@@ -48,6 +48,11 @@ class ComplianceRun(BaseModel):
     error_params: Optional[dict] = None
     warning_code: Optional[str] = None  # what a finished run reports; translated by the UI
     warning_params: Optional[dict] = None
+    # LLM_CHECK model calls of the run, and verdicts read from the cache (None: not counted)
+    llm_calls: Optional[int] = None
+    llm_cache_hits: Optional[int] = None
+    # Entities an LLM_CHECK couldn't judge: in neither count nor the score
+    not_evaluated_count: Optional[int] = None
 
 
 class ComplianceResult(BaseModel):
@@ -57,6 +62,7 @@ class ComplianceResult(BaseModel):
     object_id: str
     object_name: Optional[str] = None
     passed: bool
+    not_evaluated: bool = False  # no verdict (LLM_CHECK couldn't run); passed is False
     message: Optional[str] = None
     details_json: Optional[str] = None
     created_at: datetime
@@ -73,3 +79,32 @@ class ComplianceResultsResponse(BaseModel):
     results: List[ComplianceResult]
     only_failed: bool = False
     total: int
+
+
+class LlmCheckOutcome(BaseModel):
+    """One LLM_CHECK: the model's verdict and reason, or the code of why there is none."""
+    criterion: str
+    passed: bool
+    reason: str = ''
+    code: Optional[str] = Field(default=None, description="Error code; None for a model verdict")
+    cached: bool = False
+
+
+class LlmCheckTestRequest(BaseModel):
+    """POST /api/compliance/llm-check/test: try a rule on one entity before saving it."""
+    rule: str = Field(..., min_length=1, description="Rule in the compliance DSL")
+    entity: Optional[str] = Field(
+        default=None,
+        description="Name or id of the entity to try it on; default: the first match",
+    )
+
+
+class LlmCheckTestResponse(BaseModel):
+    entity_type: str
+    entity_id: Optional[str] = None
+    entity_name: Optional[str] = None
+    passed: bool
+    error_code: Optional[str] = Field(
+        default=None, description="Why the rule failed without a verdict",
+    )
+    llm_checks: List[LlmCheckOutcome] = Field(default_factory=list)

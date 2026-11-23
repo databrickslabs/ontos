@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, ArrowLeft, PlayCircle, Scale, Pencil } from 'lucide-react';
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
+import { ResultStatusBadge } from '@/components/compliance/result-status-badge';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { CommentSidebar } from '@/components/comments';
@@ -23,12 +24,12 @@ import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warni
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import {
   complianceResultMessageText,
-  complianceResultStatus,
   complianceRunCoverageText,
   complianceRunScoreText,
   complianceRunWarningText,
 } from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { llmCheckErrorText, llmUsageText } from '@/lib/compliance-llm-checks';
 
 type Policy = {
   id: string; // UUID
@@ -59,6 +60,9 @@ type Run = {
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
   warning_params?: Record<string, unknown> | null;
+  llm_calls?: number | null;
+  llm_cache_hits?: number | null;
+  not_evaluated_count?: number | null;
 };
 
 type Result = {
@@ -68,6 +72,7 @@ type Result = {
   object_id: string;
   object_name?: string;
   passed: boolean;
+  not_evaluated?: boolean;
   message?: string;
   details_json?: string;
   created_at: string;
@@ -99,9 +104,11 @@ export default function CompliancePolicyDetails() {
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
     { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
-      <Badge variant={complianceResultStatus(t, row.original).variant}>
-        {complianceResultStatus(t, row.original).label}
-      </Badge>
+      <ResultStatusBadge
+        passed={row.original.passed}
+        notEvaluated={row.original.not_evaluated}
+        detailsJson={row.original.details_json}
+      />
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
       <span className="text-sm text-muted-foreground break-words">
@@ -173,11 +180,12 @@ export default function CompliancePolicyDetails() {
     try {
       const res = await post<Run>(`/api/compliance/policies/${policyId}/runs`, { mode: 'inline' });
       if (res.error) {
-        // e.g. 403 when the rule changes tags and the user can't write tags
+        // e.g. 403 when the rule changes tags and the user can't write tags; coded
+        // refusals (LLM_CHECK access, quota) are translated
         toast({
           variant: 'destructive',
           title: t('compliance:errors.runningPolicy'),
-          description: res.error,
+          description: llmCheckErrorText(t, res),
         });
         return;
       }
@@ -362,6 +370,18 @@ export default function CompliancePolicyDetails() {
             {activeRun.status !== 'failed' && activeRun.warning_code && (
               <div className="text-sm text-amber-600" data-testid="run-warning">
                 {complianceRunWarningText(t, activeRun)}
+              </div>
+            )}
+            {!!activeRun.not_evaluated_count && (
+              <div className="text-sm text-muted-foreground" data-testid="run-not-evaluated">
+                {t('compliance:llmCheck.notEvaluatedCount', {
+                  count: activeRun.not_evaluated_count,
+                })}
+              </div>
+            )}
+            {llmUsageText(t, activeRun) && (
+              <div className="text-sm text-muted-foreground" data-testid="run-llm-usage">
+                {llmUsageText(t, activeRun)}
               </div>
             )}
           </CardHeader>

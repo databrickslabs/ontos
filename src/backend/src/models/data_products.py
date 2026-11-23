@@ -532,6 +532,18 @@ class DataProduct(BaseModel):
                 coerced.append(item)
         return coerced
 
+    @model_validator(mode='before')
+    @classmethod
+    def drop_null_tags(cls, data):
+        """``tags: null`` in a payload means "not sent" (only ``[]`` clears the tags).
+
+        Without this, ``parse_tags`` would read it as ``[]``, which marks the field as set
+        and makes a whole-product PUT remove every tag (#1435).
+        """
+        if isinstance(data, dict) and 'tags' in data and data['tags'] is None:
+            data = {k: v for k, v in data.items() if k != 'tags'}
+        return data
+
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
     def parse_tags(cls, value):
@@ -852,7 +864,10 @@ class HandleStatusChangePayload(BaseModel):
     """Payload for handling a status change request (approve/deny)."""
     decision: str = Field(..., description="Decision: 'approve', 'deny', or 'clarify'")
     target_status: str = Field(..., description="The target status that was requested")
-    requester_email: str = Field(..., description="Email of the original requester")
+    requester_email: Optional[str] = Field(
+        None,
+        description="Deprecated; the original requester is resolved from the stored request",
+    )
     message: Optional[str] = Field(None, description="Optional message from approver")
 
 

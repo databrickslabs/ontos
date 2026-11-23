@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Optional, Protocol, Set
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_enrichment import (
@@ -330,7 +331,10 @@ class AppEntityLoader(EntityLoader):
     def _rows(self, repo, entity_id: Optional[str], **kwargs) -> List[Any]:
         """The rows load_entities reads: all of them, or the one with ``entity_id``."""
         if entity_id is None:
-            return repo.get_multi(self.db, limit=1000, **kwargs)
+            # No cap (a cap without ORDER BY checked an arbitrary subset); sorted
+            # by id because the repositories don't order, so runs are repeatable.
+            rows = repo.get_multi(self.db, limit=None, **kwargs)
+            return sorted(rows, key=lambda row: str(row.id))
         # Session.get, not repo.get: the repositories roll the whole
         # transaction back on an error, past the savepoint of _load.
         row = self.db.get(repo.model, entity_id)
@@ -348,11 +352,13 @@ class AppEntityLoader(EntityLoader):
     ) -> Iterator[Dict[str, Any]]:
         """Load app entities from database.
 
-        NOTE: repositories expose get_multi() (CRUDBase), not list(); the Db
-        models carry owner_team_id/domain_id rather than owner/domain/tags
-        attributes. Only the types a rule matches are loaded; a type that
-        can't be loaded raises EntityLoadError (see _load). With ``entity_id``
-        only that entity is read (a workflow policy check, see load_entity).
+        NOTE: repositories expose get_multi() (CRUDBase), not list(); the
+        product and contract Db models carry owner_team_id rather than owner, a
+        domain's owners are its Business Owners, and the domains and tags are
+        in association tables. Only the types a rule matches are loaded; a type
+        that can't be loaded raises EntityLoadError (see _load). With
+        ``entity_id`` only that entity is read (a workflow policy check, see
+        load_entity).
         """
         # Data Products
         if 'data_product' in entity_types:
@@ -375,7 +381,7 @@ class AppEntityLoader(EntityLoader):
             tags_map = self._tags_by_entity('data_product', [str(p.id) for p in products])
             for product in products:
                 assigned = domains_map.get(str(product.id), [])
-                primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
+                primary_domain = next((a for a in assigned if a.is_primary), None)
                 yield {
                     'type': 'data_product',
                     'id': product.id,
@@ -383,7 +389,8 @@ class AppEntityLoader(EntityLoader):
                     # As for contracts, the purpose text (description is the
                     # ODPS description row, None when the product has none)
                     'description': getattr(product.description, 'purpose', None),
-                    'domain': primary_domain,
+                    'domain': primary_domain.domain_name if primary_domain else None,
+                    'domain_id': primary_domain.domain_id if primary_domain else None,
                     'status': product.status,
                     'version': getattr(product, 'version', None),
                     'owner': getattr(product, 'owner_team_id', None),
@@ -395,11 +402,23 @@ class AppEntityLoader(EntityLoader):
         # Data Contracts
         if 'data_contract' in entity_types:
             from src.repositories.data_contracts_repository import data_contract_repo
-            contracts = self._load(
-                'data_contract', lambda: self._rows(data_contract_repo, entity_id)
-            )
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+            def contracts_and_domains():
+                contracts = self._rows(data_contract_repo, entity_id)
+                # As for products: the legacy domain_id column was dropped, the
+                # domains are in the entity_domain_associations junction
+                domains = entity_domain_repo.get_domains_for_entities(
+                    self.db, entity_type="data_contract", entity_ids=[str(c.id) for c in contracts]
+                ) if contracts else {}
+                return contracts, domains
+
+            contracts, domains_map = self._load('data_contract', contracts_and_domains)
             tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
             for contract in contracts:
+                assigned = domains_map.get(str(contract.id), [])
+                # As for products: `domain` is the primary domain's name, `domain_id` its id
+                primary_domain = next((a for a in assigned if a.is_primary), None)
                 yield {
                     'type': 'data_contract',
                     'id': contract.id,
@@ -408,7 +427,8 @@ class AppEntityLoader(EntityLoader):
                     'status': contract.status,
                     'version': getattr(contract, 'version', None),
                     'owner': getattr(contract, 'owner_team_id', None),
-                    'domain': getattr(contract, 'domain_id', None),
+                    'domain': primary_domain.domain_name if primary_domain else None,
+                    'domain_id': primary_domain.domain_id if primary_domain else None,
                     'tags': tags_map.get(str(contract.id), {}),
                     'created_at': getattr(contract, 'created_at', None),
                     'updated_at': getattr(contract, 'updated_at', None),
@@ -416,8 +436,30 @@ class AppEntityLoader(EntityLoader):
 
         # Domains
         if 'domain' in entity_types:
+            from src.db_models.business_owners import BusinessOwnerDb
             from src.repositories.data_domain_repository import data_domain_repo
-            domains = self._load('domain', lambda: self._rows(data_domain_repo, entity_id))
+
+            def domains_and_owners():
+                domains = self._rows(data_domain_repo, entity_id)
+                # A domain has no owner team (its owner_team_id column was dropped):
+                # its owners are its active Business Owners, whatever their role, as
+                # the domain page lists them under "Owners"
+                rows = self.db.query(
+                    BusinessOwnerDb.object_id, BusinessOwnerDb.user_email
+                ).filter(
+                    BusinessOwnerDb.object_type == 'data_domain',
+                    BusinessOwnerDb.object_id.in_([str(d.id) for d in domains]),
+                    BusinessOwnerDb.is_active.is_(True),
+                ).order_by(
+                    BusinessOwnerDb.assigned_at, BusinessOwnerDb.user_email
+                ).all() if domains else []
+                owners: Dict[str, List[str]] = {}
+                for object_id, email in rows:
+                    if email and email not in owners.setdefault(object_id, []):
+                        owners[object_id].append(email)
+                return domains, owners
+
+            domains, owners_map = self._load('domain', domains_and_owners)
             tags_map = self._tags_by_entity('data_domain', [str(d.id) for d in domains])
             for domain in domains:
                 yield {
@@ -425,7 +467,8 @@ class AppEntityLoader(EntityLoader):
                     'id': domain.id,
                     'name': domain.name,
                     'description': getattr(domain, 'description', None),
-                    'owner': getattr(domain, 'owner_team_id', None),
+                    # Emails of its owners, in assignment order; [] when it has none
+                    'owner': owners_map.get(str(domain.id), []),
                     'tags': tags_map.get(str(domain.id), {}),
                     'created_at': getattr(domain, 'created_at', None),
                     'updated_at': getattr(domain, 'updated_at', None),
@@ -623,9 +666,25 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
         ``code`` and ``params`` (for the UI to translate) and an English
         ``message``.
     """
-    from src.common.compliance_dsl import parse_rule
+    from src.common.compliance_dsl import (
+        LlmCheckCriterionError, llm_check_criterion, parse_rule,
+    )
 
     parsed = parse_rule(rule, strict=True)
+    if _function_calls(parsed.get('where_clause'), 'LLM_CHECK'):
+        # The WHERE is evaluated without a model: the check fails, and the rule
+        # would skip every entity without a word
+        raise LlmCheckInWhereError(
+            "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
+            "would skip every entity. Move it to ASSERT."
+        )
+    refuse_llm_check_tag_actions(parsed)
+    for call in llm_check_calls(parsed):
+        if llm_check_criterion(call) is None:
+            raise LlmCheckCriterionError(
+                "LLM_CHECK takes a text and a criterion written as a string literal, "
+                "for example LLM_CHECK(t.comment, 'states the grain of the table')"
+            )
     warnings: List[Dict[str, Any]] = []
     entity_filter = parse_entity_filter(rule, parsed=parsed)
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
@@ -647,4 +706,83 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             'message': "The rule has no ASSERT clause, so every entity passes.",
         })
     return warnings
+
+
+class LlmCheckInWhereError(CodedValueError):
+    """A rule with LLM_CHECK in WHERE (rejected on save)."""
+
+    code = 'llm_check_in_where'
+
+
+# The actions a rule with LLM_CHECK can't have: they write on a model's verdict.
+# Revisit once model verdicts can go through Authority Resolution (#831)
+LLM_CHECK_REFUSED_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+class LlmCheckTagActionError(CodedValueError):
+    """A rule with LLM_CHECK and ASSIGN_TAG / REMOVE_TAG actions.
+
+    Refused on save, in the YAML load and when a run starts.
+    """
+
+    code = 'llm_check_tag_action'
+
+
+def llm_check_tag_actions(parsed: Dict[str, Any]) -> List[str]:
+    """The refused tag actions of a parsed rule with LLM_CHECK, sorted ([] if none)."""
+    if not llm_check_calls(parsed):
+        return []
+    actions = (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+    return sorted({a.get('type') for a in actions if a.get('type') in LLM_CHECK_REFUSED_ACTIONS})
+
+
+def refuse_llm_check_tag_actions(parsed: Dict[str, Any]) -> None:
+    """Raise ``LlmCheckTagActionError`` for a rule with LLM_CHECK and tag actions.
+
+    The verdict picks ON_PASS / ON_FAIL, and an entity's owner can edit the text the
+    model reads: a steered verdict would change tags, which feed UC tag sync and other
+    gates. NOTIFY stays: a person reads it. Checked wherever a rule gets in (the API
+    save, the YAML load) and again when a run starts, so a rule stored another way
+    writes no tag either.
+    """
+    tag_actions = llm_check_tag_actions(parsed)
+    if tag_actions:
+        raise LlmCheckTagActionError(
+            "A rule with LLM_CHECK can't use ASSIGN_TAG or REMOVE_TAG: the model's "
+            "verdict would change tags. Use NOTIFY, or a separate rule without "
+            "LLM_CHECK for the tag actions.",
+            actions=', '.join(tag_actions),
+        )
+
+
+def llm_check_calls(parsed: Dict[str, Any]) -> list:
+    """The LLM_CHECK calls of a parsed rule, in WHERE and ASSERT."""
+    return _function_calls(parsed.get('where_clause'), 'LLM_CHECK') + _function_calls(
+        parsed.get('assert_clause'), 'LLM_CHECK'
+    )
+
+
+# The app entity types a rule can match, and the feature whose read access shows them
+APP_ENTITY_FEATURES = {
+    'data_product': 'data-products',
+    'data_contract': 'data-contracts',
+    'domain': 'data-domains',
+    'review': 'data-asset-reviews',
+}
+
+
+def _function_calls(node: Any, name: str) -> list:
+    """The calls of the DSL function ``name`` in a rule expression (AST node)."""
+    from src.common.compliance_dsl import FunctionCall
+
+    if node is None:
+        return []
+    if isinstance(node, (list, tuple)):
+        return [c for n in node for c in _function_calls(n, name)]
+    if not hasattr(node, '__dataclass_fields__'):
+        return []
+    found = [node] if isinstance(node, FunctionCall) and node.name == name else []
+    return found + [
+        c for f in node.__dataclass_fields__ for c in _function_calls(getattr(node, f), name)
+    ]
 

@@ -1021,7 +1021,7 @@ export default function ConceptDetailView() {
               </dd>
             </div>
             <div className="adv-only flex justify-between gap-3 py-1.5">
-              <dt className="text-muted-foreground">IRI</dt>
+              <dt className="text-muted-foreground">{t('semantic-models:fields.iri')}</dt>
               <dd className="font-mono text-xs text-right truncate" title={concept.iri}>
                 {concept.iri}
               </dd>

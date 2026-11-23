@@ -363,6 +363,10 @@
       "unreachableSteps": "Questi passi non sono raggiungibili dal primo passo: {{steps}}.",
       "storedEntityTypeUnknown": "Il trigger elenca \"{{entityType}}\", un tipo di entità che non esiste più. Non si attiva mai per esso.",
       "storedEntityTypeUnsupported": "Il trigger {{trigger}} non si attiva mai per {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Il passo \"{{step}}\" verifica una policy che usa LLM_CHECK. LLM_CHECK viene valutato solo nelle esecuzioni di conformità, quindi il passo farebbe fallire ogni entità. Seleziona una policy senza LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Il passaggio \"{{step}}\" ha una regola che usa LLM_CHECK. LLM_CHECK viene valutato solo nelle esecuzioni di conformità, quindi il passaggio fallirebbe per ogni entità. Rimuovi LLM_CHECK dalla regola."
     }
   },
   "approvalResponse": {

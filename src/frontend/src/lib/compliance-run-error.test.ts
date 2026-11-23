@@ -42,6 +42,20 @@ describe('complianceRunErrorText', () => {
     );
   });
 
+  it('translates a run refused for tag actions on an LLM_CHECK rule', async () => {
+    await i18n.changeLanguage('pt');
+    const text = complianceRunErrorText(i18n.t, {
+      error_code: 'llm_check_tag_action',
+      error_params: { actions: 'ASSIGN_TAG' },
+    });
+
+    expect(text).toBe(
+      'Uma regra com LLM_CHECK não pode usar ASSIGN_TAG nem REMOVE_TAG (ASSIGN_TAG): o '
+      + 'veredito do modelo mudaria tags. Use NOTIFY, ou uma regra separada sem LLM_CHECK '
+      + 'para as ações de tag.',
+    );
+  });
+
   it('does not show the stored exception text for an error that has a code', async () => {
     await i18n.changeLanguage('en');
     const text = complianceRunErrorText(i18n.t, {

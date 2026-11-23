@@ -363,6 +363,10 @@
       "unreachableSteps": "Ces étapes ne sont pas accessibles depuis la première étape : {{steps}}.",
       "storedEntityTypeUnknown": "Le déclencheur liste \"{{entityType}}\", un type d'entité qui n'existe plus. Il ne se déclenche jamais pour lui.",
       "storedEntityTypeUnsupported": "Le déclencheur {{trigger}} ne se déclenche jamais pour {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "L’étape « {{step}} » vérifie une politique qui utilise LLM_CHECK. LLM_CHECK n’est évalué que dans les exécutions de conformité, donc l’étape ferait échouer chaque entité. Sélectionnez une politique sans LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "L’étape « {{step}} » a une règle qui utilise LLM_CHECK. LLM_CHECK n’est évalué que dans les exécutions de conformité, donc l’étape échouerait pour chaque entité. Retirez LLM_CHECK de la règle."
     }
   },
   "approvalResponse": {

@@ -10,6 +10,7 @@
     "delete": "Elimina",
     "deleteSelected": "Elimina selezionati ({{count}})",
     "edit": "Modifica",
+    "rename": "Rinomina",
     "add": "Aggiungi",
     "create": "Crea",
     "update": "Aggiorna",
@@ -42,6 +43,7 @@
     "discard": "Scarta",
     "apply": "Applica",
     "select": "Seleziona",
+    "done": "Fatto",
     "remove": "Rimuovi",
     "link": "Collega",
     "unlink": "Scollega",
@@ -358,7 +360,10 @@
       "job": "Job",
       "subscription": "Abbonamento",
       "user": "Utente",
-      "metric_view": "Metric View"
+      "metric_view": "Metric View",
+      "ontology_concept": "Concetto",
+      "ontology_collection": "Raccolta",
+      "concept_changeset": "Set di modifiche ai concetti"
     },
     "stepTypes": {
       "validation": "Validazione",
@@ -638,6 +643,8 @@
   "edit": "Modifica",
   "error": "Errore",
   "home": "Home",
+  "loading": "Caricamento…",
+  "optional": "(facoltativo)",
   "refresh": "Aggiorna",
   "retry": "Riprova",
   "save": "Salva",

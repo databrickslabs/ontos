@@ -12,7 +12,10 @@
     "viewTree": "Tree",
     "viewGraph": "Graph",
     "createConcept": "New Concept",
-    "createScheme": "New Concept Scheme"
+    "createScheme": "New Concept Scheme",
+    "description": "Author, browse, and deliver your business concept schemes.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL and knowledge graph search"
   },
   "nav": {
     "collections": "Schemes",
@@ -24,5 +27,99 @@
     "generator": "Generator",
     "import": "Import",
     "mapping": "Mapping"
+  },
+  "define": {
+    "description": "Author, generate, or import your business concept schemes."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Write governed metadata onto the mapped {{platform}} assets.",
+      "tags": {
+        "name": "Tags",
+        "desc": "Key/value governance tags on tables and columns. Drives discovery and access policy.",
+        "via": "via uc_tag_sync",
+        "notConfigured": "Tag delivery is not configured. The uc_tag_sync job needs to be installed in Settings > Jobs to activate this.",
+        "note": "Tag delivery runs through the shared uc_tag_sync job, which also covers other aspects beyond semantic assignment. Configure its scope and schedule in Settings > Jobs."
+      },
+      "desc": {
+        "name": "Column descriptions",
+        "desc": "Plain-language meaning on columns. What Genie and search read to answer accurately.",
+        "assist": "dbxmetagen can draft these"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "The governed business glossary in the platform itself.",
+        "note": "Syncs concepts to Unity Catalog's native business glossary, the governed layer Genie Ontology reads from. Arrives at UC Glossary GA."
+      },
+      "title": "Deliver",
+      "tip": "Deliver writes your governed metadata onto the platform. Downstream tools (Genie, search, agents) read it from there. Tags = policy & discovery. Descriptions = what Genie reads. Glossary = the governed business layer.",
+      "pendingTitle": "Pending tag changes",
+      "pendingSubtitle": "Concept-to-asset links created since the last successful tag sync. A re-run of uc_tag_sync would deliver these.",
+      "pendingEmpty": "Nothing pending.",
+      "pendingInScheme": "in",
+      "pendingAppliesTo": "applies to",
+      "coverageSynced": "{{synced}} of {{total}} synced · ",
+      "pendingCount": "{{pending}} pending",
+      "lastRun": " · last run {{run}}",
+      "notSynced": "Not synced yet",
+      "manageInSettings": "Manage in Settings",
+      "configure": "Configure",
+      "comingSoon": "Coming soon: configuring and running this sync from Ontos is not wired yet.",
+      "syncNow": "Sync now",
+      "about": "About this delivery target"
+    },
+    "subtitle": "Map your concepts to assets, then deliver governed metadata onto the platform.",
+    "deliverTo": "Deliver to",
+    "platformTip": "Delivery platforms come from your configured connections in Settings. Unity Catalog is the default. The delivery targets below adapt to the platform you pick.",
+    "manageConnections": "Manage connections ↗",
+    "map": {
+      "title": "Map",
+      "suggest": "Suggest matches",
+      "desc": "Link a concept straight to a {{platform}} Asset (the default path, no product or contract needed), then optionally add links to data products and data contracts. All three are independent.",
+      "col": {
+        "scheme": "Concept scheme",
+        "lastRun": "Last run",
+        "concepts": "Concepts",
+        "coverage": "Coverage",
+        "products": "Products",
+        "contracts": "Contracts",
+        "assets": "Assets",
+        "suggested": "Suggested"
+      },
+      "assetNote": "Asset links are what Deliver enriches in step 2. Asset-direct linking works even before any product or contract exists, so it solves the chicken-and-egg case.",
+      "review": "Review",
+      "allSelected": "All selected",
+      "unmappedNote": "{{unmapped}} concepts have no link yet.",
+      "coverageTip": "Coverage = share of a concept scheme's concepts with at least one link. Products and Contracts are optional extra links, so the three counts don't sum to the total. Only Assets can be enriched in step 2.",
+      "placeholderNote": "Coverage figures are sample data — the live coverage service is unavailable right now."
+    },
+    "review": {
+      "title": "Review suggested matches",
+      "subtitle": "Accept or reject each concept-to-Asset match. Nothing syncs until you accept it.",
+      "loading": "Loading suggested matches…",
+      "applied": "Applied {{count}} match(es). They will sync on next delivery.",
+      "applyError": "Could not apply matches: ",
+      "placeholderNote": "Sample matches shown for illustration.",
+      "reject": "Reject",
+      "accept": "Accept",
+      "drift": "Schema drift to resolve",
+      "openFull": "Open full Review Board",
+      "applying": "Applying…",
+      "acceptApplyAll": "Accept & apply all {{count}}"
+    },
+    "modes": {
+      "direct": "Direct",
+      "directDesc": "Ontos applies changes to this workspace immediately via the service principal.",
+      "indirect": "Indirect",
+      "indirectDesc": "Ontos writes YAML to Git for your CI/CD pipeline to promote (dev to staging to prod).",
+      "manual": "Manual",
+      "manualDesc": "Ontos notifies a person to apply the change elsewhere.",
+      "active": "active",
+      "manageLink": "Delivery mode is set per site in Settings, Delivery"
+    }
+  },
+  "mode": {
+    "description": "Advanced view reveals the ontology layer: RDF/SKOS, IRIs, property domain & range, and technical delivery settings. Simple hides them. Your choice is remembered.",
+    "label": "View mode"
   }
 }

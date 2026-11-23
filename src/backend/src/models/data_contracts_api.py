@@ -326,13 +326,17 @@ class ServerConfig(BaseModel):
         # the contract API returns them), the others the `properties` map
         rows = {getattr(r, 'key', None): getattr(r, 'value', None)
                 for r in getattr(data, 'properties', None) or []}
+        port = str(rows.get('port') or '').strip()
+        if port and not port.isdigit():
+            named = tuple(k for k in NAMED_FIELDS if k != 'port')  # `${PORT}`: kept as text
+        else:
+            named = NAMED_FIELDS
         values['properties'] = {k: v for k, v in rows.items()
-                                if k is not None and k not in NAMED_FIELDS}
-        for key in NAMED_FIELDS:
+                                if k is not None and k not in named}
+        for key in named:
             if rows.get(key) is not None:
                 values['database_schema' if key == 'schema' else key] = (
-                    int(rows[key]) if key == 'port' and str(rows[key]).isdigit()
-                    else rows[key])
+                    int(port) if key == 'port' else rows[key])
         values['roles'] = json_list(getattr(data, 'roles_json', None))
         values['customProperties'] = json_list(getattr(data, 'custom_properties_json', None))
         return values

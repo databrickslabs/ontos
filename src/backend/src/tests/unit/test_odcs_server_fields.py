@@ -163,3 +163,24 @@ def test_a_server_form_save_keeps_the_named_fields_the_form_doesnt_show(db_sessi
 
     assert _servers(_export(manager, db_session, cid))['srv-athena']['catalog'] == \
         'awsdatacatalog'
+
+
+@pytest.mark.parametrize('port,expected', [('5432 ', 5432), ('${PORT}', None)])
+def test_a_stored_port_that_is_no_number_doesnt_break_the_read(db_session, imported, port,
+                                                               expected):
+    from src.models.data_contracts_api import ServerConfig
+
+    manager, cid = imported
+    db_session.expire_all()
+    row = next(r for r in db_session.get(DataContractDb, cid).servers if r.server == 'pg')
+    next(p for p in row.properties if p.key == 'port').value = port
+
+    server = ServerConfig.model_validate(row)
+
+    assert server.port == expected
+    if expected is None:
+        assert server.properties['port'] == port
+        # and a save of what was read keeps it
+        from src.utils.contract_servers import property_values
+        assert property_values(server.model_dump(by_alias=True, exclude_none=True))[
+            'port'] == port

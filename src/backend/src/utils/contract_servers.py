@@ -25,6 +25,12 @@ FORM_UNSENT_FIELDS = ('catalog', 'project', 'account', 'region')
 _INTEGER_FIELDS = ('port',)
 
 
+def _text_port(key: str, value: Any) -> bool:
+    """A stored ``port`` that is no number (``${PORT}``): the read keeps it in the
+    ``properties`` map, since ``ServerConfig.port`` takes only numbers."""
+    return key == 'port' and isinstance(value, str) and not value.strip().isdigit()
+
+
 def property_values(server: Dict[str, Any]) -> Dict[str, str]:
     """The key/value rows of an ODCS server: the entries of the Ontos
     ``properties`` map (the server form's extra fields), then its type's fields,
@@ -34,7 +40,7 @@ def property_values(server: Dict[str, Any]) -> Dict[str, str]:
     values: Dict[str, str] = {}
     extra = server.get('properties')
     extra_items = [(k, v) for k, v in (extra if isinstance(extra, dict) else {}).items()
-                   if k not in server and k not in NAMED_FIELDS]
+                   if k not in server and (k not in NAMED_FIELDS or _text_port(k, v))]
     items = extra_items + list(server.items())
     for key, value in items:
         if key in SERVER_COLUMNS or value is None:

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_contracts import SchemaPropertyDb
+from src.utils.odcs_type_options import read_type_options
 
 
 def _manager():
@@ -20,6 +21,14 @@ def _manager():
 
 def _column(doc, name):
     return next(p for p in doc["schema"][0]["properties"] if p["name"] == name)
+
+
+def _options(doc, name):
+    """The column's type options wherever the export writes them (logicalTypeOptions,
+    items.logicalType, ontos.* custom properties) plus any flat key."""
+    col = _column(doc, name)
+    return {**read_type_options(col), **{k: v for k, v in col.items()
+                                         if k in ("format", "timezone", "customFormat")}}
 
 
 def test_a_date_column_exports_its_format_but_no_timezone(db_session):
@@ -40,11 +49,9 @@ def test_a_date_column_exports_its_format_but_no_timezone(db_session):
     exported = manager.build_odcs_from_db(contract, db_session, for_export=True)
 
     day = _column(exported, "day")
-    # Flat `format` is the current export shape, not the intended ODCS one: type options
-    # move under `logicalTypeOptions` with #1635.
-    assert day["format"] == "yyyy-MM-dd"
-    assert "timezone" not in day
-    assert _column(exported, "code")["pattern"] == "^[A-Z]+$"
+    assert day["logicalTypeOptions"]["format"] == "yyyy-MM-dd"
+    assert "timezone" not in _options(exported, "day")
+    assert _column(exported, "code")["logicalTypeOptions"]["pattern"] == "^[A-Z]+$"
     # still stored
     stored = db_session.query(SchemaPropertyDb).filter_by(name="day").one()
     assert json.loads(stored.logical_type_options_json)["timezone"] == "UTC"
@@ -68,9 +75,8 @@ def test_a_custom_format_is_not_exported_as_a_non_schema_key(db_session):
     exported = manager.build_odcs_from_db(contract, db_session, for_export=True)
 
     ts = _column(exported, "ts")
-    # Flat `format`: current shape, to move under `logicalTypeOptions` with #1635.
-    assert ts["format"] == "yyyy-MM-dd"
-    assert "customFormat" not in ts
+    assert ts["logicalTypeOptions"]["format"] == "yyyy-MM-dd"
+    assert "customFormat" not in _options(exported, "ts")
     stored = db_session.query(SchemaPropertyDb).filter_by(name="ts").one()
     assert json.loads(stored.logical_type_options_json)["customFormat"] == "yyyy/dd"
 
@@ -109,8 +115,8 @@ def test_a_save_keeps_the_stored_options_the_export_leaves_out(db_session):
     stored_contract = db_session.get(type(contract), contract.id)
     # the internal source of an update still has them; only the export leaves them out
     internal = manager.build_odcs_from_db(stored_contract, db_session)
-    assert _column(internal, "day")["timezone"] == "UTC"
-    assert _column(internal, "ts")["customFormat"] == "yyyy/dd"
+    assert _options(internal, "day")["timezone"] == "UTC"
+    assert _options(internal, "ts")["customFormat"] == "yyyy/dd"
     refreshed = manager.build_odcs_from_db(stored_contract, db_session, for_export=True)
-    assert "timezone" not in _column(refreshed, "day")
-    assert "customFormat" not in _column(refreshed, "ts")
+    assert "timezone" not in _options(refreshed, "day")
+    assert "customFormat" not in _options(refreshed, "ts")

@@ -22,11 +22,11 @@ TRAILING = 'MATCH (obj:table)\nASSERT obj.name = "x" IS NOT NULL'
 COMPLETE = 'MATCH (obj:table) ASSERT obj.name = "x" ON_FAIL FAIL "m"'
 
 
-def _run_job_policy(db, rule):
+def _run_job_policy(db, rule, entities=()):
     policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='Stored', rule=rule, is_active=True)
     db.add(policy)
     db.flush()
-    iterator = MagicMock(**{'iterate.return_value': iter([])})
+    iterator = MagicMock(**{'iterate.return_value': iter(entities)})
     with patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator), \
             patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()):
         return job.run_policy(db, {'id': policy.id, 'name': 'Stored'}, ComplianceManager(), None)
@@ -46,7 +46,9 @@ def test_a_job_run_records_and_returns_the_warning(db_session, capsys):
 
 
 def test_a_job_run_of_a_complete_rule_has_no_warning(db_session, capsys):
-    result = _run_job_policy(db_session, COMPLETE)
+    # With an entity: a run that matches none has the no_entities_matched warning
+    table = {'type': 'table', 'id': 'main.s.x', 'name': 'x'}
+    result = _run_job_policy(db_session, COMPLETE, entities=[table])
 
     assert result['status'] == 'succeeded'
     assert result['warning'] is None

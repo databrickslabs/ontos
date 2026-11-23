@@ -216,7 +216,8 @@
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
     "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos.",
     "llm_check_budget_exceeded": "{{count}} comprobaciones de LLM no se ejecutaron porque la ejecución alcanzó su presupuesto de {{budget}} llamadas al modelo, por lo que esas entidades fallaron. Vuelve a ejecutarla (los veredictos en caché no cuentan) o aumenta COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
-    "llm_check_daily_quota_exceeded": "{{count}} comprobaciones LLM no se ejecutaron porque usaste tus {{limit}} llamadas al modelo de hoy, así que esas entidades fallaron. Ejecútala de nuevo mañana (los veredictos en caché no cuentan) o pide a un administrador que aumente COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY."
+    "llm_check_daily_quota_exceeded": "{{count}} comprobaciones LLM no se ejecutaron porque usaste tus {{limit}} llamadas al modelo de hoy, así que esas entidades fallaron. Ejecútala de nuevo mañana (los veredictos en caché no cuentan) o pide a un administrador que aumente COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.",
+    "no_entities_matched": "Ninguna entidad coincide con esta regla, así que no se comprobó nada. Si esperaba alguna, revise el tipo de MATCH y la condición WHERE."
   },
   "actionOutcomes": {
     "status": {

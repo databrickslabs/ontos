@@ -33,7 +33,7 @@ from src.common.authorization import PermissionChecker, ApprovalChecker, user_ha
 from src.common.authorization import effective_permissions_for_request, has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, VersioningRequiredError
 from src.controller.lifecycle_fields import (
     LifecycleFieldError, deprecation_audit_details, product_status_audit,
 )
@@ -2099,53 +2099,6 @@ async def update_data_product(
     try:
         logger.info(f"Updating data product ID: {product_id}")
 
-        # Check if versioning is required for non-draft products
-        current_product_db = manager.get_product(product_id)
-        if current_product_db and current_product_db.status and current_product_db.status.lower() != 'draft':
-            # Check if caller explicitly forced the update
-            force_update = request.headers.get('X-Force-Update') == 'true'
-            
-            if not force_update:
-                # Analyze the impact of proposed changes
-                product_dict = product_update.model_dump(by_alias=True)
-                impact_analysis = manager.analyze_update_impact(
-                    product_id=product_id,
-                    proposed_changes=product_dict,
-                    db=db
-                )
-                
-                # Check if user is admin
-                from src.common.authorization import is_user_admin
-                from src.common.config import get_settings
-                settings = get_settings()
-                user_is_admin = is_user_admin(current_user.groups, settings)
-                
-                if impact_analysis['requires_versioning']:
-                    # If breaking changes and not admin, force new version
-                    if not user_is_admin:
-                        raise HTTPException(
-                            status_code=409,
-                            detail={
-                                "message": "Breaking changes detected - new version required",
-                                "requires_versioning": True,
-                                "change_analysis": impact_analysis['change_analysis'],
-                                "user_can_override": False,
-                                "recommended_action": "clone"
-                            }
-                        )
-                    else:
-                        # Admin can choose - return recommendation
-                        raise HTTPException(
-                            status_code=409,
-                            detail={
-                                "message": "Breaking changes detected - recommend new version",
-                                "requires_versioning": True,
-                                "change_analysis": impact_analysis['change_analysis'],
-                                "user_can_override": True,
-                                "recommended_action": "clone"
-                            }
-                        )
-
         # Delegate to manager (includes auth check)
         user_groups = current_user.groups or []
         # PR I: exclude_unset preserves partial-update semantics. Without it,
@@ -2193,6 +2146,14 @@ async def update_data_product(
                 "falling back to ownership cascade"
             )
 
+        # The manager refuses a breaking edit of a non-draft product (409 below)
+        # unless an admin forces it: an app admin or a data-products Admin, the
+        # same admins who may edit any product. Others get a new version.
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        user_is_admin = is_feature_admin or is_user_admin(current_user.groups, get_settings())
+        force_update = request.headers.get('X-Force-Update') == 'true' and user_is_admin
+
         # Fires the on_update workflows (update_product)
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,
@@ -2203,6 +2164,8 @@ async def update_data_product(
             background_tasks=background_tasks,
             caller_team_ids=caller_team_ids,
             is_feature_admin=is_feature_admin,
+            force_update=force_update,
+            user_is_admin=user_is_admin,
         )
 
         if not updated_product_response:
@@ -2225,6 +2188,20 @@ async def update_data_product(
         details_for_audit["exception"] = {"type": "PermissionError", "message": str(e)}
         logger.warning(f"Permission denied updating product {product_id}: {e}")
         raise HTTPException(status_code=403, detail=str(e))
+    except VersioningRequiredError as e:
+        success = False
+        response_status_code = 409
+        details_for_audit["exception"] = {"type": "VersioningRequiredError", "message": str(e)}
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(e),
+                "requires_versioning": True,
+                "change_analysis": e.change_analysis,
+                "user_can_override": e.user_can_override,
+                "recommended_action": "clone",
+            },
+        )
     except ValueError as e:
         # Validation errors from manager
         success = False

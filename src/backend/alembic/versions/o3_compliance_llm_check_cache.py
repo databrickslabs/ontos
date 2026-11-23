@@ -1,7 +1,7 @@
 """Add compliance_llm_check_cache, the LLM_CHECK call counts of a run, the daily usage
 
 Revision ID: o3_compliance_llm_check_cache
-Revises: o3_compliance_run_score_nullable
+Revises: r3_odcs_roundtrip_fields
 Create Date: 2026-11-12
 
 Verdicts of the LLM_CHECK compliance DSL function, keyed by a sha256 of the
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'o3_compliance_llm_check_cache'
-down_revision: Union[str, None] = 'o3_compliance_run_score_nullable'
+down_revision: Union[str, None] = 'r3_odcs_roundtrip_fields'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

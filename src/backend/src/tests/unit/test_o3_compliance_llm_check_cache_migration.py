@@ -34,7 +34,7 @@ def _apply(conn, step):
 def test_upgrade_adds_the_llm_check_tables_and_columns_and_downgrade_drops_them(
     tmp_path, migration,
 ):
-    assert migration.down_revision == 'o3_compliance_run_score_nullable'
+    assert migration.down_revision == 'r3_odcs_roundtrip_fields'
     engine = create_engine(f"sqlite:///{tmp_path / 'o3.db'}")
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE compliance_runs (id VARCHAR PRIMARY KEY)"))

@@ -384,3 +384,42 @@ def test_invalid_or_unknown_nested_options_are_not_stored(db_session):
     rows = db_session.query(SchemaPropertyDb).filter_by(name="code").all()
     # an ontos.* name that is no option stays a custom property
     assert {cp.property for r in rows for cp in r.custom_properties} == {"ontos.logicalType"}
+
+
+# a stored value of another type than ODCS has for the column's logicalType (the editor's
+# free-text timezone, a bound left from another logicalType) goes to ontos.<option>
+MISMATCHED = {
+    "ts": ("timestamp", {"timezone": "UTC", "minimum": 5}),
+    "day": ("date", {"maximum": 10, "format": "yyyy-MM-dd"}),
+    "amount": ("number", {"minimum": "2020-01-01", "maximum": 9, "exclusiveMinimum": True}),
+}
+
+
+@pytest.mark.parametrize("version,schema_file", [
+    ("v3.1.0", "odcs-json-schema-v3.1.0.json"), ("v3.0.2", "odcs-json-schema-v3.0.2.json"),
+])
+def test_options_of_another_value_type_export_as_custom_properties(
+        db_session, version, schema_file):
+    document = _document(api_version=version, nested=False)
+    document["schema"][0]["properties"] = [
+        {"name": name, "logicalType": logical_type, **options}
+        for name, (logical_type, options) in MISMATCHED.items()
+        if version >= "v3.1.0" or logical_type != "timestamp"
+    ]
+    manager, cid = _upload(db_session, document)
+    stored = _stored(db_session, cid)
+    exported = _export(manager, db_session, cid)
+
+    assert _errors(exported, schema_file) == []
+    columns = _columns(exported)
+    props = {cp["property"]: cp["value"] for cp in columns["amount"]["customProperties"]}
+    assert props["ontos.minimum"] == "2020-01-01"
+    assert columns["amount"]["logicalTypeOptions"]["maximum"] == 9
+    assert columns["day"]["logicalTypeOptions"] == {"format": "yyyy-MM-dd"}
+    if version >= "v3.1.0":
+        ts = {cp["property"]: cp["value"] for cp in columns["ts"]["customProperties"]}
+        assert ts == {"ontos.timezone": "UTC", "ontos.minimum": 5}
+    exported["id"] = str(uuid.uuid4())
+    exported["name"] = f"{exported['name']}-again"
+    _, cid_again = _upload(db_session, exported)
+    assert _stored(db_session, cid_again) == stored

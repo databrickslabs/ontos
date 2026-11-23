@@ -9,9 +9,10 @@ the editors write them flat on the property.
 The export writes:
 - the options ODCS defines for the column's type under ``logicalTypeOptions``;
 - an array's item type as ``items.logicalType`` (the ODCS place for it);
-- any other stored option (``precision``, ``customFormat`` ...) as a column
-  custom property ``ontos.<option>``, so the export validates and the import
-  reads it back.
+- any other stored option (``precision``, ``customFormat``, or a value of another
+  type than ODCS has for the column's type, such as a text ``timezone`` on a
+  timestamp) as a column custom property ``ontos.<option>``, so the export
+  validates and the import reads it back.
 The import reads all of these, and the flat keys of older exports.
 """
 from typing import Any, Dict, List, Optional, Tuple
@@ -102,6 +103,35 @@ def _allowed(logical_type: Optional[str], api_version: Optional[str]):
     return table.get(logical_type or 'string')
 
 
+_DATE_TYPES = frozenset(('date', 'timestamp', 'time'))
+_INTEGER_OPTIONS = frozenset(('minLength', 'maxLength', 'minItems', 'maxItems',
+                              'minProperties', 'maxProperties'))
+_TEXT_OPTIONS = frozenset(('pattern', 'format', 'defaultTimezone'))
+
+
+def _fits(key: str, value: Any, logical_type: Optional[str], api_version: Optional[str]) -> bool:
+    """Whether the value has the type the bundled schema gives ``logicalTypeOptions.<key>``
+    for the column's type (a free-text timezone, or a bound left from another
+    logicalType, doesn't)."""
+    if key in _INTEGER_OPTIONS:
+        return _int(value)
+    if key in _TEXT_OPTIONS:
+        return _text(value)
+    if key in ('uniqueItems', 'timezone'):  # timezone: a boolean on timestamp / time
+        return isinstance(value, bool)
+    if key == 'required':
+        return isinstance(value, list) and all(isinstance(i, str) for i in value)
+    date_like = logical_type in _DATE_TYPES
+    if key in ('exclusiveMinimum', 'exclusiveMaximum') \
+            and (api_version or 'v3.1.0') < 'v3.1.0':
+        return isinstance(value, bool)  # v3.0.2: a flag on the bound
+    if key in ('minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum'):
+        return _text(value) if date_like else _number(value)
+    if key == 'multipleOf':
+        return _number(value)
+    return True
+
+
 def split_type_options(
     logical_type: Optional[str], options: Dict[str, Any], api_version: Optional[str],
 ) -> Tuple[Dict[str, Any], Optional[str], List[Dict[str, Any]]]:
@@ -118,7 +148,8 @@ def split_type_options(
             key = 'required'
         if key == 'itemType' and logical_type == 'array' and value in LOGICAL_TYPES:
             item_type = value
-        elif key != 'itemType' and (allowed is None or key in allowed):
+        elif key != 'itemType' and (allowed is None or (
+                key in allowed and _fits(key, value, logical_type, api_version))):
             nested[key] = value
         else:
             extra.append({'property': f'{OPTION_PROPERTY_PREFIX}{key}', 'value': value})

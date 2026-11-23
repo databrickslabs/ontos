@@ -116,6 +116,8 @@ class GlobalSearchTool(BaseTool):
                         include_history=include_history, query=query,
                     ),
                     **read_access.allowed_project_ids_by_type(ctx, type),
+                    # Assets and the documents imported for them: the asset read rule.
+                    **read_access.allowed_asset_ids_by_type(ctx, type),
                 },
                 # Rows of features without the caller's Read-only level are
                 # dropped too, as /api/search does by feature_id; and a user

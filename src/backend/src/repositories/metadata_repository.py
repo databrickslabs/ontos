@@ -18,6 +18,9 @@ from src.models.metadata import (
     MetadataAttachmentCreate,
 )
 
+# entity_id of a shared library row (the shared routes store it; nothing else does).
+SHARED_ENTITY_ID = "__shared__"
+
 
 def _remove_all_for_entity(db: Session, model, *, entity_type: str, entity_id: str) -> int:
     """Delete every row of ``model`` stored for an entity (used when the entity is deleted)."""
@@ -49,7 +52,12 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
     
     def list_shared(self, db: Session, *, entity_type: Optional[str] = None) -> List[RichTextMetadataDb]:
         """List all shared rich text assets, optionally filtered by entity type."""
-        query = db.query(RichTextMetadataDb).filter(RichTextMetadataDb.is_shared == True)
+        # A row stored with is_shared on an entity (before the per-entity routes ignored
+        # it) is that entity's, not the library's (#1342).
+        query = db.query(RichTextMetadataDb).filter(
+            RichTextMetadataDb.is_shared == True,
+            RichTextMetadataDb.entity_id == SHARED_ENTITY_ID,
+        )
         if entity_type:
             query = query.filter(RichTextMetadataDb.entity_type == entity_type)
         return query.order_by(RichTextMetadataDb.level.asc(), RichTextMetadataDb.title.asc()).all()
@@ -58,6 +66,8 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
         """Get multiple rich texts by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(RichTextMetadataDb).filter(RichTextMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -98,7 +108,12 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
     
     def list_shared(self, db: Session, *, entity_type: Optional[str] = None) -> List[LinkMetadataDb]:
         """List all shared link assets."""
-        query = db.query(LinkMetadataDb).filter(LinkMetadataDb.is_shared == True)
+        # A row stored with is_shared on an entity (before the per-entity routes ignored
+        # it) is that entity's, not the library's (#1342).
+        query = db.query(LinkMetadataDb).filter(
+            LinkMetadataDb.is_shared == True,
+            LinkMetadataDb.entity_id == SHARED_ENTITY_ID,
+        )
         if entity_type:
             query = query.filter(LinkMetadataDb.entity_type == entity_type)
         return query.order_by(LinkMetadataDb.level.asc(), LinkMetadataDb.title.asc()).all()
@@ -107,6 +122,8 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
         """Get multiple links by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(LinkMetadataDb).filter(LinkMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -249,7 +266,12 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
     
     def list_shared(self, db: Session, *, entity_type: Optional[str] = None) -> List[DocumentMetadataDb]:
         """List all shared document assets."""
-        query = db.query(DocumentMetadataDb).filter(DocumentMetadataDb.is_shared == True)
+        # A row stored with is_shared on an entity (before the per-entity routes ignored
+        # it) is that entity's, not the library's (#1342).
+        query = db.query(DocumentMetadataDb).filter(
+            DocumentMetadataDb.is_shared == True,
+            DocumentMetadataDb.entity_id == SHARED_ENTITY_ID,
+        )
         if entity_type:
             query = query.filter(DocumentMetadataDb.entity_type == entity_type)
         return query.order_by(DocumentMetadataDb.level.asc(), DocumentMetadataDb.title.asc()).all()
@@ -258,6 +280,8 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
         """Get multiple documents by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(DocumentMetadataDb).filter(DocumentMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(

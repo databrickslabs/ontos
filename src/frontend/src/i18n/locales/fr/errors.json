@@ -24,6 +24,11 @@
     "message": "Une erreur inattendue s'est produite.",
     "retry": "Réessayer"
   },
+  "assetAccess": {
+    "readDenied": "Vous n'avez pas accès à cet actif. Pour le consulter, il faut un accès en lecture/écriture aux Actifs ou l'accès à un produit de données auquel il appartient.",
+    "writeDenied": "Modifier les notes, liens, documents et coûts d'un actif nécessite un accès en lecture/écriture aux Actifs.",
+    "notFound": "Actif '{{assetId}}' introuvable."
+  },
   "internalError": "Une erreur inattendue s'est produite. Les détails se trouvent dans le journal du serveur (id de l'erreur {{errorId}}).",
   "userTokenRequired": "Cette requête nécessite votre jeton d'accès Databricks, et aucun n'a été reçu. Rechargez la page ; si le problème persiste, demandez à un administrateur d'activer l'autorisation utilisateur pour l'application.",
   "subscription": {

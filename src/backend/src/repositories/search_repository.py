@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
-from src.common.search_interfaces import SearchIndexItem
+from src.common.search_interfaces import TYPE_PREFIX_WILDCARD, SearchIndexItem
 
 logger = get_logger(__name__)
 
@@ -104,7 +104,8 @@ def _where(
 
     ``allowed_ids_by_type`` (type -> document ids, ``product::<id>``): a
     document of a listed type is kept only when its id is listed, in the
-    results, the counts and the facets alike. Each list is bound as one array
+    results, the counts and the facets alike; a ``<prefix>*`` key covers every
+    type with that prefix (``asset-*``). Each list is bound as one array
     parameter (``id = ANY(:allowed_n)``), so its size doesn't change the
     statement or hit a placeholder limit.
     """
@@ -113,7 +114,15 @@ def _where(
     has_query = bool(query) and query.strip() not in ("", "*")
 
     for n, (doc_type, ids) in enumerate(sorted((allowed_ids_by_type or {}).items())):
-        clauses.append(f"(type <> :allowed_type_{n} OR id = ANY(:allowed_{n}))")
+        if doc_type.endswith(TYPE_PREFIX_WILDCARD):
+            # ``asset-*``: every type with the prefix (compared as text, no LIKE pattern).
+            doc_type = doc_type[:-1]
+            clauses.append(
+                f"(left(type, :allowed_len_{n}) <> :allowed_type_{n} OR id = ANY(:allowed_{n}))"
+            )
+            params[f"allowed_len_{n}"] = len(doc_type)
+        else:
+            clauses.append(f"(type <> :allowed_type_{n} OR id = ANY(:allowed_{n}))")
         params[f"allowed_type_{n}"] = doc_type
         params[f"allowed_{n}"] = list(ids)
 

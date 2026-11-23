@@ -282,6 +282,79 @@ def allowed_project_ids_by_type(
     return {PROJECT_TYPE: {f"{PROJECT_ITEM_PREFIX}{i}" for i in visible}}
 
 
+# --- Assets: the rule of GET /api/assets/{id} ---------------------------------------
+
+ASSETS_FEATURE = "assets"
+# Every asset index type (``asset-table``, ...; ``search_interfaces.TYPE_PREFIX_WILDCARD``).
+ASSET_TYPES = "asset-*"
+ASSET_ITEM_PREFIX = "asset::"
+DOCUMENT_TYPE = "document"
+DOCUMENT_ITEM_PREFIX = "document::"
+
+
+def reads_every_asset(ctx: ToolContext) -> bool:
+    """``assets`` READ_WRITE reads every asset, as on the REST routes."""
+    caller = _caller(ctx)
+    return caller.full_access or caller.has_level(ASSETS_FEATURE, FeatureAccessLevel.READ_WRITE)
+
+
+def readable_asset_ids(ctx: ToolContext) -> Optional[set]:
+    """Ids of the assets the caller may read; ``None`` when they read every asset.
+
+    Others read the assets linked to a published Data Product
+    (``SearchManager.readable_asset_ids``). Computed once per request; empty
+    without a search manager or when the lookup fails (fail closed).
+    """
+    if reads_every_asset(ctx):
+        return None
+    key = "readable_ids:asset"
+    if key not in ctx.cache:
+        manager = ctx.search_manager
+        ctx.cache[key] = set() if manager is None or ctx.db is None else set(
+            manager.readable_asset_ids(ctx.db, data_products_manager=ctx.data_products_manager)
+        )
+    return ctx.cache[key]
+
+
+def _readable_document_item_ids(ctx: ToolContext, asset_ids: set) -> set:
+    """Index ids of the imported documents the caller may see: every document of
+    another entity, and those of the assets in ``asset_ids``. Empty on failure."""
+    from src.db_models.metadata import DocumentMetadataDb as D
+
+    try:
+        rows = ctx.db.query(D.id, D.entity_type, D.entity_id).filter(
+            D.source_path.isnot(None)).all()
+    except Exception:
+        logger.exception("Document lookup for the asset read rule failed; leaving them out")
+        return set()
+    return {
+        f"{DOCUMENT_ITEM_PREFIX}{doc_id}" for doc_id, entity_type, entity_id in rows
+        if str(entity_type or "").strip().lower() != "asset" or str(entity_id) in asset_ids
+    }
+
+
+def allowed_asset_ids_by_type(
+    ctx: ToolContext, type_filter: Optional[str] = None
+) -> Dict[str, set]:
+    """For ``global_search``: the asset and document index ids the caller may see.
+
+    An asset, and a document imported for an asset (its full text), follow the
+    asset read rule, as ``/api/search`` (``SearchManager._apply_asset_visibility``).
+    Empty (not filtered) for a caller who reads every asset, or who lacks
+    Read-only on ``assets`` (``allowed_features`` drops those rows, of the
+    ``assets`` feature, already). Merged into ``allowed_ids_by_type``.
+    """
+    if not has_feature_read_level(ctx, ASSETS_FEATURE):
+        return {}
+    asset_ids = readable_asset_ids(ctx)
+    if asset_ids is None:
+        return {}
+    allowed: Dict[str, set] = {ASSET_TYPES: {f"{ASSET_ITEM_PREFIX}{i}" for i in asset_ids}}
+    if type_filter in (None, "", DOCUMENT_TYPE):
+        allowed[DOCUMENT_TYPE] = _readable_document_item_ids(ctx, asset_ids)
+    return allowed
+
+
 def owning_row(entity_type: str, entity_id: Any) -> Optional[Tuple[str, str]]:
     """``(kind, row id)`` whose read rule applies to the entity, or None."""
     kind = _KIND_BY_ENTITY_TYPE.get(str(entity_type or ""))

@@ -1,5 +1,7 @@
 import urllib.parse
 from typing import List, Optional, Dict, Any, Tuple
+from collections.abc import Callable
+from uuid import UUID
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
@@ -22,15 +24,13 @@ from src.models.metadata import (
 from src.repositories.metadata_repository import (
     rich_text_repo, link_repo, document_repo, attachment_repo,
     RichTextRepository, LinkRepository, DocumentRepository, MetadataAttachmentRepository,
+    SHARED_ENTITY_ID,
 )
 from src.repositories.change_log_repository import change_log_repo
 from src.db_models.change_log import ChangeLogDb
 from src.db_models.metadata import DocumentMetadataDb, MetadataAttachmentDb
 
 logger = get_logger(__name__)
-
-# Constant for shared asset entity_id
-SHARED_ENTITY_ID = "__shared__"
 
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"
@@ -186,6 +186,8 @@ class MetadataManager(SearchableAsset):
 
     # --- Rich Text ---
     def create_rich_text(self, db: Session, *, data: RichTextCreate, user_email: Optional[str]) -> RichText:
+        # A row of an entity: shared rows come only from create_shared_rich_text.
+        data = data.model_copy(update={'is_shared': False})
         db_obj = self._rich_text_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -195,6 +197,10 @@ class MetadataManager(SearchableAsset):
     def list_rich_texts(self, db: Session, *, entity_type: str, entity_id: str) -> List[RichText]:
         rows = self._rich_text_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
         return [RichText.from_orm(r) for r in rows]
+
+    def get_rich_text(self, db: Session, *, id: str) -> Optional[RichText]:
+        db_obj = self._rich_text_repo.get(db, id=id)
+        return RichText.from_orm(db_obj) if db_obj else None
 
     def update_rich_text(self, db: Session, *, id: str, data: RichTextUpdate, user_email: Optional[str]) -> Optional[RichText]:
         db_obj = self._rich_text_repo.get(db, id=id)
@@ -220,6 +226,8 @@ class MetadataManager(SearchableAsset):
 
     # --- Link ---
     def create_link(self, db: Session, *, data: LinkCreate, user_email: Optional[str]) -> Link:
+        # A row of an entity: shared rows come only from create_shared_link.
+        data = data.model_copy(update={'is_shared': False})
         db_obj = self._link_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -229,6 +237,10 @@ class MetadataManager(SearchableAsset):
     def list_links(self, db: Session, *, entity_type: str, entity_id: str) -> List[Link]:
         rows = self._link_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
         return [Link.from_orm(r) for r in rows]
+
+    def get_link(self, db: Session, *, id: str) -> Optional[Link]:
+        db_obj = self._link_repo.get(db, id=id)
+        return Link.from_orm(db_obj) if db_obj else None
 
     def update_link(self, db: Session, *, id: str, data: LinkUpdate, user_email: Optional[str]) -> Optional[Link]:
         db_obj = self._link_repo.get(db, id=id)
@@ -296,6 +308,25 @@ class MetadataManager(SearchableAsset):
             self._log_change(db, entity_type=f"{entity_type}:document", entity_id=entity_id, action="DELETE", username=user_email)
             return True
         return False
+
+    def get_row_owner(self, db: Session, *, kind: str, id: str) -> Optional[Tuple[str, str]]:
+        """``(entity_type, entity_id)`` of a note, link or document, from the stored row.
+
+        ``kind`` is ``rich_text``, ``link`` or ``document``. The row isn't converted
+        to its response model, so a row that model can't load still has an owner
+        (access checks rely on it). ``None`` when no row has this id; an id that
+        isn't a UUID can't be one.
+        """
+        repo = {
+            'rich_text': self._rich_text_repo, 'link': self._link_repo,
+            'document': self._document_repo,
+        }[kind]
+        try:
+            UUID(str(id))
+        except ValueError:
+            return None
+        db_obj = repo.get(db, id=id)
+        return (db_obj.entity_type, db_obj.entity_id) if db_obj else None
 
     def get_document(self, db: Session, *, id: str) -> Optional[Document]:
         db_obj = self._document_repo.get(db, id=id)
@@ -616,11 +647,25 @@ class MetadataManager(SearchableAsset):
         return removed
     
     def list_attachments(
-        self, db: Session, *, entity_type: str, entity_id: str
+        self, db: Session, *, entity_type: str, entity_id: str,
+        can_read_row: Optional[Callable[[str, str], bool]] = None,
     ) -> List[MetadataAttachment]:
-        """List all shared asset attachments for an entity."""
+        """List all shared asset attachments for an entity.
+
+        ``can_read_row(entity_type, entity_id)``: attachments of a row stored on an
+        entity it refuses are left out, as in ``get_merged_metadata`` (#1342).
+        """
         rows = self._attachment_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
+        if can_read_row is not None:
+            rows = [r for r in rows if self._attached_row_readable(db, r, can_read_row)]
         return [MetadataAttachment.from_orm(r) for r in rows]
+
+    def _attached_row_readable(self, db: Session, attachment, can_read_row) -> bool:
+        if attachment.asset_type not in ('rich_text', 'link', 'document'):
+            return True
+        owner = self.get_row_owner(db, kind=attachment.asset_type, id=attachment.asset_id)
+        # A row that no longer exists tells nothing about an asset.
+        return owner is None or can_read_row(*owner)
 
     # =========================================================================
     # Merged Metadata with Inheritance
@@ -629,6 +674,7 @@ class MetadataManager(SearchableAsset):
     def get_merged_metadata(
         self, db: Session, *,
         entity_type: str, entity_id: str,
+        can_read_row: Optional[Callable[[str, str], bool]] = None,
         contract_ids: Optional[List[str]] = None,
         max_level_inheritance: int = 99
     ) -> MergedMetadataResponse:
@@ -669,6 +715,14 @@ class MetadataManager(SearchableAsset):
         attached_rich_texts = self._rich_text_repo.get_by_ids(db, ids=attached_rt_ids)
         attached_links = self._link_repo.get_by_ids(db, ids=attached_link_ids)
         attached_docs = self._document_repo.get_by_ids(db, ids=attached_doc_ids)
+        # can_read_row(entity_type, entity_id): attached rows stored on an entity it
+        # refuses are left out (an asset's row the caller can't read, #1342).
+        if can_read_row is not None:
+            attached_rich_texts = [
+                r for r in attached_rich_texts if can_read_row(r.entity_type, r.entity_id)
+            ]
+            attached_links = [r for r in attached_links if can_read_row(r.entity_type, r.entity_id)]
+            attached_docs = [r for r in attached_docs if can_read_row(r.entity_type, r.entity_id)]
         
         for rt in attached_rich_texts:
             sources[str(rt.id)] = f"shared:{entity_id}"

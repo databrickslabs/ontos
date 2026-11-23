@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 from src.common.payload_spellings import CamelCaseSpellingWins
+from src.common.odcs_api_version import normalized_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -463,9 +464,14 @@ class DataContractBase(CamelCaseSpellingWins):
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
-    apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
+    # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
+    apiVersion: str = Field('v3.1.0', alias='api_version')
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain assignment (primary included)
+    # Multi-domain assignment (primary included). The create dialogs send the fields by
+    # name: every aliased field is read by its name as well as its alias
+    # (``populate_by_name``); when both spellings are sent, the camelCase one wins, as on
+    # update (``CamelCaseSpellingWins``)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')
     primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
@@ -473,8 +479,12 @@ class DataContractBase(CamelCaseSpellingWins):
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
 
+    # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
+    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+
     class Config:
-        # The create dialog sends the field names (domainIds, primaryDomainId, ...)
+        # The create dialogs and the wizard send the field names (dataProduct, tenant,
+        # domainIds, ...), the documented camelCase input
         populate_by_name = True
 
 
@@ -611,6 +621,9 @@ class DataContractUpdate(CamelCaseSpellingWins):
 
     class Config:
         populate_by_name = True
+
+    # Spelling only ('3.0.2' -> 'v3.0.2'), as on create
+    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
 
 
 class DataContractRead(BaseModel):

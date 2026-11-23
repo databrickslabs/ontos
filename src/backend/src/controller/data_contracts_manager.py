@@ -170,6 +170,7 @@ from src.controller.lifecycle_fields import (
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
 from src.common.api_errors import CodedValueError
+from src.common.odcs_api_version import normalized_api_version
 
 logger = get_logger(__name__)
 
@@ -766,7 +767,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         status = odcs.get('status') or 'draft'
         owner = odcs.get('owner') or (current_username or 'unknown')
         kind = odcs.get('kind') or 'DataContract'
-        api_version = odcs.get('apiVersion') or 'v3.0.1'
+        # The ODCS spelling ('3.0.2' -> 'v3.0.2'), as the REST models store it
+        api_version = normalized_api_version(odcs.get('apiVersion')) or 'v3.0.1'
         description = odcs.get('description') or {}
 
         # Try to resolve owner as team name
@@ -1122,7 +1124,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
-            'apiVersion': db_obj.api_version or 'v3.1.0',
+            # The ODCS spelling: a row stored before the spelling fix may hold '3.0.2'
+            'apiVersion': normalized_api_version(db_obj.api_version) or 'v3.1.0',
             'name': db_obj.name,
             'version': db_obj.version,
             # The Stage Category's standard value; the exact stage and group
@@ -1131,6 +1134,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 db_session, 'data_contract', db_obj
             )[0],
         }
+        # The version checks below read the exported value, not the stored one
+        api_version = odcs['apiVersion']
         
         # Apply multi-domain fields via the export adapter: primary name in `domain`,
         # additional domains under customProperties.additionalDomains, plus app round-trip
@@ -1367,7 +1372,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             if property_quality_checks:
                                 quality = []
                                 for check in property_quality_checks:
-                                    quality_dict = odcs_quality_check(check, db_obj.api_version)
+                                    quality_dict = odcs_quality_check(check, api_version)
                                     quality.append(quality_dict)
                                 prop_dict['quality'] = quality
 
@@ -1400,7 +1405,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         # Property-level checks have property_id set and are exported with their properties
                         if check.property_id is not None:
                             continue
-                        quality_dict = odcs_quality_check(check, db_obj.api_version)
+                        quality_dict = odcs_quality_check(check, api_version)
                         quality.append(quality_dict)
                     schema_dict['quality'] = quality
 
@@ -1493,7 +1498,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
 
         if members_list:
-            api_version = db_obj.api_version or 'v3.1.0'
             tm = getattr(db_obj, 'team_metadata', None)
             if api_version >= 'v3.1.0' and tm:
                 team_obj: Dict[str, Any] = {}
@@ -3403,7 +3407,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
-            api_version_val = parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version', 'v3.1.0')
+            # The ODCS spelling ('3.0.2' -> 'v3.0.2'), as the REST models store it. A value
+            # outside ODCS is kept: the import only warns (ODCS validation above)
+            api_version_val = normalized_api_version(
+                parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version')
+            ) or 'v3.1.0'
             
             # Extract description fields
             description = parsed_odcs.get('description', {})

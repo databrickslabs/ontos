@@ -80,12 +80,42 @@ def _create(db: Session, **fields):
     )
 
 
-def test_create_stores_the_other_fields_sent_by_name(db_session: Session):
-    """populate_by_name makes every aliased field of DataContractBase readable by
-    name, not only the domains: the ones the create path stores are kept."""
+def test_create_reads_every_aliased_field_by_name(db_session: Session):
+    """The create body is read by field name as well as by alias: ``dataProduct``,
+    ``apiVersion`` and the domains sent by name are stored (the wizard sends them so)."""
     created = _create(db_session, dataProduct="orders-dp", apiVersion="v3.0.2")
 
     assert (created.data_product, created.api_version) == ("orders-dp", "v3.0.2")
+
+
+def test_the_flat_description_fields_are_read_by_name_and_by_alias():
+    by_name = DataContractCreate.model_validate({
+        "name": "Orders", "descriptionUsage": "u", "descriptionPurpose": "p",
+        "descriptionLimitations": "l",
+    })
+    by_alias = DataContractCreate.model_validate({
+        "name": "Orders", "description_usage": "u", "description_purpose": "p",
+        "description_limitations": "l",
+    })
+
+    for model in (by_name, by_alias):
+        assert (model.descriptionUsage, model.descriptionPurpose) == ("u", "p")
+        assert model.descriptionLimitations == "l"
+
+
+def test_api_version_by_name_wins_over_the_alias():
+    model = DataContractCreate.model_validate({
+        "name": "Orders", "apiVersion": "v3.0.2", "api_version": "v3.1.0",
+    })
+    assert model.apiVersion == "v3.0.2"
+
+
+def test_the_field_name_wins_when_both_spellings_are_sent():
+    model = DataContractCreate.model_validate({
+        "name": "Orders", "domainIds": ["d1"], "domain_ids": ["d2"],
+        "primaryDomainId": "d1", "primary_domain_id": "d2",
+    })
+    assert (model.domainIds, model.primaryDomainId) == (["d1"], "d1")
 
 
 def test_create_still_stores_the_other_fields_sent_by_alias(db_session: Session):
@@ -128,7 +158,7 @@ def test_an_update_with_empty_domain_ids_clears_them(db_session: Session):
 
 
 def test_an_update_with_null_api_version_keeps_it(db_session: Session):
-    created = _create(db_session, apiVersion="v3.0.2")
+    created = _create(db_session, api_version="v3.0.2")
     _update(db_session, created.id, apiVersion=None)
 
     db_session.expire_all()

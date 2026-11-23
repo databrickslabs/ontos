@@ -14,6 +14,8 @@ RUN_FAILED_CODE = 'run_failed'
 RUN_ERROR_CODES = frozenset({
     'entities_load_failed', 'rule_parse_failed', RUN_FAILED_CODE, 'tags_load_failed',
     'user_token_required', 'workspace_client_unavailable',
+    # LLM_CHECK (compliance_llm_check)
+    'llm_check_tag_action',
 })
 
 # Prefix of the error parse_rule raises for a rule that doesn't parse

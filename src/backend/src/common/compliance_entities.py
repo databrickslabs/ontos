@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Optional, Protocol, Set
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_enrichment import (
@@ -623,9 +624,25 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
         ``code`` and ``params`` (for the UI to translate) and an English
         ``message``.
     """
-    from src.common.compliance_dsl import parse_rule
+    from src.common.compliance_dsl import (
+        LlmCheckCriterionError, llm_check_criterion, parse_rule,
+    )
 
     parsed = parse_rule(rule, strict=True)
+    if _function_calls(parsed.get('where_clause'), 'LLM_CHECK'):
+        # The WHERE is evaluated without a model: the check fails, and the rule
+        # would skip every entity without a word
+        raise LlmCheckInWhereError(
+            "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
+            "would skip every entity. Move it to ASSERT."
+        )
+    refuse_llm_check_tag_actions(parsed)
+    for call in llm_check_calls(parsed):
+        if llm_check_criterion(call) is None:
+            raise LlmCheckCriterionError(
+                "LLM_CHECK takes a text and a criterion written as a string literal, "
+                "for example LLM_CHECK(t.comment, 'states the grain of the table')"
+            )
     warnings: List[Dict[str, Any]] = []
     entity_filter = parse_entity_filter(rule, parsed=parsed)
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
@@ -647,4 +664,83 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             'message': "The rule has no ASSERT clause, so every entity passes.",
         })
     return warnings
+
+
+class LlmCheckInWhereError(CodedValueError):
+    """A rule with LLM_CHECK in WHERE (rejected on save)."""
+
+    code = 'llm_check_in_where'
+
+
+# The actions a rule with LLM_CHECK can't have: they write on a model's verdict.
+# Revisit once model verdicts can go through Authority Resolution (#831)
+LLM_CHECK_REFUSED_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+class LlmCheckTagActionError(CodedValueError):
+    """A rule with LLM_CHECK and ASSIGN_TAG / REMOVE_TAG actions.
+
+    Refused on save, in the YAML load and when a run starts.
+    """
+
+    code = 'llm_check_tag_action'
+
+
+def llm_check_tag_actions(parsed: Dict[str, Any]) -> List[str]:
+    """The refused tag actions of a parsed rule with LLM_CHECK, sorted ([] if none)."""
+    if not llm_check_calls(parsed):
+        return []
+    actions = (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+    return sorted({a.get('type') for a in actions if a.get('type') in LLM_CHECK_REFUSED_ACTIONS})
+
+
+def refuse_llm_check_tag_actions(parsed: Dict[str, Any]) -> None:
+    """Raise ``LlmCheckTagActionError`` for a rule with LLM_CHECK and tag actions.
+
+    The verdict picks ON_PASS / ON_FAIL, and an entity's owner can edit the text the
+    model reads: a steered verdict would change tags, which feed UC tag sync and other
+    gates. NOTIFY stays: a person reads it. Checked wherever a rule gets in (the API
+    save, the YAML load) and again when a run starts, so a rule stored another way
+    writes no tag either.
+    """
+    tag_actions = llm_check_tag_actions(parsed)
+    if tag_actions:
+        raise LlmCheckTagActionError(
+            "A rule with LLM_CHECK can't use ASSIGN_TAG or REMOVE_TAG: the model's "
+            "verdict would change tags. Use NOTIFY, or a separate rule without "
+            "LLM_CHECK for the tag actions.",
+            actions=', '.join(tag_actions),
+        )
+
+
+def llm_check_calls(parsed: Dict[str, Any]) -> list:
+    """The LLM_CHECK calls of a parsed rule, in WHERE and ASSERT."""
+    return _function_calls(parsed.get('where_clause'), 'LLM_CHECK') + _function_calls(
+        parsed.get('assert_clause'), 'LLM_CHECK'
+    )
+
+
+# The app entity types a rule can match, and the feature whose read access shows them
+APP_ENTITY_FEATURES = {
+    'data_product': 'data-products',
+    'data_contract': 'data-contracts',
+    'domain': 'data-domains',
+    'review': 'data-asset-reviews',
+}
+
+
+def _function_calls(node: Any, name: str) -> list:
+    """The calls of the DSL function ``name`` in a rule expression (AST node)."""
+    from src.common.compliance_dsl import FunctionCall
+
+    if node is None:
+        return []
+    if isinstance(node, (list, tuple)):
+        return [c for n in node for c in _function_calls(n, name)]
+    if not hasattr(node, '__dataclass_fields__'):
+        return []
+    found = [node] if isinstance(node, FunctionCall) and node.name == name else []
+    return found + [
+        c for f in node.__dataclass_fields__ for c in _function_calls(getattr(node, f), name)
+    ]
 

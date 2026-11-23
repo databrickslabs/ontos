@@ -363,6 +363,10 @@
       "unreachableSteps": "Estas etapas não são alcançáveis a partir da primeira etapa: {{steps}}.",
       "storedEntityTypeUnknown": "O gatilho lista \"{{entityType}}\", um tipo de entidade que não existe mais. Ele nunca dispara para ele.",
       "storedEntityTypeUnsupported": "O gatilho {{trigger}} nunca dispara para {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "A etapa \"{{step}}\" verifica uma política que usa LLM_CHECK. LLM_CHECK só é avaliado em execuções de conformidade, então a etapa reprovaria todas as entidades. Selecione uma política sem LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "A etapa \"{{step}}\" tem uma regra que usa LLM_CHECK. LLM_CHECK só é avaliado nas execuções de conformidade, então a etapa reprovaria todas as entidades. Remova LLM_CHECK da regra."
     }
   },
   "approvalResponse": {

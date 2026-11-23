@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.dependencies import DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
@@ -29,6 +30,12 @@ router = APIRouter(prefix="/api", tags=["Maturity Levels"])
 SETTINGS_FEATURE_ID = "settings"
 DP_FEATURE_ID = "data-products"
 DC_FEATURE_ID = "data-contracts"
+
+
+class MaturityGateLlmCheckError(CodedValueError):
+    """A maturity gate on a policy whose rule uses LLM_CHECK."""
+
+    code = 'maturity_gate_policy_uses_llm_check'
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +230,14 @@ async def add_gate(
     policy = db.get(CompliancePolicyDb, body.compliance_policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Compliance policy not found")
+    from src.controller.compliance_manager import rule_uses_llm_check
+    if rule_uses_llm_check(policy.rule):
+        # Gates evaluate the rule without a model: LLM_CHECK would fail every entity
+        error = MaturityGateLlmCheckError(
+            "This policy uses LLM_CHECK, which is only evaluated in compliance runs; "
+            "a maturity gate would fail every entity",
+        )
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     try:
         gate = maturity_repo.add_gate(

@@ -363,6 +363,10 @@
       "unreachableSteps": "Deze stappen zijn niet bereikbaar vanaf de eerste stap: {{steps}}.",
       "storedEntityTypeUnknown": "De trigger bevat \"{{entityType}}\", een entiteitstype dat niet meer bestaat. Hij wordt daarvoor nooit geactiveerd.",
       "storedEntityTypeUnsupported": "De trigger {{trigger}} wordt nooit geactiveerd voor {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Stap \"{{step}}\" controleert een beleid dat LLM_CHECK gebruikt. LLM_CHECK wordt alleen in compliance-runs geëvalueerd, dus de stap zou elke entiteit laten mislukken. Selecteer een beleid zonder LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Stap \"{{step}}\" heeft een regel met LLM_CHECK. LLM_CHECK wordt alleen in compliance-runs geëvalueerd, dus de stap zou voor elke entiteit mislukken. Verwijder LLM_CHECK uit de regel."
     }
   },
   "approvalResponse": {

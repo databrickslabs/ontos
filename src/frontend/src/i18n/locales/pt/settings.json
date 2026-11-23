@@ -1313,6 +1313,9 @@
       "created": "Nível de maturidade \"{{name}}\" criado.",
       "deleted": "Nível de maturidade \"{{name}}\" excluído.",
       "cannotDeleteTitle": "Não é possível excluir"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Esta política usa LLM_CHECK, que só é avaliado em execuções de conformidade, então um gate de maturidade reprovaria todas as entidades. Selecione uma política sem LLM_CHECK."
     }
   },
   "directory": {

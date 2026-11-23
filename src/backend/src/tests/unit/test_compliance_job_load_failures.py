@@ -249,7 +249,7 @@ def test_the_job_passes_one_statement_cache_to_every_policy(monkeypatch, tmp_pat
 
     caches = []
 
-    def record(db, policy, manager, entity_limit, statement_cache=None):
+    def record(db, policy, manager, entity_limit, statement_cache=None, llm_checker=None):
         caches.append(statement_cache)
         return {'policy_id': policy['id'], 'policy_name': policy['name'],
                 'status': 'succeeded', 'success_count': 1, 'failure_count': 0,
@@ -282,3 +282,33 @@ def test_a_job_policy_run_reads_as_the_app_with_the_shared_cache(db_session):
     assert kwargs['statement_cache'] is cache
     assert kwargs['run_identity'].on_behalf_of_user is False
     assert 'current_user' not in kwargs  # no user: the run is the app's
+
+
+def test_the_policies_of_a_job_run_share_one_llm_check_budget(monkeypatch, tmp_path):
+    checkers = []
+
+    def run_policy(db, policy, manager, entity_limit, statement_cache=None, llm_checker=None):
+        checkers.append(llm_checker)
+        return {
+            'policy_id': policy['id'], 'policy_name': policy['name'], 'status': 'succeeded',
+            'success_count': 1, 'failure_count': 0, 'score': 100.0, 'error': None,
+        }
+
+    monkeypatch.setattr(job, 'WorkspaceClient', lambda **_: SimpleNamespace(
+        config=SimpleNamespace(host='https://example.cloud.databricks.com')))
+    monkeypatch.setattr(job, '_initialize_application_config', lambda ws: None)
+    monkeypatch.setattr(job, 'create_engine_from_params',
+                        lambda **_: _engine_at(tmp_path, _head()))
+    monkeypatch.setattr(job, 'load_policies', lambda *a, **k: [
+        {'id': 'p1', 'name': 'Contracts active'}, {'id': 'p2', 'name': 'Domains described'},
+    ])
+    monkeypatch.setattr(job, 'run_policy', run_policy)
+    monkeypatch.setattr(sys, 'argv', [
+        'compliance_checks.py', '--lakebase_instance_name', 'local',
+        '--postgres_host', 'localhost', '--postgres_db', 'db',
+    ])
+
+    job.main()
+
+    assert len(checkers) == 2
+    assert checkers[0] is not None and checkers[0] is checkers[1]

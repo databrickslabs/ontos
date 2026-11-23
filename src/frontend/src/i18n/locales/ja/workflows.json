@@ -363,6 +363,10 @@
       "unreachableSteps": "最初のステップからたどれないステップがあります: {{steps}}。",
       "storedEntityTypeUnknown": "トリガーには、もう存在しないエンティティタイプ「{{entityType}}」が含まれています。このタイプでは一度も起動しません。",
       "storedEntityTypeUnsupported": "{{trigger}} トリガーは {{entity}} では一度も起動しません。"
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "ステップ「{{step}}」は LLM_CHECK を使用するポリシーをチェックします。LLM_CHECK はコンプライアンス実行でのみ評価されるため、このステップはすべてのエンティティを不合格にします。LLM_CHECK を使用しないポリシーを選択してください。",
+      "validationRuleUsesLlmCheck": "ステップ「{{step}}」のルールは LLM_CHECK を使用しています。LLM_CHECK はコンプライアンスの実行でのみ評価されるため、このステップはすべてのエンティティで不合格になります。ルールから LLM_CHECK を外してください。"
     }
   },
   "approvalResponse": {

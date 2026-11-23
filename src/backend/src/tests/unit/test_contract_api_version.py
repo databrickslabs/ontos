@@ -323,13 +323,21 @@ def test_a_batch_import_reports_the_refusal_with_its_code(manager, db_session):
         for n, v in [(bad, "v9.9.9"), (good, "v3.0.2")]
     ]
 
-    result = manager.create_contracts_from_files(db=db_session, files=files, current_user="alice")
-
-    by_name = {item.name: item for item in result.items}
-    assert (by_name[bad].status, by_name[bad].code, by_name[bad].params) == (
-        "failed", "odcs_api_version_unsupported", {"api_version": "v9.9.9"},
-    )
-    assert by_name[good].status == "created"
+    try:
+        result = manager.create_contracts_from_files(
+            db=db_session, files=files, current_user="alice",
+        )
+        by_name = {item.name: item for item in result.items}
+        assert (by_name[bad].status, by_name[bad].code, by_name[bad].params) == (
+            "failed", "odcs_api_version_unsupported", {"api_version": "v9.9.9"},
+        )
+        assert by_name[good].status == "created"
+    finally:
+        # The batch import commits per file, past the fixture's rollback: remove the row, or
+        # later contract-list tests in the same run count it.
+        db_session.query(DataContractDb).filter(
+            DataContractDb.name.in_([good, bad])).delete(synchronize_session=False)
+        db_session.commit()
 
 
 def test_a_self_service_contract_outside_odcs_is_refused(manager, db_session):

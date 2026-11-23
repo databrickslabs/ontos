@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { mergeEditedProperties, newAssetProperties } from './asset-form-properties';
 
 interface AssetFormDialogProps {
   isOpen: boolean;
@@ -91,6 +92,41 @@ export function AssetFormDialog({
   const form = useForm<Record<string, any>>({
     defaultValues: {},
   });
+  // The values the form opened with, to send only the properties the user edited
+  const openedWith = useRef<Record<string, any>>({});
+  // The asset's stored properties. A list row (Asset Explorer) carries none, so they
+  // are read from the asset; undefined until known (then the update leaves them out).
+  const [storedProperties, setStoredProperties] = useState<
+    Record<string, any> | null | undefined
+  >(undefined);
+  // 'loading' keeps the form closed (a late read would reset it); 'failed' blocks Save
+  const [propertiesRead, setPropertiesRead] = useState<'ready' | 'loading' | 'failed'>('ready');
+
+  useEffect(() => {
+    if (!isOpen || !asset) {
+      setStoredProperties(undefined);
+      setPropertiesRead('ready');
+      return;
+    }
+    if (asset.properties !== undefined) {
+      setStoredProperties(asset.properties);
+      setPropertiesRead('ready');
+      return;
+    }
+    let cancelled = false;
+    setStoredProperties(undefined);
+    setPropertiesRead('loading');
+    apiGet<AssetRead>(`/api/assets/${asset.id}`).then((response) => {
+      if (cancelled) return;
+      if (!response.error && response.data) {
+        setStoredProperties(response.data.properties ?? null);
+        setPropertiesRead('ready');
+      } else {
+        setPropertiesRead('failed');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, asset, apiGet]);
 
   const fetchSchema = useCallback(async () => {
     if (!assetTypeIri) return;
@@ -129,7 +165,7 @@ export function AssetFormDialog({
       defaults.primary_domain_id = asset.primary_domain_id
         ?? asset.domains?.find(d => d.is_primary)?.domain_id
         ?? asset.domain_id ?? null;
-      const props = asset.properties || {};
+      const props = storedProperties || {};
       if (schema?.fields) {
         for (const f of schema.fields) {
           if (TOP_LEVEL_FIELDS.has(f.name) || SYSTEM_FIELDS.has(f.name)) continue;
@@ -151,8 +187,9 @@ export function AssetFormDialog({
         }
       }
     }
+    openedWith.current = defaults;
     form.reset(defaults);
-  }, [isOpen, schema, isEdit, asset]);
+  }, [isOpen, schema, isEdit, asset, storedProperties]);
 
   const groupedFields = useMemo(() => {
     if (!schema?.fields) return [];
@@ -165,17 +202,11 @@ export function AssetFormDialog({
   const onSubmit = async (values: Record<string, any>) => {
     setIsSubmitting(true);
     try {
-      const properties: Record<string, any> = {};
-      for (const [key, val] of Object.entries(values)) {
-        if (key.startsWith('prop_')) {
-          const propName = key.slice(5);
-          if (val !== '' && val !== null && val !== undefined) {
-            properties[propName] = val;
-          }
-        }
-      }
-
+      // On edit, keep the stored properties: the form shows only the ontology fields
       if (isEdit && asset) {
+        const properties = storedProperties === undefined
+          ? undefined
+          : mergeEditedProperties(storedProperties, values, openedWith.current);
         const payload: AssetUpdate = {
           name: values.name || null,
           description: values.description || null,
@@ -184,7 +215,8 @@ export function AssetFormDialog({
           location: values.location || null,
           domain_ids: values.domain_ids || [],
           primary_domain_id: values.primary_domain_id ?? null,
-          properties: Object.keys(properties).length > 0 ? properties : null,
+          // {} clears the properties; left out (stored ones unknown), they are kept
+          ...(properties === undefined ? {} : { properties }),
         };
         const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
@@ -200,6 +232,7 @@ export function AssetFormDialog({
         }
         onSuccess(response.data!);
       } else {
+        const properties = newAssetProperties(values);
         const payload: AssetCreate = {
           name: values.name,
           description: values.description || null,
@@ -245,12 +278,17 @@ export function AssetFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {schemaLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">{t('common:assetForm.loadingSchema')}</span>
-          </div>
-        ) : (
+        <div role="status" aria-live="polite">
+          {(schemaLoading || propertiesRead === 'loading') && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+              <span className="ml-2 text-sm text-muted-foreground">
+                {t('common:assetForm.loadingSchema')}
+              </span>
+            </div>
+          )}
+        </div>
+        {schemaLoading || propertiesRead === 'loading' ? null : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Core fields always shown */}
@@ -376,11 +414,16 @@ export function AssetFormDialog({
                 </div>
               ))}
 
+              {propertiesRead === 'failed' && (
+                <p role="alert" className="text-sm text-destructive">
+                  {t('common:assetFormStoredProperties.loadError')}
+                </p>
+              )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   {t('common:actions.cancel')}
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || propertiesRead !== 'ready'}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isEdit ? t('common:actions.saveChanges') : t('common:assetForm.createTitle', { name: assetTypeName })}
                 </Button>

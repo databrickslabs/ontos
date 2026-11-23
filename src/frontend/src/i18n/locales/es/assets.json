@@ -103,6 +103,9 @@
     "downloadTemplate": "Descargar plantilla",
     "exportHelp1": "El archivo de exportación incluye todos los campos de cada activo. Puede editarlo sin conexión y volver a importarlo.",
     "exportHelp2": "La plantilla proporciona un archivo vacío con los encabezados correctos y una fila de ejemplo.",
+    "importHelp": {
+      "properties": "En la columna properties, una celda vacía conserva las propiedades almacenadas del activo; use {} para borrarlas. Un valor reemplaza las propiedades públicas y se conservan las que Ontos mantiene por sí mismo."
+    },
     "selectFile": "Seleccionar archivo",
     "preview": "Vista previa",
     "rows_one": "{{count}} fila",

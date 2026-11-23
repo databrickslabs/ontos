@@ -103,6 +103,9 @@
     "downloadTemplate": "Download Template",
     "exportHelp1": "The export file includes all fields for each asset. You can edit it offline and re-import.",
     "exportHelp2": "The template provides an empty file with correct headers and an example row.",
+    "importHelp": {
+      "properties": "In the properties column, an empty cell keeps the asset's stored properties; use {} to clear them. A value replaces the public properties, and the ones Ontos keeps itself are retained."
+    },
     "selectFile": "Select File",
     "preview": "Preview",
     "rows_one": "{{count}} row",

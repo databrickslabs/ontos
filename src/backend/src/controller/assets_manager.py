@@ -18,7 +18,7 @@ from src.models.assets import (
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteResult,
-    PHYSICAL_TABLE_ASSET_TYPES, with_internal_properties,
+    PHYSICAL_TABLE_ASSET_TYPES, public_properties, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
@@ -31,6 +31,8 @@ from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
+
+_UNSET = object()
 
 ONTOS_NS = "http://ontos.app/ontology#"
 
@@ -428,7 +430,20 @@ class AssetsManager(SearchableAsset):
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
-            self._validate_properties(db, effective_type_id, asset_in.properties)
+            # Only what the update changes: a stored legacy value that doesn't fit the
+            # schema doesn't block an edit of another field (the dialog sends them back).
+            # A type change checks them all: none was checked against the new type.
+            checked = asset_in.properties
+            if str(effective_type_id) == str(db_asset.asset_type_id):
+                stored = db_asset.properties or {}
+                checked = {k: v for k, v in checked.items() if stored.get(k, _UNSET) != v}
+            self._validate_properties(db, effective_type_id, checked)
+        elif ('properties' not in asset_in.model_fields_set
+              and str(effective_type_id) != str(db_asset.asset_type_id)):
+            # Omitted, the stored properties are kept: on a type change they must fit
+            # the new type (null clears them, so there is nothing to check)
+            self._validate_properties(
+                db, effective_type_id, public_properties(db_asset.properties))
 
         update_data = asset_in.model_dump(exclude_unset=True)
         # A status change is a move its lifecycle stage group must allow
@@ -442,10 +457,11 @@ class AssetsManager(SearchableAsset):
                 _from, update_data['status'] = lifecycle_service.check_transition(
                     db, 'asset', db_asset, requested,
                 )
-        if update_data.get('properties') is not None:
-            # Clients never see the internal keys, so they can't send them back
+        if 'properties' in update_data:
+            # Clients never see the internal keys, so they can't send them back; null
+            # clears the public properties like {} and keeps the internal ones
             update_data['properties'] = with_internal_properties(
-                update_data['properties'], db_asset.properties)
+                update_data['properties'] or {}, db_asset.properties)
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.pop('domain_ids', None) or []
         primary_domain_id = update_data.pop('primary_domain_id', None)

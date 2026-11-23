@@ -682,7 +682,7 @@
       "titleEdit": "{{key}} v{{version}} bewerken",
       "keyHint": "Identificatie die alle versies van het document delen, bijv. POL-DOA.",
       "urlHint": "Optioneel. Link naar het brondocument (http of https). Ontos opent het niet.",
-      "validityHint": "De geldigheid zoals het document die aangeeft. Alleen informatief: er wordt niets afgedwongen. Controles kunnen die lezen als justification.valid_to.",
+      "validityHint": "De geldigheid zoals het document die aangeeft. Alleen informatief: er wordt niets afgedwongen. Controles kunnen die lezen als policy_ref.valid_to.",
       "validation": {
         "required": "Externe ID en naam zijn verplicht",
         "title": "De verwijzing is niet geldig",
@@ -707,7 +707,7 @@
       "backButton": "Terug naar verwijzingen",
       "buttonNewVersion": "Nieuwe versie",
       "versionCreated": "Versie {{version}} aangemaakt",
-      "expiredNote": "De geldigheid die deze verwijzing aangeeft is verstreken. De verwijzing blokkeert zelf niets; een controle die justification.expired leest, kan dat wel.",
+      "expiredNote": "De geldigheid die deze verwijzing aangeeft is verstreken. De verwijzing blokkeert zelf niets; een controle die policy_ref.expired leest, kan dat wel.",
       "cardReference": "Verwijzing",
       "cardDependents": "Geciteerd door ({{count}})",
       "noDependents": "Geen Authority Relation citeert deze verwijzing."

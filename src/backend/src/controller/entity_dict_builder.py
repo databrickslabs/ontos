@@ -158,9 +158,9 @@ def build_authority_relation_dict(db: Session, relation_id: str) -> Optional[Dic
     base["is_active"] = relation.status == "active"
 
     # ARF 1.2.0: the cited policy reference's validity, for Compliance and Maturity
-    # checks (justification.cited / valid_from / valid_to / expired), computed now.
+    # checks (policy_ref.cited / valid_from / valid_to / expired), computed now.
     from src.controller.authority_policy_manager import AuthorityPolicyManager
-    base["justification"] = AuthorityPolicyManager().justification(db, relation)
+    base["policy_ref"] = AuthorityPolicyManager().policy_ref(db, relation)
 
     return base
 

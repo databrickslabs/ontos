@@ -682,7 +682,7 @@
       "titleEdit": "{{key}} v{{version}} を編集",
       "keyHint": "文書のすべてのバージョンで共通の識別子（例: POL-DOA）。",
       "urlHint": "任意。元文書へのリンク（http または https）。Ontos は開きません。",
-      "validityHint": "文書に記載された有効期間。参考情報のみで、強制はされません。チェックは justification.valid_to として参照できます。",
+      "validityHint": "文書に記載された有効期間。参考情報のみで、強制はされません。チェックは policy_ref.valid_to として参照できます。",
       "validation": {
         "required": "外部 ID と名前は必須です",
         "title": "参照が有効ではありません",
@@ -707,7 +707,7 @@
       "backButton": "参照一覧に戻る",
       "buttonNewVersion": "新しいバージョン",
       "versionCreated": "バージョン {{version}} を作成しました",
-      "expiredNote": "この参照に記載された有効期間は過ぎています。参照自体は何もブロックしませんが、justification.expired を読むチェックはブロックできます。",
+      "expiredNote": "この参照に記載された有効期間は過ぎています。参照自体は何もブロックしませんが、policy_ref.expired を読むチェックはブロックできます。",
       "cardReference": "参照",
       "cardDependents": "引用元 ({{count}})",
       "noDependents": "この参照を引用している Authority Relation はありません。"

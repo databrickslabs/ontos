@@ -4,8 +4,9 @@ Read-only users see references; Read-write users create, edit, version and delet
 them. Every change writes an audit record through the app's audit service, and
 errors are coded (``{code, message, params}``).
 """
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, Query, Request
 
+from src.common.api_errors import coded_http_error
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import AuditCurrentUserDep, AuditManagerDep, DBSessionDep
 from src.common.features import FeatureAccessLevel
@@ -30,17 +31,10 @@ def _user(current_user) -> str | None:
     return current_user.username if current_user else None
 
 
-def _failure(exc: AuthorityPolicyError) -> HTTPException:
-    """The coded answer: the handler reads the code from ``__cause__``."""
-    error = HTTPException(status_code=getattr(exc, "http_status", 400), detail=str(exc))
-    error.__cause__ = exc
-    return error
-
-
 def _get_or_404(db, policy_id: str):
     policy = manager.get_policy(db, policy_id)
     if not policy:
-        raise _failure(AuthorityPolicyNotFoundError("Policy reference not found."))
+        raise coded_http_error("get policy reference", AuthorityPolicyNotFoundError("Policy reference not found."))
     return policy
 
 
@@ -82,7 +76,7 @@ async def create_policy(
     try:
         policy = manager.create_policy(db, payload, current_user=_user(current_user))
     except AuthorityPolicyError as e:
-        raise _failure(e)
+        raise coded_http_error("policy reference", e)
     _audit(audit_manager, db, request, current_user, "CREATE_POLICY_REFERENCE", policy)
     return manager.to_read_dict(db, policy)
 
@@ -109,9 +103,9 @@ async def update_policy(
     try:
         policy = manager.update_policy(db, policy_id, payload, current_user=_user(current_user))
     except AuthorityPolicyError as e:
-        raise _failure(e)
+        raise coded_http_error("policy reference", e)
     if not policy:
-        raise _failure(AuthorityPolicyNotFoundError("Policy reference not found."))
+        raise coded_http_error("update policy reference", AuthorityPolicyNotFoundError("Policy reference not found."))
     _audit(audit_manager, db, request, current_user, "UPDATE_POLICY_REFERENCE", policy)
     return manager.to_read_dict(db, policy)
 
@@ -129,7 +123,7 @@ async def delete_policy(
     try:
         manager.delete_policy(db, policy_id)
     except AuthorityPolicyError as e:
-        raise _failure(e)
+        raise coded_http_error("policy reference", e)
     _audit(audit_manager, db, request, current_user, "DELETE_POLICY_REFERENCE", policy)
     return {"deleted": True, "id": policy_id}
 
@@ -144,7 +138,7 @@ async def get_policy_versions(
     try:
         rows = manager.get_versions(db, policy_id)
     except AuthorityPolicyError as e:
-        raise _failure(e)
+        raise coded_http_error("policy reference", e)
     return [
         {
             "id": r.id,
@@ -177,9 +171,9 @@ async def create_policy_version(
             change_summary=payload.change_summary, current_user=_user(current_user),
         )
     except AuthorityPolicyError as e:
-        raise _failure(e)
+        raise coded_http_error("policy reference", e)
     if policy is None:
-        raise _failure(AuthorityPolicyNotFoundError("Policy reference not found."))
+        raise coded_http_error("update policy reference", AuthorityPolicyNotFoundError("Policy reference not found."))
     _audit(audit_manager, db, request, current_user, "CREATE_POLICY_REFERENCE_VERSION", policy,
            details={"parent_policy_id": policy.parent_policy_id})
     return manager.to_read_dict(db, policy)

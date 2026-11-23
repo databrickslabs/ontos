@@ -7,8 +7,8 @@ nothing about a reference is enforced: a draft, expired or superseded reference
 does not change what an AR decides, and it does not gate activation. The AR's
 approvers check the document themselves.
 
-Validity is exposed to Compliance Checks (``justification.*`` in the evaluation
-object, see :func:`justification_view`) so an author can add a check that enforces
+Validity is exposed to Compliance Checks (``policy_ref.*`` in the evaluation
+object, see :func:`policy_ref_view`) so an author can add a check that enforces
 it at resolve, or run one on a schedule.
 
 Versions: a new version is a new record in the same family (``version_family_id``)
@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError
+from src.common.authority_rule import UNCITED_POLICY_REF
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.db_models.authority_policy import AuthorityPolicyDb
@@ -108,6 +109,18 @@ def normalize_clauses(clauses: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def policy_ref_from_citation(citation: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """The ``policy_ref`` view of a citation already loaded for this resolve (no second lookup)."""
+    if not citation or "policy_key" not in citation:
+        return dict(UNCITED_POLICY_REF)
+    return {
+        "cited": True,
+        "valid_from": citation.get("valid_from"),
+        "valid_to": citation.get("valid_to"),
+        "expired": bool(citation.get("expired")),
+    }
+
+
 def _rule_clauses(rule: Any) -> List[str]:
     """Clause labels cited on an AR rule's constraints, duties and prohibitions."""
     if not isinstance(rule, dict):
@@ -117,8 +130,8 @@ def _rule_clauses(rule: Any) -> List[str]:
     return [str(i["clause"]) for i in items if isinstance(i, dict) and i.get("clause")]
 
 
-def justification_view(policy: Optional[AuthorityPolicyDb], at: Optional[datetime] = None) -> Dict[str, Any]:
-    """What Compliance Checks see as ``justification`` (ARF 1.2.0).
+def policy_ref_view(policy: Optional[AuthorityPolicyDb], at: Optional[datetime] = None) -> Dict[str, Any]:
+    """What Compliance Checks see as ``policy_ref`` (ARF 1.2.0).
 
     ``cited`` is False when no reference is cited, so a check that requires one
     fails with its own message. ``expired`` is computed at ``at`` (default now) and
@@ -126,7 +139,7 @@ def justification_view(policy: Optional[AuthorityPolicyDb], at: Optional[datetim
     by the reference itself.
     """
     if policy is None:
-        return {"cited": False, "valid_from": None, "valid_to": None, "expired": False}
+        return dict(UNCITED_POLICY_REF)
     end = _aware(policy.valid_to)
     at = _aware(at) or utcnow()
     return {
@@ -193,7 +206,7 @@ class AuthorityPolicyManager(SearchableAsset):
             else:
                 self._notify_index_remove(self._search_id(family_id))
         except Exception as e:  # pragma: no cover - index refresh is best-effort
-            logger.debug(f"Failed to refresh search entry for policy family {family_id}: {e}")
+            logger.debug("Failed to refresh search entry for policy family %s: %s", family_id, e)
 
     def get_search_index_items(self) -> List[SearchIndexItem]:
         from src.common.database import get_session_factory
@@ -208,7 +221,7 @@ class AuthorityPolicyManager(SearchableAsset):
                     if item:
                         items.append(item)
         except Exception as e:
-            logger.error(f"Error preparing Policy references for search: {e}", exc_info=True)
+            logger.error("Error preparing Policy references for search: %s", e, exc_info=True)
         return items
 
     # ----------------------------------------------------------- helpers
@@ -238,7 +251,7 @@ class AuthorityPolicyManager(SearchableAsset):
                 db, entity_id=policy_id, entity_type=ENTITY_TYPE, tags=list(tags), user_email=user,
             )
         except Exception as e:  # pragma: no cover - tag write is best-effort
-            logger.warning(f"Could not set tags for policy {policy_id}: {e}")
+            logger.warning("Could not set tags for policy %s: %s", policy_id, e)
 
     def _log_timeline(self, db: Session, entity_type: str, entity_id: str, message: str) -> None:
         """Best-effort system comment on the entity's Comments timeline."""
@@ -250,7 +263,7 @@ class AuthorityPolicyManager(SearchableAsset):
                 user_email="system@ontos", is_admin=True,
             )
         except Exception as e:  # pragma: no cover - timeline logging is best-effort
-            logger.warning(f"Could not write timeline comment for {entity_type} {entity_id}: {e}")
+            logger.warning("Could not write timeline comment for %s %s: %s", entity_type, entity_id, e)
 
     @staticmethod
     def _representative(versions: List[AuthorityPolicyDb]) -> Optional[AuthorityPolicyDb]:
@@ -410,11 +423,11 @@ class AuthorityPolicyManager(SearchableAsset):
             "clause_refs": r.policy_clause_refs or [],
         } for r in authority_policy_repo.list_citing_relations(db, policy_ids=[policy_id])]
 
-    def justification(self, db: Session, relation: AuthorityRelationDb, at: Optional[datetime] = None) -> Dict[str, Any]:
-        """The ``justification`` the checks see for this AR, computed now (or at ``at``)."""
+    def policy_ref(self, db: Session, relation: AuthorityRelationDb, at: Optional[datetime] = None) -> Dict[str, Any]:
+        """The ``policy_ref`` the checks see for this AR's reference, computed now (or at ``at``)."""
         policy_id = getattr(relation, "authority_policy_id", None)
         policy = authority_policy_repo.get(db, policy_id) if policy_id else None
-        return justification_view(policy, at)
+        return policy_ref_view(policy, at)
 
     def citation(self, db: Session, relation: AuthorityRelationDb) -> Optional[Dict[str, Any]]:
         """What an AR cites, for its read view and decision provenance (no documents)."""
@@ -427,10 +440,10 @@ class AuthorityPolicyManager(SearchableAsset):
         }
         if policy is None:
             return out
-        view = justification_view(policy)
+        view = policy_ref_view(policy)
         out.update({
             "policy_key": policy.policy_key, "version": policy.version, "title": policy.title,
-            "url": policy.url,
+            "url": policy.url, "parent_policy_id": policy.parent_policy_id,
             # ISO strings: the citation is stored in decision provenance (JSON).
             "valid_from": view["valid_from"], "valid_to": view["valid_to"], "expired": view["expired"],
         })
@@ -446,7 +459,7 @@ class AuthorityPolicyManager(SearchableAsset):
                     for t in TagsManager().list_assigned_tags(db, entity_id=policy.id, entity_type=ENTITY_TYPE)]
         except Exception:  # pragma: no cover - tags are best-effort
             pass
-        view = justification_view(policy)
+        view = policy_ref_view(policy)
         return {
             "id": policy.id,
             "policy_key": policy.policy_key,

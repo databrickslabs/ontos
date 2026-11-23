@@ -682,7 +682,7 @@
       "titleEdit": "Modifier {{key}} v{{version}}",
       "keyHint": "Identifiant commun à toutes les versions du document, par ex. POL-DOA.",
       "urlHint": "Facultatif. Lien vers le document source (http ou https). Ontos ne l'ouvre pas.",
-      "validityHint": "La validité indiquée par le document. Informative uniquement : rien n'est appliqué. Les contrôles peuvent la lire comme justification.valid_to.",
+      "validityHint": "La validité indiquée par le document. Informative uniquement : rien n'est appliqué. Les contrôles peuvent la lire comme policy_ref.valid_to.",
       "validation": {
         "required": "L'identifiant externe et le nom sont obligatoires",
         "title": "La référence n'est pas valide",
@@ -707,7 +707,7 @@
       "backButton": "Retour aux références",
       "buttonNewVersion": "Nouvelle version",
       "versionCreated": "Version {{version}} créée",
-      "expiredNote": "La validité indiquée par cette référence est dépassée. La référence ne bloque rien par elle-même ; un contrôle qui lit justification.expired peut le faire.",
+      "expiredNote": "La validité indiquée par cette référence est dépassée. La référence ne bloque rien par elle-même ; un contrôle qui lit policy_ref.expired peut le faire.",
       "cardReference": "Référence",
       "cardDependents": "Citée par ({{count}})",
       "noDependents": "Aucune Authority Relation ne cite cette référence."

@@ -2,7 +2,7 @@
 
 A reference is metadata only (ARF 1.2.0 decision): nothing about it is enforced.
 These tests cover the reference CRUD and versions, the citation and its clause
-labels (free text), the validity that reaches the checks as ``justification.*``
+labels (free text), the validity that reaches the checks as ``policy_ref.*``
 (the shipped validity template included), that an expired or superseded
 reference changes nothing at resolve or activation, the cited-by list and the
 delete guard, audit records, and coded errors.
@@ -76,25 +76,25 @@ TEMPLATE_CHECK = {
 
 # ------------------------------------------------------------ validity view
 
-def test_justification_view_covers_every_state():
-    none = apm.justification_view(None)
+def test_policy_ref_view_covers_every_state():
+    none = apm.policy_ref_view(None)
     assert none == {"cited": False, "valid_from": None, "valid_to": None, "expired": False}
     open_ended = SimpleNamespace(valid_from=NOW - timedelta(days=2), valid_to=None)
-    assert apm.justification_view(open_ended)["expired"] is False
+    assert apm.policy_ref_view(open_ended)["expired"] is False
     current = SimpleNamespace(valid_from=NOW - timedelta(days=2), valid_to=NOW + timedelta(days=1))
-    assert apm.justification_view(current)["expired"] is False
+    assert apm.policy_ref_view(current)["expired"] is False
     lapsed = SimpleNamespace(valid_from=NOW - timedelta(days=9), valid_to=NOW - timedelta(days=1))
-    view = apm.justification_view(lapsed)
+    view = apm.policy_ref_view(lapsed)
     assert view["cited"] is True and view["expired"] is True and isinstance(view["valid_to"], str)
     # Naive datetimes are UTC (SQLite returns them naive).
     naive = SimpleNamespace(valid_from=None, valid_to=datetime.utcnow() - timedelta(days=1))
-    assert apm.justification_view(naive)["expired"] is True
+    assert apm.policy_ref_view(naive)["expired"] is True
 
 
 def test_the_validity_is_computed_at_the_given_time():
     ref = SimpleNamespace(valid_from=None, valid_to=NOW + timedelta(days=10))
-    assert apm.justification_view(ref, at=NOW)["expired"] is False
-    assert apm.justification_view(ref, at=NOW + timedelta(days=11))["expired"] is True
+    assert apm.policy_ref_view(ref, at=NOW)["expired"] is False
+    assert apm.policy_ref_view(ref, at=NOW + timedelta(days=11))["expired"] is True
 
 
 # ------------------------------------------------------------ validation
@@ -301,34 +301,51 @@ def test_new_ar_version_keeps_the_citation(db_session, mgrs):
     assert [c["policy_clause_ref"] for c in rm.to_read_dict(db_session, v2)["criteria"]] == ["§7.2"]
 
 
-# ------------------------------------------------------------ justification in the checks
+# ------------------------------------------------------------ policy_ref in the checks
 
-def test_the_evaluation_object_carries_the_justification(db_session, mgrs):
+def test_the_evaluation_object_carries_the_policy_ref(db_session, mgrs):
     rm, pm = mgrs
     ar = _ar(rm, db_session, _policy(pm, db_session, end=NOW - timedelta(days=1)))
-    obj = rm._evaluation_object(ar, {"value": 1})
-    assert obj["justification"]["cited"] is True and obj["justification"]["expired"] is True
-    assert obj["justification"]["valid_to"] is not None
+    view = rm._policy_ref_for_relation(db_session, ar)
+    obj = rm._evaluation_object(ar, {"value": 1}, None, view)
+    assert obj["policy_ref"]["cited"] is True and obj["policy_ref"]["expired"] is True
+    assert obj["policy_ref"]["valid_to"] is not None
     # A request can't set it (anti-spoofing): the reference's own value wins.
-    spoofed = rm._evaluation_object(ar, {"value": 1, "justification": {"expired": False, "cited": True}})
-    assert spoofed["justification"]["expired"] is True
+    spoofed = rm._evaluation_object(ar, {"value": 1, "policy_ref": {"expired": False, "cited": True}}, None, view)
+    assert spoofed["policy_ref"]["expired"] is True
 
 
-def test_the_entity_dict_carries_the_justification(db_session, mgrs):
+def test_a_request_field_named_justification_stays_an_ordinary_field(db_session, mgrs):
+    """The namespace is ``policy_ref``: a ``justification`` field is just ``obj.justification``."""
+    rm, pm = mgrs
+    ar = _ar(rm, db_session, _policy(pm, db_session))
+    view = rm._policy_ref_for_relation(db_session, ar)
+    obj = rm._evaluation_object(ar, {"value": 1, "justification": "board minute 12"}, None, view)
+    assert obj["justification"] == "board minute 12"
+    assert obj["policy_ref"]["cited"] is True
+    assert passed_check(obj, "ASSERT obj.justification = 'board minute 12'")
+
+
+def passed_check(obj, rule):
+    from src.common.compliance_dsl import evaluate_rule_strict
+    return evaluate_rule_strict(rule, obj).passed is True
+
+
+def test_the_entity_dict_carries_the_policy_ref(db_session, mgrs):
     from src.controller.entity_dict_builder import build_authority_relation_dict
     rm, pm = mgrs
     ar = _ar(rm, db_session, _policy(pm, db_session, end=NOW + timedelta(days=3)))
     db_session.flush()
-    j = build_authority_relation_dict(db_session, ar.id)["justification"]
+    j = build_authority_relation_dict(db_session, ar.id)["policy_ref"]
     assert j["cited"] is True and j["expired"] is False and j["valid_to"]
     uncited = _ar(rm, db_session, None, slug="u2", refs=None, criteria=[{"name": "c", "rule": "obj.value > 0"}])
     db_session.flush()
-    assert build_authority_relation_dict(db_session, uncited.id)["justification"]["cited"] is False
+    assert build_authority_relation_dict(db_session, uncited.id)["policy_ref"]["cited"] is False
 
 
-def test_justification_is_a_closed_namespace_for_other_entities():
-    # A data product has no justification; a top-level key must not stand in for it.
-    passed, _ = evaluate_rule_on_object("ASSERT justification.expired = False", {"expired": False})
+def test_policy_ref_is_a_closed_namespace_for_other_entities():
+    # A data product has no policy_ref; a top-level key must not stand in for it.
+    passed, _ = evaluate_rule_on_object("ASSERT policy_ref.expired = False", {"expired": False})
     assert passed is False
 
 
@@ -417,3 +434,56 @@ def test_policy_references_have_no_document_panel_kind():
     DocumentCreate(entity_id="x", entity_type="authority_relation", title="t")
     with pytest.raises(ValidationError):
         DocumentCreate(entity_id="x", entity_type="authority_policy", title="t")
+
+
+# ------------------------------------------------------------ one view for resolve, DNA and the validators
+
+def test_the_validator_uses_the_ars_real_reference_or_the_samples_view(db_session, mgrs):
+    from src.routes.authority_resolution_routes import validate_criterion
+    rm, pm = mgrs
+    ar = _ar(rm, db_session, _policy(pm, db_session, end=NOW - timedelta(days=1)))
+    db_session.flush()
+    rule = "ASSERT policy_ref.cited = True AND policy_ref.expired = False"
+    # A stored AR is judged against its real reference: lapsed here, whatever the sample says.
+    out = asyncio.run(validate_criterion(db_session, {"rule": rule, "object": {}, "relation_id": ar.id,
+                                                      "policy_ref": {"cited": True, "expired": False}}, True))
+    assert out["passed"] is False
+    # A dry-run sample without a relation can say it's cited and current.
+    out = asyncio.run(validate_criterion(db_session, {"rule": rule, "object": {}, "policy_ref": {
+        "cited": True, "expired": False}}, True))
+    assert out["passed"] is True
+    out = asyncio.run(validate_criterion(db_session, {"rule": rule, "object": {}}, True))
+    assert out["passed"] is False
+
+
+def test_dna_evidence_rows_carry_the_reference_view(db_session, mgrs):
+    rm, pm = mgrs
+    ar = _ar(rm, db_session, _policy(pm, db_session, end=NOW + timedelta(days=30)))
+    view = rm._policy_ref_for_relation(db_session, ar)
+    kept, skipped = rm._scoped_evidence(ar, [{"value": 1}, {"value": 2}], {}, view)
+    assert skipped == 0 and [row["policy_ref"]["cited"] for row in kept] == [True, True]
+
+
+def test_the_citation_carries_the_parent_version(db_session, mgrs):
+    rm, pm = mgrs
+    v1 = _policy(pm, db_session)
+    v2 = pm.create_new_version(db_session, v1.id, "2")
+    ar = _ar(rm, db_session, v2)
+    assert rm.to_read_dict(db_session, ar)["policy"]["parent_policy_id"] == v1.id
+
+
+def test_the_coded_helper_answers_a_refusal_with_its_code_and_attributes():
+    from src.common.api_errors import coded_http_error
+    from src.controller.authority_policy_manager import AuthorityPolicyInUseError
+    exc = AuthorityPolicyInUseError("cited by X", cited_by=["X"])
+    refused = coded_http_error("test", exc)
+    assert refused.status_code == 409
+    assert refused.detail == "cited by X" and refused.__cause__ is exc
+    assert (exc.code, exc.params) == ("authority_policy_in_use", {"cited_by": ["X"]})
+
+
+def test_the_coded_helper_hides_an_unexpected_failure_behind_an_error_id():
+    from src.common.api_errors import coded_http_error
+    failed = coded_http_error("test", RuntimeError("secret SQL text"))
+    assert failed.status_code == 500
+    assert failed.detail["code"] == "request_failed" and "secret SQL" not in str(failed.detail)

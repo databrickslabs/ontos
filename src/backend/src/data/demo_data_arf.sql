@@ -167,7 +167,7 @@ ON CONFLICT (id) DO NOTHING;
 -- is metadata: Ontos keeps its name, external id, version, validity window and
 -- owner, and the documents themselves stay where they are (no links are seeded).
 -- Nothing here is enforced: a reference past its valid_to is shown as expired
--- and reaches the Compliance checks as justification.expired, nothing else.
+-- and reaches the Compliance checks as policy_ref.expired, nothing else.
 
 INSERT INTO authority_policies (
   id, policy_key, version, version_family_id, parent_policy_id, change_summary,

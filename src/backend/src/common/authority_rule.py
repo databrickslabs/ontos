@@ -68,8 +68,12 @@ KIND_DUTY = "duty"                # unfulfilled duty: the permission is conditio
 NS_CTX = "ctx"
 NS_REQ = "req"
 # ARF 1.2.0: the cited policy reference's validity (cited, valid_from, valid_to, expired).
-NS_JUSTIFICATION = "justification"
-RESERVED_KEYS = (NS_CTX, NS_REQ, NS_JUSTIFICATION)
+# A request field named ``policy_ref`` is dropped (anti-spoofing); a field named
+# ``justification`` stays an ordinary ``obj.justification`` field.
+NS_POLICY_REF = "policy_ref"
+RESERVED_KEYS = (NS_CTX, NS_REQ, NS_POLICY_REF)
+# What the checks see when no reference is cited, or none is known (a dry-run sample).
+UNCITED_POLICY_REF: Dict[str, Any] = {"cited": False, "valid_from": None, "valid_to": None, "expired": False}
 
 OPERATORS = ("eq", "neq", "lt", "lteq", "gt", "gteq", "isAnyOf", "isNoneOf")
 _DSL_OPS = {"eq": "=", "neq": "!=", "lt": "<", "lteq": "<=", "gt": ">", "gteq": ">="}
@@ -577,14 +581,18 @@ def evaluation_object(
     params: Dict[str, Any],
     extra_ctx: Optional[Dict[str, Any]] = None,
     strip: Iterable[str] = (),
+    *,
+    policy_ref: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """The object rules evaluate against.
+    """The object rules evaluate against: the one builder for resolve, DNA and the validators.
 
     ``flat`` is the request (or an evidence row) as before, so existing
     ``obj.<field>`` rules read it unchanged; ``req`` is the same request as a
     namespace and ``ctx`` the AR's parameters plus ``extra_ctx`` (resolved refs).
-    Caller-supplied ``ctx`` / ``req`` keys (and any ``strip`` prefixes) are
-    dropped: a request can't impersonate the AR's own values.
+    ``policy_ref`` is the cited reference's validity (``policy_ref.cited /
+    valid_from / valid_to / expired``), fixed by the caller for the whole evaluation.
+    Caller-supplied ``ctx`` / ``req`` / ``policy_ref`` keys (and any ``strip``
+    prefixes) are dropped: a request can't impersonate the AR's own values.
     """
     prefixes = tuple(strip)
     clean = {
@@ -596,4 +604,5 @@ def evaluation_object(
     obj = dict(clean)
     obj[NS_REQ] = {k: v for k, v in clean.items() if v is not None}
     obj[NS_CTX] = ctx
+    obj[NS_POLICY_REF] = dict(policy_ref)
     return obj

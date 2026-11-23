@@ -21,8 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from sqlalchemy.orm import Session, object_session
-from sqlalchemy.orm.exc import UnmappedInstanceError
+from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError, client_failure
 from src.common.review_access import AUTHORITY_RELATION_FQN_PREFIX, authority_relation_fqn
@@ -78,6 +77,8 @@ class AuthorityPermissionError(CodedValueError, PermissionError):
 
     Also a ``PermissionError``, so callers that catch the built-in keep working.
     """
+
+    http_status = 403
 
     code = "authority_permission_denied"
 
@@ -2518,7 +2519,9 @@ class AuthorityResolutionManager(SearchableAsset):
                     "does not define (no parameter or domain-context ref). Fix the configuration, then measure again.",
                     parameters=absent,
                 )
-            rows, out_of_scope = self._scoped_evidence(relation, rows, ctx)
+            # The reference's validity at measurement time, the same for every row (no per-event history).
+            policy_ref = self._policy_ref_for_relation(db, relation)
+            rows, out_of_scope = self._scoped_evidence(relation, rows, ctx, policy_ref)
             if not rows:
                 raise AuthorityInvalidError(
                     f"All {out_of_scope} evidence rows are outside the Authority Relation's scope; "
@@ -2614,6 +2617,7 @@ class AuthorityResolutionManager(SearchableAsset):
 
     def _scoped_evidence(
         self, relation: AuthorityRelationDb, rows: List[Dict[str, Any]], ctx: Dict[str, Any],
+        policy_ref: Dict[str, Any],
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Evidence rows as rules see them, and how many fell outside the scope.
 
@@ -2635,7 +2639,7 @@ class AuthorityResolutionManager(SearchableAsset):
             ):
                 skipped += 1
                 continue
-            kept.append(arule.evaluation_object(norm, ctx))
+            kept.append(arule.evaluation_object(norm, ctx, policy_ref=policy_ref))
         return kept, skipped
 
     def recompute_scheduled(self, db: Session) -> Dict[str, Any]:
@@ -2913,47 +2917,42 @@ class AuthorityResolutionManager(SearchableAsset):
                 out[key] = r.get("value")
         return out
 
+    def _policy_ref_for_relation(self, db: Session, relation: AuthorityRelationDb) -> Dict[str, Any]:
+        """The AR's reference view, looked up once (DNA runs, the rule dry-run for a stored AR)."""
+        return apol.AuthorityPolicyManager().policy_ref(db, relation)
+
     def _evaluation_object(
         self,
         relation: AuthorityRelationDb,
         req: Dict[str, Any],
-        resolved_refs: Optional[List[Dict[str, Any]]] = None,
+        resolved_refs: Optional[List[Dict[str, Any]]],
+        policy_ref: Dict[str, Any],
     ) -> Dict[str, Any]:
         """The request as rules see it: ``obj.<field>`` (normalised), ``req.<key>``,
-        ``ctx.<param>`` and ``obj.ref_<field_path>``. Request keys in the
-        ``ref_`` / ``ctx`` / ``req`` namespaces are dropped (anti-spoofing)."""
+        ``ctx.<param>``, ``obj.ref_<field_path>`` and ``policy_ref.*`` (ARF 1.2.0).
+        Request keys in the ``ref_`` / ``ctx`` / ``req`` / ``policy_ref`` namespaces are
+        dropped (anti-spoofing); a request field named ``justification`` is an ordinary field."""
         flat = {k: v for k, v in req.items() if not str(k).startswith(REF_KEY_PREFIX)}
         for r in resolved_refs or []:
             flat[ref_key(r["field_path"])] = r.get("value")
             if r.get("iri"):
                 flat[ref_key(r["field_path"]) + "_iri"] = r["iri"]
         params = arule.normalize_domain_context(relation.domain_context)["params"]
-        obj = arule.evaluation_object(
+        return arule.evaluation_object(
             authority_dna.normalize_row(flat), params, extra_ctx=self._ref_ctx(resolved_refs),
+            policy_ref=policy_ref,
         )
-        # ARF 1.2.0: the cited reference's validity, read as the checks see it
-        # (``justification.cited / valid_from / valid_to / expired``), computed now.
-        # It overrides any request key of the same name.
-        # A dry-run probe (validate route) isn't a mapped row: it reads as uncited.
-        try:
-            db = object_session(relation)
-        except UnmappedInstanceError:
-            db = None
-        obj[arule.NS_JUSTIFICATION] = (
-            apol.AuthorityPolicyManager().justification(db, relation) if db is not None
-            else apol.justification_view(None)
-        )
-        return obj
 
     def _evaluate_decision(
         self,
         relation: AuthorityRelationDb,
         req: Dict[str, Any],
-        resolved_refs: Optional[List[Dict[str, Any]]] = None,
-        policy_label: Optional[str] = None,
+        resolved_refs: Optional[List[Dict[str, Any]]],
+        policy_label: Optional[str],
+        policy_ref: Dict[str, Any],
     ) -> Tuple[str, str, List[Dict[str, Any]]]:
         """``(verdict, reason, pending_duties)`` of :meth:`_decide`, without its reason code."""
-        verdict, reason, pending, _ = self._decide(relation, req, resolved_refs, policy_label)
+        verdict, reason, pending, _ = self._decide(relation, req, resolved_refs, policy_label, policy_ref)
         return verdict, reason, pending
 
     @staticmethod
@@ -2981,8 +2980,9 @@ class AuthorityResolutionManager(SearchableAsset):
         self,
         relation: AuthorityRelationDb,
         req: Dict[str, Any],
-        resolved_refs: Optional[List[Dict[str, Any]]] = None,
-        policy_label: Optional[str] = None,
+        resolved_refs: Optional[List[Dict[str, Any]]],
+        policy_label: Optional[str],
+        policy_ref: Dict[str, Any],
     ) -> Tuple[str, str, List[Dict[str, Any]], Optional[str]]:
         """Deterministic evaluation of the request against the AR's rule and checks.
 
@@ -2999,7 +2999,7 @@ class AuthorityResolutionManager(SearchableAsset):
         fields, a missing parameter is a conflict. An UNKNOWN duty stays unfulfilled.
         Returns ``(verdict, reason, pending_duties, reason_code)``.
         """
-        obj = self._evaluation_object(relation, req, resolved_refs)
+        obj = self._evaluation_object(relation, req, resolved_refs, policy_ref)
         try:
             rule_criteria = self._rule_criteria(relation)
         except ValueError as e:
@@ -3191,6 +3191,7 @@ class AuthorityResolutionManager(SearchableAsset):
             }
 
         citation = self._policy_citation(db, relation)
+        policy_ref = apol.policy_ref_from_citation(citation)
         policy_label = f"{citation['policy_key']} v{citation['version']}" if citation and citation.get("policy_key") else None
 
         # The AR applies only inside its scope; outside it there is no authority
@@ -3252,7 +3253,8 @@ class AuthorityResolutionManager(SearchableAsset):
             )
             out["resolver_failure"] = True
             return out
-        verdict, reason, own_pending, decision_code = self._decide(relation, req, resolved_refs, policy_label)
+        verdict, reason, own_pending, decision_code = self._decide(
+            relation, req, resolved_refs, policy_label, policy_ref)
         # A conditional prerequisite's duties are this decision's duties too.
         pending = [d for e in chain for d in (e.get("pending_duties") or [])] + own_pending
         if verdict == VERDICT_APPROVED and pending:

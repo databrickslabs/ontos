@@ -682,7 +682,7 @@
       "titleEdit": "Edit {{key}} v{{version}}",
       "keyHint": "Identifier shared by every version of the document, e.g. POL-DOA.",
       "urlHint": "Optional. A link to the source document (http or https). Ontos doesn't open it.",
-      "validityHint": "The validity the document states. Informational: nothing is enforced. Checks can read it as justification.valid_to.",
+      "validityHint": "The validity the document states. Informational: nothing is enforced. Checks can read it as policy_ref.valid_to.",
       "validation": {
         "required": "External ID and name are required",
         "title": "The reference is not valid",
@@ -707,7 +707,7 @@
       "backButton": "Back to references",
       "buttonNewVersion": "New version",
       "versionCreated": "Version {{version}} created",
-      "expiredNote": "The validity this reference states has passed. The reference blocks nothing by itself; a check that reads justification.expired can.",
+      "expiredNote": "The validity this reference states has passed. The reference blocks nothing by itself; a check that reads policy_ref.expired can.",
       "cardReference": "Reference",
       "cardDependents": "Cited by ({{count}})",
       "noDependents": "No Authority Relation cites this reference."

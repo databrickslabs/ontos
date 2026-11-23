@@ -1221,7 +1221,8 @@
     },
     "errors": {
       "deploy_request_not_an_approver": "このデプロイ要求の承認者ではないため、決定できません。",
-      "deploy_request_already_decided": "このデプロイ要求はすでに決定されています。"
+      "deploy_request_already_decided": "このデプロイ要求はすでに決定されています。",
+      "deploy_request_own_request": "自分のデプロイ要求は決定できません。"
     }
   },
   "publishRequest": {

@@ -1221,7 +1221,8 @@
     },
     "errors": {
       "deploy_request_not_an_approver": "Non sei un approvatore di questa richiesta di distribuzione, quindi non puoi deciderla.",
-      "deploy_request_already_decided": "Questa richiesta di distribuzione è già stata decisa."
+      "deploy_request_already_decided": "Questa richiesta di distribuzione è già stata decisa.",
+      "deploy_request_own_request": "Non puoi decidere la tua stessa richiesta di distribuzione."
     }
   },
   "publishRequest": {

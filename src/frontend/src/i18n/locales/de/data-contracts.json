@@ -1221,7 +1221,8 @@
     },
     "errors": {
       "deploy_request_not_an_approver": "Sie sind kein Genehmiger dieser Bereitstellungsanfrage und können sie daher nicht entscheiden.",
-      "deploy_request_already_decided": "Über diese Bereitstellungsanfrage wurde bereits entschieden."
+      "deploy_request_already_decided": "Über diese Bereitstellungsanfrage wurde bereits entschieden.",
+      "deploy_request_own_request": "Sie können Ihre eigene Bereitstellungsanfrage nicht entscheiden."
     }
   },
   "publishRequest": {

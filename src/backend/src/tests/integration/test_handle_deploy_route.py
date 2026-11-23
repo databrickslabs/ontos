@@ -13,9 +13,12 @@ from fastapi.testclient import TestClient
 from src.db_models.notifications import NotificationDb
 
 
-def _contract_id(client: TestClient, db_session=None, recipient='Admin', role_id=None) -> str:
-    """A contract with a pending deployment request addressed to ``recipient``
-    (the request route addresses the Admin role)."""
+def _contract_id(
+    client: TestClient, db_session=None, recipient='Admin', role_id=None,
+    requester='req@example.com',
+) -> str:
+    """A contract with a pending deployment request of ``requester`` addressed
+    to ``recipient`` (the request route addresses the Admin role)."""
     response = client.post('/api/data-contracts', json={
         'name': 'Deploy Route Contract', 'version': '1.0.0', 'status': 'draft',
         'owner': 'test@example.com',
@@ -28,7 +31,7 @@ def _contract_id(client: TestClient, db_session=None, recipient='Admin', role_id
             recipient=recipient, recipient_role_id=role_id, created_at=datetime.utcnow(),
             action_type='handle_deploy_request', can_delete=False, read=False,
             action_payload=json.dumps({
-                'contract_id': contract_id, 'requester_email': 'test@example.com',
+                'contract_id': contract_id, 'requester_email': requester,
             }),
         ))
         db_session.commit()
@@ -118,6 +121,16 @@ class TestDeployApprover:
 
         assert response.status_code == 409, response.text
         assert response.json()['detail']['code'] == 'deploy_request_already_decided'
+
+    @pytest.mark.parametrize('requester', ['test@example.com', 'Test@Example.COM'])
+    def test_an_admin_does_not_decide_their_own_request(self, client, db_session, requester):
+        """The request goes to the Admin role, which its requester may hold."""
+        contract_id = _contract_id(client, db_session, requester=requester)
+
+        response = _decide(client, contract_id)
+
+        assert response.status_code == 403, response.text
+        assert response.json()['detail']['code'] == 'deploy_request_own_request'
 
     def test_a_request_a_workflow_handles_is_decided_by_the_workflow(self, client, db_session):
         """Only a workflow approval notification: even an admin is refused here."""

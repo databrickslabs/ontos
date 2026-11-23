@@ -1221,7 +1221,8 @@
     },
     "errors": {
       "deploy_request_not_an_approver": "Vous n'êtes pas approbateur de cette demande de déploiement : vous ne pouvez pas la décider.",
-      "deploy_request_already_decided": "Cette demande de déploiement a déjà été décidée."
+      "deploy_request_already_decided": "Cette demande de déploiement a déjà été décidée.",
+      "deploy_request_own_request": "Vous ne pouvez pas décider votre propre demande de déploiement."
     }
   },
   "publishRequest": {

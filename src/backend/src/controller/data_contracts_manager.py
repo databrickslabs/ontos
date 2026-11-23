@@ -6781,6 +6781,25 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             access = 'decided'
         return access
 
+    def is_own_deploy_request(self, db, contract_id: str, user_info) -> bool:
+        """Whether the user requested the contract's undecided deployment request.
+
+        The request goes to the Admin role, which its requester may hold; their
+        own decision is refused, as owner approvals on the workflow side
+        (``own_owner_approval``). Email and username compare case-insensitively.
+        """
+        if not user_info:
+            return False
+        caller = {
+            (getattr(user_info, 'email', None) or '').lower(),
+            (getattr(user_info, 'username', None) or '').lower(),
+        } - {''}
+        return any(
+            not payload.get('handled')
+            and str(payload.get('requester_email') or '').strip().lower() in caller
+            for _, payload in self._deploy_request_notifications(db, contract_id)
+        )
+
     def handle_deploy_response(
         self,
         db,

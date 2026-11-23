@@ -1221,7 +1221,8 @@
     },
     "errors": {
       "deploy_request_not_an_approver": "Você não é aprovador desta solicitação de implantação, então não pode decidi-la.",
-      "deploy_request_already_decided": "Esta solicitação de implantação já foi decidida."
+      "deploy_request_already_decided": "Esta solicitação de implantação já foi decidida.",
+      "deploy_request_own_request": "Você não pode decidir a sua própria solicitação de implantação."
     }
   },
   "publishRequest": {

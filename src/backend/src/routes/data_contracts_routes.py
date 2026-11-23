@@ -1274,12 +1274,12 @@ async def handle_deploy_request_response(
     """Record a deployment request decision (approve/deny).
 
     Only an approver of the contract's deployment request (a recipient of its
-    notification, e.g. the Admin role) decides it, once; others get 403, a
-    second decision 409 (also when two decide at the same time: the manager
-    re-checks under a row lock). A request an ``on_request_deploy`` workflow handles
-    has no such notification: its approval step decides it
-    (``POST /api/workflows/handle-approval``), so it is refused here for
-    everyone. Nothing is deployed. ``execute_deployment`` is accepted and
+    notification, e.g. the Admin role) other than its requester decides it,
+    once; others get 403, a second decision 409 (also when two decide at the
+    same time: the manager re-checks under a row lock). A request an
+    ``on_request_deploy`` workflow handles has no such notification: its
+    approval step decides it (``POST /api/workflows/handle-approval``), so it
+    is refused here for everyone. Nothing is deployed. ``execute_deployment`` is accepted and
     ignored with a warning in the response.
     """
     access = manager.deploy_request_access(db, notifications, contract_id, current_user)
@@ -1292,6 +1292,15 @@ async def handle_deploy_request_response(
             detail={
                 'code': 'deploy_request_not_an_approver',
                 'message': "Only the approvers of this deployment request can decide it.",
+            },
+        )
+    if manager.is_own_deploy_request(db, contract_id, current_user):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_own_request',
+                'message': "You can't decide your own deployment request.",
             },
         )
     try:

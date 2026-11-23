@@ -244,3 +244,40 @@ class TestDecidedOnce:
         self._decide(db_session)
 
         assert _json.loads(row.action_payload)['decision'] == 'approve'
+
+
+class TestOwnDeployRequest:
+    """``is_own_deploy_request``: the requester of an undecided request."""
+
+    def _request(self, db, requester, handled=False):
+        import json as _json
+        import uuid as _uuid
+        from datetime import datetime as _dt
+        from src.db_models.notifications import NotificationDb
+
+        db.add(NotificationDb(
+            id=str(_uuid.uuid4()), type='action_required', title='Contract Deployment Request',
+            recipient='Admin', created_at=_dt.utcnow(), action_type='handle_deploy_request',
+            can_delete=False, read=False, action_payload=_json.dumps({
+                'contract_id': 'c1', 'requester_email': requester,
+                **({'handled': True} if handled else {}),
+            }),
+        ))
+        db.flush()
+
+    def _own(self, db, email, username=None):
+        manager = DataContractsManager.__new__(DataContractsManager)
+        user = SimpleNamespace(email=email, username=username or email)
+        return manager.is_own_deploy_request(db, 'c1', user)
+
+    def test_the_requester_case_insensitively(self, db_session):
+        self._request(db_session, 'Ana@X.com')
+        assert self._own(db_session, 'ana@x.com') is True
+        assert self._own(db_session, None, username='ANA@x.com') is True
+
+    def test_another_user_or_a_decided_request(self, db_session):
+        self._request(db_session, 'ana@x.com', handled=True)
+        assert self._own(db_session, 'ana@x.com') is False
+        self._request(db_session, 'ana@x.com')
+        assert self._own(db_session, 'bob@x.com') is False
+        assert self._own(db_session, 'ana@x.com') is True

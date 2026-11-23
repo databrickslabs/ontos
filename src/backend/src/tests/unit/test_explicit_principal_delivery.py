@@ -54,7 +54,7 @@ def _note(recipient):
 
 
 def _visible(manager, recipient, user):
-    with patch.object(manager._repo, 'get_multi', return_value=[_note(recipient)]):
+    with patch.object(manager._repo, 'get_addressed_to', return_value=[_note(recipient)]):
         return bool(manager.get_notifications(Mock(), user_info=user))
 
 
@@ -101,3 +101,28 @@ def _matches(manager, recipient, user):
 ])
 def test_the_require_all_matcher_reads_explicit_principals(manager, recipient, user, expected):
     assert _matches(manager, recipient, user) is expected
+
+
+def test_prefilter_selects_explicit_principals_ignoring_case():
+    """The SQL prefilter must keep the rows the membership check accepts: a
+    ``group:`` recipient in another case, and ``user:<x>`` (#1526)."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from src.db_models.notifications import NotificationDb
+
+    engine = create_engine('sqlite://')
+    NotificationDb.__table__.create(bind=engine)
+    db = sessionmaker(bind=engine)()
+    for recipient in ('group:data steward', 'group:Stewards', 'user:GINA@example.com',
+                      'user:other@example.com'):
+        db.add(NotificationDb(
+            id=recipient, type='info', title='t', read=False, can_delete=True,
+            recipient=recipient, created_at=datetime(2026, 1, 1),
+        ))
+    db.commit()
+    manager = NotificationsManager(settings_manager=Mock())
+    manager._settings_manager.list_app_roles.return_value = []
+    keys = manager._membership(GROUP_MEMBER, 'test').recipient_keys()
+    ids = {n.id for n in manager._repo.get_addressed_to(db, keys=keys, history_limit=10)}
+    assert ids == {'group:data steward', 'user:GINA@example.com'}

@@ -83,9 +83,6 @@ class AssetsManager(SearchableAsset):
 
     # Hierarchical relationship types where source = parent, target = child
     _HIERARCHICAL_RELS = {"hasColumn", "hasTable", "hasView", "hasDataset", "hasPart", "contains"}
-    # Containment a reader of a product may follow from its linked assets
-    # (dataset -> table / view -> column), as the product page hierarchy does
-    _PRODUCT_TREE_RELS = ("hasTable", "hasView", "hasColumn")
 
     def _asset_to_summary(self, db_asset: AssetDb) -> AssetSummary:
         summary = AssetSummary.model_validate(db_asset)
@@ -327,15 +324,12 @@ class AssetsManager(SearchableAsset):
         asset_ids = data_products_manager.list_linked_asset_ids_for_products(
             db, product_ids=dp_ids,
         )
-        # The tree the product page shows (#1614): the tables and views of a
-        # linked dataset, and the columns of a linked or contained table/view.
+        # The tree the product page's hierarchy shows (#1614): the product's
+        # datasets, their tables and views, and those tables' and views' columns.
         from src.repositories.entity_relationships_repository import entity_relationship_repo
 
-        contained = entity_relationship_repo.get_contained_asset_ids(
-            db, parent_ids=asset_ids, relationship_types=self._PRODUCT_TREE_RELS,
-            max_depth=2,
-        )
-        return list(set(asset_ids) | contained)
+        tree = entity_relationship_repo.get_product_tree_asset_ids(db, product_ids=dp_ids)
+        return list(set(asset_ids) | tree)
 
     def is_asset_accessible(
         self,

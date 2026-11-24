@@ -83,47 +83,43 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             logger.exception("Failed to resolve DP-linked asset IDs")
             return set()
 
-    def get_contained_asset_ids(
-        self,
-        db: Session,
-        *,
-        parent_ids: Iterable[UUID],
-        relationship_types: Iterable[str],
-        max_depth: int,
-    ) -> Set[UUID]:
-        """Asset UUIDs reached from ``parent_ids`` through ``relationship_types``.
+    def get_product_tree_asset_ids(self, db: Session, *, product_ids: Iterable[str]) -> Set[UUID]:
+        """Asset UUIDs of the products' hierarchy, as ``get_product_hierarchy`` walks it.
 
-        Follows outgoing relationships (source = parent, target = child) for at
-        most ``max_depth`` hops; the parents themselves are not returned. One
-        query per hop. Fails closed (empty set) on a database error.
+        product -> ``hasDataset`` -> Dataset -> ``hasTable`` / ``hasView`` -> table or
+        view -> ``hasColumn`` -> column. Nothing else is followed (a schema an
+        output port links, lineage, ``replacedBy``...). Three queries. Fails
+        closed (empty set) on a database error.
         """
-        rel_types = list(relationship_types)
-        frontier = {str(p) for p in parent_ids}
-        seen: Set[str] = set(frontier)
-        found: Set[UUID] = set()
+        pid_list = [str(p) for p in product_ids]
+        if not pid_list:
+            return set()
+        m = self.model
         try:
-            for _ in range(max_depth):
-                if not frontier:
-                    break
-                rows = (
-                    db.query(self.model.target_id)
-                    .filter(
-                        self.model.source_id.in_(list(frontier)),
-                        self.model.relationship_type.in_(rel_types),
-                    )
-                    .all()
-                )
-                frontier = set()
-                for (target_id,) in rows:
-                    uid = self._to_uuid(target_id)
-                    if uid is None or str(uid) in seen:
-                        continue
-                    seen.add(str(uid))
+            dataset_ids = [r[0] for r in db.query(m.target_id).filter(
+                m.source_type == "DataProduct", m.source_id.in_(pid_list),
+                m.relationship_type == "hasDataset",
+            ).all()]
+            if not dataset_ids:
+                return set()
+            children = db.query(m.target_id, m.target_type).filter(
+                m.source_type == "Dataset", m.source_id.in_(dataset_ids),
+                m.relationship_type.in_(("hasTable", "hasView")),
+            ).all()
+            child_ids = [r[0] for r in children]
+            columns = db.query(m.target_id).filter(
+                m.source_id.in_(child_ids),
+                m.source_type.in_({r[1] for r in children}),
+                m.relationship_type == "hasColumn",
+            ).all() if child_ids else []
+            found: Set[UUID] = set()
+            for raw in [*dataset_ids, *child_ids, *(r[0] for r in columns)]:
+                uid = self._to_uuid(raw)
+                if uid is not None:
                     found.add(uid)
-                    frontier.add(str(uid))
             return found
         except SQLAlchemyError:
-            logger.exception("Failed to resolve contained asset IDs")
+            logger.exception("Failed to resolve product tree asset IDs")
             return set()
 
     def get_by_source(

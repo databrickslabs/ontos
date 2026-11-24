@@ -4,6 +4,25 @@ import { FeatureAccessLevel } from '@/types/settings';
 import { TileData } from '../types';
 import { DataProductStatus } from '@/types/data-product';
 
+async function fetchList(url: string): Promise<any[]> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
+/** The products of both lists, each once (by id). */
+export function mergeById(...lists: any[][]): any[] {
+  const byId = new Map<string, any>();
+  for (const list of lists) {
+    for (const product of list) {
+      const id = product?.id;
+      if (id && !byId.has(id)) byId.set(id, product);
+    }
+  }
+  return Array.from(byId.values());
+}
+
 export function useDataProductsData(): TileData {
   const { hasPermission, appliedRoleId, isLoading: permissionsLoading } = usePermissions();
   const [data, setData] = useState<TileData>({
@@ -31,13 +50,11 @@ export function useDataProductsData(): TileData {
       return;
     }
 
-    fetch('/api/data-products')
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
-      .then(apiData => {
-        const productsArray = Array.isArray(apiData) ? apiData : [];
+    // The products the user can read (#1617): the list endpoint returns only the
+    // ones they own (all for admins), the Marketplace the published ones.
+    Promise.all([fetchList('/api/data-products'), fetchList('/api/data-products/published')])
+      .then(([owned, published]) => {
+        const productsArray = mergeById(owned, published);
 
         // Calculate product status breakdown - show top 4 most-used statuses
         const statusMap = new Map<string, number>(

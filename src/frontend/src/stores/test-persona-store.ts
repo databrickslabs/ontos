@@ -49,8 +49,10 @@ interface TestPersonaState {
   token: string | null;
   /** Server-provided header names so client and server stay in sync. */
   headerNames: TestPersonaHeaders | null;
-  /** Probe + load personas. Safe to call multiple times. */
+  /** Probe + load personas. Safe to call multiple times: one shared probe. */
   initialize: () => Promise<void>;
+  /** The probe itself; call `initialize` instead. */
+  _probe: () => Promise<void>;
   /** Select a persona and persist. Pass null to clear. */
   setPersona: (id: string | null) => void;
   /** Convenience accessor. */
@@ -75,6 +77,18 @@ const readToken = (): string | null => {
   }
 };
 
+const PERSONAS_PATH = '/api/test/personas';
+
+/**
+ * The persona probe, in flight or done. Shared by every `initialize` call and
+ * by the fetch interceptor, which holds other /api requests back until it
+ * settles (#1609): a request sent earlier would go out without the persona
+ * headers and run as the real user.
+ */
+let initPromise: Promise<void> | null = null;
+/** True once the probe settled (persona list, 404 or failure). */
+let initSettled = false;
+
 const useTestPersonaStore = create<TestPersonaState>((set, get) => ({
   enabled: false,
   isLoading: false,
@@ -83,11 +97,19 @@ const useTestPersonaStore = create<TestPersonaState>((set, get) => ({
   token: null,
   headerNames: null,
 
-  initialize: async () => {
-    if (get().isLoading || get().enabled) return;
+  initialize: () => {
+    if (initPromise) return initPromise;
+    if (get().enabled) return Promise.resolve();
+    initPromise = get()._probe().finally(() => {
+      initSettled = true;
+    });
+    return initPromise;
+  },
+
+  _probe: async () => {
     set({ isLoading: true });
     try {
-      const response = await fetch('/api/test/personas', { cache: 'no-store' });
+      const response = await fetch(PERSONAS_PATH, { cache: 'no-store' });
       if (response.status === 404) {
         // Feature disabled server-side. Clear any stale selection.
         set({
@@ -204,9 +226,12 @@ export function getActiveOverride(): ActiveOverride | null {
  * Monkeypatch `window.fetch` once at app startup so every request
  * automatically carries the test override headers when a persona is active.
  *
- * The interceptor is a no-op when the feature isn't enabled or no persona is
- * selected, so it's safe to install unconditionally in production builds
+ * The interceptor adds no headers when the feature isn't enabled or no persona
+ * is selected, so it's safe to install unconditionally in production builds
  * (the backend would ignore the headers without `TEST_USER_TOKEN` anyway).
+ * When a test token is stored, it holds /api requests back until the persona
+ * probe settles (one round trip at startup, at most PROBE_HOLD_MS), so none of
+ * them runs as the real user (#1609). Without a token nothing is held.
  */
 export function installTestPersonaFetchInterceptor(): void {
   if (typeof window === 'undefined') return;
@@ -214,20 +239,9 @@ export function installTestPersonaFetchInterceptor(): void {
   if (w.__testPersonaFetchInstalled) return;
   w.__testPersonaFetchInstalled = true;
   const original = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  const withOverride = (input: RequestInfo | URL, init?: RequestInit) => {
     const override = getActiveOverride();
     if (!override) {
-      return original(input, init);
-    }
-    // Only inject for same-origin /api requests so we don't leak headers
-    // to third-party endpoints (LLM streaming, telemetry, etc.).
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    if (!url.startsWith('/api') && !url.startsWith(window.location.origin + '/api')) {
       return original(input, init);
     }
     const merged = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
@@ -238,6 +252,53 @@ export function installTestPersonaFetchInterceptor(): void {
     merged.set(override.headerNames.groups, JSON.stringify(override.groups));
     return original(input, { ...init, headers: merged });
   };
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    // Only inject for same-origin /api requests so we don't leak headers
+    // to third-party endpoints (LLM streaming, telemetry, etc.).
+    const path = apiPathOf(input);
+    if (path === null) {
+      return original(input, init);
+    }
+    // The probe itself, everything once it settled, and everything when no
+    // test token is stored (production: no persona can apply) go out right away.
+    if (initSettled || path.startsWith(PERSONAS_PATH) || !readToken()) {
+      return withOverride(input, init);
+    }
+    // Hold the request until the probe settles, so it carries the restored
+    // persona's headers (#1609). The first /api request starts the probe:
+    // child components fetch before the App effect that calls initialize.
+    // The hold ends after PROBE_HOLD_MS even if the probe hangs.
+    return probeHold().then(() => withOverride(input, init));
+  };
+}
+
+/** Longest time an /api request waits for the persona probe. */
+export const PROBE_HOLD_MS = 4000;
+let holdPromise: Promise<void> | null = null;
+
+/** The probe, or PROBE_HOLD_MS, whichever ends first (one shared wait). */
+function probeHold(): Promise<void> {
+  if (!holdPromise) {
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(resolve, PROBE_HOLD_MS);
+    });
+    holdPromise = Promise.race([useTestPersonaStore.getState().initialize(), timeout]);
+  }
+  return holdPromise;
+}
+
+/** The `/api...` path of a same-origin API request, else null. */
+function apiPathOf(input: RequestInfo | URL): string | null {
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : (input as Request).url;
+  if (url.startsWith('/api')) return url;
+  const origin = window.location.origin;
+  if (url.startsWith(origin + '/api')) return url.slice(origin.length);
+  return null;
 }
 
 export default useTestPersonaStore;

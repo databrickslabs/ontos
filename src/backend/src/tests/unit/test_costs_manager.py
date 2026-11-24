@@ -1,12 +1,16 @@
 """
 Unit tests for CostsManager
 """
-import pytest
-from datetime import date
+
+from datetime import UTC, date, datetime
 from unittest.mock import Mock
+from uuid import UUID
+
+import pytest
+
 from src.controller.costs_manager import CostsManager
-from src.models.costs import CostItemCreate, CostItemUpdate, CostItem
 from src.db_models.costs import CostItemDb
+from src.models.costs import CostItem, CostItemCreate, CostItemUpdate
 
 
 class TestCostsManager:
@@ -26,16 +30,21 @@ class TestCostsManager:
     def sample_cost_item_db(self):
         """Sample cost item database object."""
         cost_item = Mock(spec=CostItemDb)
-        cost_item.id = "cost-123"
+        cost_item.id = UUID("00000000-0000-4000-8000-000000000123")
         cost_item.entity_type = "data_product"
         cost_item.entity_id = "product-456"
         cost_item.title = "Storage Costs"
         cost_item.description = "Monthly storage costs"
         cost_item.cost_center = "infrastructure"
+        cost_item.custom_center_name = None
         cost_item.amount_cents = 150000
         cost_item.currency = "USD"
         cost_item.start_month = date(2024, 1, 1)
         cost_item.end_month = None
+        cost_item.created_by = None
+        cost_item.updated_by = None
+        cost_item.created_at = datetime(2024, 1, 1, tzinfo=UTC)
+        cost_item.updated_at = datetime(2024, 1, 1, tzinfo=UTC)
         return cost_item
 
     @pytest.fixture
@@ -61,7 +70,9 @@ class TestCostsManager:
 
     # Create Tests
 
-    def test_create_cost_item_success(self, manager, mock_repository, sample_cost_create, sample_cost_item_db):
+    def test_create_cost_item_success(
+        self, manager, mock_repository, sample_cost_create, sample_cost_item_db
+    ):
         """Test creating a cost item."""
         mock_repository.create.return_value = sample_cost_item_db
         mock_db = Mock()
@@ -69,12 +80,14 @@ class TestCostsManager:
         result = manager.create(mock_db, data=sample_cost_create, user_email="user@example.com")
 
         assert isinstance(result, CostItem)
-        assert result.id == "cost-123"
+        assert str(result.id) == "00000000-0000-4000-8000-000000000123"
         assert result.amount_cents == 150000
         mock_repository.create.assert_called_once()
         assert mock_db.commit.called
 
-    def test_create_cost_item_logs_change(self, manager, mock_repository, sample_cost_create, sample_cost_item_db):
+    def test_create_cost_item_logs_change(
+        self, manager, mock_repository, sample_cost_create, sample_cost_item_db
+    ):
         """Test that creating a cost item logs a change."""
         mock_repository.create.return_value = sample_cost_item_db
         mock_db = Mock()
@@ -107,8 +120,18 @@ class TestCostsManager:
         result = manager.list(mock_db, entity_type="data_product", entity_id="product-456")
 
         assert len(result) == 1
-        assert result[0].id == "cost-123"
+        assert str(result[0].id) == "00000000-0000-4000-8000-000000000123"
         assert result[0].amount_cents == 150000
+        assert result[0].cost_center == "INFRASTRUCTURE"
+
+    def test_list_normalizes_legacy_cost_center_values(
+        self, manager, mock_repository, sample_cost_item_db
+    ):
+        mock_repository.list_for_entity.return_value = [sample_cost_item_db]
+
+        result = manager.list(Mock(), entity_type="data_product", entity_id="product-456")
+
+        assert result[0].cost_center == "INFRASTRUCTURE"
 
     def test_list_cost_items_filtered_by_month(self, manager, mock_repository, sample_cost_item_db):
         """Test listing cost items filtered by month."""
@@ -132,7 +155,7 @@ class TestCostsManager:
         # Create updated item with same attributes but changed amount
         updated_item = Mock(spec=CostItemDb)
         for key, value in sample_cost_item_db.__dict__.items():
-            if not key.startswith('_'):
+            if not key.startswith("_"):
                 setattr(updated_item, key, value)
         updated_item.amount_cents = 200000
         updated_item.entity_type = sample_cost_item_db.entity_type
@@ -143,7 +166,9 @@ class TestCostsManager:
         mock_db = Mock()
 
         update_data = CostItemUpdate(amount_cents=200000)
-        result = manager.update(mock_db, id="cost-123", data=update_data, user_email="user@example.com")
+        result = manager.update(
+            mock_db, id="cost-123", data=update_data, user_email="user@example.com"
+        )
 
         assert result is not None
         assert result.amount_cents == 200000
@@ -155,7 +180,9 @@ class TestCostsManager:
         mock_db = Mock()
 
         update_data = CostItemUpdate(amount_cents=200000)
-        result = manager.update(mock_db, id="nonexistent", data=update_data, user_email="user@example.com")
+        result = manager.update(
+            mock_db, id="nonexistent", data=update_data, user_email="user@example.com"
+        )
 
         assert result is None
 
@@ -163,7 +190,7 @@ class TestCostsManager:
         """Test that updating a cost item logs a change."""
         updated_item = Mock(spec=CostItemDb)
         for key, value in sample_cost_item_db.__dict__.items():
-            if not key.startswith('_'):
+            if not key.startswith("_"):
                 setattr(updated_item, key, value)
         updated_item.entity_type = sample_cost_item_db.entity_type
         updated_item.entity_id = sample_cost_item_db.entity_id
@@ -260,9 +287,12 @@ class TestCostsManager:
         mock_db = Mock()
 
         # Test various dates
-        result1 = manager.summarize(mock_db, entity_type="data_product", entity_id="p1", month=date(2024, 1, 15))
-        result2 = manager.summarize(mock_db, entity_type="data_product", entity_id="p2", month=date(2024, 12, 31))
+        result1 = manager.summarize(
+            mock_db, entity_type="data_product", entity_id="p1", month=date(2024, 1, 15)
+        )
+        result2 = manager.summarize(
+            mock_db, entity_type="data_product", entity_id="p2", month=date(2024, 12, 31)
+        )
 
         assert result1.month == "2024-01"
         assert result2.month == "2024-12"
-

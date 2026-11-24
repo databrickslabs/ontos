@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Not an owner",
+    "notOwnerMessage": "You can view this product but not edit it. Only its owning team, members of its project, its draft owner or a data products admin can edit it."
+  },
   "title": "Data Products",
   "subtitle": "Manage your data products",
   "newProduct": "New Data Product",

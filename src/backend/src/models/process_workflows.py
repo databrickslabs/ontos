@@ -531,17 +531,15 @@ class ConditionalStepConfig(BaseModel):
 
 
 class ScriptStepConfig(BaseModel):
-    """Configuration for script execution steps."""
-    language: str = Field(default="python", description="Script language: 'python' or 'sql'")
-    code: str = Field(..., description="Script code to execute")
-    timeout_seconds: int = Field(default=60, description="Execution timeout")
-    
+    """Configuration for script execution steps (SQL; Python steps are disabled)."""
+    language: str = Field(default="sql", description="Script language: 'sql'")
+    code: str = Field(..., description="SQL statement; ${...} values are bound as parameters")
+
     class Config:
         json_schema_extra = {
             "example": {
-                "language": "python",
-                "code": "result = {'passed': True, 'data': {'status': 'ok'}}",
-                "timeout_seconds": 30
+                "language": "sql",
+                "code": "SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}",
             }
         }
 

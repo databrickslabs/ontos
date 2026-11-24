@@ -42,6 +42,7 @@ import {
 } from '@/lib/workflow-labels';
 import { useApi } from '@/hooks/use-api';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
+import { stepErrorKeys } from '@/lib/workflow-execution-error';
 
 interface WorkflowExecutionDialogProps {
   execution: WorkflowExecution | null;
@@ -114,7 +115,7 @@ export function getStepErrorText(
   const params = (data.error_params && typeof data.error_params === 'object')
     ? data.error_params as Record<string, unknown>
     : {};
-  return t(`workflows:execution.stepErrors.${code}`, {
+  return t(stepErrorKeys(code), {
     ...params,
     defaultValue: run.error_message || code,
   });

@@ -11,6 +11,18 @@ export interface WorkflowExecutionErrorFields {
 }
 
 /**
+ * The keys of a failed step's coded error, in lookup order: the step errors,
+ * then the Script step errors the designer also shows on save
+ * (``workflows:designer.scriptStepSafety.errors.<code>``).
+ */
+export function stepErrorKeys(code: string): string[] {
+  return [
+    `workflows:execution.stepErrors.${code}`,
+    `workflows:designer.scriptStepSafety.errors.${code}`,
+  ];
+}
+
+/**
  * Why an execution failed, in the user's language when the backend sent the
  * failed step's code for it (``workflows:execution.stepErrors.<code>``);
  * otherwise ``defaultText`` (a shipped fail step's message in the user's
@@ -28,7 +40,7 @@ export function workflowExecutionErrorText(
   if (typeof params.stepType === 'string') {
     params.stepType = getStepTypeLabel(params.stepType as StepType, t);
   }
-  return t(`workflows:execution.stepErrors.${execution.error_code}`, {
+  return t(stepErrorKeys(execution.error_code), {
     ...params,
     defaultValue: execution.error_message,
   }) as string;

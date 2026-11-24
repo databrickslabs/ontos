@@ -7,7 +7,12 @@ import { useState } from 'react';
 
 import i18n from '@/i18n/config';
 import { ConditionalStepConfig, ScriptStepConfig } from './step-config-forms';
-import { localStepConfigIssue, stepConfigIssueText } from './step-config-checks';
+import {
+  LEGACY_SCRIPT_LANGUAGE,
+  localStepConfigIssue,
+  scriptLanguageOf,
+  stepConfigIssueText,
+} from './step-config-checks';
 
 const api = vi.hoisted(() => ({ post: vi.fn() }));
 
@@ -19,9 +24,8 @@ vi.mock('./template-vars-inspector', () => ({
 const SCRIPT_SCHEMA = {
   type: 'object',
   properties: {
-    language: { type: 'string', enum: ['python', 'sql'], default: 'python' },
+    language: { type: 'string', enum: ['sql'], default: 'sql' },
     code: { type: 'string' },
-    timeout_seconds: { type: 'integer', default: 60, minimum: 1 },
   },
   required: ['code'],
 };
@@ -108,48 +112,68 @@ describe('ConditionalStepConfig', () => {
 });
 
 describe('ScriptStepConfig', () => {
-  it('starts as Python with the schema timeout, and documents the variables', () => {
-    render(<Editable kind="script" />);
-
-    expect(screen.getByTestId('script-language')).toHaveTextContent('Python');
-    expect(screen.getByLabelText('Timeout (seconds)')).toHaveValue(60);
-    const variables = screen.getByTestId('script-python-variables');
-    for (const name of ['entity', 'entity_type', 'entity_id', 'entity_name', 'user_email', 'step_results']) {
-      expect(variables).toHaveTextContent(name);
-    }
-    expect(variables).toHaveTextContent("result = {'passed': False, 'message': '...'} follows the Fail branch");
-  });
-
-  it('edits the code and the timeout', () => {
-    const onConfig = vi.fn();
-    render(<Editable kind="script" onConfig={onConfig} />);
-
-    fireEvent.change(screen.getByLabelText('Code'), { target: { value: "result = {'passed': True}" } });
-    fireEvent.change(screen.getByLabelText('Timeout (seconds)'), { target: { value: '15' } });
-
-    expect(onConfig).toHaveBeenLastCalledWith({ code: "result = {'passed': True}", timeout_seconds: 15 });
-  });
-
-  it('rejects a timeout below the schema minimum', () => {
-    render(<Editable kind="script" initial={{ code: 'x = 1' }} />);
-
-    fireEvent.change(screen.getByLabelText('Timeout (seconds)'), { target: { value: '0' } });
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a whole number of seconds, at least 1.');
-  });
-
-  it('shows the SQL help and template variables for a SQL script', () => {
-    render(<Editable kind="script" initial={{ language: 'sql', code: 'SELECT 1' }} />);
+  it('starts as SQL, with the help, the placeholder rules and the variables', () => {
+    render(<Editable kind="script" initial={{ language: 'sql' }} />);
 
     expect(screen.getByTestId('script-language')).toHaveTextContent('SQL');
     expect(screen.getByText(/Runs on the SQL warehouse set in Settings/)).toBeInTheDocument();
+    expect(screen.getByTestId('script-sql-placeholder-help')).toHaveTextContent(
+      "A placeholder can't be inside quotes or backticks",
+    );
     expect(screen.getByTestId('template-vars-inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('script-language-issue')).not.toBeInTheDocument();
+  });
+
+  it('has no timeout field and no Python variables', () => {
+    render(<Editable kind="script" initial={{ language: 'sql', code: 'SELECT 1' }} />);
+
     expect(screen.queryByLabelText('Timeout (seconds)')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('script-python-variables')).not.toBeInTheDocument();
+  });
+
+  it('edits the code and keeps the language', () => {
+    const onConfig = vi.fn();
+    render(<Editable kind="script" initial={{ language: 'sql' }} onConfig={onConfig} />);
+
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'SELECT 1' } });
+
+    expect(onConfig).toHaveBeenLastCalledWith({ language: 'sql', code: 'SELECT 1' });
+  });
+
+  it('shows a stored Python step as a disabled Python option, with what to do', () => {
+    render(<Editable kind="script" initial={{ language: 'python', code: 'x = 1' }} />);
+
+    expect(screen.getByTestId('script-language')).toHaveTextContent('Python');
+    expect(screen.getByTestId('script-language-issue')).toHaveTextContent(
+      'Python script steps are disabled: rewrite the step in SQL or remove it.',
+    );
+    // Not SQL: no SQL help, no variables inspector
+    expect(screen.queryByTestId('script-sql-placeholder-help')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('template-vars-inspector')).not.toBeInTheDocument();
+  });
+
+  it('treats a stored step without a language as Python (the old default)', () => {
+    const stored = { code: "result = {'passed': True}", timeout_seconds: 30 };
+    render(<Editable kind="script" initial={stored} />);
+
+    expect(screen.getByTestId('script-language')).toHaveTextContent('Python');
+    expect(screen.getByTestId('script-language-issue')).toHaveTextContent(
+      'Python script steps are disabled',
+    );
+  });
+
+  it('explains the disabled Python step in the UI language', async () => {
+    await i18n.changeLanguage('pt');
+    render(<Editable kind="script" initial={{ code: 'x = 1' }} />);
+
+    expect(screen.getByTestId('script-language-issue')).toHaveTextContent(
+      'Etapas de script Python estão desativadas: reescreva a etapa em SQL ou remova-a.',
+    );
   });
 
   it('asks for code once it is cleared, in the UI language', async () => {
     await i18n.changeLanguage('de');
-    render(<Editable kind="script" initial={{ code: 'x = 1' }} />);
+    render(<Editable kind="script" initial={{ language: 'sql', code: 'SELECT 1' }} />);
 
     fireEvent.change(screen.getByLabelText('Code'), { target: { value: '' } });
 
@@ -161,25 +185,84 @@ describe('step config checks', () => {
   const step = (step_type: string, config: Record<string, unknown>) =>
     ({ step_id: 's', name: 'S', step_type, config, order: 0 }) as never;
 
-  it('finds a missing condition or code and a bad timeout', () => {
+  it('finds a missing condition or code', () => {
     expect(localStepConfigIssue(step('conditional', {}))?.code).toBe('condition_required');
-    expect(localStepConfigIssue(step('script', { code: ' ' }))?.code).toBe('script_code_required');
-    expect(localStepConfigIssue(step('script', { code: 'x', timeout_seconds: 2.5 }), SCRIPT_SCHEMA)?.code).toBe(
-      'script_timeout_invalid',
+    expect(localStepConfigIssue(step('script', { language: 'sql', code: ' ' }))?.code).toBe(
+      'script_code_required',
     );
+    expect(localStepConfigIssue(step('script', {}))?.code).toBe('script_code_required');
     expect(localStepConfigIssue(step('conditional', { condition: "obj.a = 'b'" }))).toBeNull();
-    expect(localStepConfigIssue(step('script', { code: 'x = 1' }), SCRIPT_SCHEMA)).toBeNull();
+    expect(localStepConfigIssue(step('script', { language: 'sql', code: 'SELECT 1' }))).toBeNull();
     expect(localStepConfigIssue(step('validation', {}))).toBeNull();
   });
 
-  it('does not check the timeout of a SQL script, which has no timeout field', () => {
+  it('refuses a Python script, and a script without a language (the old default)', () => {
+    expect(localStepConfigIssue(step('script', { language: 'python', code: 'x = 1' }))).toEqual({
+      code: 'script_python_disabled',
+    });
+    expect(localStepConfigIssue(step('script', { code: 'x = 1' }))).toEqual({
+      code: 'script_python_disabled',
+    });
+    expect(localStepConfigIssue(step('script', { language: '', code: 'x = 1' }))?.code).toBe(
+      'script_python_disabled',
+    );
+  });
+
+  it('does not check the timeout of a SQL script', () => {
     expect(
-      localStepConfigIssue(step('script', { code: 'SELECT 1', language: 'sql', timeout_seconds: 0 }), SCRIPT_SCHEMA),
+      localStepConfigIssue(
+        step('script', { code: 'SELECT 1', language: 'sql', timeout_seconds: 0 }),
+      ),
     ).toBeNull();
-    expect(
-      localStepConfigIssue(step('script', { code: 'x = 1', language: 'python', timeout_seconds: 0 }), SCRIPT_SCHEMA)
-        ?.code,
-    ).toBe('script_timeout_invalid');
+  });
+
+  it('knows a script language as the backend reads it', () => {
+    expect(scriptLanguageOf({ language: 'sql' })).toBe('sql');
+    expect(scriptLanguageOf({})).toBe(LEGACY_SCRIPT_LANGUAGE);
+    expect(scriptLanguageOf({ language: '' })).toBe('python');
+    expect(scriptLanguageOf({ language: 7 })).toBe('python');
+  });
+
+  it.each([
+    [
+      'script_python_disabled',
+      {},
+      'Python script steps are disabled: rewrite the step in SQL or remove it.',
+    ],
+    [
+      'script_sql_placeholder_in_quotes',
+      { placeholder: '${entity_name}' },
+      "The placeholder ${entity_name} is inside quotes or backticks, "
+        + "where its value can't be sent as a parameter.",
+    ],
+    [
+      'script_sql_placeholder_in_identifier',
+      { placeholder: '${entity_id}' },
+      'The placeholder ${entity_id} is part of a longer name.',
+    ],
+    [
+      'script_sql_placeholder_as_list',
+      { placeholder: '${ids}' },
+      'The placeholder ${ids} is the whole list of an IN (...), but its value is a single text.',
+    ],
+  ])('translates %s from designer.scriptStepSafety.errors', (code, params, text) => {
+    const issue = { code, params, message: 'English from the backend' };
+    expect(stepConfigIssueText(issue, i18n.t)).toContain(text);
+  });
+
+  it('translates the new script codes in the UI language', async () => {
+    await i18n.changeLanguage('pt');
+    const issue = { code: 'script_sql_placeholder_in_quotes', params: { placeholder: '${x}' } };
+    expect(stepConfigIssueText(issue, i18n.t)).toContain(
+      'O marcador ${x} está entre aspas ou crases',
+    );
+    await i18n.changeLanguage('en');
+  });
+
+  it('keeps the script texts of the other script codes', () => {
+    expect(stepConfigIssueText({ code: 'script_code_required' }, i18n.t)).toBe(
+      "Enter the script's code.",
+    );
   });
 
   it('translates the too long and too complex condition codes', async () => {

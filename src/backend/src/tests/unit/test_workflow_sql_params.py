@@ -1,0 +1,243 @@
+"""SQL script step placeholders: what can be bound, and the bound statement.
+
+``check_sql_placeholders`` lists the placeholders a SQL step can't bind (refused on
+save and at run time); ``bind_sql_placeholders`` turns the others into named
+parameters (``:p0``, ``:p1``...) so a value is never pasted into the SQL text.
+"""
+import os
+
+os.environ['TESTING'] = 'true'
+os.environ['SKIP_STARTUP_TASKS'] = 'true'
+
+import pytest
+
+from src.common.workflow_sql_params import (
+    SQL_PLACEHOLDER_AS_LIST,
+    SQL_PLACEHOLDER_IN_IDENTIFIER,
+    SQL_PLACEHOLDER_IN_QUOTES,
+    bind_sql_placeholders,
+    check_sql_placeholders,
+)
+
+
+def _issues(code):
+    return [(i['code'], i['params']['placeholder']) for i in check_sql_placeholders(code)]
+
+
+# --- check_sql_placeholders: placeholders that can be bound ---------------------
+
+@pytest.mark.parametrize('code', [
+    'SELECT 1',
+    '',
+    'SELECT * FROM ${entity_id}',
+    'select * from {{entity_id}} t',
+    'SELECT 1 FROM a JOIN ${other} b ON a.id = b.id',
+    'INSERT INTO ${target} VALUES (${value})',
+    'UPDATE ${target} SET owner = ${user_email}',
+    'SELECT * FROM t WHERE name = ${entity_name}',
+    "SELECT * FROM t WHERE name = '${entity_name}'",
+    'SELECT * FROM IDENTIFIER(${entity_id})',
+    "SELECT * FROM IDENTIFIER(concat('main.', ${schema}, '.t'))",
+    "SELECT * FROM t WHERE name LIKE concat('%', ${entity_name}, '%')",
+    'SELECT * FROM t WHERE id IN (${a}, ${b})',
+    'SELECT * FROM t WHERE id IN (${a}, 1)',
+    # {{x}} spelling with spaces around the name
+    'SELECT * FROM t WHERE name = {{ entity_name }}',
+])
+def test_a_placeholder_that_can_be_bound_has_no_issue(code):
+    assert check_sql_placeholders(code) == []
+
+
+def test_none_code_has_no_issue():
+    assert check_sql_placeholders(None) == []
+
+
+# --- check_sql_placeholders: placeholders that can't ---------------------------
+
+@pytest.mark.parametrize('code, expected', [
+    # inside a longer quoted text
+    ("SELECT * FROM t WHERE name LIKE '%${n}%'", [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]),
+    ("SELECT * FROM t WHERE name LIKE '%{{n}}%'", [(SQL_PLACEHOLDER_IN_QUOTES, '{{n}}')]),
+    ("SELECT * FROM t WHERE name = 'x ${n}'", [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]),
+    # an escaped quote does not end the text
+    ("SELECT * FROM t WHERE name = 'it\\'s ${n}'", [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]),
+    # double quotes and backticks, even for a whole-text placeholder
+    ('SELECT * FROM t WHERE name = "${n}"', [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]),
+    ('SELECT * FROM `${n}`', [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]),
+    # glued to name text
+    ('SELECT * FROM main.${schema}', [(SQL_PLACEHOLDER_IN_IDENTIFIER, '${schema}')]),
+    ('SELECT * FROM {{schema}}.t', [(SQL_PLACEHOLDER_IN_IDENTIFIER, '{{schema}}')]),
+    ('SELECT * FROM t_${suffix}', [(SQL_PLACEHOLDER_IN_IDENTIFIER, '${suffix}')]),
+    ('SELECT * FROM ${a}${b}', [
+        (SQL_PLACEHOLDER_IN_IDENTIFIER, '${a}'), (SQL_PLACEHOLDER_IN_IDENTIFIER, '${b}'),
+    ]),
+    # the whole list of an IN (...)
+    ('SELECT * FROM t WHERE id IN (${ids})', [(SQL_PLACEHOLDER_AS_LIST, '${ids}')]),
+    ('SELECT * FROM t WHERE id in ( {{ids}} )', [(SQL_PLACEHOLDER_AS_LIST, '{{ids}}')]),
+])
+def test_a_placeholder_that_cannot_be_bound_is_reported(code, expected):
+    assert _issues(code) == expected
+
+
+def test_an_issue_carries_the_placeholder_and_an_english_message():
+    [issue] = check_sql_placeholders("SELECT * FROM t WHERE name LIKE '%${n}%'")
+
+    assert issue['code'] == SQL_PLACEHOLDER_IN_QUOTES
+    assert issue['params'] == {'placeholder': '${n}'}
+    assert '${n}' in issue['message']
+
+
+def test_the_same_placeholder_written_the_same_wrong_way_is_reported_once():
+    code = "SELECT * FROM t WHERE a LIKE '%${n}%' OR b LIKE '${n}%' OR c = 'x ${n}'"
+
+    assert _issues(code) == [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]
+
+
+def test_two_different_placeholders_are_both_reported():
+    code = "SELECT * FROM t WHERE a LIKE '%${n}%' OR b LIKE '%${m}%'"
+
+    assert _issues(code) == [
+        (SQL_PLACEHOLDER_IN_QUOTES, '${n}'), (SQL_PLACEHOLDER_IN_QUOTES, '${m}'),
+    ]
+
+
+def test_the_same_placeholder_wrong_in_two_ways_is_reported_for_each():
+    code = "SELECT * FROM main.${n} WHERE a LIKE '%${n}%'"
+
+    assert sorted(code_ for code_, _ in _issues(code)) == [
+        SQL_PLACEHOLDER_IN_IDENTIFIER, SQL_PLACEHOLDER_IN_QUOTES,
+    ]
+
+
+@pytest.mark.parametrize('code', [
+    'SELECT 1 -- main.${n}\n',
+    'SELECT 1 -- IN (${n})',
+    "SELECT 1 /* LIKE '%${n}%' */",
+    "SELECT 1 /* unterminated '%${n}%'",
+])
+def test_a_placeholder_in_a_comment_is_left_alone(code):
+    assert check_sql_placeholders(code) == []
+
+
+def test_code_after_a_comment_is_still_checked():
+    code = "-- a note\n/* another */ SELECT * FROM t WHERE a LIKE '%${n}%'"
+
+    assert _issues(code) == [(SQL_PLACEHOLDER_IN_QUOTES, '${n}')]
+
+
+# --- bind_sql_placeholders --------------------------------------------------------
+
+def _resolver(values):
+    return lambda name: values.get(name)
+
+
+def test_a_value_is_bound_as_a_parameter():
+    statement, params = bind_sql_placeholders(
+        'SELECT * FROM audit WHERE name = ${entity_name}',
+        _resolver({'entity_name': 'orders'}),
+    )
+
+    assert statement == 'SELECT * FROM audit WHERE name = :p0'
+    assert params == [('p0', 'orders')]
+
+
+def test_a_whole_quoted_literal_loses_its_quotes():
+    statement, params = bind_sql_placeholders(
+        "SELECT * FROM audit WHERE name = '${entity_name}'",
+        _resolver({'entity_name': "x'; DROP TABLE t; --"}),
+    )
+
+    assert statement == 'SELECT * FROM audit WHERE name = :p0'
+    assert params == [('p0', "x'; DROP TABLE t; --")]
+
+
+@pytest.mark.parametrize('code, statement', [
+    ('SELECT * FROM ${t}', 'SELECT * FROM IDENTIFIER(:p0)'),
+    ('select * from {{t}} x', 'select * from IDENTIFIER(:p0) x'),
+    ('SELECT * FROM a JOIN ${t} b', 'SELECT * FROM a JOIN IDENTIFIER(:p0) b'),
+    ('INSERT INTO ${t} VALUES (1)', 'INSERT INTO IDENTIFIER(:p0) VALUES (1)'),
+    ('UPDATE ${t} SET a = 1', 'UPDATE IDENTIFIER(:p0) SET a = 1'),
+    ('SELECT IDENTIFIER(${t})', 'SELECT IDENTIFIER(:p0)'),
+])
+def test_a_table_is_bound_through_identifier(code, statement):
+    assert bind_sql_placeholders(code, _resolver({'t': 'main.sales.orders'})) == (
+        statement, [('p0', 'main.sales.orders')],
+    )
+
+
+def test_an_unresolved_placeholder_is_left_as_written_and_takes_no_number():
+    statement, params = bind_sql_placeholders(
+        "SELECT * FROM t WHERE a = ${known} AND b = ${missing} AND c = {{known}}",
+        _resolver({'known': 'k'}),
+    )
+
+    assert statement == 'SELECT * FROM t WHERE a = :p0 AND b = ${missing} AND c = :p1'
+    assert params == [('p0', 'k'), ('p1', 'k')]
+
+
+def test_an_unresolved_whole_literal_drops_its_quotes():
+    statement, params = bind_sql_placeholders(
+        "SELECT * FROM t WHERE a = '${missing}'", _resolver({}),
+    )
+
+    assert statement == 'SELECT * FROM t WHERE a = ${missing}'
+    assert params == []
+
+
+def test_a_placeholder_in_a_comment_is_left_as_written():
+    statement, params = bind_sql_placeholders(
+        "SELECT * FROM t -- by ${user_email}\nWHERE a = ${a} /* ${a} */",
+        _resolver({'user_email': 'u@x.io', 'a': 'A'}),
+    )
+
+    assert statement == 'SELECT * FROM t -- by ${user_email}\nWHERE a = :p0 /* ${a} */'
+    assert params == [('p0', 'A')]
+
+
+def test_placeholders_are_numbered_left_to_right_across_both_spellings():
+    statement, params = bind_sql_placeholders(
+        "SELECT * FROM ${t} WHERE a = {{a}} AND b = '${b}' AND c = ${c}",
+        _resolver({'t': 'cat.sch.t', 'a': 'A', 'b': 'B', 'c': 'C'}),
+    )
+
+    assert statement == (
+        'SELECT * FROM IDENTIFIER(:p0) WHERE a = :p1 AND b = :p2 AND c = :p3'
+    )
+    assert params == [('p0', 'cat.sch.t'), ('p1', 'A'), ('p2', 'B'), ('p3', 'C')]
+
+
+def test_a_placeholder_written_twice_is_bound_twice():
+    statement, params = bind_sql_placeholders(
+        'SELECT ${a}, ${a}', _resolver({'a': 'A'}),
+    )
+
+    assert statement == 'SELECT :p0, :p1'
+    assert params == [('p0', 'A'), ('p1', 'A')]
+
+
+def test_a_placeholder_that_cannot_be_bound_is_left_as_written():
+    code = "SELECT * FROM t WHERE a LIKE '%${n}%' AND b = ${n}"
+
+    statement, params = bind_sql_placeholders(code, _resolver({'n': 'N'}))
+
+    assert statement == "SELECT * FROM t WHERE a LIKE '%${n}%' AND b = :p0"
+    assert params == [('p0', 'N')]
+
+
+def test_the_name_is_stripped_before_it_is_resolved():
+    seen = []
+
+    def resolve(name):
+        seen.append(name)
+        return 'V'
+
+    statement, _ = bind_sql_placeholders('SELECT {{ entity_name }}', resolve)
+
+    assert seen == ['entity_name']
+    assert statement == 'SELECT :p0'
+
+
+def test_code_without_placeholders_is_unchanged():
+    code = "SELECT 'a${' FROM t"
+
+    assert bind_sql_placeholders(code, _resolver({})) == (code, [])

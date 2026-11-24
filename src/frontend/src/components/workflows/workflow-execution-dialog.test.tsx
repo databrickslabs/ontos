@@ -175,6 +175,36 @@ describe('step errors', () => {
     }
   });
 
+  it('translates a script step error from the designer texts', async () => {
+    const run = {
+      error_message:
+        "Placeholder ${entity_name} is inside quotes or backticks, where its value can't be bound.",
+      result_data: {
+        error_code: 'script_sql_placeholder_in_quotes',
+        error_params: { placeholder: '${entity_name}' },
+      },
+    };
+    expect(getStepErrorText(run, i18n.t)).toContain(
+      "The placeholder ${entity_name} is inside quotes or backticks, "
+        + "where its value can't be sent as a parameter.",
+    );
+    await i18n.changeLanguage('pt');
+    try {
+      expect(getStepErrorText(run, i18n.t)).toContain(
+        'O marcador ${entity_name} está entre aspas ou crases',
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('translates a Python script step that was refused', () => {
+    expect(getStepErrorText({
+      error_message: 'Python script steps are disabled: rewrite the step in SQL or remove it',
+      result_data: { error_code: 'script_python_disabled', error_params: {} },
+    }, i18n.t)).toBe('Python script steps are disabled: rewrite the step in SQL or remove it.');
+  });
+
   it('shows an error without a code as stored', () => {
     expect(getStepErrorText({ error_message: 'Policy not found: x' }, i18n.t)).toBe(
       'Policy not found: x',

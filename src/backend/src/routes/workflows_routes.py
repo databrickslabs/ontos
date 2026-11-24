@@ -865,12 +865,16 @@ def _refuse_unrunnable_policy_steps(
     manager: WorkflowsManager, existing: ProcessWorkflow,
 ) -> None:
     """400 when a stored workflow has policy_check steps with no existing policy,
-    or validation steps whose rule uses LLM_CHECK.
+    validation steps whose rule uses LLM_CHECK, or script steps that can't run
+    (Python, or SQL placeholders that can't be bound).
 
     Called before the overlap check: a workflow that can't run is refused outright
     instead of offering an "activate anyway" that would then fail.
     """
-    rule_errors = manager.validation_rule_errors(existing.steps)
+    rule_errors = [
+        *manager.validation_rule_errors(existing.steps),
+        *manager.script_step_errors(existing.steps),
+    ]
     validation = _with_policy_errors(
         manager,
         WorkflowValidationResult(valid=not rule_errors, errors=rule_errors),

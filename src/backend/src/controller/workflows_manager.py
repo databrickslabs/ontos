@@ -42,7 +42,11 @@ from src.models.process_workflows import (
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
-from src.common.workflow_step_config import check_condition, check_script_config
+from src.common.workflow_step_config import (
+    SCRIPT_LANGUAGES,
+    check_condition,
+    check_script_config,
+)
 from src.common.quartz_cron import QuartzCronError, validate_schedule
 
 logger = get_logger(__name__)
@@ -550,6 +554,20 @@ class WorkflowsManager:
                     "evaluated in compliance runs, so the step would fail every entity",
                     'validation_rule_uses_llm_check', step=step.step_id,
                 ))
+        return errors
+
+    @staticmethod
+    def script_step_errors(steps: Iterable[Any]) -> List[CodedMessage]:
+        """Errors of Script steps that can't run: Python, or SQL placeholders that can't be bound.
+
+        Checked on save (``_validate_step_config``) and again when a stored workflow
+        is activated, so one saved before these rules can't be switched on.
+        """
+        errors = []
+        for step in steps:
+            if step.step_type == StepType.SCRIPT:
+                errors.extend(_step_issue(step, issue)
+                              for issue in check_script_config(step.config or {}))
         return errors
 
     def toggle_active(
@@ -1370,14 +1388,16 @@ class WorkflowsManager:
             StepTypeSchema(
                 type=StepType.SCRIPT,
                 name="Script",
-                description="Execute custom Python or SQL script",
+                description="Run a SQL statement on the configured SQL warehouse",
                 icon="code",
                 config_schema={
                     "type": "object",
                     "properties": {
-                        "language": {"type": "string", "enum": ["python", "sql"], "default": "python"},
-                        "code": {"type": "string", "description": "Script code"},
-                        "timeout_seconds": {"type": "integer", "default": 60}
+                        # Python steps are disabled (workflow_step_config)
+                        "language": {
+                            "type": "string", "enum": list(SCRIPT_LANGUAGES), "default": "sql",
+                        },
+                        "code": {"type": "string", "description": "SQL statement"},
                     },
                     "required": ["code"]
                 },

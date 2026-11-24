@@ -694,32 +694,24 @@ A condition that could be evaluated makes the step succeed, true or false. True 
 
 #### 7. Script Step
 
-Executes custom Python or SQL code.
+Runs a SQL statement on the SQL warehouse set in Settings. The step passes when the statement succeeds; it waits up to 50 seconds.
 
 | Config Key | Type | Description |
 |------------|------|-------------|
-| `language` | String | `python` or `sql` |
-| `code` | String | Script code to execute |
-| `timeout_seconds` | Integer | Maximum execution time |
+| `language` | String | `sql` |
+| `code` | String | The SQL statement |
 
 **Example Configuration:**
 ```yaml
 step_type: script
 config:
-  language: python
-  code: |
-    # Access entity data via 'entity' variable
-    # Access step results via 'step_results' dict
-    # Return a dict with 'passed' boolean and optional 'message'
-    if entity.get('row_count', 0) > 1000000:
-        return {'passed': True, 'message': 'Large table detected'}
-    return {'passed': True}
-  timeout_seconds: 30
+  language: sql
+  code: SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}
 ```
 
 **Handler:** `ScriptStepHandler`
 
-> **Security Note:** Script execution runs in a restricted sandbox. Only approved functions and modules are available.
+> **Security Note:** Python script steps are disabled: code run in the app's process can't be sandboxed. Saving or activating a workflow with one is refused (`script_python_disabled`), and a stored one fails when it runs. A step without `language` counts as Python (the former default). In SQL, `${...}` values are sent as statement parameters, never pasted into the SQL; see [Scripts](/user-docs/workflow-authoring-guide#scripts) for where a placeholder can go.
 
 #### 8. Pass Step (Terminal)
 

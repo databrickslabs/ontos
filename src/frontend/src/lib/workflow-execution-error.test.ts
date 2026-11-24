@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 
 import i18n from '@/i18n/config';
-import { workflowExecutionErrorText } from './workflow-execution-error';
+import { stepErrorKeys, workflowExecutionErrorText } from './workflow-execution-error';
 
 const asStored = (text: string | undefined | null) => text ?? undefined;
 
@@ -84,5 +84,42 @@ describe('workflowExecutionErrorText', () => {
 
   it('shows nothing without an error', () => {
     expect(workflowExecutionErrorText(i18n.t, {}, asStored)).toBeUndefined();
+  });
+});
+
+describe('stepErrorKeys', () => {
+  it('looks in the step errors, then in the script step errors', () => {
+    expect(stepErrorKeys('script_python_disabled')).toEqual([
+      'workflows:execution.stepErrors.script_python_disabled',
+      'workflows:designer.scriptStepSafety.errors.script_python_disabled',
+    ]);
+  });
+});
+
+describe('workflowExecutionErrorText for a script step', () => {
+  it('translates a placeholder error with its parameter', async () => {
+    const execution = {
+      error_message:
+        "Placeholder ${entity_name} is inside quotes or backticks, where its value can't be bound.",
+      error_code: 'script_sql_placeholder_in_quotes',
+      error_params: { placeholder: '${entity_name}' },
+    };
+    expect(workflowExecutionErrorText(i18n.t, execution, asStored)).toContain(
+      'The placeholder ${entity_name} is inside quotes or backticks',
+    );
+    await i18n.changeLanguage('pt');
+    try {
+      expect(workflowExecutionErrorText(i18n.t, execution, asStored)).toContain(
+        'O marcador ${entity_name} está entre aspas ou crases',
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('still prefers a step error text of the same code', () => {
+    expect(workflowExecutionErrorText(i18n.t, {
+      error_message: 'Request denied', error_code: 'approval_rejected', error_params: {},
+    }, asStored)).toBe('Request denied');
   });
 });

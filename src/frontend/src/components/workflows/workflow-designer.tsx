@@ -1507,7 +1507,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       step_id: stepId,
       name: t('workflows:designer.newStepName', { type }),
       step_type: type,
-      config: type === 'entity_action' ? { action: 'certify' } : {},
+      // A Script step without a language is a (disabled) Python step: new ones are SQL
+      config: type === 'entity_action' ? { action: 'certify' }
+        : type === 'script' ? { language: 'sql' } : {},
       order: steps.length,
       // Below the lowest node, on a spot no other node takes.
       position: newStepPosition(nodes.map(n => n.position)),
@@ -1590,8 +1592,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // Conditional and Script steps the backend would reject, with a translatable issue.
   const findStepConfigIssue = async (): Promise<{ step: WorkflowStepCreate; issue: StepConfigIssue } | null> => {
     for (const step of steps) {
-      const schema = _stepTypes.find(s => s.type === step.step_type)?.config_schema;
-      const local = localStepConfigIssue(step, schema);
+      const local = localStepConfigIssue(step);
       if (local) {
         return { step, issue: local };
       }

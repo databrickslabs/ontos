@@ -9,6 +9,8 @@ import { useApi } from '@/hooks/use-api';
 import TemplateVarsInspector from './template-vars-inspector';
 import {
   localStepConfigIssue,
+  LEGACY_SCRIPT_LANGUAGE,
+  scriptLanguageOf,
   scriptSchema,
   stepConfigIssueText,
   type ConditionCheckResult,
@@ -16,7 +18,7 @@ import {
 } from './step-config-checks';
 
 // Forms for the Conditional and Script steps (#943, #942). The step contract
-// (languages, defaults, minimum timeout) comes from the step's config_schema
+// (the languages) comes from the step's config_schema
 // returned by GET /api/workflows/step-types; the texts are i18n keys.
 
 const CONDITION_EXAMPLES = [
@@ -28,8 +30,6 @@ const CONDITION_EXAMPLES = [
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type JsonSchema = Record<string, any>;
-
-const PYTHON_VARIABLES = ['entity', 'entity_type', 'entity_id', 'entity_name', 'user_email', 'step_results'];
 
 function IssueText({ issue, testId }: { issue: StepConfigIssue; testId: string }) {
   const { t } = useTranslation(['workflows']);
@@ -202,18 +202,15 @@ export function ScriptStepConfig({
   showRequired?: boolean;
 }) {
   const { t } = useTranslation(['workflows']);
-  const { languages, defaultLanguage, defaultTimeout, minimumTimeout } = scriptSchema(schema);
-  const language = typeof config.language === 'string' ? config.language : defaultLanguage;
+  const { languages } = scriptSchema(schema);
+  const language = scriptLanguageOf(config);
   const code = typeof config.code === 'string' ? config.code : '';
   const [touched, setTouched] = useState(false);
+  // A stored Python step (disabled): shown as is, with what to do instead
+  const disabledLanguage = languages.includes(language) ? null : language;
 
   const codeIssue: StepConfigIssue | null =
     !code.trim() && (touched || showRequired) ? { code: 'script_code_required' } : null;
-  const timeout = config.timeout_seconds;
-  const timeoutIssue: StepConfigIssue | null =
-    timeout !== undefined && (!Number.isInteger(timeout) || (timeout as number) < minimumTimeout)
-      ? { code: 'script_timeout_invalid', params: { minimum: minimumTimeout } }
-      : null;
 
   return (
     <div className="space-y-3" data-testid="script-step-config">
@@ -227,8 +224,18 @@ export function ScriptStepConfig({
                 {t(`workflows:designer.script.languages.${option}`, { defaultValue: option })}
               </SelectItem>
             ))}
+            {disabledLanguage && (
+              <SelectItem value={disabledLanguage} disabled>
+                {t(`workflows:designer.script.languages.${disabledLanguage}`, {
+                  defaultValue: disabledLanguage,
+                })}
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
+        {disabledLanguage === LEGACY_SCRIPT_LANGUAGE && (
+          <IssueText issue={{ code: 'script_python_disabled' }} testId="script-language-issue" />
+        )}
       </div>
       <div>
         <Label htmlFor="script-code">{t('workflows:designer.script.code')}</Label>
@@ -239,62 +246,20 @@ export function ScriptStepConfig({
             setTouched(true);
             onChange({ ...config, code: e.target.value });
           }}
-          placeholder={t(
-            language === 'sql'
-              ? 'workflows:designer.script.sqlPlaceholder'
-              : 'workflows:designer.script.pythonPlaceholder',
-          )}
+          placeholder={t('workflows:designer.script.sqlPlaceholder')}
           rows={12}
           className="font-mono text-sm"
           aria-invalid={codeIssue ? true : undefined}
         />
         {codeIssue && <IssueText issue={codeIssue} testId="script-code-issue" />}
       </div>
-      {language === 'sql' ? (
+      {language === 'sql' && (
         <>
           <p className="text-xs text-muted-foreground">{t('workflows:designer.script.sqlHelp')}</p>
+          <p className="text-xs text-muted-foreground" data-testid="script-sql-placeholder-help">
+            {t('workflows:designer.scriptStepSafety.placeholderRules')}
+          </p>
           <TemplateVarsInspector triggerType={triggerType} entityType={entityType} />
-        </>
-      ) : (
-        <>
-          <div>
-            <Label htmlFor="script-timeout">{t('workflows:designer.script.timeout')}</Label>
-            <Input
-              id="script-timeout"
-              type="number"
-              min={minimumTimeout}
-              step={1}
-              value={timeout === undefined ? defaultTimeout : String(timeout)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                const next = { ...config };
-                if (raw === '') {
-                  delete next.timeout_seconds;
-                } else {
-                  next.timeout_seconds = Number(raw);
-                }
-                onChange(next);
-              }}
-              aria-invalid={timeoutIssue ? true : undefined}
-            />
-            {timeoutIssue ? (
-              <IssueText issue={timeoutIssue} testId="script-timeout-issue" />
-            ) : (
-              <p className="text-xs text-muted-foreground mt-1">{t('workflows:designer.script.timeoutHelp')}</p>
-            )}
-          </div>
-          <div data-testid="script-python-variables">
-            <p className="text-xs font-medium">{t('workflows:designer.script.variablesTitle')}</p>
-            <ul className="mt-1 space-y-1">
-              {PYTHON_VARIABLES.map((name) => (
-                <li key={name} className="text-xs text-muted-foreground">
-                  <code className="font-mono bg-muted rounded px-1 py-0.5 text-foreground">{name}</code>{' '}
-                  {t(`workflows:designer.script.pythonVariables.${name}`)}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground mt-2">{t('workflows:designer.script.pythonResultHelp')}</p>
-          </div>
         </>
       )}
     </div>

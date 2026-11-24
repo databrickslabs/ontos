@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from src.common.workflow_executor import (
+    resolve_template_variable,
     substitute_template,
     NotificationStepHandler,
     StepContext,
@@ -203,6 +204,39 @@ class TestSubstituteTemplateMissing:
         """entity_name=None should resolve to empty string, not 'None'."""
         ctx = _make_context(entity_name=None)
         assert substitute_template("N=${entity_name}", ctx) == "N="
+
+
+# =========================================================================
+# resolve_template_variable — one variable's text (SQL steps bind it as a parameter)
+# =========================================================================
+
+class TestResolveTemplateVariable:
+    """One name's text as substitute_template gives it; None when unresolved."""
+
+    @pytest.mark.parametrize('name, expected', [
+        ('entity_name', 'test_table'),
+        ('entity_id', 'entity-123'),
+        ('user_email', 'user@example.com'),
+        ('entity.owner', 'alice@co.com'),
+        ('step_results.validate.score', '95'),
+        ('context.entity_type', 'table'),
+    ])
+    def test_resolves_a_variable(self, name, expected):
+        assert resolve_template_variable(name, _make_context()) == expected
+
+    @pytest.mark.parametrize('name', [
+        'nonexistent_var', 'entity.missing_field', 'step_results.missing.field',
+        'other.namespace', 'context.nothing',
+    ])
+    def test_an_unresolved_variable_is_none(self, name):
+        assert resolve_template_variable(name, _make_context()) is None
+
+    def test_agrees_with_substitute_template(self):
+        ctx = _make_context()
+        for name in ('entity_name', 'entity.owner', 'step_results.validate.score'):
+            assert substitute_template('${' + name + '}', ctx) == (
+                resolve_template_variable(name, ctx)
+            )
 
 
 # =========================================================================

@@ -56,6 +56,29 @@ class TestPythonDisabled:
         assert result.passed is False
         mock_popen.assert_not_called()
 
+    def test_python_script_fails_with_a_code(self, db_session):
+        handler = ScriptStepHandler(db=db_session, config={'language': 'python', 'code': 'x = 1'})
+        result = handler.execute(_make_context())
+
+        assert result.passed is False
+        assert result.data['error_code'] == 'script_python_disabled'
+        assert result.data['error_params'] == {}
+
+    @pytest.mark.parametrize('config', [
+        # No language: Python was the default, so such a step is a Python step
+        {'code': "result = {'passed': True}"},
+        {'code': "result = {'passed': True}", 'timeout_seconds': 30},
+        {'language': '', 'code': 'SELECT 1'},
+        {'language': None, 'code': 'SELECT 1'},
+    ])
+    def test_a_step_without_a_language_is_refused_as_python(self, db_session, config):
+        with patch('src.common.workspace_client.get_workspace_client') as mock_get_ws:
+            result = ScriptStepHandler(db=db_session, config=config).execute(_make_context())
+
+        assert result.passed is False
+        assert result.data['error_code'] == 'script_python_disabled'
+        mock_get_ws.assert_not_called()
+
     def test_python_script_no_code_fails(self, db_session):
         """Empty code config should fail the step."""
         handler = ScriptStepHandler(db=db_session, config={'language': 'python', 'code': ''})
@@ -214,3 +237,58 @@ class TestSQLExecution:
 
         assert result.passed is False
         assert 'connect' in result.error.lower()
+
+    @pytest.mark.parametrize('code, error_code, placeholder', [
+        ("SELECT * FROM t WHERE name LIKE '%${entity_name}%'",
+         'script_sql_placeholder_in_quotes', '${entity_name}'),
+        ('SELECT * FROM `${entity_id}`', 'script_sql_placeholder_in_quotes', '${entity_id}'),
+        ('SELECT * FROM main.${entity_name}',
+         'script_sql_placeholder_in_identifier', '${entity_name}'),
+        ('SELECT * FROM t WHERE id IN (${entity_id})',
+         'script_sql_placeholder_as_list', '${entity_id}'),
+    ])
+    def test_a_stored_step_with_an_unbindable_placeholder_fails_without_running(
+        self, db_session, code, error_code, placeholder,
+    ):
+        """A step stored before the placeholder rules is refused, not sent to the warehouse."""
+        from src.db_models.app_settings import AppSettingDb
+        db_session.add(AppSettingDb(key="sql_warehouse_id", value="wh-abc"))
+        db_session.flush()
+
+        with patch('src.common.workspace_client.get_workspace_client') as mock_get_ws:
+            mock_ws = MagicMock()
+            mock_get_ws.return_value = mock_ws
+
+            handler = ScriptStepHandler(db=db_session, config={'language': 'sql', 'code': code})
+            result = handler.execute(_make_context(entity_name='my_product'))
+
+        assert result.passed is False
+        assert result.data['error_code'] == error_code
+        assert result.data['error_params'] == {'placeholder': placeholder}
+        assert placeholder in result.error
+        mock_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_sql_binds_a_table_placeholder_through_identifier(self, db_session):
+        from src.db_models.app_settings import AppSettingDb
+        db_session.add(AppSettingDb(key="sql_warehouse_id", value="wh-abc"))
+        db_session.flush()
+
+        mock_resp = MagicMock()
+        mock_resp.status.state.value = "SUCCEEDED"
+        mock_resp.manifest.total_row_count = 1
+
+        with patch('src.common.workspace_client.get_workspace_client') as mock_get_ws:
+            mock_ws = MagicMock()
+            mock_get_ws.return_value = mock_ws
+            mock_ws.statement_execution.execute_statement.return_value = mock_resp
+
+            handler = ScriptStepHandler(
+                db=db_session,
+                config={'language': 'sql', 'code': 'SELECT count(*) FROM ${entity_id}'},
+            )
+            result = handler.execute(_make_context(entity_id='main.sales.orders'))
+
+        assert result.passed is True
+        kwargs = mock_ws.statement_execution.execute_statement.call_args.kwargs
+        assert kwargs['statement'] == 'SELECT count(*) FROM IDENTIFIER(:p0)'
+        assert [(p.name, p.value) for p in kwargs['parameters']] == [('p0', 'main.sales.orders')]

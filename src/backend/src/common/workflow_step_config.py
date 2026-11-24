@@ -6,7 +6,11 @@ has a ``code`` and ``params`` the UI translates, and an English ``message``.
 
 from typing import Any, Dict, List, Optional
 
-SCRIPT_LANGUAGES = ('python', 'sql')
+SCRIPT_LANGUAGES = ('sql',)
+# The language of a Script step stored without one: Python was the default
+# before Python steps were disabled, so such a step is refused, not run as SQL.
+LEGACY_SCRIPT_LANGUAGE = 'python'
+SCRIPT_PYTHON_DISABLED = 'script_python_disabled'
 
 # Longest condition the designer and a save accept. The DSL parser is
 # recursive, so a deeply nested condition could exhaust the stack before the
@@ -79,15 +83,28 @@ def check_condition(condition: Optional[str]) -> Optional[Dict[str, Any]]:
     return None
 
 
+def script_language_of(config: Dict[str, Any]) -> Any:
+    """A Script step's language as the run reads it (``LEGACY_SCRIPT_LANGUAGE`` when unset)."""
+    return config.get('language') or LEGACY_SCRIPT_LANGUAGE
+
+
 def check_script_config(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Return the issues of a Script step's config (empty when it can run)."""
+    from src.common.workflow_sql_params import check_sql_placeholders
+
     issues: List[Dict[str, Any]] = []
     code = config.get('code')
     if not isinstance(code, str) or not code.strip():
         issues.append(_issue('script_code_required', "Script step requires 'code' in config"))
 
-    language = config.get('language', 'python')
-    if language not in SCRIPT_LANGUAGES:
+    language = script_language_of(config)
+    if language == 'python':
+        # exec() in the app's process can't be sandboxed (ScriptStepHandler)
+        issues.append(_issue(
+            SCRIPT_PYTHON_DISABLED,
+            "Python script steps are disabled: rewrite the step in SQL or remove it",
+        ))
+    elif language not in SCRIPT_LANGUAGES:
         supported = ', '.join(SCRIPT_LANGUAGES)
         issues.append(_issue(
             'script_language_unsupported',
@@ -95,15 +112,6 @@ def check_script_config(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             language=str(language),
             supported=supported,
         ))
-
-    # Only Python scripts use the timeout: the SQL handler waits on the
-    # warehouse with its own limit, and the designer hides the field for SQL.
-    timeout = config.get('timeout_seconds', 60)
-    if language == 'sql':
-        return issues
-    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout < 1:
-        issues.append(_issue(
-            'script_timeout_invalid',
-            "Script step 'timeout_seconds' must be a whole number of seconds, at least 1",
-        ))
+    elif isinstance(code, str):
+        issues.extend(check_sql_placeholders(code))
     return issues

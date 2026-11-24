@@ -76,11 +76,7 @@ def _render_template_value(value: Any) -> str:
     return str(value)
 
 
-def substitute_template(
-    template: str,
-    context: 'StepContext',
-    render: Optional[Callable[[str], str]] = None,
-) -> str:
+def substitute_template(template: str, context: 'StepContext') -> str:
     """Replace ${variable} and {{variable}} placeholders with context values.
 
     Supports:
@@ -94,12 +90,24 @@ def substitute_template(
                                      Top-level scalar attrs like
                                      ${context.entity_type} also work.
 
-    ``render``, if given, maps each resolved value to its replacement text
-    (used by SQL steps to emit bind-parameter markers instead of raw values).
-    Unresolved placeholders are left intact either way.
+    Unresolved placeholders are left intact. SQL steps don't use this: their
+    values are bound as parameters (``src.common.workflow_sql_params``).
     """
     import re
 
+    def _replace(match):
+        resolved = resolve_template_variable(match.group(1), context)
+        # leave placeholder intact when unresolved
+        return match.group(0) if resolved is None else resolved
+
+    # Support both ${var} and {{var}} syntax
+    result = re.sub(r'\$\{([^}]+)\}', _replace, template)
+    result = re.sub(r'\{\{([^}]+)\}\}', _replace, result)
+    return result
+
+
+def resolve_template_variable(var_name: str, context: 'StepContext') -> Optional[str]:
+    """The text of one placeholder's variable (see ``substitute_template``), None if unresolved."""
     flat_subs = {
         'entity_type': context.entity_type,
         'entity_id': context.entity_id,
@@ -141,40 +149,20 @@ def substitute_template(
                 return None
         return _render_template_value(obj)
 
-    def _replace(match):
-        var_name = match.group(1)
-        # 1) flat top-level scalars
-        if var_name in flat_subs:
-            return _render_template_value(flat_subs[var_name])
-        # 2) namespaced paths
-        if '.' in var_name:
-            head, _, tail = var_name.partition('.')
-            parts = tail.split('.') if tail else []
-            if head == 'entity':
-                resolved = _walk_dict(context.entity, parts)
-                if resolved is not None:
-                    return resolved
-            elif head == 'step_results':
-                resolved = _walk_dict(context.step_results, parts)
-                if resolved is not None:
-                    return resolved
-            elif head == 'context':
-                resolved = _lookup_context(parts)
-                if resolved is not None:
-                    return resolved
-        return None
-
-    def _sub(match):
-        value = _replace(match)
-        if value is None:
-            # leave placeholder intact when unresolved
-            return match.group(0)
-        return render(value) if render else value
-
-    # Support both ${var} and {{var}} syntax
-    result = re.sub(r'\$\{([^}]+)\}', _sub, template)
-    result = re.sub(r'\{\{([^}]+)\}\}', _sub, result)
-    return result
+    # 1) flat top-level scalars
+    if var_name in flat_subs:
+        return _render_template_value(flat_subs[var_name])
+    # 2) namespaced paths
+    if '.' in var_name:
+        head, _, tail = var_name.partition('.')
+        parts = tail.split('.') if tail else []
+        if head == 'entity':
+            return _walk_dict(context.entity, parts)
+        if head == 'step_results':
+            return _walk_dict(context.step_results, parts)
+        if head == 'context':
+            return _lookup_context(parts)
+    return None
 
 
 @dataclass
@@ -2336,11 +2324,29 @@ class ConditionalStepHandler(StepHandler):
             return _rule_step_error(e)
 
 
+def _coded_step_failure(code: str, message: str, **params: Any) -> StepResult:
+    """A failed step with ``error_code`` / ``error_params`` in its data (the UI's text)."""
+    return StepResult(
+        passed=False, error=message, data={'error_code': code, 'error_params': params},
+    )
+
+
 class ScriptStepHandler(StepHandler):
-    """Handler for script execution steps."""
+    """Handler for script execution steps: SQL only.
+
+    Python steps are refused (``script_python_disabled``): ``exec()`` in the app's
+    process can't be sandboxed (a restricted ``__builtins__`` is escaped through
+    attribute access), so a stored one fails instead of running. A step without a
+    ``language`` was a Python step (the old default).
+    """
 
     def execute(self, context: StepContext) -> StepResult:
-        language = self._config.get('language', 'python')
+        from src.common.workflow_step_config import (
+            SCRIPT_PYTHON_DISABLED,
+            script_language_of,
+        )
+
+        language = script_language_of(self._config)
         code = self._config.get('code', '')
         timeout_seconds = self._config.get('timeout_seconds', 60)
         
@@ -2349,11 +2355,9 @@ class ScriptStepHandler(StepHandler):
         
         try:
             if language == 'python':
-                # In-process exec() cannot be sandboxed (restricted __builtins__
-                # is escapable via attribute access), so Python steps are disabled.
-                return StepResult(
-                    passed=False,
-                    error="Python script steps are disabled for security reasons; use a SQL step or a webhook/job step instead",
+                return _coded_step_failure(
+                    SCRIPT_PYTHON_DISABLED,
+                    "Python script steps are disabled: rewrite the step in SQL or remove it",
                 )
             elif language == 'sql':
                 result = self._execute_sql(code, context, timeout_seconds)
@@ -2367,32 +2371,36 @@ class ScriptStepHandler(StepHandler):
 
     def _execute_sql(self, code: str, context: StepContext, timeout: int) -> StepResult:
         """Execute SQL via Databricks statement_execution API."""
-        try:
-            from src.common.workspace_client import get_workspace_client
-            ws = get_workspace_client()
+        from src.common.workflow_sql_params import (
+            bind_sql_placeholders,
+            check_sql_placeholders,
+        )
 
-            # Resolve SQL warehouse ID from settings
+        # A step stored before the placeholder rules: refused before it runs
+        issues = check_sql_placeholders(code)
+        if issues:
+            return _coded_step_failure(
+                issues[0]['code'], issues[0]['message'], **issues[0]['params'],
+            )
+        try:
+            # Resolve SQL warehouse ID from settings (before building a workspace client)
             from src.db_models.app_settings import AppSettingDb as SettingDb
-            import json as _json
             wh_row = self._db.query(SettingDb).filter(SettingDb.key == "sql_warehouse_id").first()
             if not wh_row or not wh_row.value:
                 return StepResult(passed=False, error="No SQL warehouse configured in Settings")
             warehouse_id = wh_row.value.strip().strip('"')
 
-            # Bind substituted values as named parameters (never paste them
-            # into the SQL text). Quotes around a placeholder are dropped since
-            # the parameter is already a string literal; for identifiers write
-            # IDENTIFIER(${entity.full_name}).
+            from src.common.workspace_client import get_workspace_client
+            ws = get_workspace_client()
+
+            # Values are bound as named parameters, never pasted into the SQL text
             from databricks.sdk.service.sql import StatementParameterListItem
-            parameters: List[StatementParameterListItem] = []
-
-            def _bind(value: str) -> str:
-                name = f"p{len(parameters)}"
-                parameters.append(StatementParameterListItem(name=name, value=value))
-                return f":{name}"
-
-            unquoted = re.sub(r"'(\$\{[^}']+\}|\{\{[^}']+\}\})'", r"\1", code)
-            resolved_sql = substitute_template(unquoted, context, render=_bind)
+            resolved_sql, bound = bind_sql_placeholders(
+                code, lambda name: resolve_template_variable(name, context),
+            )
+            parameters = [
+                StatementParameterListItem(name=name, value=value) for name, value in bound
+            ]
 
             resp = ws.statement_execution.execute_statement(
                 statement=resolved_sql,

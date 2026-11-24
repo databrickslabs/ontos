@@ -1276,6 +1276,55 @@
       "importErrorDescription": "Impossibile importare l'ontologia"
     }
   },
+  "deliveryOutbox": {
+    "title": "Modifiche non ancora consegnate",
+    "description": "Modifiche salvate in Ontos che una modalità di consegna non ha ancora consegnato. Una consegna non riuscita viene ritentata automaticamente, fino a {{max}} tentativi.",
+    "empty": "Tutte le modifiche sono state consegnate.",
+    "loadError": "Impossibile caricare le modifiche non ancora consegnate.",
+    "refresh": "Aggiorna",
+    "deletedEntity": "(non esiste più)",
+    "deliverAgain": "Consegna di nuovo",
+    "noRetry": "Nessun altro tentativo automatico",
+    "attempts": "{{attempts}} di {{max}}",
+    "columns": {
+      "entity": "Entità",
+      "change": "Modifica",
+      "mode": "Modalità",
+      "status": "Stato",
+      "reason": "Motivo",
+      "attempts": "Tentativi",
+      "nextAttempt": "Prossimo tentativo"
+    },
+    "status": {
+      "pending": "In attesa",
+      "failed": "Non riuscita",
+      "delivered": "Consegnata"
+    },
+    "mode": {
+      "direct": "Diretta",
+      "indirect": "Indiretta",
+      "manual": "Manuale"
+    },
+    "change": {
+      "product_create": "Prodotto dati creato",
+      "product_update": "Prodotto dati aggiornato"
+    },
+    "result": {
+      "delivered": "Consegnato.",
+      "skipped": "Niente da consegnare: nessuna modalità attiva si applica.",
+      "pending": "In coda: verrà consegnato a breve.",
+      "failed": "Ancora non consegnato: {{reason}}",
+      "refused": "Impossibile consegnarlo di nuovo."
+    },
+    "reason": {
+      "delivery_git_unavailable": "Il repository Git non è disponibile. Controlla Impostazioni > Git.",
+      "delivery_git_write_failed": "Impossibile scrivere il file nel repository Git.",
+      "delivery_entity_not_found": "L'entità non esiste più.",
+      "delivery_entity_type_unsupported": "Questo tipo di entità non può essere consegnato di nuovo.",
+      "delivery_no_active_mode": "Nessuna modalità di consegna è attiva.",
+      "delivery_failed": "La consegna non è riuscita. I log del server contengono i dettagli."
+    }
+  },
   "delivery": {
     "description": "Configura come le modifiche di governance vengono propagate ai sistemi esterni. Più modalità possono essere attive contemporaneamente.",
     "direct": {
@@ -1360,54 +1409,24 @@
       "data_product_type_default_inactive": "\"{{key}}\" non può essere predefinito e inattivo contemporaneamente. Imposta prima un altro tipo come predefinito."
     }
   },
-  "deliveryOutbox": {
-    "title": "Modifiche non ancora consegnate",
-    "description": "Modifiche salvate in Ontos che una modalità di consegna non ha ancora consegnato. Una consegna non riuscita viene ritentata automaticamente, fino a {{max}} tentativi.",
-    "empty": "Tutte le modifiche sono state consegnate.",
-    "loadError": "Impossibile caricare le modifiche non ancora consegnate.",
-    "refresh": "Aggiorna",
-    "deletedEntity": "(non esiste più)",
-    "deliverAgain": "Consegna di nuovo",
-    "noRetry": "Nessun altro tentativo automatico",
-    "attempts": "{{attempts}} di {{max}}",
-    "columns": {
-      "entity": "Entità",
-      "change": "Modifica",
-      "mode": "Modalità",
-      "status": "Stato",
-      "reason": "Motivo",
-      "attempts": "Tentativi",
-      "nextAttempt": "Prossimo tentativo"
+  "delivery": {
+    "description": "Configura come le modifiche di governance vengono propagate ai sistemi esterni. Più modalità possono essere attive contemporaneamente.",
+    "direct": {
+      "description": "Applica le modifiche direttamente a Unity Catalog tramite SDK (GRANT, assegnazioni di tag).",
+      "dryRun": "Modalità dry-run (registra le modifiche senza applicarle)",
+      "label": "Modalità diretta"
     },
-    "status": {
-      "pending": "In attesa",
-      "failed": "Non riuscita",
-      "delivered": "Consegnata"
+    "indirect": {
+      "description": "Rendi persistenti le modifiche come file YAML in un repository Git per l'integrazione CI/CD.",
+      "gitInfo": "Configura il repository Git nella scheda Git. Le modifiche verranno esportate nel volume UC configurato in /git-export/.",
+      "label": "Modalità indiretta"
     },
-    "mode": {
-      "direct": "Diretta",
-      "indirect": "Indiretta",
-      "manual": "Manuale"
+    "manual": {
+      "description": "Genera notifiche affinché gli amministratori applichino manualmente le modifiche nei sistemi esterni.",
+      "label": "Modalità manuale"
     },
-    "change": {
-      "product_create": "Prodotto dati creato",
-      "product_update": "Prodotto dati aggiornato"
-    },
-    "result": {
-      "delivered": "Consegnato.",
-      "skipped": "Niente da consegnare: nessuna modalità attiva si applica.",
-      "pending": "In coda: verrà consegnato a breve.",
-      "failed": "Ancora non consegnato: {{reason}}",
-      "refused": "Impossibile consegnarlo di nuovo."
-    },
-    "reason": {
-      "delivery_git_unavailable": "Il repository Git non è disponibile. Controlla Impostazioni > Git.",
-      "delivery_git_write_failed": "Impossibile scrivere il file nel repository Git.",
-      "delivery_entity_not_found": "L'entità non esiste più.",
-      "delivery_entity_type_unsupported": "Questo tipo di entità non può essere consegnato di nuovo.",
-      "delivery_no_active_mode": "Nessuna modalità di consegna è attiva.",
-      "delivery_failed": "La consegna non è riuscita. I log del server contengono i dettagli."
-    }
+    "saveButton": "Impostazioni di consegna salvate correttamente",
+    "title": "Modalità di consegna"
   },
   "certificationLevels": {
     "title": "Livelli di certificazione",

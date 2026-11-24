@@ -1294,6 +1294,55 @@
       "importErrorDescription": "Failed to import ontology"
     }
   },
+  "deliveryOutbox": {
+    "title": "Changes not delivered yet",
+    "description": "Changes saved in Ontos that a delivery mode hasn't delivered. A failed delivery is retried automatically, up to {{max}} attempts.",
+    "empty": "Every change was delivered.",
+    "loadError": "The changes not delivered yet couldn't be loaded.",
+    "refresh": "Refresh",
+    "deletedEntity": "(no longer exists)",
+    "deliverAgain": "Deliver again",
+    "noRetry": "No more automatic attempts",
+    "attempts": "{{attempts}} of {{max}}",
+    "columns": {
+      "entity": "Entity",
+      "change": "Change",
+      "mode": "Mode",
+      "status": "Status",
+      "reason": "Reason",
+      "attempts": "Attempts",
+      "nextAttempt": "Next attempt"
+    },
+    "status": {
+      "pending": "Pending",
+      "failed": "Failed",
+      "delivered": "Delivered"
+    },
+    "mode": {
+      "direct": "Direct",
+      "indirect": "Indirect",
+      "manual": "Manual"
+    },
+    "change": {
+      "product_create": "Data product created",
+      "product_update": "Data product updated"
+    },
+    "result": {
+      "delivered": "Delivered.",
+      "skipped": "Nothing to deliver: no active mode applies to it.",
+      "pending": "Queued: it will be delivered shortly.",
+      "failed": "Still not delivered: {{reason}}",
+      "refused": "Couldn't deliver it again."
+    },
+    "reason": {
+      "delivery_git_unavailable": "The Git repository isn't available. Check Settings > Git.",
+      "delivery_git_write_failed": "The file couldn't be written to the Git repository.",
+      "delivery_entity_not_found": "The entity no longer exists.",
+      "delivery_entity_type_unsupported": "This kind of entity can't be delivered again.",
+      "delivery_no_active_mode": "No delivery mode is active.",
+      "delivery_failed": "The delivery failed. The server logs have the details."
+    }
+  },
   "delivery": {
     "description": "Configure how governance changes are propagated to external systems. Multiple modes can be active simultaneously.",
     "direct": {
@@ -1378,54 +1427,24 @@
       "data_product_type_default_inactive": "\"{{key}}\" can't be both the default and inactive. Make another type the default first."
     }
   },
-  "deliveryOutbox": {
-    "title": "Changes not delivered yet",
-    "description": "Changes saved in Ontos that a delivery mode hasn't delivered. A failed delivery is retried automatically, up to {{max}} attempts.",
-    "empty": "Every change was delivered.",
-    "loadError": "The changes not delivered yet couldn't be loaded.",
-    "refresh": "Refresh",
-    "deletedEntity": "(no longer exists)",
-    "deliverAgain": "Deliver again",
-    "noRetry": "No more automatic attempts",
-    "attempts": "{{attempts}} of {{max}}",
-    "columns": {
-      "entity": "Entity",
-      "change": "Change",
-      "mode": "Mode",
-      "status": "Status",
-      "reason": "Reason",
-      "attempts": "Attempts",
-      "nextAttempt": "Next attempt"
+  "delivery": {
+    "description": "Configure how governance changes are propagated to external systems. Multiple modes can be active simultaneously.",
+    "direct": {
+      "description": "Apply changes directly to Unity Catalog via SDK (GRANTs, tag assignments).",
+      "dryRun": "Dry-run mode (log changes without applying)",
+      "label": "Direct Mode"
     },
-    "status": {
-      "pending": "Pending",
-      "failed": "Failed",
-      "delivered": "Delivered"
+    "indirect": {
+      "description": "Persist changes as YAML files in a Git repository for CI/CD integration.",
+      "gitInfo": "Configure Git repository in the Git tab. Changes will be exported to the configured UC Volume under /git-export/.",
+      "label": "Indirect Mode"
     },
-    "mode": {
-      "direct": "Direct",
-      "indirect": "Indirect",
-      "manual": "Manual"
+    "manual": {
+      "description": "Generate notifications for admins to apply changes manually in external systems.",
+      "label": "Manual Mode"
     },
-    "change": {
-      "product_create": "Data product created",
-      "product_update": "Data product updated"
-    },
-    "result": {
-      "delivered": "Delivered.",
-      "skipped": "Nothing to deliver: no active mode applies to it.",
-      "pending": "Queued: it will be delivered shortly.",
-      "failed": "Still not delivered: {{reason}}",
-      "refused": "Couldn't deliver it again."
-    },
-    "reason": {
-      "delivery_git_unavailable": "The Git repository isn't available. Check Settings > Git.",
-      "delivery_git_write_failed": "The file couldn't be written to the Git repository.",
-      "delivery_entity_not_found": "The entity no longer exists.",
-      "delivery_entity_type_unsupported": "This kind of entity can't be delivered again.",
-      "delivery_no_active_mode": "No delivery mode is active.",
-      "delivery_failed": "The delivery failed. The server logs have the details."
-    }
+    "saveButton": "Delivery settings saved successfully",
+    "title": "Delivery Modes"
   },
   "certificationLevels": {
     "title": "Certification Levels",

@@ -1294,6 +1294,55 @@
       "importErrorDescription": "Falha ao importar a ontologia"
     }
   },
+  "deliveryOutbox": {
+    "title": "Alterações ainda não entregues",
+    "description": "Alterações salvas no Ontos que um modo de entrega ainda não entregou. Uma entrega que falha é tentada de novo automaticamente, até {{max}} tentativas.",
+    "empty": "Todas as alterações foram entregues.",
+    "loadError": "Não foi possível carregar as alterações ainda não entregues.",
+    "refresh": "Atualizar",
+    "deletedEntity": "(não existe mais)",
+    "deliverAgain": "Entregar de novo",
+    "noRetry": "Sem novas tentativas automáticas",
+    "attempts": "{{attempts}} de {{max}}",
+    "columns": {
+      "entity": "Entidade",
+      "change": "Alteração",
+      "mode": "Modo",
+      "status": "Status",
+      "reason": "Motivo",
+      "attempts": "Tentativas",
+      "nextAttempt": "Próxima tentativa"
+    },
+    "status": {
+      "pending": "Pendente",
+      "failed": "Falhou",
+      "delivered": "Entregue"
+    },
+    "mode": {
+      "direct": "Direto",
+      "indirect": "Indireto",
+      "manual": "Manual"
+    },
+    "change": {
+      "product_create": "Produto de dados criado",
+      "product_update": "Produto de dados atualizado"
+    },
+    "result": {
+      "delivered": "Entregue.",
+      "skipped": "Nada a entregar: nenhum modo ativo se aplica.",
+      "pending": "Na fila: será entregue em instantes.",
+      "failed": "Ainda não entregue: {{reason}}",
+      "refused": "Não foi possível entregar de novo."
+    },
+    "reason": {
+      "delivery_git_unavailable": "O repositório Git não está disponível. Verifique Configurações > Git.",
+      "delivery_git_write_failed": "Não foi possível gravar o arquivo no repositório Git.",
+      "delivery_entity_not_found": "A entidade não existe mais.",
+      "delivery_entity_type_unsupported": "Este tipo de entidade não pode ser entregue de novo.",
+      "delivery_no_active_mode": "Nenhum modo de entrega está ativo.",
+      "delivery_failed": "A entrega falhou. Os logs do servidor têm os detalhes."
+    }
+  },
   "delivery": {
     "description": "Configure como as alterações de governança são propagadas para sistemas externos. Vários modos podem estar ativos simultaneamente.",
     "direct": {
@@ -1378,54 +1427,24 @@
       "data_product_type_default_inactive": "\"{{key}}\" não pode ser padrão e inativo ao mesmo tempo. Torne outro tipo o padrão primeiro."
     }
   },
-  "deliveryOutbox": {
-    "title": "Alterações ainda não entregues",
-    "description": "Alterações salvas no Ontos que um modo de entrega ainda não entregou. Uma entrega que falha é tentada de novo automaticamente, até {{max}} tentativas.",
-    "empty": "Todas as alterações foram entregues.",
-    "loadError": "Não foi possível carregar as alterações ainda não entregues.",
-    "refresh": "Atualizar",
-    "deletedEntity": "(não existe mais)",
-    "deliverAgain": "Entregar de novo",
-    "noRetry": "Sem novas tentativas automáticas",
-    "attempts": "{{attempts}} de {{max}}",
-    "columns": {
-      "entity": "Entidade",
-      "change": "Alteração",
-      "mode": "Modo",
-      "status": "Status",
-      "reason": "Motivo",
-      "attempts": "Tentativas",
-      "nextAttempt": "Próxima tentativa"
+  "delivery": {
+    "description": "Configure como as alterações de governança são propagadas para sistemas externos. Vários modos podem estar ativos simultaneamente.",
+    "direct": {
+      "description": "Aplicar alterações diretamente no Unity Catalog via SDK (GRANTs, atribuições de tags).",
+      "dryRun": "Modo de simulação (registrar alterações sem aplicar)",
+      "label": "Modo direto"
     },
-    "status": {
-      "pending": "Pendente",
-      "failed": "Falhou",
-      "delivered": "Entregue"
+    "indirect": {
+      "description": "Persistir alterações como arquivos YAML em um repositório Git para integração com CI/CD.",
+      "gitInfo": "Configure o repositório Git na guia Git. As alterações serão exportadas para o UC Volume configurado em /git-export/.",
+      "label": "Modo indireto"
     },
-    "mode": {
-      "direct": "Direto",
-      "indirect": "Indireto",
-      "manual": "Manual"
+    "manual": {
+      "description": "Gerar notificações para que administradores apliquem as alterações manualmente em sistemas externos.",
+      "label": "Modo manual"
     },
-    "change": {
-      "product_create": "Produto de dados criado",
-      "product_update": "Produto de dados atualizado"
-    },
-    "result": {
-      "delivered": "Entregue.",
-      "skipped": "Nada a entregar: nenhum modo ativo se aplica.",
-      "pending": "Na fila: será entregue em instantes.",
-      "failed": "Ainda não entregue: {{reason}}",
-      "refused": "Não foi possível entregar de novo."
-    },
-    "reason": {
-      "delivery_git_unavailable": "O repositório Git não está disponível. Verifique Configurações > Git.",
-      "delivery_git_write_failed": "Não foi possível gravar o arquivo no repositório Git.",
-      "delivery_entity_not_found": "A entidade não existe mais.",
-      "delivery_entity_type_unsupported": "Este tipo de entidade não pode ser entregue de novo.",
-      "delivery_no_active_mode": "Nenhum modo de entrega está ativo.",
-      "delivery_failed": "A entrega falhou. Os logs do servidor têm os detalhes."
-    }
+    "saveButton": "Configurações de entrega salvas com sucesso",
+    "title": "Modos de entrega"
   },
   "certificationLevels": {
     "title": "Níveis de certificação",

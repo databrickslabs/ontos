@@ -824,9 +824,9 @@ Optional.
 POST /api/data-contracts/{contract_id}/handle-deploy
 ```
 
-Decides a deployment request and, optionally, executes the deployment in the same call.
+Records the decision on a deployment request and notifies the requester. Nothing is deployed: there is no deployment trigger yet.
 
-**Authorization:** `data-contracts` — `Read/Write`
+**Authorization:** `data-contracts` — `Read/Write`, and the caller must be an approver of the contract's deployment request: a recipient of its notification (the Admin role, as the request route sends it; a group, role or user recipient matches as in the notification bell). Others, and everyone when the contract has no such request, get `403` with `detail.code` `deploy_request_not_an_approver`. A request is decided once: a second decision gets `409`, `detail.code` `deploy_request_already_decided`. A request handled by an `on_request_deploy` workflow is decided by the workflow's approval step (`POST /api/workflows/handle-approval`), not by this route.
 
 #### Request body
 
@@ -834,11 +834,11 @@ Decides a deployment request and, optionally, executes the deployment in the sam
 | --- | --- | --- | --- |
 | `decision` | `"approve" \| "deny"` | — | Decision on the request. Required. |
 | `message` | `string` | — | Message from the approver. |
-| `execute_deployment` | `boolean` | `false` | When `true`, actually trigger the deployment after approving. |
+| `execute_deployment` | `boolean` | `false` | Ignored. Still accepted from older clients; when `true`, the response has a warning. |
 
 #### Response
 
-`200 OK`
+`200 OK` — `{"message": "..."}`. When `execute_deployment` is `true`, the response also has `"warnings": [{"code": "deployment_not_available", "message": "...", "params": {}}]`.
 
 ## Versioning and drafts
 

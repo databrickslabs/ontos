@@ -68,4 +68,5 @@ def test_the_guard_runs_for_settings_read_from_the_environment(monkeypatch):
 
 
 def test_test_identity_allowed_outside_prod():
-    assert _settings(ENV="DEV", TEST_USER_TOKEN="secret", MOCK_USER_DETAILS=True).TEST_USER_TOKEN == "secret"
+    settings = _settings(ENV="DEV", TEST_USER_TOKEN="secret", MOCK_USER_DETAILS=True)
+    assert settings.TEST_USER_TOKEN == "secret"

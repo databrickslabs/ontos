@@ -47,7 +47,8 @@ class TestPythonDisabled:
         code = (
             "for c in ().__class__.__base__.__subclasses__():\n"
             "    if c.__name__ == '_wrap_close':\n"
-            "        result = {'passed': True, 'message': c.__init__.__globals__['popen']('id').read()}\n"
+            "        result = {'passed': True,\n"
+            "                  'message': c.__init__.__globals__['popen']('id').read()}\n"
         )
         handler = ScriptStepHandler(db=db_session, config={'language': 'python', 'code': code})
         with patch('os.popen') as mock_popen:
@@ -179,7 +180,9 @@ class TestSQLExecution:
         executed_sql = call_kwargs.kwargs['statement']
         assert 'DROP' not in executed_sql
         # Unresolved placeholders are left visible (and will fail loudly at the warehouse).
-        assert executed_sql == "SELECT * FROM audit WHERE name = :p0 AND owner = :p1 AND x = ${entity.missing}"
+        assert executed_sql == (
+            "SELECT * FROM audit WHERE name = :p0 AND owner = :p1 AND x = ${entity.missing}"
+        )
         params = call_kwargs.kwargs['parameters']
         assert [(p.name, p.value) for p in params] == [('p0', evil), ('p1', 'alice@co.com')]
 

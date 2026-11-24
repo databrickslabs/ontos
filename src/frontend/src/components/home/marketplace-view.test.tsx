@@ -33,6 +33,17 @@ vi.mock('@/components/data-domains/data-domain-mini-graph', () => ({
   ),
 }));
 
+vi.mock('@/components/quality/quality-badge', () => ({
+  QualityBadge: () => <span>quality</span>,
+}));
+
+// The real dialog fetches metadata and ratings; here only the header slot matters.
+vi.mock('@/components/metadata/entity-info-dialog', () => ({
+  default: ({ headerExtra }: { headerExtra?: React.ReactNode }) => (
+    <div data-testid="info-dialog-extra">{headerExtra}</div>
+  ),
+}));
+
 const PRODUCTS = [
   {
     id: 'p1', name: 'Customer 360', status: 'active', domain: 'Retail', domain_ids: ['retail'],
@@ -117,7 +128,7 @@ describe('MarketplaceView', () => {
 
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
-          '/api/search?search_term=customer', expect.anything(),
+          '/api/search?search_term=customer&types=data-product', expect.anything(),
         );
       });
       // "Orders" matches no text of the query: the server decided (e.g. a linked concept)
@@ -157,6 +168,15 @@ describe('MarketplaceView', () => {
       expect(within(legacy).getByText('Retiring')).toBeInTheDocument();
       expect(within(legacy).getByText('Retiring, use Customer 360 instead')).toBeInTheDocument();
       expect(within(legacy).queryByText('deprecated')).not.toBeInTheDocument();
+    });
+
+    it('shows status and scope in the product info dialog, not on the card', async () => {
+      await renderMarketplace();
+      await userEvent.click(screen.getByText('Orders'));
+      const extra = await screen.findByTestId('info-dialog-extra');
+      expect(within(extra).getByText('Status: Draft')).toBeInTheDocument();
+      expect(within(extra).getByText('Published to: Domain')).toBeInTheDocument();
+      expect(within(extra).getByText('quality')).toBeInTheDocument();
     });
 
     it('hides "Exact match only" until Advanced filters is opened', async () => {

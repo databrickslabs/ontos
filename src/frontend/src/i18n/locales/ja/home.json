@@ -299,6 +299,24 @@
       "pills": "リスト",
       "graph": "グラフ"
     },
+    "details": {
+      "status": "ステータス",
+      "publishedTo": "公開範囲",
+      "statusLabels": {
+        "draft": "下書き",
+        "proposed": "提案済み",
+        "active": "有効",
+        "deprecated": "提供終了予定",
+        "retired": "提供終了",
+        "under_review": "レビュー中",
+        "approved": "承認済み"
+      },
+      "scopes": {
+        "domain": "ドメイン",
+        "organization": "組織",
+        "external": "外部"
+      }
+    },
     "filters": {
       "activeDomains": "絞り込み:",
       "removeDomain": "フィルターから{{name}}を削除",

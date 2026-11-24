@@ -186,6 +186,7 @@ class SearchManager:
         user: UserInfo, 
         team_role_override: Optional[str] = None,
         effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
+        types: Optional[Iterable[str]] = None,
     ) -> List[SearchIndexItem]:
         """
         Performs a configurable search on indexed items.
@@ -209,6 +210,9 @@ class SearchManager:
             effective_permissions: The user's resolved permissions
                 (``resolve_effective_permissions``). When given, they're used as
                 they are and ``team_role_override`` is ignored.
+            types: Keep only items of these index types. Applied to the candidates
+                before the candidate limit, in every backend; permission filtering
+                is unchanged.
             
         Returns:
             List of matching SearchIndexItem, sorted by relevance
@@ -225,6 +229,7 @@ class SearchManager:
         if self._uses_postgres():
             return self._search_postgres(
                 query_stripped, auth_manager, user, team_role_override, effective_permissions,
+                types,
             )
 
         config = self.config
@@ -234,10 +239,17 @@ class SearchManager:
         if query_stripped.lower().startswith('tag:'):
             tag_pattern = query_stripped[4:].strip()  # Extract pattern after 'tag:'
             matches = self._filter_by_tag(tag_pattern, config)
+            if types is not None:
+                wanted = set(types)
+                matches = [m for m in matches if m.item.type in wanted]
         else:
             # Normal search: tokenized scoring via the shared scorer, then wrapped
             # in SearchMatch so downstream permission-filtering and ranking are unchanged.
-            for scored in search_scoring.score_and_rank(self.index, query_stripped, config):
+            candidates = self.index
+            if types is not None:
+                wanted = set(types)
+                candidates = [i for i in candidates if i.type in wanted]
+            for scored in search_scoring.score_and_rank(candidates, query_stripped, config):
                 matches.append(SearchMatch(
                     item=scored.item,
                     matched_field="",
@@ -289,11 +301,12 @@ class SearchManager:
         user: UserInfo,
         team_role_override: Optional[str],
         effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
+        types: Optional[Iterable[str]] = None,
     ) -> List[SearchIndexItem]:
         """REST search via the Postgres backend: DB-ranked candidates, then the
         existing per-item permission filter (reused verbatim — no SQL auth)."""
         REST_CANDIDATE_LIMIT = 200
-        candidates = self._backend.search_items(query, limit=REST_CANDIDATE_LIMIT)
+        candidates = self._backend.search_items(query, limit=REST_CANDIDATE_LIMIT, types=types)
 
         if effective_permissions is None and not user.groups:
             logger.warning(f"User {user.username} has no groups, returning empty search results.")
@@ -319,6 +332,16 @@ class SearchManager:
             f"after permission filtering for user {user.username}."
         )
         return results
+
+    def known_types(self) -> set:
+        """Index types a REST ``types`` filter may name: the configured asset types plus
+        the types that currently have documents."""
+        known = set(self.config.asset_types.keys())
+        try:
+            known.update(self._backend.indexed_types())
+        except Exception as e:
+            logger.warning(f"Could not list indexed search types: {e}")
+        return known
 
     def _apply_project_visibility(self, results: List[SearchIndexItem], user: UserInfo) -> List[SearchIndexItem]:
         """Hide `project::` items the caller cannot see on the list page.

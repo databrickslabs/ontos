@@ -60,8 +60,17 @@ class SearchBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def search_items(self, query: str, *, limit: int = 200) -> List[SearchIndexItem]:
-        """Ranked items for the REST path; the caller applies permission filtering."""
+    def search_items(
+        self, query: str, *, limit: int = 200, types: Optional[Iterable[str]] = None,
+    ) -> List[SearchIndexItem]:
+        """Ranked items for the REST path; the caller applies permission filtering.
+
+        ``types`` keeps only items of those index types, before ``limit`` is applied.
+        """
+
+    @abstractmethod
+    def indexed_types(self) -> List[str]:
+        """Index types that currently have documents."""
 
     # --- index maintenance (no-op-safe) ---
     def upsert(self, items: Iterable[SearchIndexItem]) -> None:  # pragma: no cover - overridden
@@ -97,9 +106,16 @@ class InMemoryBackend(SearchBackend):
             allowed_ids_by_type=allowed_ids_by_type,
         )
 
-    def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:
-        scored = search_scoring.score_and_rank(self._m.index, query, self._m.config)
+    def search_items(self, query, *, limit=200, types=None) -> List[SearchIndexItem]:
+        index = self._m.index
+        if types is not None:
+            wanted = set(types)
+            index = [i for i in index if i.type in wanted]
+        scored = search_scoring.score_and_rank(index, query, self._m.config)
         return [s.item for s in scored[:limit]]
+
+    def indexed_types(self) -> List[str]:
+        return sorted({i.type for i in self._m.index})
 
     def upsert(self, items: Iterable[SearchIndexItem]) -> None:
         for item in items:
@@ -140,10 +156,15 @@ class PostgresBackend(SearchBackend):
                 allowed_ids_by_type=allowed_ids_by_type,
             )
 
-    def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:
+    def search_items(self, query, *, limit=200, types=None) -> List[SearchIndexItem]:
         from src.repositories import search_repository
         with self._session_factory() as db:
-            return search_repository.search_index_items(db, query, limit=limit)
+            return search_repository.search_index_items(db, query, limit=limit, types=types)
+
+    def indexed_types(self) -> List[str]:
+        from src.repositories import search_repository
+        with self._session_factory() as db:
+            return search_repository.indexed_types(db)
 
     def upsert(self, items: Iterable[SearchIndexItem]) -> None:
         from src.repositories import search_repository

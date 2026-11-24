@@ -46,11 +46,28 @@ async def search_items(
     auth_manager: AuthorizationManagerDep,
     current_user: CurrentUserDep,
     settings_manager: SettingsManagerDep,
-    manager: SearchManager = Depends(get_search_manager) 
+    types: Optional[str] = None,
+    manager: SearchManager = Depends(get_search_manager),
 ) -> List[SearchIndexItem]:
-    """Search across indexed items, filtered by user permissions."""
+    """Search across indexed items, filtered by user permissions.
+
+    ``types`` (optional, comma-separated index types, e.g. ``data-product``) keeps only items
+    of those types; it is applied to the candidates before the candidate limit, and the
+    per-item permission filter still runs on what is left.
+    """
     if not search_term:
         raise HTTPException(status_code=400, detail="Query parameter (search_term) is required")
+    wanted_types = None
+    if types is not None:
+        wanted_types = [t.strip() for t in types.split(",") if t.strip()]
+        known = manager.known_types()
+        unknown = sorted(t for t in wanted_types if t not in known)
+        if not wanted_types or unknown:
+            raise HTTPException(status_code=400, detail={
+                "code": "search_unknown_type",
+                "message": "Unknown search type",
+                "params": {"types": unknown or [types]},
+            })
     try:
         # The same permissions every check uses: applied role override, else groups,
         # email and team roles (#1245)
@@ -59,6 +76,7 @@ async def search_items(
         )
         results = manager.search(
             search_term, auth_manager, current_user, effective_permissions=effective_permissions,
+            types=wanted_types,
         )
         return results
     except Exception as e:

@@ -345,3 +345,79 @@ class TestSearchManager:
         )
         assert len(results) >= 1
 
+
+
+class TestSearchTypesFilter:
+    """The REST ``types`` filter is applied to the candidates before the candidate limit."""
+
+    @staticmethod
+    def _items(n_other=250):
+        items = [
+            SearchIndexItem(
+                id=f"term::{i}", type="glossary-term", feature_id="glossary",
+                title="customer customer", description="customer", link=f"/t/{i}", tags=[],
+            )
+            for i in range(n_other)
+        ]
+        items.append(SearchIndexItem(
+            id="product::p1", type="data-product", feature_id="data-products",
+            title="Shoppers 360", description="about customer", link="/p/1", tags=[],
+        ))
+        return items
+
+    def test_in_memory_backend_filters_before_limit(self):
+        from src.controller.search_backend import InMemoryBackend
+        from src.models.search_config import SearchConfig
+
+        class _M:
+            index = self._items()
+            config = SearchConfig()
+
+        backend = InMemoryBackend(_M())
+        assert "product::p1" not in [i.id for i in backend.search_items("customer", limit=200)]
+        typed = backend.search_items("customer", limit=200, types=["data-product"])
+        assert [i.id for i in typed] == ["product::p1"]
+
+    def test_postgres_path_passes_types_and_keeps_permission_filter(self):
+        from src.controller.search_backend import PostgresBackend
+
+        seen = {}
+        items = self._items(3)
+
+        class _FakePg(PostgresBackend):
+            def __init__(self):
+                pass
+
+            def search_items(self, query, *, limit=200, types=None):
+                seen.update(limit=limit, types=types)
+                return [i for i in items if types is None or i.type in types]
+
+            def indexed_types(self):
+                return ["data-product", "glossary-term"]
+
+        manager = SearchManager(searchable_managers=[])
+        manager._backend = _FakePg()
+        auth = Mock()
+        auth.has_permission.side_effect = (
+            lambda perms, feature_id, level: feature_id == "data-products"
+        )
+        user = UserInfo(username="t", email="t@example.com", user="T", ip="127.0.0.1", groups=["g"])
+
+        results = manager.search(
+            "customer", auth, user, effective_permissions={}, types=["data-product"],
+        )
+        assert seen["types"] == ["data-product"] and seen["limit"] == 200
+        assert [r.id for r in results] == ["product::p1"]
+
+        # A feature the user cannot read is dropped even when its type was asked for
+        auth.has_permission.side_effect = lambda perms, feature_id, level: False
+        assert manager.search(
+            "customer", auth, user, effective_permissions={}, types=["data-product"],
+        ) == []
+
+    def test_known_types_include_config_and_indexed(self):
+        manager = SearchManager(searchable_managers=[])
+        manager.index = self._items(1)
+        known = manager.known_types()
+        assert "data-product" in known and "glossary-term" in known
+        assert "nonsense" not in known

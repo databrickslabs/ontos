@@ -299,6 +299,24 @@
       "pills": "Liste",
       "graph": "Graphe"
     },
+    "details": {
+      "status": "Statut",
+      "publishedTo": "Publié pour",
+      "statusLabels": {
+        "draft": "Brouillon",
+        "proposed": "Proposé",
+        "active": "Actif",
+        "deprecated": "En retrait",
+        "retired": "Retiré",
+        "under_review": "En revue",
+        "approved": "Approuvé"
+      },
+      "scopes": {
+        "domain": "Domaine",
+        "organization": "Organisation",
+        "external": "Externe"
+      }
+    },
     "filters": {
       "activeDomains": "Filtré par :",
       "removeDomain": "Retirer {{name}} du filtre",

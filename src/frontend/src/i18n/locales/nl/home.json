@@ -299,6 +299,24 @@
       "pills": "Lijst",
       "graph": "Grafiek"
     },
+    "details": {
+      "status": "Status",
+      "publishedTo": "Gepubliceerd voor",
+      "statusLabels": {
+        "draft": "Concept",
+        "proposed": "Voorgesteld",
+        "active": "Actief",
+        "deprecated": "Wordt uitgefaseerd",
+        "retired": "Uitgefaseerd",
+        "under_review": "In beoordeling",
+        "approved": "Goedgekeurd"
+      },
+      "scopes": {
+        "domain": "Domein",
+        "organization": "Organisatie",
+        "external": "Extern"
+      }
+    },
     "filters": {
       "activeDomains": "Gefilterd op:",
       "removeDomain": "{{name}} uit het filter verwijderen",

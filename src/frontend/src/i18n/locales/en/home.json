@@ -299,6 +299,24 @@
       "pills": "List",
       "graph": "Graph"
     },
+    "details": {
+      "status": "Status",
+      "publishedTo": "Published to",
+      "statusLabels": {
+        "draft": "Draft",
+        "proposed": "Proposed",
+        "active": "Active",
+        "deprecated": "Retiring",
+        "retired": "Retired",
+        "under_review": "Under review",
+        "approved": "Approved"
+      },
+      "scopes": {
+        "domain": "Domain",
+        "organization": "Organization",
+        "external": "External"
+      }
+    },
     "filters": {
       "activeDomains": "Filtered by:",
       "removeDomain": "Remove {{name}} from the filter",

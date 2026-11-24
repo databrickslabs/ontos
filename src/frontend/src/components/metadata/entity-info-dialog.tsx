@@ -29,6 +29,8 @@ interface Props {
   onGoToDetails?: () => void;
   // Inheritance support (for Data Products and Datasets)
   contractIds?: string[];
+  /** Extra content shown under the title (e.g. status, scope and quality of a product) */
+  headerExtra?: React.ReactNode;
 }
 
 function slugify(text: string): string {
@@ -67,6 +69,7 @@ export default function EntityInfoDialog({
   showBackButton = false,
   onGoToDetails,
   contractIds,
+  headerExtra,
 }: Props) {
   const { t } = useTranslation(['metadata', 'common']);
   // Products and contracts inherit metadata (sources are resolved server-side);
@@ -187,6 +190,14 @@ export default function EntityInfoDialog({
               </span>
             )}
           </DialogTitle>
+          {headerExtra && (
+            <div
+              className="flex items-center gap-2 flex-wrap text-sm"
+              data-testid="info-dialog-extra"
+            >
+              {headerExtra}
+            </div>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6">

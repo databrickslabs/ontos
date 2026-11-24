@@ -25,6 +25,7 @@ import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog'
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import CertificationBadge from '@/components/common/certification-badge';
+import { QualityBadge } from '@/components/quality/quality-badge';
 import { PUBLICATION_SCOPE_LABELS, type CertificationLevel } from '@/types/lifecycle';
 import {
   graphFocusForSelection,
@@ -157,9 +158,10 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const resp = await fetch(`/api/search?search_term=${encodeURIComponent(query)}`, {
-          signal: controller.signal,
-        });
+        const resp = await fetch(
+          `/api/search?search_term=${encodeURIComponent(query)}&types=data-product`,
+          { signal: controller.signal },
+        );
         if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
         const data = await resp.json();
         setSearchHits(productIdsFromSearch(Array.isArray(data) ? data : []));
@@ -406,6 +408,41 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
 
   const searchPending = searchQuery.trim() !== '' && searchHits === null;
   const clearDomainFilter = useCallback(() => setSelectedDomainIds([]), []);
+
+  // Plain status label: translated for the known statuses, else the raw value humanised
+  const statusLabel = (status: string) =>
+    t(`marketplace.details.statusLabels.${status.toLowerCase()}`, {
+      defaultValue: status.replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()),
+    });
+
+  // What the card no longer shows (#1600): status, publication scope and quality
+  const productDetails = (product: DataProduct) => (
+    <>
+      {product.status && (
+        <Badge variant="outline">
+          {t('marketplace.details.status')}: {statusLabel(product.status)}
+        </Badge>
+      )}
+      {product.publication_scope && product.publication_scope !== 'none' && (
+        <Badge variant="outline">
+          {t('marketplace.details.publishedTo')}:{' '}
+          {t(`marketplace.details.scopes.${product.publication_scope}`, {
+            defaultValue: PUBLICATION_SCOPE_LABELS[
+              product.publication_scope as keyof typeof PUBLICATION_SCOPE_LABELS
+            ] ?? product.publication_scope,
+          })}
+        </Badge>
+      )}
+      {product.id && (
+        <QualityBadge
+          entityType="data_product"
+          entityId={product.id}
+          productAggregation
+          size="sm"
+        />
+      )}
+    </>
+  );
 
   // Handle product card click
   const handleProductClick = async (product: DataProduct) => {
@@ -907,6 +944,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             setInfoDialogOpen(open);
             if (!open) setSelectedProduct(null);
           }}
+          headerExtra={productDetails(selectedProduct)}
           onSubscribe={handleSubscribeClick}
           isSubscribed={productIsSubscribed}
           subscriptionLoading={checkingSubscription}

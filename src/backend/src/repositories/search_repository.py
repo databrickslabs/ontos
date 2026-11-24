@@ -99,6 +99,7 @@ def _where(
     filters: Optional[Dict[str, Optional[str]]],
     allowed_features: Optional[Iterable[str]],
     allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+    types: Optional[Iterable[str]] = None,
 ) -> tuple[str, Dict[str, Any], bool]:
     """Build the shared WHERE clause + params. Returns (sql, params, has_query).
 
@@ -129,6 +130,9 @@ def _where(
     if type_filter:
         clauses.append("type = :type_filter")
         params["type_filter"] = type_filter
+    if types is not None:
+        clauses.append("type = ANY(:types)")
+        params["types"] = list(types)
     if allowed_features is not None:
         clauses.append("feature_id = ANY(:allowed_features)")
         params["allowed_features"] = list(allowed_features)
@@ -316,7 +320,8 @@ def _row_to_item(row: Any) -> SearchIndexItem:
 
 
 def _search_by_tag(
-    db: Session, pattern: str, allowed_features: Optional[Iterable[str]], limit: int
+    db: Session, pattern: str, allowed_features: Optional[Iterable[str]], limit: int,
+    types: Optional[Iterable[str]] = None,
 ) -> List[SearchIndexItem]:
     """Mirror SearchManager._filter_by_tag: exact match when the pattern has a '/',
     otherwise namespace-prefix match (tag == pattern or starts with 'pattern/')."""
@@ -331,6 +336,9 @@ def _search_by_tag(
     if allowed_features is not None:
         where.append("feature_id = ANY(:allowed_features)")
         params["allowed_features"] = list(allowed_features)
+    if types is not None:
+        where.append("type = ANY(:types)")
+        params["types"] = list(types)
     sql = (
         "SELECT id, entity_id, type, title, description, link, tags, extra_data, feature_id "
         f"FROM search_documents WHERE {' AND '.join(where)} ORDER BY lower(title) ASC LIMIT :limit"
@@ -344,17 +352,19 @@ def search_index_items(
     *,
     allowed_features: Optional[Iterable[str]] = None,
     limit: int = 200,
+    types: Optional[Iterable[str]] = None,
 ) -> List[SearchIndexItem]:
     """Ranked SearchIndexItems for the REST path (caller applies permission filtering).
 
-    Supports the ``tag:`` prefix like the in-memory SearchManager.
+    Supports the ``tag:`` prefix like the in-memory SearchManager. ``types`` keeps only
+    documents of those index types, in the query itself (so before ``limit``).
     """
     limit = max(1, min(limit, 500))
     q = (query or "").strip()
     if q.lower().startswith("tag:"):
-        return _search_by_tag(db, q[4:].strip(), allowed_features, limit)
+        return _search_by_tag(db, q[4:].strip(), allowed_features, limit, types)
 
-    where, params, has_query = _where(query, None, None, allowed_features)
+    where, params, has_query = _where(query, None, None, allowed_features, types=types)
     order = (
         "ts_rank_cd(search_tsv, websearch_to_tsquery('english', :q)) DESC, lower(title) ASC"
         if has_query else "lower(title) ASC"
@@ -370,3 +380,8 @@ def replace_all(db: Session, items: Iterable[SearchIndexItem]) -> int:
     """Full rebuild: clear the table and re-insert all items (one transaction)."""
     db.execute(text("DELETE FROM search_documents"))
     return upsert_documents(db, items)
+
+
+def indexed_types(db: Session) -> List[str]:
+    """Distinct document types currently in the search index."""
+    return [r[0] for r in db.execute(text("SELECT DISTINCT type FROM search_documents"))]

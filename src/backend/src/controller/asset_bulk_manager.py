@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from src.common.errors import ValidationError
 from src.common.logging import get_logger
+from src.controller.asset_description_history import SOURCE_BULK_IMPORT, record_description_change
 from src.controller.assets_manager import AssetsManager
 from src.controller.uc_description_sync_manager import (
     preview_import_warning, uc_comment_target_for,
@@ -839,6 +840,8 @@ class AssetBulkManager:
                             db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
                         )
                         db.flush()
+                        self._record_description(
+                            db, updated, previous_description, description_field, current_user_id)
                         self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
                         item.action = ImportAction.UPDATE
                         item.asset_id = str(updated.id)
@@ -863,6 +866,9 @@ class AssetBulkManager:
                                 obj_in=update_data.model_dump(exclude_unset=True)
                             )
                             db.flush()
+                            self._record_description(
+                                db, updated, previous_description, description_field,
+                                current_user_id)
                             self._set_asset_domains(
                                 db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
                             item.action = ImportAction.UPDATE
@@ -897,6 +903,8 @@ class AssetBulkManager:
                             db.add(db_asset)
                             db.flush()
                             db.refresh(db_asset)
+                            self._record_description(
+                                db, db_asset, None, {"description": description}, current_user_id)
                             self._set_asset_domains(
                                 db, db_asset.id, domain_ids_val, primary_domain_val,
                                 current_user_id)
@@ -925,6 +933,19 @@ class AssetBulkManager:
             self._wire_parent_relationships(db, rows, type_map, created_assets, result)
 
         return result
+
+    @staticmethod
+    def _record_description(
+        db: Session, asset: AssetDb, previous: Optional[str],
+        description_field: Dict[str, Any], username: str,
+    ) -> None:
+        """Log a table, view or column description the row set (a file without a
+        description column leaves it alone). Inside the row's savepoint: a row fails
+        whole, history included."""
+        if "description" in description_field:
+            record_description_change(
+                db, asset, before=previous, after=description_field["description"],
+                source=SOURCE_BULK_IMPORT, username=username)
 
     @staticmethod
     def _preview_uc_write(item: ImportPreviewItem, row: Dict[str, str], asset_type_raw: str,

@@ -18,8 +18,14 @@ from src.controller.metric_views_manager import (
 )
 from src.common.workspace_client import get_obo_workspace_client
 from src.controller.semantic_links_manager import SemanticLinksManager
+from src.controller.uc_description_reset_manager import (
+    NOT_SENT as _RESET_NOT_SENT, ResetError, UcDescriptionResetManager,
+)
 from src.controller.uc_description_sync_manager import (
     SyncOutcome, UcDescriptionSyncManager, write_failed_warning,
+)
+from src.models.asset_description import (
+    DescriptionResetRequest, DescriptionResetResult, UcCommentPreview,
 )
 from src.db_models.assets import AssetDb
 from src.models.metric_views import MetricViewRead
@@ -518,6 +524,110 @@ def update_asset(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="UPDATE_ASSET", success=success, details=details,
         )
+
+
+@assets_router.get(
+    "/{asset_id}/description/uc-comment",
+    response_model=UcCommentPreview,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def get_asset_uc_comment(
+    asset_id: UUID,
+    request: Request,
+    settings: SettingsDep,
+    db: DBSessionDep,
+    manager=Depends(get_assets_manager),
+):
+    """The asset's description next to its Unity Catalog comment (read as the user).
+
+    The diff the "use the Unity Catalog comment" dialog shows. Coded errors: 403
+    ``user_token_required`` / ``uc_reset_permission_denied``, 404 ``uc_reset_object_not_found``,
+    409 ``uc_reset_metric_view``, 400 ``uc_reset_not_applicable``, 502 ``uc_reset_unavailable``,
+    503 ``user_client_unavailable``.
+    """
+    reset_manager = UcDescriptionResetManager(manager, UcDescriptionSyncManager(settings))
+    return _reset_call(
+        asset_id, lambda: reset_manager.preview(
+            db, asset_id, user_client=lambda: _user_workspace_client(request)))
+
+
+@assets_router.post(
+    "/{asset_id}/description/reset-to-uc",
+    response_model=DescriptionResetResult,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def reset_asset_description_to_uc(
+    asset_id: UUID,
+    request: Request,
+    settings: SettingsDep,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
+    reset_in: Optional[DescriptionResetRequest] = None,
+    manager=Depends(get_assets_manager),
+):
+    """Replaces the description of a table, view or column asset with its Unity Catalog comment.
+
+    The comment is read as the user (on-behalf-of token, no fallback to the app), so Unity
+    Catalog decides who may read it. Nothing is written to Unity Catalog, so it works with the
+    write-back setting off. An empty comment changes nothing (warning ``uc_description_empty``).
+    ``expected_uc_comment``: the comment the user saw; 409 ``uc_reset_uc_changed`` when Unity
+    Catalog has another now. Errors are those of the preview endpoint.
+    """
+    success = False
+    details = {"params": {"asset_id": str(asset_id)}}
+    expected = (
+        reset_in.expected_uc_comment
+        if reset_in is not None and 'expected_uc_comment' in reset_in.model_fields_set
+        else _RESET_NOT_SENT
+    )
+    reset_manager = UcDescriptionResetManager(manager, UcDescriptionSyncManager(settings))
+    try:
+        outcome = _reset_call(asset_id, lambda: reset_manager.reset(
+            db, asset_id, user_client=lambda: _user_workspace_client(request),
+            username=current_user.email, expected_uc_comment=expected))
+        details["description_reset"] = outcome.audit
+        if outcome.result.changed:
+            # Commits: the audit says success only once the change is stored
+            _schedule_maturity_evaluation(
+                db, background_tasks, request, asset_id, current_user.email)
+        else:
+            db.commit()
+        success = True
+        return outcome.result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status": e.status_code}
+        raise
+    except Exception as e:
+        logger.exception("Failed to reset the description of asset %s", asset_id)
+        details["exception"] = {"type": type(e).__name__}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset the description") from e
+    finally:
+        if success:
+            details["updated_resource_id"] = str(asset_id)
+        audit_manager.log_action(
+            db=db, username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID, action="RESET_ASSET_DESCRIPTION", success=success,
+            details=details,
+        )
+
+
+def _reset_call(asset_id: UUID, call):
+    """``call()``, with the errors of a description reset as coded HTTP errors."""
+    try:
+        return call()
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ResetError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except UserClientUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 
 
 @assets_router.get(

@@ -238,3 +238,44 @@ def test_a_missing_column_is_not_found():
 ])
 def test_normalize_comment_ignores_line_endings_and_trailing_blanks(text, expected):
     assert uc_comments.normalize_comment(text) == expected
+
+
+def _table_info(comment, columns, table_type=None):
+    return SimpleNamespace(
+        table_type=table_type, comment=comment,
+        columns=[SimpleNamespace(name=n, comment=c) for n, c in columns.items()])
+
+
+def test_one_read_returns_the_table_and_every_column_comment():
+    ws = MagicMock()
+    ws.tables.get.return_value = _table_info(
+        'About orders', {'id': 'The key', 'note': '', 'other': None}, table_type='MANAGED')
+
+    comments = uc_comments.read_table_comments(ws, 'main.sales.orders')
+
+    ws.tables.get.assert_called_once_with(full_name='main.sales.orders')
+    assert comments.table_type == 'MANAGED' and comments.comment == 'About orders'
+    assert comments.columns == {'id': 'The key', 'note': None, 'other': None}
+
+
+def test_the_single_comment_read_agrees_with_the_full_one():
+    ws = MagicMock()
+    ws.tables.get.return_value = _table_info('T', {'id': 'C'})
+
+    assert read_comment(ws, 'main.sales.orders', None) == (None, 'T')
+    assert read_comment(ws, 'main.sales.orders', 'id') == (None, 'C')
+    with pytest.raises(CommentWriteError) as e:
+        read_comment(ws, 'main.sales.orders', 'missing')
+    assert e.value.reason == NOT_FOUND
+
+
+def test_a_table_that_cannot_be_read_says_why():
+    from databricks.sdk.errors import NotFound
+
+    ws = MagicMock()
+    for error, reason in ((NotFound('x'), NOT_FOUND), (PermissionDenied('x'), PERMISSION_DENIED),
+                          (RuntimeError('x'), FAILED)):
+        ws.tables.get.side_effect = error
+        with pytest.raises(CommentWriteError) as e:
+            uc_comments.read_table_comments(ws, 'main.sales.orders')
+        assert e.value.reason == reason

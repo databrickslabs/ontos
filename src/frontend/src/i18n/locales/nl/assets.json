@@ -55,6 +55,38 @@
       "uc_description_import_keeps_uc": "Unity Catalog heeft een andere opmerking bij {{object}}, dus de import behoudt die en schrijft de beschrijving daar niet."
     }
   },
+  "descriptionReset": {
+    "action": "Unity Catalog-opmerking gebruiken",
+    "title": "Unity Catalog-opmerking als beschrijving gebruiken",
+    "description": "Vervangt de beschrijving in Ontos door de opmerking die Unity Catalog bij {{object}} heeft.",
+    "descriptionLoading": "Leest de opmerking uit Unity Catalog met uw rechten.",
+    "loading": "Unity Catalog wordt gelezen...",
+    "inOntos": "In Ontos (wordt vervangen)",
+    "inUnityCatalog": "In Unity Catalog",
+    "empty": "(leeg)",
+    "alreadyInSync": "De beschrijving komt al overeen met de Unity Catalog-opmerking.",
+    "ucEmpty": "Unity Catalog heeft geen opmerking bij dit object, dus er valt niets over te nemen. De Ontos-beschrijving blijft behouden.",
+    "replaceNote": "De vorige beschrijving blijft bewaard in het wijzigingslogboek.",
+    "confirm": "Beschrijving vervangen",
+    "toast": {
+      "done": "Beschrijving vervangen",
+      "unchanged": "Beschrijving ongewijzigd"
+    },
+    "errors": {
+      "generic": "De opmerking kon niet uit Unity Catalog worden gelezen.",
+      "user_token_required": "Voor het lezen van Unity Catalog is uw Databricks-aanmelding nodig, en dit verzoek bevatte er geen.",
+      "user_client_unavailable": "Uw Databricks-sessie kon niet worden gebruikt om Unity Catalog te lezen.",
+      "uc_reset_permission_denied": "U mag {{object}} niet lezen in Unity Catalog. Het recht SELECT op de tabel is nodig.",
+      "uc_reset_object_not_found": "{{object}} is niet gevonden in Unity Catalog, of u hebt er geen toegang toe.",
+      "uc_reset_unavailable": "Unity Catalog kon niet worden gelezen voor {{object}}. Probeer het zo opnieuw.",
+      "uc_reset_metric_view": "{{object}} is een metric view: de beschrijving komt uit de definitie, niet uit een opmerking.",
+      "uc_reset_not_applicable": "{{object}} is geen tabel, view of kolom van Unity Catalog.",
+      "uc_reset_uc_changed": "De Unity Catalog-opmerking bij {{object}} is gewijzigd sinds u die zag. Open het opnieuw om de nieuwe te zien."
+    },
+    "warnings": {
+      "uc_description_empty": "Unity Catalog heeft geen opmerking bij {{object}}, dus de beschrijving in Ontos is behouden."
+    }
+  },
   "deleteDialog": {
     "title": "Asset verwijderen?",
     "description": "Deze actie kan niet ongedaan worden gemaakt. Dit zal de asset en al zijn relaties permanent verwijderen.",

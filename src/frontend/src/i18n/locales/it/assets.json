@@ -55,6 +55,38 @@
       "uc_description_import_keeps_uc": "Unity Catalog ha un altro commento su {{object}}, quindi l'importazione lo mantiene e non vi scrive la descrizione."
     }
   },
+  "descriptionReset": {
+    "action": "Usa il commento di Unity Catalog",
+    "title": "Usa il commento di Unity Catalog come descrizione",
+    "description": "Sostituisce la descrizione in Ontos con il commento che Unity Catalog ha su {{object}}.",
+    "descriptionLoading": "Legge il commento da Unity Catalog con i tuoi permessi.",
+    "loading": "Lettura di Unity Catalog...",
+    "inOntos": "In Ontos (verrà sostituita)",
+    "inUnityCatalog": "In Unity Catalog",
+    "empty": "(vuoto)",
+    "alreadyInSync": "La descrizione coincide già con il commento di Unity Catalog.",
+    "ucEmpty": "Unity Catalog non ha un commento su questo oggetto, quindi non c'è nulla da importare. La descrizione di Ontos viene mantenuta.",
+    "replaceNote": "La descrizione precedente resta nel registro delle modifiche.",
+    "confirm": "Sostituisci descrizione",
+    "toast": {
+      "done": "Descrizione sostituita",
+      "unchanged": "Descrizione invariata"
+    },
+    "errors": {
+      "generic": "Non è stato possibile leggere il commento da Unity Catalog.",
+      "user_token_required": "Leggere Unity Catalog richiede il tuo accesso Databricks, e questa richiesta non ne conteneva.",
+      "user_client_unavailable": "Non è stato possibile usare la tua sessione Databricks per leggere Unity Catalog.",
+      "uc_reset_permission_denied": "Non puoi leggere {{object}} in Unity Catalog. Serve il permesso SELECT sulla tabella.",
+      "uc_reset_object_not_found": "{{object}} non è stato trovato in Unity Catalog, oppure non hai accesso.",
+      "uc_reset_unavailable": "Non è stato possibile leggere Unity Catalog per {{object}}. Riprova tra poco.",
+      "uc_reset_metric_view": "{{object}} è una metric view: la sua descrizione deriva dalla definizione, non da un commento.",
+      "uc_reset_not_applicable": "{{object}} non è una tabella, vista o colonna di Unity Catalog.",
+      "uc_reset_uc_changed": "Il commento di Unity Catalog su {{object}} è cambiato da quando l'hai visto. Riapri la finestra per vedere il nuovo."
+    },
+    "warnings": {
+      "uc_description_empty": "Unity Catalog non ha un commento su {{object}}, quindi la descrizione in Ontos è stata mantenuta."
+    }
+  },
   "deleteDialog": {
     "title": "Eliminare l'asset?",
     "description": "Questa azione non può essere annullata. Eliminerà permanentemente l'asset e tutte le sue relazioni.",

@@ -15,6 +15,7 @@ from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, ListAssetsOptions
 from src.controller.connections_manager import ConnectionsManager
+from src.controller.asset_description_history import SOURCE_UC_IMPORT
 from src.controller.assets_manager import AssetsManager
 from src.controller.metric_view_consistency_manager import (
     STORE_KEY as METRIC_VIEW_PROPERTY, build_stored_metric_view, store_metric_view,
@@ -970,7 +971,9 @@ class SchemaImportManager:
             status=AssetStatus.ACTIVE,
         )
 
-        return self._assets.create_asset(db, asset_in=asset_in, current_user_id=current_user_id)
+        return self._assets.create_asset(
+            db, asset_in=asset_in, current_user_id=current_user_id,
+            description_source=SOURCE_UC_IMPORT)
 
     @staticmethod
     def _find_column_in_cache(

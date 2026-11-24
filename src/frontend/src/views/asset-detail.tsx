@@ -14,6 +14,9 @@ import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
 import { DescriptionSyncNotice } from '@/components/assets/description-sync-notice';
+import {
+  DescriptionResetDialog, canResetDescription,
+} from '@/components/assets/description-reset-dialog';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -114,6 +117,7 @@ export default function AssetDetailView() {
   const [relViewMode, setRelViewMode] = useState<'table' | 'graph'>('table');
   const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
+  const [isDescriptionResetOpen, setIsDescriptionResetOpen] = useState(false);
 
   const { get: apiGet, post: apiPost, delete: apiDelete } = useApi();
   const { t, i18n } = useTranslation(['assets', 'common']);
@@ -145,6 +149,9 @@ export default function AssetDetailView() {
   }, [entityType]);
 
   const showLineageTab = true;
+
+  // The description of a table, view or column on Databricks can be taken from Unity Catalog
+  const showDescriptionReset = canWrite && canResetDescription(entityType, asset?.platform);
 
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
@@ -315,7 +322,18 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
-        <DescriptionSyncNotice sync={asset.description_sync} />
+        <DescriptionSyncNotice
+          sync={asset.description_sync}
+          onUseUcComment={showDescriptionReset ? () => setIsDescriptionResetOpen(true) : undefined}
+        />
+        {showDescriptionReset && !asset.description_sync && (
+          <Button
+            variant="link" size="sm" className="mt-1 h-auto p-0 text-xs"
+            onClick={() => setIsDescriptionResetOpen(true)}
+          >
+            {t('assets:descriptionReset.action')}
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -630,6 +648,16 @@ export default function AssetDetailView() {
           assetTypeName={asset.asset_type_name || 'Asset'}
           assetTypeIri={ontologyIri}
           asset={asset}
+        />
+      )}
+
+      {/* Replace the description with the Unity Catalog comment */}
+      {asset && showDescriptionReset && (
+        <DescriptionResetDialog
+          assetId={asset.id}
+          open={isDescriptionResetOpen}
+          onOpenChange={setIsDescriptionResetOpen}
+          onReset={() => fetchAsset()}
         />
       )}
 

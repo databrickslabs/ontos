@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from src.common.after_commit import run_after_commit
 from src.controller.data_products_manager import DataProductsManager
@@ -45,7 +45,11 @@ def events(committing_session, monkeypatch):
     monkeypatch.setattr(committing_session, "commit", commit)
 
     def deliver(payload):
-        log.append(f"deliver:{payload.data['entity'].name}")
+        entity = payload.data["entity"]
+        # Read the way a file model does, relationships included
+        assert entity.output_ports is not None and entity.support_channels is not None
+        assert object_session(entity) is not committing_session
+        log.append(f"deliver:{entity.name}")
         return SimpleNamespace(all_success=True)
 
     service = SimpleNamespace(get_active_modes=lambda: ["direct"], deliver=deliver)

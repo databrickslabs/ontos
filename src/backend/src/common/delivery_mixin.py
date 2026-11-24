@@ -21,6 +21,7 @@ Usage:
 
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from src.common.after_commit import run_after_commit
@@ -115,12 +116,26 @@ class DeliveryMixin:
         delivered when the transaction, or the savepoint the entity was queued
         in, rolls back.
         """
-        run_after_commit(
-            db,
-            lambda: self._queue_delivery(
-                entity=entity, change_type=change_type, user=user,
-            ),
-        )
+        # The committed session can't be used for SQL in ``after_commit``, and the
+        # entity it holds is expired: deliver a copy read in a session of its own.
+        state = sa_inspect(entity, raiseerr=False)
+        orm_class = type(entity) if state is not None and state.mapper else None
+        entity_id = self._get_entity_id(entity)
+        bind = db.get_bind()
+
+        def deliver() -> None:
+            if orm_class is None:
+                self._queue_delivery(entity=entity, change_type=change_type, user=user)
+                return
+            with Session(bind=bind, expire_on_commit=False) as own:
+                fresh = own.get(orm_class, entity_id)
+                if fresh is None:
+                    logger.warning("Not delivering %s %s: not found after commit",
+                                   self.DELIVERY_ENTITY_TYPE, entity_id)
+                    return
+                self._queue_delivery(entity=fresh, change_type=change_type, user=user)
+
+        run_after_commit(db, deliver)
 
     def _get_entity_id(self, entity: Any) -> str:
         """Extract ID from an entity.

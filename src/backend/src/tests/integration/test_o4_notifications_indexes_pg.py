@@ -16,6 +16,8 @@ import uuid
 from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, text
@@ -70,6 +72,7 @@ def engine(request):
             "INSERT INTO notifications (id, type, title, read, can_delete, action_type) "
             "SELECT g::text, 'info', 't', false, true, 'a' FROM generate_series(1, 50) g"
         ))
+    engine.test_schema = schema
     try:
         yield engine
     finally:
@@ -162,3 +165,24 @@ def test_a_rerun_recovers_when_the_second_build_fails(migration, engine, monkeyp
     assert _state(engine, _ACTION) == first
     oid, valid, unique = _state(engine, _CREATED)
     assert valid is True and unique is False
+
+
+def test_it_runs_through_env_py_with_a_target_schema(migration, engine):
+    """``alembic/env.py`` sets the search_path on its AUTOCOMMIT engine before configuring.
+
+    SQLAlchemy autobegins on that statement; if env.py left it open, Alembic's
+    ``autocommit_block`` would hit an AssertionError. This drives the real env.py.
+    """
+    backend = Path(__file__).resolve().parents[3]
+    cfg = Config()
+    cfg.set_main_option('script_location', str(backend / 'alembic'))
+    cfg.attributes['engine'] = create_engine(_PG_URL, future=True)
+    cfg.attributes['target_schema'] = engine.test_schema
+    command.stamp(cfg, migration.down_revision)
+
+    command.upgrade(cfg, 'head')
+
+    assert _state(engine, _ACTION)[1] is True
+    assert _state(engine, _CREATED)[1] is True
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT version_num FROM alembic_version')).scalar() == _NAME

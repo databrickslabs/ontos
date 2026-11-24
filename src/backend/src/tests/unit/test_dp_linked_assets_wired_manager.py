@@ -29,7 +29,7 @@ def test_dp_linked_assets_route_uses_the_wired_manager():
 
     with patch.object(singleton, "get_all_assets", return_value=["singleton"]):
         result = asyncio.run(dpr.get_product_linked_assets(
-            "p1", _request(app), MagicMock(), user, skip=0, limit=10, _=True,
+            "p1", _request(app), MagicMock(), user, skip=0, limit=10, _=True, product=None,
         ))
 
     assert result == ["wired"]

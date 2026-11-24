@@ -35,9 +35,9 @@ def _draft(owner="owner@example.com"):
     )
 
 
-def _call(levels, product, email):
+def _call(levels, product, email, groups=()):
     auth = _auth(levels)
-    user = SimpleNamespace(email=email, groups=[])
+    user = SimpleNamespace(email=email, groups=list(groups))
     return asyncio.run(get_my_product_access(
         request=_request(auth), db=MagicMock(), current_user=user,
         auth_manager=auth, product=product, _=True,
@@ -64,6 +64,14 @@ def test_owner_without_write_permission_cannot_write():
 
 def test_data_products_admin_can_write_any_product():
     assert _call(ADMIN, _draft(), "admin@example.com") == {"can_write": True}
+
+
+def test_app_admin_with_write_can_write_like_put(monkeypatch):
+    # update_product_with_auth lets configured app admins past the ownership rule
+    monkeypatch.setattr(
+        "src.common.authorization.is_user_admin", lambda groups, settings: "ops" in groups,
+    )
+    assert _call(RW, _draft(), "ops@example.com", groups=["ops"]) == {"can_write": True}
 
 
 def test_failure_denies():

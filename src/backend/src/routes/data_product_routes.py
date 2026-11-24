@@ -2316,15 +2316,17 @@ async def get_my_product_access(
     request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    # The feature check first: without data-products the answer is 403 whether
+    # the id exists or not (no existence probe through the 404 of readable_product)
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
     product: Any = Depends(readable_product),
-    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ) -> Dict[str, bool]:
     """What the caller may do with a product they can read (#1613).
 
     ``can_write``: data-products READ_WRITE plus the ownership rule of
-    ``PUT /data-products/{id}`` (a data-products admin, the draft owner, a member
-    of the owning team or of the product's project). A reviewer who reads a
+    ``PUT /data-products/{id}`` (an app admin, a data-products admin, the draft
+    owner, a member of the owning team or of the product's project). A reviewer who reads a
     product under review without owning it gets ``false``. A UI hint only: the
     write routes still check. Fails closed. A product the caller can't read
     answers 404, like the product page.
@@ -2335,7 +2337,13 @@ async def get_my_product_access(
             auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID,
             FeatureAccessLevel.READ_WRITE, request=request,
         ):
-            can_write = _caller_owns_product_or_denies(request, db, current_user, product)
+            # As update_product_with_auth: configured app admins pass the ownership rule
+            from src.common.authorization import is_user_admin
+            from src.common.config import get_settings
+
+            can_write = is_user_admin(current_user.groups or [], get_settings()) or (
+                _caller_owns_product_or_denies(request, db, current_user, product)
+            )
     except Exception:
         logger.exception(
             "Access check failed for product %s; denying", getattr(product, "id", None),

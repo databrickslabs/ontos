@@ -112,6 +112,33 @@
       "description_history_entry_not_found": "この変更はこのアセットの履歴にありません。"
     }
   },
+  "descriptionDrift": {
+    "changedInUc": "Unity Catalog で変更されました",
+    "columnsChangedInUc": "Unity Catalog で変更された列: {{count}}",
+    "compare": "Unity Catalog と比較",
+    "title": "Unity Catalog と比較",
+    "description": "{{object}} とその列の説明を、あなたの権限で読み取った Unity Catalog のコメントと比較します。",
+    "descriptionLoading": "あなたの権限で Unity Catalog からコメントを読み取ります。",
+    "loading": "Unity Catalog を読み取り中...",
+    "empty": "（空）",
+    "noDifferences": "説明は Unity Catalog のコメントと一致しています。",
+    "differences": "異なる説明: {{count}}",
+    "selectAll": "すべて選択",
+    "selectNone": "選択を解除",
+    "select": "{{name}} を選択",
+    "colName": "名前",
+    "colOntos": "Ontos",
+    "colUc": "Unity Catalog",
+    "changedBadge": "Unity Catalog で変更されました",
+    "ucEmptyRow": "ここには Unity Catalog のコメントがないため、取り込むものはありません。",
+    "truncated": "最初の 1000 列のみ表示されます。",
+    "replaceNote": "選択した Ontos の説明は置き換えられ、以前の説明は変更履歴に残ります。",
+    "resetSelected": "選択をリセット ({{count}})",
+    "toast": {
+      "done": "置き換えた説明: {{count}}",
+      "failed": "置き換えられなかった説明: {{count}}。理由はダイアログに表示されます。"
+    }
+  },
   "deleteDialog": {
     "title": "アセットを削除しますか？",
     "description": "この操作は元に戻せません。アセットとそのすべての関係が完全に削除されます。",

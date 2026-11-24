@@ -557,7 +557,11 @@ METRIC_VIEW_PROPERTY = "metric_view"
 # Why the asset's description is not in Unity Catalog: set when writing it there
 # failed, removed when a later write succeeds (see uc_description_sync_manager).
 DESCRIPTION_SYNC_PROPERTY = "uc_description_sync"
-INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY, DESCRIPTION_SYNC_PROPERTY})
+# The Unity Catalog comment last seen for the asset, to tell a later change there
+# (see uc_description_baseline)
+DESCRIPTION_BASELINE_PROPERTY = "uc_description_baseline"
+INTERNAL_PROPERTY_KEYS = frozenset(
+    {METRIC_VIEW_PROPERTY, DESCRIPTION_SYNC_PROPERTY, DESCRIPTION_BASELINE_PROPERTY})
 
 
 def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

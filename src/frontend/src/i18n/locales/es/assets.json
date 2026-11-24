@@ -112,6 +112,33 @@
       "description_history_entry_not_found": "Ese cambio no está en el historial de este activo."
     }
   },
+  "descriptionDrift": {
+    "changedInUc": "Cambiado en Unity Catalog",
+    "columnsChangedInUc": "Columnas cambiadas en Unity Catalog: {{count}}",
+    "compare": "Comparar con Unity Catalog",
+    "title": "Comparar con Unity Catalog",
+    "description": "Compara las descripciones de {{object}} y sus columnas con los comentarios de Unity Catalog, leídos con sus permisos.",
+    "descriptionLoading": "Lee los comentarios de Unity Catalog con sus permisos.",
+    "loading": "Leyendo Unity Catalog...",
+    "empty": "(vacío)",
+    "noDifferences": "Las descripciones coinciden con los comentarios de Unity Catalog.",
+    "differences": "Descripciones distintas: {{count}}",
+    "selectAll": "Seleccionar todo",
+    "selectNone": "Quitar selección",
+    "select": "Seleccionar {{name}}",
+    "colName": "Nombre",
+    "colOntos": "En Ontos",
+    "colUc": "En Unity Catalog",
+    "changedBadge": "Cambiado en Unity Catalog",
+    "ucEmptyRow": "Unity Catalog no tiene comentario aquí, así que no hay nada que traer.",
+    "truncated": "Solo se listan las primeras 1000 columnas.",
+    "replaceNote": "Las descripciones seleccionadas en Ontos se sustituyen; las anteriores quedan en el registro de cambios.",
+    "resetSelected": "Restablecer seleccionadas ({{count}})",
+    "toast": {
+      "done": "Descripciones sustituidas: {{count}}",
+      "failed": "No sustituidas: {{count}}. Los motivos están en el cuadro de diálogo."
+    }
+  },
   "deleteDialog": {
     "title": "¿Eliminar activo?",
     "description": "Esta acción no se puede deshacer. Se eliminará permanentemente el activo y todas sus relaciones.",

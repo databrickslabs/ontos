@@ -144,6 +144,47 @@ export interface AssetDescriptionHistory {
   items: AssetDescriptionHistoryEntry[];
 }
 
+/** One description next to its Unity Catalog comment (GET .../description/drift). */
+export interface AssetDriftField {
+  asset_id: string;
+  name: string;
+  /** table, view or column */
+  object_type: string;
+  target: string;
+  description?: string | null;
+  uc_comment?: string | null;
+  baseline_known: boolean;
+  baseline_text?: string | null;
+  differs: boolean;
+  /** The comment is not what Ontos last saw (needs a recorded baseline) */
+  changed_in_uc: boolean;
+  missing_in_uc: boolean;
+}
+
+export interface AssetDescriptionDrift {
+  asset_id: string;
+  target: string;
+  table_type?: string | null;
+  /** The asset itself first, then the Column assets of a table or view */
+  fields: AssetDriftField[];
+  truncated: boolean;
+}
+
+/** One field of POST .../description/reset-selected. */
+export interface AssetResetFieldResult {
+  asset_id: string;
+  target?: string | null;
+  changed: boolean;
+  warnings: AssetCodedWarning[];
+  error?: { code: string; message: string; params?: Record<string, unknown> } | null;
+}
+
+export interface AssetResetSelectedResult {
+  results: AssetResetFieldResult[];
+  changed: number;
+  failed: number;
+}
+
 /** PUT /api/assets/{id}: the saved asset, with what the save could not do. */
 export interface AssetUpdateResult extends AssetRead {
   warnings?: AssetCodedWarning[];

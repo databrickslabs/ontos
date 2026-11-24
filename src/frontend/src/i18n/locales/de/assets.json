@@ -112,6 +112,33 @@
       "description_history_entry_not_found": "Diese Änderung ist nicht im Verlauf dieses Assets."
     }
   },
+  "descriptionDrift": {
+    "changedInUc": "In Unity Catalog geändert",
+    "columnsChangedInUc": "In Unity Catalog geänderte Spalten: {{count}}",
+    "compare": "Mit Unity Catalog vergleichen",
+    "title": "Mit Unity Catalog vergleichen",
+    "description": "Vergleicht die Beschreibungen von {{object}} und seinen Spalten mit den Unity-Catalog-Kommentaren, gelesen mit Ihren Berechtigungen.",
+    "descriptionLoading": "Liest die Kommentare mit Ihren Berechtigungen aus Unity Catalog.",
+    "loading": "Unity Catalog wird gelesen...",
+    "empty": "(leer)",
+    "noDifferences": "Die Beschreibungen entsprechen den Unity-Catalog-Kommentaren.",
+    "differences": "Abweichende Beschreibungen: {{count}}",
+    "selectAll": "Alle auswählen",
+    "selectNone": "Auswahl aufheben",
+    "select": "{{name}} auswählen",
+    "colName": "Name",
+    "colOntos": "In Ontos",
+    "colUc": "In Unity Catalog",
+    "changedBadge": "In Unity Catalog geändert",
+    "ucEmptyRow": "Unity Catalog hat hier keinen Kommentar, es gibt also nichts zu übernehmen.",
+    "truncated": "Es werden nur die ersten 1000 Spalten aufgelistet.",
+    "replaceNote": "Die ausgewählten Beschreibungen in Ontos werden ersetzt; die bisherigen bleiben im Änderungsprotokoll.",
+    "resetSelected": "Ausgewählte zurücksetzen ({{count}})",
+    "toast": {
+      "done": "Ersetzte Beschreibungen: {{count}}",
+      "failed": "Nicht ersetzt: {{count}}. Die Gründe stehen im Dialog."
+    }
+  },
   "deleteDialog": {
     "title": "Asset löschen?",
     "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies löscht das Asset und alle seine Beziehungen dauerhaft.",

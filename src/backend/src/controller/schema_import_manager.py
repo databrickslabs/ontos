@@ -16,6 +16,7 @@ from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, ListAssetsOptions
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.asset_description_history import SOURCE_UC_IMPORT, description_source
+from src.controller.uc_description_baseline import make_baseline
 from src.controller.assets_manager import AssetsManager
 from src.controller.metric_view_consistency_manager import (
     STORE_KEY as METRIC_VIEW_PROPERTY, build_stored_metric_view, store_metric_view,
@@ -23,6 +24,7 @@ from src.controller.metric_view_consistency_manager import (
 from src.db_models.assets import AssetDb
 from src.db_models.connections import ConnectionDb
 from src.models.assets import (
+    DESCRIPTION_BASELINE_PROPERTY,
     METRIC_VIEW_ASSET_TYPE,
     AssetCreate,
     AssetRelationshipCreate,
@@ -902,6 +904,7 @@ class SchemaImportManager:
 
         properties: Dict[str, Any] = {}
         description = None
+        uc_comment_read = False  # the description is what Unity Catalog held just now
 
         if item.asset_type == "Column":
             parent_path = item.parent_path or ".".join(item.path.split(".")[:-1])
@@ -910,6 +913,7 @@ class SchemaImportManager:
             )
             if col_info:
                 description = col_info.description
+                uc_comment_read = True
                 properties = {
                     "data_type": col_info.data_type,
                     "logical_type": col_info.logical_type,
@@ -929,6 +933,7 @@ class SchemaImportManager:
                     if _metadata_cache is not None:
                         _metadata_cache[item.path] = meta
                     description = meta.description
+                    uc_comment_read = True
                     if meta.schema_info:
                         properties["schema"] = {
                             "column_count": meta.schema_info.column_count,
@@ -960,6 +965,11 @@ class SchemaImportManager:
                             properties[METRIC_VIEW_PROPERTY] = stored
             except Exception as exc:
                 logger.debug(f"Could not fetch metadata for '{item.path}': {exc}")
+
+        if (uc_comment_read and connector.connector_type == "databricks"
+                and item.asset_type in ("Table", "View", "Column")):
+            # What Unity Catalog holds now, to tell a later change there (drift)
+            properties = {**properties, DESCRIPTION_BASELINE_PROPERTY: make_baseline(description)}
 
         asset_in = AssetCreate(
             name=item.name,

@@ -20,6 +20,7 @@ import {
 import {
   DescriptionHistoryPanel, hasDescriptionHistory,
 } from '@/components/assets/description-history-panel';
+import { DescriptionDriftNotice } from '@/components/assets/description-drift-notice';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -328,6 +329,13 @@ export default function AssetDetailView() {
         <DescriptionSyncNotice
           sync={asset.description_sync}
           onUseUcComment={showDescriptionReset ? () => setIsDescriptionResetOpen(true) : undefined}
+        />
+        <DescriptionDriftNotice
+          assetId={asset.id}
+          assetTypeName={asset.asset_type_name}
+          enabled={showDescriptionReset}
+          refreshKey={asset.updated_at}
+          onReset={() => fetchAsset()}
         />
         {showDescriptionReset && !asset.description_sync && (
           <Button

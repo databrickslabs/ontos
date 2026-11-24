@@ -31,8 +31,9 @@ from src.controller.asset_description_history import (
     HistoryEntryNotFoundError, SOURCE_RESTORE, description_source, get_description_entry,
     list_description_history,
 )
+from src.controller.uc_description_drift_manager import UcDescriptionDriftManager
 from src.models.asset_description import (
-    DescriptionHistory, DescriptionHistoryEntry, DescriptionResetRequest, DescriptionResetResult,
+    DescriptionDrift, ResetSelectedRequest, ResetSelectedResult, DescriptionHistory, DescriptionHistoryEntry, DescriptionResetRequest, DescriptionResetResult,
     DescriptionRestoreRequest, UcCommentPreview,
 )
 from src.db_models.assets import AssetDb
@@ -759,6 +760,90 @@ def restore_asset_description(
             db=db, username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="RESTORE_ASSET_DESCRIPTION", success=success,
+            details=details,
+        )
+
+
+def _drift_manager(manager, settings) -> UcDescriptionDriftManager:
+    return UcDescriptionDriftManager(
+        UcDescriptionResetManager(manager, UcDescriptionSyncManager(settings)))
+
+
+@assets_router.get(
+    "/{asset_id}/description/drift",
+    response_model=DescriptionDrift,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def get_asset_description_drift(
+    asset_id: UUID,
+    request: Request,
+    settings: SettingsDep,
+    db: DBSessionDep,
+    manager=Depends(get_assets_manager),
+):
+    """The descriptions of a table or view and its Column assets (or of one column) next to the
+    Unity Catalog comments, from one read as the user, on demand. ``changed_in_uc``: the comment
+    is not the one Ontos last saw (needs the baseline recorded at import, reset or write-back).
+    Errors are those of the preview endpoint."""
+    return _reset_call(asset_id, lambda: _drift_manager(manager, settings).compare(
+        db, asset_id, user_client=lambda: _user_workspace_client(request)))
+
+
+@assets_router.post(
+    "/{asset_id}/description/reset-selected",
+    response_model=ResetSelectedResult,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def reset_asset_descriptions_to_uc(
+    asset_id: UUID,
+    request: Request,
+    reset_in: ResetSelectedRequest,
+    settings: SettingsDep,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
+    manager=Depends(get_assets_manager),
+):
+    """Resets the selected fields of a table (itself and its Column assets) to their Unity
+    Catalog comments in one request, from one read as the user (``assets`` READ_WRITE). Each
+    field answers on its own: one whose comment changed since it was shown
+    (``expected_uc_comment``), or whose column is gone, reports a coded error and the others
+    go on. Nothing is written to Unity Catalog."""
+    success = False
+    details = {"params": {"asset_id": str(asset_id), "fields": len(reset_in.fields)}}
+    try:
+        result = _reset_call(asset_id, lambda: _drift_manager(manager, settings).reset_many(
+            db, asset_id, reset_in.fields, user_client=lambda: _user_workspace_client(request),
+            username=current_user.email))
+        details["results"] = [
+            {"asset_id": str(r.asset_id), "changed": r.changed,
+             "error": r.error.code if r.error else None} for r in result.results]
+        changed_ids = [r.asset_id for r in result.results if r.changed]
+        for changed_id in changed_ids:
+            # Commits: the audit says success only once the changes are stored
+            _schedule_maturity_evaluation(
+                db, background_tasks, request, changed_id, current_user.email)
+        if not changed_ids:
+            db.commit()
+        success = True
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status": e.status_code}
+        raise
+    except Exception as e:
+        logger.exception("Failed to reset the descriptions under asset %s", asset_id)
+        details["exception"] = {"type": type(e).__name__}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset the descriptions") from e
+    finally:
+        if success:
+            details["updated_resource_id"] = str(asset_id)
+        audit_manager.log_action(
+            db=db, username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID, action="RESET_ASSET_DESCRIPTIONS", success=success,
             details=details,
         )
 

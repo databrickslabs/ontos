@@ -112,6 +112,33 @@
       "description_history_entry_not_found": "Cette modification n'est pas dans l'historique de cet actif."
     }
   },
+  "descriptionDrift": {
+    "changedInUc": "Modifié dans Unity Catalog",
+    "columnsChangedInUc": "Colonnes modifiées dans Unity Catalog : {{count}}",
+    "compare": "Comparer avec Unity Catalog",
+    "title": "Comparer avec Unity Catalog",
+    "description": "Compare les descriptions de {{object}} et de ses colonnes avec les commentaires d'Unity Catalog, lus avec vos autorisations.",
+    "descriptionLoading": "Lit les commentaires dans Unity Catalog avec vos autorisations.",
+    "loading": "Lecture d'Unity Catalog...",
+    "empty": "(vide)",
+    "noDifferences": "Les descriptions correspondent aux commentaires d'Unity Catalog.",
+    "differences": "Descriptions différentes : {{count}}",
+    "selectAll": "Tout sélectionner",
+    "selectNone": "Tout désélectionner",
+    "select": "Sélectionner {{name}}",
+    "colName": "Nom",
+    "colOntos": "Dans Ontos",
+    "colUc": "Dans Unity Catalog",
+    "changedBadge": "Modifié dans Unity Catalog",
+    "ucEmptyRow": "Unity Catalog n'a pas de commentaire ici, il n'y a donc rien à récupérer.",
+    "truncated": "Seules les 1000 premières colonnes sont listées.",
+    "replaceNote": "Les descriptions sélectionnées dans Ontos sont remplacées ; les précédentes restent dans le journal des modifications.",
+    "resetSelected": "Réinitialiser la sélection ({{count}})",
+    "toast": {
+      "done": "Descriptions remplacées : {{count}}",
+      "failed": "Non remplacées : {{count}}. Les raisons sont dans la fenêtre."
+    }
+  },
   "deleteDialog": {
     "title": "Supprimer l'actif ?",
     "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement l'actif et toutes ses relations.",

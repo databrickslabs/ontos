@@ -30,6 +30,7 @@ from src.common.uc_comments import (
     SINGLE_READ_TIMEOUT_SECONDS, TIMED_OUT, UNSUPPORTED_TEXT, normalize_comment, read_comment,
     set_comment, split_column_location,
 )
+from src.controller.uc_description_baseline import set_baseline
 from src.db_models.assets import AssetDb
 from src.models.assets import (
     DESCRIPTION_SYNC_PROPERTY, CodedWarning, DescriptionSyncState, description_sync_state,
@@ -393,6 +394,7 @@ class UcDescriptionSyncManager:
         decision = guard_decision(uc_comment, text, previous_description, _agreed(asset))
         if decision == GUARD_UNCHANGED:
             audit['outcome'] = 'unchanged'
+            set_baseline(db, asset, uc_comment)
             return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
         if decision == GUARD_KEEP:
             # Not the comment Ontos agreed to before: a comment someone else wrote is kept
@@ -425,6 +427,7 @@ class UcDescriptionSyncManager:
             return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=text),
                                audit=audit)
         if normalize_comment(after) == normalize_comment(text):
+            set_baseline(db, asset, after)
             return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
         # Someone wrote another comment right after this write: theirs is kept
         logger.info("The Unity Catalog comment of %s changed right after Ontos wrote it "

@@ -80,3 +80,12 @@ def test_a_custom_template_is_not_a_decision_notice():
     assert set(STATUS_CHANGE_DECISION_TEMPLATES) == {
         'status_change_approved', 'status_change_denied', 'status_change_clarification',
     }
+
+
+def test_the_denied_message_survives_a_callers_own_decision_text():
+    # Callers send 'denied' / 'cancelled' as the decision; the outcome is the executor's
+    results = [{'outcome': 'rejected', 'decision': 'denied', 'message': 'Not now'}]
+
+    _, text, _ = _notice('status_change_denied', results)
+
+    assert text.endswith('Approver message: Not now')

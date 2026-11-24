@@ -394,7 +394,9 @@ def status_change_decision_notice(
     step_value = _DECISION_STEP_VALUES[decision]
     message = None
     for result in decision_results:
-        if isinstance(result, Mapping) and result.get('decision') == step_value:
+        if isinstance(result, Mapping) and (
+            result.get('outcome') or result.get('decision')
+        ) == step_value:
             message = result.get('message') or result.get('reason') or message
     name = str(entity_name or entity_id or '')
     params: Dict[str, Any] = {

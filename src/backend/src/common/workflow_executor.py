@@ -4558,6 +4558,9 @@ class WorkflowExecutor:
                     'decision': _approval_result(step_result, clarify, decision=True),
                     # Flatten result_data so ${step_results.approve.reason} works directly
                     **(result_data or {}),
+                    # The normalized outcome (approved / rejected / clarify): callers'
+                    # own 'decision' texts (denied, cancelled) can't override it
+                    'outcome': _approval_result(step_result, clarify, decision=True),
                 },
             },
             on_behalf_of=on_behalf_of,

@@ -1360,6 +1360,55 @@
       "data_product_type_default_inactive": "\"{{key}}\" no puede ser predeterminado e inactivo a la vez. Establezca primero otro tipo como predeterminado."
     }
   },
+  "deliveryOutbox": {
+    "title": "Cambios aún no entregados",
+    "description": "Cambios guardados en Ontos que un modo de entrega aún no ha entregado. Una entrega fallida se reintenta automáticamente, hasta {{max}} intentos.",
+    "empty": "Todos los cambios se entregaron.",
+    "loadError": "No se pudieron cargar los cambios aún no entregados.",
+    "refresh": "Actualizar",
+    "deletedEntity": "(ya no existe)",
+    "deliverAgain": "Entregar de nuevo",
+    "noRetry": "Sin más intentos automáticos",
+    "attempts": "{{attempts}} de {{max}}",
+    "columns": {
+      "entity": "Entidad",
+      "change": "Cambio",
+      "mode": "Modo",
+      "status": "Estado",
+      "reason": "Motivo",
+      "attempts": "Intentos",
+      "nextAttempt": "Próximo intento"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "failed": "Fallido",
+      "delivered": "Entregado"
+    },
+    "mode": {
+      "direct": "Directo",
+      "indirect": "Indirecto",
+      "manual": "Manual"
+    },
+    "change": {
+      "product_create": "Producto de datos creado",
+      "product_update": "Producto de datos actualizado"
+    },
+    "result": {
+      "delivered": "Entregado.",
+      "skipped": "Nada que entregar: ningún modo activo se aplica.",
+      "pending": "En cola: se entregará en breve.",
+      "failed": "Aún no entregado: {{reason}}",
+      "refused": "No se pudo entregar de nuevo."
+    },
+    "reason": {
+      "delivery_git_unavailable": "El repositorio Git no está disponible. Revise Configuración > Git.",
+      "delivery_git_write_failed": "No se pudo escribir el archivo en el repositorio Git.",
+      "delivery_entity_not_found": "La entidad ya no existe.",
+      "delivery_entity_type_unsupported": "Este tipo de entidad no se puede entregar de nuevo.",
+      "delivery_no_active_mode": "Ningún modo de entrega está activo.",
+      "delivery_failed": "La entrega falló. Los registros del servidor tienen los detalles."
+    }
+  },
   "certificationLevels": {
     "title": "Niveles de certificación",
     "description": "Define los niveles de certificación disponibles para los productos de datos, los contratos y los activos.",

@@ -803,6 +803,11 @@
       "delivery_failed": "Importiert, aber nicht ausgeliefert. Details stehen in den Server-Logs."
     }
   },
+  "importDeliveryOutbox": {
+    "pending": "Importiert; die Zustellung steht in der Warteschlange und läuft in Kürze.",
+    "notDelivered": "Noch nicht zugestellt: {{count}}. Ontos wiederholt sie automatisch.",
+    "openSettings": "Einstellungen > Zustellmodi öffnen"
+  },
   "deprecation": {
     "reason": "Grund der Abkündigung",
     "reasonPlaceholder": "Warum wird es abgekündigt? Konsumenten sehen diesen Text.",

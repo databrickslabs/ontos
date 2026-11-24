@@ -9,6 +9,7 @@ import { SettingsFormSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useToast } from '@/hooks/use-toast';
+import DeliveryOutboxList from '@/components/settings/delivery-outbox-list';
 
 interface DeliveryModeSettings {
   deliveryModeDirect: boolean;
@@ -213,6 +214,11 @@ export default function DeliverySettings() {
             </Button>
           </div>
         )}
+
+        <Separator />
+
+        {/* Changes not delivered yet, with "Deliver again" (#1688) */}
+        <DeliveryOutboxList canWrite={hasWriteAccess} />
       </div>
     </>
   );

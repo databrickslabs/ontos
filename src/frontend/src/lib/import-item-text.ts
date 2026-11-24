@@ -29,16 +29,18 @@ const DELIVERY_CODES = new Set([
 
 /**
  * The items an import report lists: those not created, and created ones with a
- * note or whose delivery failed.
+ * note or whose delivery failed or is still queued.
  */
 export function reportedImportItems(result: BatchImportResult): ImportItemResult[] {
   return result.items.filter(
-    (i) => i.status !== 'created' || !!i.message || i.delivery?.status === 'failed',
+    (i) => i.status !== 'created' || !!i.message || i.delivery?.status === 'failed'
+      || i.delivery?.status === 'pending',
   );
 }
 
 /** Why a created item wasn't delivered, or null when it was (or nothing was to be). */
 function deliveryText(item: ImportItemResult, t: TFunction): string | null {
+  if (item.delivery?.status === 'pending') return t('common:importDeliveryOutbox.pending');
   if (item.delivery?.status !== 'failed') return null;
   const code = item.delivery.code && DELIVERY_CODES.has(item.delivery.code)
     ? item.delivery.code : 'delivery_failed';

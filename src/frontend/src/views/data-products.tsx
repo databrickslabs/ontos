@@ -29,6 +29,7 @@ import { DataTable } from "@/components/ui/data-table";
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import ImportEntityDialog from '@/components/common/import-entity-dialog';
+import ImportDeliveryAlert from '@/components/common/import-delivery-alert';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -93,6 +94,8 @@ export default function DataProducts() {
   const [importingProductPaste, setImportingProductPaste] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The last import with issues, for the dialog's "not delivered" line (#1688)
+  const [importResult, setImportResult] = useState<BatchImportResult | null>(null);
 
   // Use the imported types for state (values loaded but not directly consumed by UI)
   const [_statuses, setStatuses] = useState<DataProductStatus[]>([]);
@@ -247,6 +250,7 @@ export default function DataProducts() {
       setDuplicatesAsNew(false);
       setOdpsPaste('');
       setError(null);
+      setImportResult(null);
     }
   }, [uploadDialogOpen]);
 
@@ -500,6 +504,7 @@ export default function DataProducts() {
           duration: 10000,
         });
         if (reportedItems.length > 0) setError(`${summary}\n${detail}`);
+        setImportResult(result);
       } else {
         setUploadDialogOpen(false);
         const success = productUploadSuccessText(files, result?.created ?? 0, t);
@@ -924,6 +929,7 @@ export default function DataProducts() {
                       'text/yaml': ['.yaml', '.yml'],
                     }}
                     onFiles={uploadProductFiles}
+                    alert={<ImportDeliveryAlert result={importResult} />}
                     toggles={{
                       createMissingDomains, setCreateMissingDomains,
                       adoptIds, setAdoptIds,

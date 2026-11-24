@@ -803,6 +803,11 @@
       "delivery_failed": "インポートしましたが配信されていません。詳細はサーバーログを確認してください。"
     }
   },
+  "importDeliveryOutbox": {
+    "pending": "インポートしました。配信はキューに入っており、まもなく実行されます。",
+    "notDelivered": "未配信: {{count}} 件。Ontos が自動で再試行します。",
+    "openSettings": "設定 > 配信モードを開く"
+  },
   "deprecation": {
     "reason": "非推奨の理由",
     "reasonPlaceholder": "非推奨にする理由。利用者に表示されます。",

@@ -1360,6 +1360,55 @@
       "data_product_type_default_inactive": "« {{key}} » ne peut pas être à la fois par défaut et inactif. Définissez d'abord un autre type par défaut."
     }
   },
+  "deliveryOutbox": {
+    "title": "Modifications pas encore livrées",
+    "description": "Modifications enregistrées dans Ontos qu'un mode de livraison n'a pas encore livrées. Une livraison échouée est réessayée automatiquement, jusqu'à {{max}} tentatives.",
+    "empty": "Toutes les modifications ont été livrées.",
+    "loadError": "Impossible de charger les modifications pas encore livrées.",
+    "refresh": "Actualiser",
+    "deletedEntity": "(n'existe plus)",
+    "deliverAgain": "Livrer à nouveau",
+    "noRetry": "Plus de tentatives automatiques",
+    "attempts": "{{attempts}} sur {{max}}",
+    "columns": {
+      "entity": "Entité",
+      "change": "Modification",
+      "mode": "Mode",
+      "status": "Statut",
+      "reason": "Motif",
+      "attempts": "Tentatives",
+      "nextAttempt": "Prochaine tentative"
+    },
+    "status": {
+      "pending": "En attente",
+      "failed": "Échec",
+      "delivered": "Livré"
+    },
+    "mode": {
+      "direct": "Direct",
+      "indirect": "Indirect",
+      "manual": "Manuel"
+    },
+    "change": {
+      "product_create": "Produit de données créé",
+      "product_update": "Produit de données mis à jour"
+    },
+    "result": {
+      "delivered": "Livré.",
+      "skipped": "Rien à livrer : aucun mode actif ne s'applique.",
+      "pending": "En file d'attente : sera livré sous peu.",
+      "failed": "Toujours pas livré : {{reason}}",
+      "refused": "Impossible de le livrer à nouveau."
+    },
+    "reason": {
+      "delivery_git_unavailable": "Le dépôt Git n'est pas disponible. Vérifiez Paramètres > Git.",
+      "delivery_git_write_failed": "Le fichier n'a pas pu être écrit dans le dépôt Git.",
+      "delivery_entity_not_found": "L'entité n'existe plus.",
+      "delivery_entity_type_unsupported": "Ce type d'entité ne peut pas être livré à nouveau.",
+      "delivery_no_active_mode": "Aucun mode de livraison n'est actif.",
+      "delivery_failed": "La livraison a échoué. Les journaux du serveur contiennent les détails."
+    }
+  },
   "certificationLevels": {
     "title": "Niveaux de certification",
     "description": "Définissez les niveaux de certification disponibles pour les produits de données, les contrats et les actifs.",

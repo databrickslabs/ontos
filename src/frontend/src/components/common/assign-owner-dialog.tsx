@@ -6,6 +6,10 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -15,10 +19,16 @@ import { PrincipalPicker } from '@/components/common/principal-picker';
 import type { OwnerObjectType } from '@/types/business-owner';
 import type { BusinessRoleRead } from '@/types/business-role';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+
+interface AssignOwnerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  objectType: OwnerObjectType;
+  objectId: string;
+  onSuccess: () => void;
+  initialEmail?: string;
+  initialName?: string;
+}
 
 // Business role names that make their holder an owner for owner-routed approvals and
 // notifications (compared lowercased; mirrors the backend's owner resolution).
@@ -36,16 +46,6 @@ export function isOwnerRole(role: Pick<BusinessRoleRead, 'name'>): boolean {
 export function defaultOwnerRole(roles: BusinessRoleRead[]): BusinessRoleRead | undefined {
   const byName = (name: string) => roles.find((r) => r.name.trim().toLowerCase() === name);
   return byName('data owner') ?? byName('owner') ?? roles.find((r) => r.is_approver) ?? roles[0];
-}
-
-interface AssignOwnerDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  objectType: OwnerObjectType;
-  objectId: string;
-  onSuccess: () => void;
-  initialEmail?: string;
-  initialName?: string;
 }
 
 export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, onSuccess, initialEmail, initialName }: AssignOwnerDialogProps) {

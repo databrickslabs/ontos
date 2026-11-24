@@ -303,6 +303,7 @@
       "status": "Status",
       "publishedTo": "Published to",
       "statusLabels": {
+        "sandbox": "Sandbox",
         "draft": "Draft",
         "proposed": "Proposed",
         "active": "Active",

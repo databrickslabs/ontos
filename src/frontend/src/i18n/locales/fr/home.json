@@ -303,6 +303,7 @@
       "status": "Statut",
       "publishedTo": "Publié pour",
       "statusLabels": {
+        "sandbox": "Bac à sable",
         "draft": "Brouillon",
         "proposed": "Proposé",
         "active": "Actif",

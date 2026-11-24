@@ -303,6 +303,7 @@
       "status": "Status",
       "publishedTo": "Gepubliceerd voor",
       "statusLabels": {
+        "sandbox": "Sandbox",
         "draft": "Concept",
         "proposed": "Voorgesteld",
         "active": "Actief",

@@ -67,6 +67,10 @@ const PRODUCTS = [
     description: { purpose: 'Old sales' },
     owner_team_name: 'Sales Team',
   },
+  {
+    id: 'p4', name: 'Old Feed', status: 'deprecated', domain: 'Finance', domain_ids: ['finance'],
+    publication_scope: 'organization', description: { purpose: 'Retired feed' },
+  },
 ];
 
 function jsonResponse(body: unknown) {
@@ -137,6 +141,41 @@ describe('MarketplaceView', () => {
       expect(titles).toEqual(['Orders', 'Customer 360']);
     });
 
+    it('drops the previous query hits while the next query is loading', async () => {
+      searchResponse = [{ id: 'product::p1', type: 'data-product' }];
+      await renderMarketplace();
+      const box = screen.getByPlaceholderText(/help you find/i);
+      await userEvent.type(box, 'customer');
+      await waitFor(() => expect(cardTitleEls().map(e => e.textContent)).toEqual(['Customer 360']));
+
+      // The next request never answers: the old hits must not stay up as its results
+      fetchMock.mockImplementation(async (input) => {
+        if (String(input).startsWith('/api/search')) return new Promise<Response>(() => {});
+        return jsonResponse([]);
+      });
+      await userEvent.type(box, 's');
+      await waitFor(() => expect(screen.queryByText('Customer 360')).not.toBeInTheDocument());
+    });
+
+    it('clears the search error as soon as the query changes', async () => {
+      await renderMarketplace();
+      fetchMock.mockImplementation(async (input) => {
+        if (String(input).startsWith('/api/search')) return new Response('x', { status: 500 });
+        return jsonResponse([]);
+      });
+      const box = screen.getByPlaceholderText(/help you find/i);
+      await userEvent.type(box, 'abc');
+      expect(await screen.findByText('Search is unavailable right now.')).toBeInTheDocument();
+      fetchMock.mockImplementation(async (input) => {
+        if (String(input).startsWith('/api/search')) return new Promise<Response>(() => {});
+        return jsonResponse([]);
+      });
+      await userEvent.type(box, 'd');
+      await waitFor(() => {
+        expect(screen.queryByText('Search is unavailable right now.')).not.toBeInTheDocument();
+      });
+    });
+
     it('does not filter in the browser while the server has not answered', async () => {
       await renderMarketplace();
       fetchMock.mockImplementation(async (input) => {
@@ -165,8 +204,12 @@ describe('MarketplaceView', () => {
       expect(within(orders).getByText('Preview')).toBeInTheDocument();
       expect(within(orders).queryByText('draft')).not.toBeInTheDocument();
       expect(within(orders).getByText(/Owner: Unknown/)).toBeInTheDocument();
-      expect(within(legacy).getByText('Retiring')).toBeInTheDocument();
+      // One retiring mention: the line with the replacement, else the badge
       expect(within(legacy).getByText('Retiring, use Customer 360 instead')).toBeInTheDocument();
+      expect(within(legacy).queryByText('Retiring')).not.toBeInTheDocument();
+      const oldFeed = cardTitleEls()
+        .find(e => e.textContent === 'Old Feed')!.closest('.cursor-pointer')!;
+      expect(within(oldFeed as HTMLElement).getByText('Retiring')).toBeInTheDocument();
       expect(within(legacy).queryByText('deprecated')).not.toBeInTheDocument();
     });
 

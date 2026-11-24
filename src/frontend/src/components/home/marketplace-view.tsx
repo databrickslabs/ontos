@@ -41,7 +41,7 @@ interface MarketplaceViewProps {
 }
 
 export default function MarketplaceView({ className }: MarketplaceViewProps) {
-  const { t } = useTranslation(['home', 'common']);
+  const { t } = useTranslation(['home', 'common', 'data-products']);
   const navigate = useNavigate();
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
   const { userInfo } = useUserStore();
@@ -150,11 +150,14 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   // marketplace listing does.
   useEffect(() => {
     const query = searchQuery.trim();
+    setSearchError(false);
     if (!query) {
       setSearchHits(null);
-      setSearchError(false);
       return;
     }
+    // A new query: drop the previous query's hits so the grid shows the loading state until
+    // the server answers (the abort below cancels the previous request).
+    setSearchHits(null);
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
@@ -412,7 +415,10 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   // Plain status label: translated for the known statuses, else the raw value humanised
   const statusLabel = (status: string) =>
     t(`marketplace.details.statusLabels.${status.toLowerCase()}`, {
-      defaultValue: status.replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()),
+      // The app's own status labels, then the raw value humanised
+      defaultValue: t(`data-products:status.${status.toLowerCase()}`, {
+        defaultValue: status.replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()),
+      }),
     });
 
   // What the card no longer shows (#1600): status, publication scope and quality
@@ -574,7 +580,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
                 size="sm"
               />
             )}
-            {trust?.kind === 'retiring' && (
+            {trust?.kind === 'retiring' && !replacement?.name && (
               <Badge
                 variant="outline"
                 className="text-xs border-amber-500 text-amber-700 dark:text-amber-300"
@@ -591,11 +597,9 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
           <div className="text-xs text-muted-foreground mt-2 truncate">
             {t('marketplace.products.owner')}: {owner}
           </div>
-          {trust?.kind === 'retiring' && (
+          {trust?.kind === 'retiring' && replacement?.name && (
             <div className="text-xs text-amber-700 dark:text-amber-300 mt-1 truncate">
-              {replacement?.name
-                ? t('marketplace.trust.retiringUseInstead', { name: replacement.name })
-                : t('marketplace.trust.retiringNoReplacement')}
+              {t('marketplace.trust.retiringUseInstead', { name: replacement.name })}
             </div>
           )}
         </CardContent>

@@ -303,6 +303,7 @@
       "status": "ステータス",
       "publishedTo": "公開範囲",
       "statusLabels": {
+        "sandbox": "サンドボックス",
         "draft": "下書き",
         "proposed": "提案済み",
         "active": "有効",

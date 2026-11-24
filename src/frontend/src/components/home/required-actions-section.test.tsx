@@ -28,7 +28,9 @@ function approval(
 
 describe('RequiredActionsSection workflow approvals', () => {
   beforeEach(() => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    // A new response per call: the approve dialog's admin check loads the permissions
+    // store too, and a response body can be read only once
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       new Response(JSON.stringify({ contracts: [], products: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

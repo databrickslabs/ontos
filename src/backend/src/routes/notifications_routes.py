@@ -6,10 +6,14 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
 from src.common.authorization import PermissionChecker
-from src.common.dependencies import NotificationsManagerDep, DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
+from src.common.dependencies import (
+    AuditCurrentUserDep, AuditManagerDep, AuthorizationManagerDep, CurrentUserDep, DBSessionDep,
+    NotificationsManagerDep,
+)
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.controller.notifications_manager import (
+    NotificationAccessDeniedError,
     NotificationNotDeletableError,
     NotificationNotFoundError,
     NotificationsManager,
@@ -98,9 +102,16 @@ async def delete_notification(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: NotificationsManagerDep,
+    auth_manager: AuthorizationManagerDep,
     _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.ADMIN))
 ):
-    """Delete a notification by ID."""
+    """Delete a notification by ID.
+
+    The feature permission says the caller may use notifications, not that they may act on
+    someone else's. A non-admin may delete only a notification they can access and that is
+    deletable; an Ontos admin (a role flagged ``is_admin``) may delete any, and deleting one
+    that is not deletable is recorded as ``admin_override`` in the audit entry.
+    """
     success = False
     details = {
         "params": {
@@ -109,19 +120,18 @@ async def delete_notification(
     }
 
     try:
-        # Mirror the mark-as-read endpoint: the feature permission says the
-        # caller may use notifications at all, not that they may act on
-        # someone else's. Without this a principal with notifications:ADMIN
-        # could delete any other user's notification, including ones scoped
-        # to a role they are not in.
         notification = manager.get_notification_by_id(db=db, notification_id=notification_id)
         if not notification:
             raise HTTPException(status_code=404, detail="Notification not found")
 
-        if not manager.can_user_access_notification(db=db, notification=notification, user_info=current_user):
-            raise HTTPException(status_code=403, detail="Cannot delete other user's notifications")
+        is_admin = auth_manager.is_user_ontos_admin(current_user.groups if current_user else None)
+        if not is_admin and not manager.can_user_access_notification(
+            db=db, notification=notification, user_info=current_user
+        ):
+            raise NotificationAccessDeniedError(
+                "You can only delete your own notifications.", notification_id=notification_id
+            )
 
-        is_admin = manager.is_app_admin(current_user)
         details["params"]["admin_override"] = is_admin and not notification.can_delete
 
         deleted = manager.delete_notification(
@@ -134,12 +144,10 @@ async def delete_notification(
     except NotificationNotFoundError:
         details["exception"] = {"type": "NotificationNotFoundError", "status_code": 404}
         raise HTTPException(status_code=404, detail="Notification not found")
-    except NotificationNotDeletableError:
-        details["exception"] = {"type": "NotificationNotDeletableError", "status_code": 403}
-        raise HTTPException(
-            status_code=403,
-            detail="This notification requires a response and cannot be dismissed",
-        )
+    except (NotificationAccessDeniedError, NotificationNotDeletableError) as e:
+        # Coded: the UI shows the message of its code in the user's language
+        details["exception"] = {"type": type(e).__name__, "code": e.code, "status_code": 403}
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except HTTPException as e:
         details["exception"] = {
             "type": "HTTPException",

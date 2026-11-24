@@ -15,6 +15,11 @@
     "notApplied": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}",
     "requesterNotApplied": "Über das Review Ihres Vertrags wurde entschieden, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}"
   },
+  "deleteRefused": {
+    "notDeletable": "Diese Benachrichtigung erfordert eine Antwort und kann nicht verworfen werden.",
+    "accessDenied": "Sie können nur Ihre eigenen Benachrichtigungen löschen.",
+    "generic": "Die Benachrichtigung konnte nicht gelöscht werden."
+  },
   "ui": {
     "tooltip": "Benachrichtigungen",
     "loading": "Benachrichtigungen werden geladen...",

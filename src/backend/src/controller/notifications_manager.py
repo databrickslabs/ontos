@@ -5,6 +5,7 @@ import json
 from sqlalchemy.orm import Session # Import Session for type hinting
 from pydantic import ValidationError # Import for error handling
 
+from src.common.api_errors import CodedValueError
 from src.common.timestamps import utc_now
 from src.common.workflow_approvals import has_decided
 from src.models.notifications import Notification, NotificationType # Import the enum too
@@ -151,7 +152,7 @@ class _RecipientMembership:
         return bool(not recipient_role_id and self.in_group(recipient))
 
 
-class NotificationNotDeletableError(Exception):
+class NotificationNotDeletableError(CodedValueError):
     """Raised when a notification is marked ``can_delete=False``.
 
     Actionable notifications (approval requests, access grants, contract
@@ -159,6 +160,15 @@ class NotificationNotDeletableError(Exception):
     ``can_delete=False`` to mean "you must respond to this, you cannot
     dismiss it". Only an admin may override.
     """
+
+    code = 'notification_not_deletable'
+
+
+class NotificationAccessDeniedError(CodedValueError):
+    """Raised when a user acts on a notification that is not addressed to them."""
+
+    code = 'notification_access_denied'
+
 
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
@@ -170,20 +180,6 @@ class NotificationsManager:
         # self.notifications: List[Notification] = [] # REMOVE In-memory list
         self._repo = notification_repo # Use the repository instance
         self._settings_manager = settings_manager # Store the manager
-
-    def is_app_admin(self, user_info: Optional[UserInfo]) -> bool:
-        """Whether the user holds the 'Admin' app role.
-
-        The same notion of admin that ``get_notifications`` uses when it
-        overrides ``can_delete`` to True and that ``can_user_access_notification``
-        uses (``_RecipientMembership.is_admin``), so what the API reports and
-        what it enforces stay in step. Distinct from ``FeatureAccessLevel.ADMIN``
-        on the notifications feature, which is a per-feature permission. Fails
-        closed: False when there is no user or the roles cannot be read.
-        """
-        if not user_info:
-            return False
-        return self._membership(user_info, "the admin check").is_admin
 
     def get_notification_by_id(self, db: Session, notification_id: str) -> Optional[Notification]:
         """Get a single notification by ID."""
@@ -389,7 +385,7 @@ class NotificationsManager:
         Args:
             db: Database session
             notification_id: ID of the notification to delete
-            is_admin: Whether the caller holds the 'Admin' app role
+            is_admin: Whether the caller is an Ontos admin (decided by the route)
 
         Returns:
             True if the notification was deleted
@@ -406,7 +402,8 @@ class NotificationsManager:
 
             if not db_obj.can_delete and not is_admin:
                 raise NotificationNotDeletableError(
-                    f"Notification {notification_id} is marked as non-deletable"
+                    "This notification requires a response and cannot be dismissed.",
+                    notification_id=notification_id,
                 )
 
             if not db_obj.can_delete:

@@ -15,6 +15,11 @@
     "notApplied": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}",
     "requesterNotApplied": "Over de review van uw contract is beslist, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}"
   },
+  "deleteRefused": {
+    "notDeletable": "Deze melding vraagt om een reactie en kan niet worden genegeerd.",
+    "accessDenied": "Je kunt alleen je eigen meldingen verwijderen.",
+    "generic": "De melding kon niet worden verwijderd."
+  },
   "ui": {
     "tooltip": "Meldingen",
     "loading": "Meldingen laden...",

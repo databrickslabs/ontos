@@ -41,6 +41,12 @@ function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
   );
 }
 
+// The refusals of DELETE /api/notifications/{id}, by the code of the error
+const DELETE_REFUSED_KEYS: Record<string, string> = {
+  notification_not_deletable: 'notifications:deleteRefused.notDeletable',
+  notification_access_denied: 'notifications:deleteRefused.accessDenied',
+};
+
 export default function NotificationBell() {
   const { t, i18n } = useTranslation();
   // Use selective subscriptions to avoid unnecessary re-renders
@@ -48,6 +54,7 @@ export default function NotificationBell() {
   const unreadCount = useNotificationsStore(state => state.unreadCount);
   const isLoading = useNotificationsStore(state => state.isLoading);
   const error = useNotificationsStore(state => state.error);
+  const deleteError = useNotificationsStore(state => state.deleteError);
   const fetchNotifications = useNotificationsStore(state => state.fetchNotifications);
   const markAsRead = useNotificationsStore(state => state.markAsRead);
   const deleteNotification = useNotificationsStore(state => state.deleteNotification);
@@ -231,6 +238,13 @@ export default function NotificationBell() {
       </Tooltip>
       <DropdownMenuContent align="end" className="w-80">
         <ScrollArea className="h-[400px]">
+          {deleteError && (
+            <div role="alert" className="border-b p-2 text-xs text-red-600">
+              {t(
+                DELETE_REFUSED_KEYS[deleteError.code ?? ''] ?? 'notifications:deleteRefused.generic',
+              )}
+            </div>
+          )}
           {isLoading ? (
              <div className="p-4 text-center text-sm text-muted-foreground">
                 {t('notifications:ui.loading')}

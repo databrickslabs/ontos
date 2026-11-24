@@ -15,6 +15,11 @@
     "notApplied": "La tua decisione di revisione è stata registrata, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}",
     "requesterNotApplied": "La revisione del tuo contratto è stata decisa, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}"
   },
+  "deleteRefused": {
+    "notDeletable": "Questa notifica richiede una risposta e non può essere ignorata.",
+    "accessDenied": "Puoi eliminare solo le tue notifiche.",
+    "generic": "Impossibile eliminare la notifica."
+  },
   "ui": {
     "tooltip": "Notifiche",
     "loading": "Caricamento notifiche...",

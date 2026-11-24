@@ -15,6 +15,11 @@
     "notApplied": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}",
     "requesterNotApplied": "La revue de votre contrat a été décidée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}"
   },
+  "deleteRefused": {
+    "notDeletable": "Cette notification attend une réponse et ne peut pas être ignorée.",
+    "accessDenied": "Vous ne pouvez supprimer que vos propres notifications.",
+    "generic": "La notification n'a pas pu être supprimée."
+  },
   "ui": {
     "tooltip": "Notifications",
     "loading": "Chargement des notifications...",

@@ -16,8 +16,9 @@ already existed in the codebase and were simply not called here:
    already called `can_user_access_notification()`.
 
 Admins may override `can_delete`, matching `get_notifications`, which reports
-`can_delete=True` on everything an admin can see. These tests pin both the
-enforcement and the override.
+`can_delete=True` on everything an admin can see. These tests pin the manager's
+enforcement and override and the recipient check; the route is covered through
+the API in `integration/test_notification_delete_authz_routes.py`.
 """
 
 # Set test environment variables BEFORE any app imports
@@ -27,6 +28,7 @@ os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import uuid
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -49,11 +51,7 @@ USER_GROUP = "data_consumers"
 
 
 def _role(role_id: str, name: str, groups):
-    role = Mock()
-    role.id = role_id
-    role.name = name
-    role.assigned_groups = groups
-    return role
+    return SimpleNamespace(id=role_id, name=name, assigned_groups=groups, assigned_users=[])
 
 
 @pytest.fixture
@@ -70,14 +68,6 @@ def settings_manager():
 @pytest.fixture
 def manager(settings_manager) -> NotificationsManager:
     return NotificationsManager(settings_manager=settings_manager)
-
-
-@pytest.fixture
-def admin_user() -> UserInfo:
-    return UserInfo(
-        username="admin", email="admin@example.com", user="admin",
-        ip="127.0.0.1", groups=[ADMIN_GROUP],
-    )
 
 
 @pytest.fixture
@@ -157,41 +147,6 @@ def test_delete_defaults_to_non_admin(manager, db_session: Session):
 
 
 # ---------------------------------------------------------------------------
-# is_app_admin
-# ---------------------------------------------------------------------------
-
-
-def test_is_app_admin_true_for_admin_group(manager, admin_user):
-    assert manager.is_app_admin(admin_user) is True
-
-
-def test_is_app_admin_false_for_normal_user(manager, normal_user):
-    assert manager.is_app_admin(normal_user) is False
-
-
-def test_is_app_admin_false_without_user(manager):
-    assert manager.is_app_admin(None) is False
-
-
-def test_is_app_admin_false_when_admin_role_has_no_groups(admin_user):
-    """A role with no assigned groups must not silently promote everyone."""
-    settings_manager = Mock()
-    settings_manager.list_app_roles.return_value = [_role("role-admin", "Admin", [])]
-    manager = NotificationsManager(settings_manager=settings_manager)
-
-    assert manager.is_app_admin(admin_user) is False
-
-
-def test_is_app_admin_false_when_role_lookup_fails(admin_user):
-    """Role-lookup failure must fail closed, not grant admin."""
-    settings_manager = Mock()
-    settings_manager.list_app_roles.side_effect = RuntimeError("settings unavailable")
-    manager = NotificationsManager(settings_manager=settings_manager)
-
-    assert manager.is_app_admin(admin_user) is False
-
-
-# ---------------------------------------------------------------------------
 # Recipient access — the check the delete endpoint now calls
 # ---------------------------------------------------------------------------
 
@@ -215,7 +170,9 @@ def test_own_notification_is_accessible(manager, db_session: Session, normal_use
     ) is True
 
 
-def test_role_scoped_notification_needs_role_membership(manager, db_session: Session, normal_user, admin_user):
+def test_role_scoped_notification_needs_role_membership(
+    manager, db_session: Session, normal_user
+):
     """Role-scoped notifications reach members of that role, not outsiders."""
     notification_id = _make_notification(db_session, role_id="role-consumer")
     notification = manager.get_notification_by_id(db_session, notification_id)
@@ -233,90 +190,12 @@ def test_role_scoped_notification_needs_role_membership(manager, db_session: Ses
     ) is False
 
 
-def test_broadcast_notification_is_accessible_to_everyone(manager, db_session: Session, normal_user):
+def test_broadcast_notification_is_accessible_to_everyone(
+    manager, db_session: Session, normal_user
+):
     notification_id = _make_notification(db_session, recipient=None)
     notification = manager.get_notification_by_id(db_session, notification_id)
 
     assert manager.can_user_access_notification(
         db=db_session, notification=notification, user_info=normal_user
     ) is True
-
-
-# ---------------------------------------------------------------------------
-# Route wiring — DELETE /api/notifications/{id}
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def stub_manager_client(client, db_session: Session):
-    """TestClient whose notifications manager is a stub we can steer.
-
-    Lets us exercise the endpoint's mapping from manager outcome to HTTP
-    status without standing up a full role/permission fixture.
-    """
-    from src.app import app
-    from src.common.manager_dependencies import get_audit_manager, get_notifications_manager
-
-    stub = Mock()
-
-    app.dependency_overrides[get_notifications_manager] = lambda: stub
-    # Startup tasks are skipped in tests, so app.state has no audit manager and
-    # the real dependency 503s before the route body runs.
-    app.dependency_overrides[get_audit_manager] = lambda: Mock()
-    yield client, stub
-    app.dependency_overrides.pop(get_notifications_manager, None)
-    app.dependency_overrides.pop(get_audit_manager, None)
-
-
-def test_delete_route_403_for_other_users_notification(stub_manager_client, db_session: Session):
-    client, stub = stub_manager_client
-    notification_id = _make_notification(db_session, recipient="bob@example.com")
-
-    stub.get_notification_by_id.return_value = Mock(can_delete=True)
-    stub.can_user_access_notification.return_value = False
-
-    response = client.delete(f"/api/notifications/{notification_id}")
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Cannot delete other user's notifications"
-    stub.delete_notification.assert_not_called()
-
-
-def test_delete_route_403_when_not_deletable(stub_manager_client, db_session: Session):
-    client, stub = stub_manager_client
-    notification_id = _make_notification(db_session, can_delete=False)
-
-    stub.get_notification_by_id.return_value = Mock(can_delete=False)
-    stub.can_user_access_notification.return_value = True
-    stub.is_app_admin.return_value = False
-    stub.delete_notification.side_effect = NotificationNotDeletableError("nope")
-
-    response = client.delete(f"/api/notifications/{notification_id}")
-
-    assert response.status_code == 403
-    assert "requires a response" in response.json()["detail"]
-
-
-def test_delete_route_404_for_missing_notification(stub_manager_client):
-    client, stub = stub_manager_client
-    stub.get_notification_by_id.return_value = None
-
-    response = client.delete(f"/api/notifications/{uuid.uuid4()}")
-
-    assert response.status_code == 404
-    stub.delete_notification.assert_not_called()
-
-
-def test_delete_route_204_on_success(stub_manager_client, db_session: Session):
-    client, stub = stub_manager_client
-    notification_id = _make_notification(db_session, recipient="alice@example.com")
-
-    stub.get_notification_by_id.return_value = Mock(can_delete=True)
-    stub.can_user_access_notification.return_value = True
-    stub.is_app_admin.return_value = False
-    stub.delete_notification.return_value = True
-
-    response = client.delete(f"/api/notifications/{notification_id}")
-
-    assert response.status_code == 204
-    assert stub.delete_notification.call_args.kwargs["is_admin"] is False

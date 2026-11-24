@@ -91,4 +91,38 @@ describe('NotificationBell', () => {
 
     expect(await screen.findByText('Nenhuma notificação')).toBeInTheDocument();
   });
+
+  it('shows a translated message, not the API text, when a delete is refused', async () => {
+    useNotificationsStore.setState({
+      deleteError: {
+        code: 'notification_not_deletable',
+        message: 'This notification requires a response and cannot be dismissed.',
+      },
+    } as never);
+    await i18n.changeLanguage('pt');
+    await openBell();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Esta notificação exige uma resposta e não pode ser descartada.',
+    );
+    expect(screen.queryByText(/requires a response/)).not.toBeInTheDocument();
+  });
+
+  it('shows a generic translated message for an unknown refusal', async () => {
+    useNotificationsStore.setState({ deleteError: { message: 'Whatever' } } as never);
+    await openBell();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The notification could not be deleted.',
+    );
+  });
+
+  it('shows no delete button on a notification that cannot be deleted', async () => {
+    useNotificationsStore.setState({
+      notifications: [{ ...translated, can_delete: false }, plain],
+    } as never);
+    await openBell();
+
+    expect(await screen.findAllByRole('button', { name: 'Delete notification' })).toHaveLength(1);
+  });
 });

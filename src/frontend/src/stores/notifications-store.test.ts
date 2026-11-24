@@ -486,6 +486,34 @@ describe('Notifications Store', () => {
     });
   });
 
+  describe('deleteNotification refused by the server', () => {
+    it('keeps the notification and stores the coded refusal', async () => {
+      const note = {
+        id: '1', type: 'action_required', title: 'Approval Required', created_at: '2026-01-01',
+        read: false, can_delete: true,
+      } as Notification;
+      act(() => {
+        useNotificationsStore.setState({ notifications: [note], unreadCount: 1, error: null });
+      });
+      const detail = {
+        code: 'notification_not_deletable', message: 'text', params: { notification_id: '1' },
+      };
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ detail }),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().deleteNotification('1');
+      });
+
+      const state = useNotificationsStore.getState();
+      expect(state.notifications).toHaveLength(1);
+      expect(state.unreadCount).toBe(1);
+      expect(state.deleteError).toEqual(detail);
+      expect(state.error).toBeNull();
+    });
+  });
+
   describe('Polling', () => {
     it('starts polling and fetches immediately', async () => {
       (global.fetch as any).mockResolvedValue({

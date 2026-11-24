@@ -83,6 +83,49 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             logger.exception("Failed to resolve DP-linked asset IDs")
             return set()
 
+    def get_contained_asset_ids(
+        self,
+        db: Session,
+        *,
+        parent_ids: Iterable[UUID],
+        relationship_types: Iterable[str],
+        max_depth: int,
+    ) -> Set[UUID]:
+        """Asset UUIDs reached from ``parent_ids`` through ``relationship_types``.
+
+        Follows outgoing relationships (source = parent, target = child) for at
+        most ``max_depth`` hops; the parents themselves are not returned. One
+        query per hop. Fails closed (empty set) on a database error.
+        """
+        rel_types = list(relationship_types)
+        frontier = {str(p) for p in parent_ids}
+        seen: Set[str] = set(frontier)
+        found: Set[UUID] = set()
+        try:
+            for _ in range(max_depth):
+                if not frontier:
+                    break
+                rows = (
+                    db.query(self.model.target_id)
+                    .filter(
+                        self.model.source_id.in_(list(frontier)),
+                        self.model.relationship_type.in_(rel_types),
+                    )
+                    .all()
+                )
+                frontier = set()
+                for (target_id,) in rows:
+                    uid = self._to_uuid(target_id)
+                    if uid is None or str(uid) in seen:
+                        continue
+                    seen.add(str(uid))
+                    found.add(uid)
+                    frontier.add(str(uid))
+            return found
+        except SQLAlchemyError:
+            logger.exception("Failed to resolve contained asset IDs")
+            return set()
+
     def get_by_source(
         self, db: Session, *, source_type: str, source_id: str
     ) -> List[EntityRelationshipDb]:

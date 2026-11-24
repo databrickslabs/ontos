@@ -5,6 +5,14 @@
 
 export type ImportItemStatus = 'created' | 'skipped' | 'failed';
 
+/** Delivery (Git, Unity Catalog) of a created entity once its import committed it. */
+export interface ImportDeliveryResult {
+  status: 'delivered' | 'failed' | 'skipped';
+  /** Code of the reason a delivery failed or was skipped. */
+  code?: string | null;
+  params?: Record<string, unknown> | null;
+}
+
 export interface ImportItemResult {
   index: number;
   source_file?: string | null;
@@ -23,6 +31,8 @@ export interface ImportItemResult {
     params?: Record<string, unknown> | null;
     message?: string | null;
   }[] | null;
+  /** Absent when no delivery mode is active. */
+  delivery?: ImportDeliveryResult | null;
 }
 
 export interface BatchImportResult {
@@ -32,6 +42,8 @@ export interface BatchImportResult {
   total: number;
   items: ImportItemResult[];
   created_ids: string[];
+  /** Created entities whose delivery failed. */
+  delivery_failed?: number;
 }
 
 /**
@@ -48,4 +60,19 @@ export function summarizeImport(
     skipped: result.skipped,
     failed: result.failed,
   });
+}
+
+/**
+ * How many created entities were delivered and not, e.g. "Delivered: 2, not
+ * delivered: 1.", when a delivery failed; empty otherwise (a delivered import
+ * needs no note, and Manual mode, on by default, delivers every import).
+ */
+export function summarizeDelivery(
+  result: BatchImportResult,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const failed = result.delivery_failed ?? 0;
+  if (!failed) return '';
+  const delivered = result.items.filter((i) => i.delivery?.status === 'delivered').length;
+  return t('common:importDelivery.notDelivered', { delivered, failed });
 }

@@ -14,6 +14,14 @@ from sqlalchemy.orm import Session, object_session
 
 from src.common.after_commit import run_after_commit
 from src.controller.data_products_manager import DataProductsManager
+from src.controller.delivery_service import DeliveryMode, DeliveryResult, DeliveryResults
+
+
+def _results(*results: DeliveryResult) -> DeliveryResults:
+    out = DeliveryResults()
+    for result in results:
+        out.add(result)
+    return out
 
 
 def _odps(name: str) -> dict:
@@ -50,9 +58,12 @@ def events(committing_session, monkeypatch):
         assert entity.output_ports is not None and entity.support_channels is not None
         assert object_session(entity) is not committing_session
         log.append(f"deliver:{entity.name}")
-        return SimpleNamespace(all_success=True)
+        return _results(DeliveryResult(
+            success=True, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
+            entity_type=payload.entity_type, entity_id=payload.entity_id,
+        ))
 
-    service = SimpleNamespace(get_active_modes=lambda: ["direct"], deliver=deliver)
+    service = SimpleNamespace(get_active_modes=lambda: ["indirect"], deliver=deliver)
     monkeypatch.setattr("src.controller.delivery_service.get_delivery_service", lambda: service)
     return log
 
@@ -120,6 +131,78 @@ def test_a_failing_delivery_does_not_fail_the_import(manager, monkeypatch):
     monkeypatch.setattr("src.controller.delivery_service.get_delivery_service", broken)
 
     assert _import(manager, "P A").created == 1
+
+
+class TestDeliveryOutcome:
+    """The import runs each delivery inside the product's commit, before it
+    returns: its outcome is in the import result."""
+
+    def test_a_delivered_product_says_so(self, manager, events):
+        result = _import(manager, "P A")
+
+        delivery = result.items[0].delivery
+        assert (delivery.status, delivery.params) == ("delivered", {"modes": ["indirect"]})
+        assert result.delivery_failed == 0
+
+    def test_a_failed_delivery_is_reported_with_its_reason(self, manager, monkeypatch):
+        def deliver(payload):
+            return _results(DeliveryResult(
+                success=False, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
+                entity_type=payload.entity_type, entity_id=payload.entity_id,
+                error="Git repository not cloned",
+                details={"error_code": "delivery_git_unavailable"},
+            ))
+
+        service = SimpleNamespace(get_active_modes=lambda: ["indirect"], deliver=deliver)
+        monkeypatch.setattr(
+            "src.controller.delivery_service.get_delivery_service", lambda: service)
+
+        result = _import(manager, "P A", "P B")
+
+        assert (result.created, result.delivery_failed) == (2, 2)
+        delivery = result.items[0].delivery
+        assert (delivery.status, delivery.code, delivery.params) == (
+            "failed", "delivery_git_unavailable", {"mode": "indirect"})
+
+    def test_a_delivery_that_raises_is_a_failed_one(self, manager, monkeypatch):
+        def deliver(payload):
+            raise OSError("disk full")
+
+        service = SimpleNamespace(get_active_modes=lambda: ["indirect"], deliver=deliver)
+        monkeypatch.setattr(
+            "src.controller.delivery_service.get_delivery_service", lambda: service)
+
+        result = _import(manager, "P A")
+
+        assert result.created == 1
+        assert (result.items[0].delivery.status, result.items[0].delivery.code) == (
+            "failed", "delivery_failed")
+
+    def test_a_change_no_active_mode_applies_to_is_skipped(self, manager, monkeypatch):
+        def deliver(payload):
+            return _results(DeliveryResult(
+                success=True, mode=DeliveryMode.DIRECT, change_type=payload.change_type,
+                entity_type=payload.entity_type, entity_id=payload.entity_id,
+                details={"skipped": True},
+            ))
+
+        service = SimpleNamespace(get_active_modes=lambda: ["direct"], deliver=deliver)
+        monkeypatch.setattr(
+            "src.controller.delivery_service.get_delivery_service", lambda: service)
+
+        delivery = _import(manager, "P A").items[0].delivery
+
+        assert (delivery.status, delivery.code) == ("skipped", "delivery_not_applicable")
+
+    def test_no_outcome_when_no_delivery_mode_is_active(self, manager, monkeypatch):
+        service = SimpleNamespace(get_active_modes=lambda: [], deliver=MagicMock())
+        monkeypatch.setattr(
+            "src.controller.delivery_service.get_delivery_service", lambda: service)
+
+        result = _import(manager, "P A")
+
+        assert result.items[0].delivery is None
+        service.deliver.assert_not_called()
 
 
 class TestRunAfterCommit:

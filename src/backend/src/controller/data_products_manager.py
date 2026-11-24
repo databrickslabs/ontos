@@ -10,7 +10,7 @@ import json
 import uuid
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Any, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 from uuid import UUID
 from pathlib import Path
 
@@ -193,7 +193,9 @@ from src.models.data_products import (
     ONTOS_OWNER_TEAM_PROPERTY,
 )
 from src.models.assets import public_properties
-from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.import_results import (
+    BatchImportResult, ImportDeliveryResult, ImportItemResult,
+)
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import (
@@ -469,6 +471,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         preserve_source_id: bool = False,
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
+        on_delivery: Optional[Callable[[ImportDeliveryResult], None]] = None,
         import_links: Optional[ImportLinks] = None,
         workflow_user: Optional[str] = None,
         create_missing_type: bool = False,
@@ -492,6 +495,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 non-colliding UUID in the payload is adopted as the primary key so
                 YAML-expressed cross-entity links survive import. Otherwise (or on a
                 non-UUID / colliding id) a fresh UUID is generated as before.
+            on_delivery: For an import, called with the outcome of the product's
+                delivery once it is committed (not when no delivery mode is active).
             import_links: Set by an ODPS import, which commits the product in its
                 savepoint and records it in ``import_links`` (here it is only
                 flushed). The ontos* lifecycle properties
@@ -685,6 +690,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 self._queue_delivery_after_commit(
                     db_session, entity=created_db_obj,
                     change_type=DeliveryChangeType.PRODUCT_CREATE, user=user,
+                    on_outcome=on_delivery,
                 )
             else:
                 self._queue_delivery(
@@ -2681,12 +2687,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         **product_data, 'status': status_value,
                         'lifecycle_stage_group_id': group_id,
                     }
+                    # Delivered once committed, before the import returns
+                    deliveries: List[ImportDeliveryResult] = []
                     created = self._create_imported_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
                         workflow_user=workflow_user,
+                        on_delivery=deliveries.append,
                     )
                     # Only a product that was created can be a replacement of
                     # the import: one that failed leaves no link
@@ -2694,6 +2703,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
+                        delivery=deliveries[-1] if deliveries else None,
                         **(status_note or {}),
                     ))
                 except ImportedLifecycleError as e:

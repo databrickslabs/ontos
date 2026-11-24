@@ -18,7 +18,7 @@ import { usePersistentState } from '@/hooks/use-persistent-state';
 
 const isStoredBoolean = (v: unknown): v is boolean => typeof v === 'boolean';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
-import { BatchImportResult, summarizeImport } from '@/types/import-results';
+import { BatchImportResult, summarizeDelivery, summarizeImport } from '@/types/import-results';
 import { productUploadSuccessText } from '@/lib/upload-text';
 import { importItemLine, reportedImportItems } from '@/lib/import-item-text';
 import { useToast } from "@/hooks/use-toast"
@@ -487,15 +487,19 @@ export default function DataProducts() {
       const reportedItems = result ? reportedImportItems(result) : [];
       const detail = reportedItems.slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
       const allCreated = !!result && result.failed === 0 && result.skipped === 0;
-      if (result && (result.failed > 0 || result.skipped > 0)) {
+      // Created products that weren't delivered (Git, Unity Catalog) are an issue too
+      const deliveryFailed = (result?.delivery_failed ?? 0) > 0;
+      if (result && (result.failed > 0 || result.skipped > 0 || deliveryFailed)) {
         // Partial success: surface the truthful summary plus the first issues.
+        const summary = [summarizeImport(result, t), summarizeDelivery(result, t)]
+          .filter(Boolean).join(' ');
         toast({
           title: result.created > 0 ? t('upload.partialSuccess', 'Imported with issues') : t('upload.failed'),
-          description: `${summarizeImport(result, t)}${detail ? `\n${detail}` : ''}`,
+          description: `${summary}${detail ? `\n${detail}` : ''}`,
           variant: result.failed > 0 && result.created === 0 ? 'destructive' : 'default',
           duration: 10000,
         });
-        if (reportedItems.length > 0) setError(`${summarizeImport(result, t)}\n${detail}`);
+        if (reportedItems.length > 0) setError(`${summary}\n${detail}`);
       } else {
         setUploadDialogOpen(false);
         const success = productUploadSuccessText(files, result?.created ?? 0, t);

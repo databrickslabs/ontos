@@ -793,6 +793,15 @@
     "createdFailed": "Aangemaakt: {{created}}, mislukt: {{failed}}.",
     "createdSkippedFailed": "Aangemaakt: {{created}}, overgeslagen: {{skipped}}, mislukt: {{failed}}."
   },
+  "importDelivery": {
+    "notDelivered": "Geleverd: {{delivered}}, niet geleverd: {{failed}}.",
+    "reason": {
+      "delivery_git_unavailable": "Geïmporteerd, maar niet geleverd: de Git-repository is niet beschikbaar. Controleer Instellingen > Git.",
+      "delivery_git_write_failed": "Geïmporteerd, maar niet geleverd: het bestand kon niet naar de Git-repository worden geschreven.",
+      "delivery_entity_not_found": "Geïmporteerd, maar niet geleverd: het product bestond niet meer na de import.",
+      "delivery_failed": "Geïmporteerd, maar niet geleverd. De serverlogs bevatten de details."
+    }
+  },
   "deprecation": {
     "reason": "Reden voor uitfasering",
     "reasonPlaceholder": "Waarom wordt het uitgefaseerd? Afnemers zien deze tekst.",

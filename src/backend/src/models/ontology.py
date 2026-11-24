@@ -130,6 +130,8 @@ class OntologyConcept(BaseModel):
     labels: Dict[str, str] = {}  # Multi-language labels: {"en": "Dataset", "ja": "データセット"}
     # prefLabel and rdfs:label kept apart: {"prefLabel": {lang: text}, "rdfsLabel": {lang: text}}
     label_maps: Dict[str, Dict[str, str]] = {}
+    # label_maps of the direct parents and children, keyed by IRI (hierarchy display)
+    linked_label_maps: Dict[str, Dict[str, Dict[str, str]]] = {}
     comment: Optional[str] = None  # Primary comment (computed from comments dict)
     comments: Dict[str, str] = {}  # Multi-language comments: {"en": "A curated...", "ja": "..."}
     concept_type: str  # 'class' | 'concept' | 'property' | 'individual' | 'term'

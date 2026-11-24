@@ -78,3 +78,17 @@ def test_concept_details_keep_pref_and_rdfs_labels_apart(manager):
     concept = manager.get_concept_details(EX + "Thing")
     assert concept.label_maps == {"prefLabel": {"en": "PrefEN"}, "rdfsLabel": {"pt": "RdfsPT"}}
     assert concept.labels == {"en": "PrefEN", "pt": "RdfsPT"}
+
+
+def test_concept_details_carry_parent_label_maps(manager):
+    from rdflib import ConjunctiveGraph
+
+    cg = ConjunctiveGraph()
+    ctx = cg.get_context(URIRef("urn:ctx:test"))
+    c, parent = URIRef(EX + "Thing"), URIRef(EX + "Parent")
+    ctx.add((c, RDF.type, URIRef("http://www.w3.org/2002/07/owl#Class")))
+    ctx.add((c, RDFS.subClassOf, parent))
+    ctx.add((parent, SKOS.prefLabel, Literal("ParentEN", lang="en")))
+    manager._graph = cg
+    concept = manager.get_concept_details(EX + "Thing")
+    assert concept.linked_label_maps[EX + "Parent"]["prefLabel"] == {"en": "ParentEN"}

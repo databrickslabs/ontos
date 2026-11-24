@@ -45,7 +45,7 @@ import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
-import { resolveLabel, resolveComment } from '@/lib/ontology-utils';
+import { resolveLabel, resolveLabelFromMaps, resolveComment } from '@/lib/ontology-utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
 import { createSchemeLookup } from '@/lib/scheme-lookup';
 import ConceptRelationsPanel from '@/components/semantic/concept-relations-panel';
@@ -799,6 +799,8 @@ export default function ConceptDetailView() {
   }
 
   const conceptTitle = resolveLabel(concept, selectedLanguage);
+  const linkedLabel = (iri: string) =>
+    resolveLabelFromMaps(concept.linked_label_maps?.[iri], iri, selectedLanguage);
   const conceptDefinition = resolveComment(concept, selectedLanguage);
   const isProperty = concept.concept_type === 'property';
   const hasDomainRange = isProperty && (concept.domain || concept.range);
@@ -1056,7 +1058,7 @@ export default function ConceptDetailView() {
                         className="cursor-pointer"
                         onClick={() => handleNavigateToConcept(iri)}
                       >
-                        {iri.split(/[/#]/).pop() || iri}
+                        {linkedLabel(iri)}
                       </Badge>
                     ))}
                   </div>
@@ -1075,7 +1077,7 @@ export default function ConceptDetailView() {
                         className="cursor-pointer"
                         onClick={() => handleNavigateToConcept(iri)}
                       >
-                        {iri.split(/[/#]/).pop() || iri}
+                        {linkedLabel(iri)}
                       </Badge>
                     ))}
                   </div>

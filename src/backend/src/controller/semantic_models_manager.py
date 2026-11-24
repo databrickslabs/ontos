@@ -3367,6 +3367,10 @@ class SemanticModelsManager(SearchableAsset):
                 label=label,
                 labels=merged_labels,
                 label_maps=label_maps,
+                linked_label_maps={
+                    related: collect_label_maps(self._graph, URIRef(related))
+                    for related in {*parent_concepts, *child_concepts}
+                },
                 comment=comment,
                 concept_type=concept_type,
                 property_type=meta["property_type"],

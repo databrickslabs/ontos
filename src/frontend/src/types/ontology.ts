@@ -79,6 +79,11 @@ export interface OntologyConcept {
     prefLabel?: Record<string, string>;
     rdfsLabel?: Record<string, string>;
   };
+  // label_maps of direct parents/children keyed by IRI
+  linked_label_maps?: Record<
+    string,
+    { prefLabel?: Record<string, string>; rdfsLabel?: Record<string, string> }
+  >;
   labels?: Record<string, string>;  // Multi-language labels: {"en": "Dataset", "ja": "データセット"}
   comment?: string;  // Primary comment (computed from comments dict)
   comments?: Record<string, string>;  // Multi-language comments: {"en": "A curated...", "ja": "..."}

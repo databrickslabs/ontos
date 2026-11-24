@@ -133,7 +133,8 @@ describe('ontology-utils', () => {
     });
 
     it('compares language tags case-insensitively', () => {
-      expect(resolveLabelFromMaps({ prefLabel: { de: 'D', PT: 'Upper' } }, iri, 'pt')).toBe('Upper');
+      const maps = { prefLabel: { de: 'D', PT: 'Upper' } };
+      expect(resolveLabelFromMaps(maps, iri, 'pt')).toBe('Upper');
       expect(resolveLabelFromMaps({ prefLabel: { 'pt-BR': 'BR', en: 'E' } }, iri, 'pt')).toBe('BR');
       expect(resolveLabelFromMaps({ prefLabel: { EN: 'E', de: 'D' } }, iri, 'pt')).toBe('E');
     });

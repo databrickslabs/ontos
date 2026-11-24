@@ -304,7 +304,6 @@
 - resolve 7 TypeScript errors from main merge
 - **frontend**: resolve all TypeScript errors and failing tests
 - **frontend**: resolve TypeScript errors breaking vite build
-- **lineage**: Business Lineage draws the System nodes the API returns (for example a historian or an ERP system at the start of an upstream path) as cards with their edges. Before, they were dropped and the path ended at the first table.
 
 ## 📚 Documentation
 

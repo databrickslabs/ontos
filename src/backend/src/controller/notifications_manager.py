@@ -192,11 +192,17 @@ class NotificationsManager:
             logger.error(f"Error getting notification {notification_id}: {e}", exc_info=True)
             return None
 
-    def get_notifications(self, db: Session, user_info: Optional[UserInfo] = None) -> List[Notification]:
+    def get_notifications(
+        self, db: Session, user_info: Optional[UserInfo] = None, *, ontos_admin: bool = False,
+    ) -> List[Notification]:
         """Get the notifications addressed to the user, newest first.
 
         The repository selects the user's rows in SQL: every pending actionable one, and the
         newest BELL_HISTORY_LIMIT of the rest. The row-by-row check below is the final word (#1526).
+
+        ``ontos_admin`` (the caller holds a role flagged ``is_admin``, decided by the route with
+        the check DELETE uses) makes every listed notification deletable, so the bell offers
+        exactly the deletes the API accepts (#675).
         """
         membership = self._membership(user_info, "notification filtering") if user_info else None
         all_notifications_db = self._repo.get_addressed_to(
@@ -231,8 +237,8 @@ class NotificationsManager:
             if n.action_type == 'workflow_approval' and has_decided(n, user_info):
                 continue
             if broadcast or membership.is_recipient(n.recipient, n.recipient_role_id):
-                # Admins can delete any notification they can see
-                if membership.is_admin:
+                # Ontos admins can delete any notification they can see
+                if ontos_admin:
                     n.can_delete = True
                 filtered_notifications.append(n)
 

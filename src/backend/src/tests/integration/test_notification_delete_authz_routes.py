@@ -167,3 +167,35 @@ def test_admin_deleting_a_deletable_notification_is_not_an_override(
 
     assert response.status_code == 204
     assert audit_entries[-1]["details"]["params"]["admin_override"] is False
+
+
+def test_custom_admin_role_sees_and_uses_the_delete_it_is_offered(
+    as_user, db_session, audit_entries
+):
+    """A role flagged is_admin that is not named Admin: GET reports can_delete and DELETE agrees."""
+    db_session.add(AppRoleDb(
+        id=str(uuid.uuid4()), name=f"Custodian {uuid.uuid4().hex[:8]}", description="custom admin",
+        feature_permissions=json.dumps({"notifications": "Admin"}),
+        assigned_groups=json.dumps(["custodians"]), home_sections="[]",
+        approval_privileges="{}", is_admin=True,
+    ))
+    notification_id = _notification(db_session, recipient=None, can_delete=False)
+    client = as_user("custodian@example.com", ["custodians"])
+
+    listed = {n["id"]: n for n in client.get("/api/notifications").json()}
+    assert listed[notification_id]["can_delete"] is True
+
+    assert client.delete(f"/api/notifications/{notification_id}").status_code == 204
+    assert audit_entries[-1]["details"]["params"]["admin_override"] is True
+
+
+def test_non_admin_is_not_offered_a_delete_on_a_non_deletable_notification(
+    as_user, ops_role, db_session
+):
+    notification_id = _notification(db_session, recipient=None, can_delete=False)
+
+    listed = {
+        n["id"]: n for n in as_user(OPS_EMAIL, [OPS_GROUP]).get("/api/notifications").json()
+    }
+
+    assert listed[notification_id]["can_delete"] is False

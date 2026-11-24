@@ -30,12 +30,16 @@ router = APIRouter(prefix="/api", tags=["Notifications"])
 async def get_notifications(
     db: DBSessionDep,
     user_info: CurrentUserDep,
-    manager: NotificationsManagerDep
+    manager: NotificationsManagerDep,
+    auth_manager: AuthorizationManagerDep,
 ):
     """Get notifications filtered for the current user."""
     try:
         logger.debug(f"Retrieving notifications for user: {user_info.email} with groups: {user_info.groups}")
-        notifications = manager.get_notifications(db=db, user_info=user_info)
+        ontos_admin = auth_manager.is_user_ontos_admin(user_info.groups if user_info else None)
+        notifications = manager.get_notifications(
+            db=db, user_info=user_info, ontos_admin=ontos_admin
+        )
         logger.debug(f"Number of notifications retrieved: {len(notifications)}")
         return notifications
     except Exception as e:

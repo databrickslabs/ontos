@@ -60,6 +60,11 @@ class DescriptionRestoreRequest(BaseModel):
     version: Literal['after', 'before'] = 'after'
 
 
+# Column assets a comparison lists, under their table. The table's own field is one more, so a
+# reset of everything the dialog shows is MAX_COMPARED_COLUMNS + 1 fields.
+MAX_COMPARED_COLUMNS = 1000
+
+
 class DescriptionDriftField(BaseModel):
     """The description of one table, view or column asset next to its Unity Catalog comment."""
     asset_id: UUID
@@ -91,7 +96,8 @@ class ResetFieldRequest(BaseModel):
 
 
 class ResetSelectedRequest(BaseModel):
-    fields: List[ResetFieldRequest] = Field(..., min_length=1, max_length=500)
+    fields: List[ResetFieldRequest] = Field(
+        ..., min_length=1, max_length=MAX_COMPARED_COLUMNS + 1)
 
 
 class CodedError(BaseModel):

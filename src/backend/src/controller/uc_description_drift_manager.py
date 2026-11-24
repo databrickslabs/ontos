@@ -22,14 +22,11 @@ from src.controller.uc_description_reset_manager import (
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.asset_description import (
-    CodedError, DescriptionDrift, DescriptionDriftField, ResetFieldRequest, ResetFieldResult,
-    ResetSelectedResult,
+    MAX_COMPARED_COLUMNS, CodedError, DescriptionDrift, DescriptionDriftField,
+    ResetFieldRequest, ResetFieldResult, ResetSelectedResult,
 )
 
 logger = get_logger(__name__)
-
-# Column assets listed (and resettable) per table in one compare
-MAX_COLUMNS = 1000
 
 
 class FieldNotInTableError(ResetError):
@@ -59,8 +56,8 @@ class UcDescriptionDriftManager:
         truncated = False
         if column_name is None:
             columns = self._columns(db, asset, table_fqn)
-            truncated = len(columns) > MAX_COLUMNS
-            for column in columns[:MAX_COLUMNS]:
+            truncated = len(columns) > MAX_COMPARED_COLUMNS
+            for column in columns[:MAX_COMPARED_COLUMNS]:
                 name = (column.location or '')[len(table_fqn) + 1:]
                 fields.append(self._field(column, table_fqn, name, comments))
         return DescriptionDrift(
@@ -134,7 +131,7 @@ class UcDescriptionDriftManager:
                 func.lower(AssetDb.platform) == 'databricks',
                 AssetDb.location.startswith(table_fqn + '.', autoescape=True),
                 AssetDb.id != table.id,
-            ).order_by(AssetDb.location).limit(MAX_COLUMNS + 1).all()
+            ).order_by(AssetDb.location).limit(MAX_COMPARED_COLUMNS + 1).all()
         )
 
     @staticmethod

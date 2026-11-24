@@ -285,6 +285,29 @@ class TestResetSelected:
         assert response.status_code == 403
         user_ws.tables.get.assert_not_called()
 
+    def test_everything_the_dialog_lists_can_be_sent_at_once(self, client, tree, user_ws):
+        # The table and the most columns a comparison lists (1000): "Select all" on a wide table
+        from uuid import uuid4
+
+        from src.models.asset_description import MAX_COMPARED_COLUMNS
+
+        user_ws.tables.get.return_value = _info('Orders (UC)', {})
+        fields = [{'asset_id': str(tree.table.id)}] + [
+            {'asset_id': str(uuid4())} for _ in range(MAX_COMPARED_COLUMNS)]
+        assert len(fields) == 1001
+
+        response = self._post(client, tree.table, fields)
+
+        assert response.status_code == 200, response.text
+        assert len(response.json()['results']) == 1001
+
+    def test_more_than_the_dialog_can_list_is_refused(self, client, tree, user_ws):
+        from uuid import uuid4
+
+        fields = [{'asset_id': str(uuid4())} for _ in range(1002)]
+
+        assert self._post(client, tree.table, fields).status_code == 422
+
     def test_no_fields_is_a_validation_error(self, client, tree, user_ws):
         assert self._post(client, tree.table, []).status_code == 422
 

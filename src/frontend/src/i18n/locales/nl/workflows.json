@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Workflowbeschrijving",
       "failClosed": "De overgang weigeren als deze poort niet kan worden geëvalueerd",
       "failClosedHint": "Fail closed: als het evalueren van deze poort een fout geeft (geen normale mislukking), wordt de statuswijziging geweigerd. Uit (fail open) gaat de wijziging door en wordt de fout gelogd en geaudit.",
+      "updateGate": {
+        "failClosed": "De update weigeren als deze poort niet kan worden geëvalueerd",
+        "failClosedHint": "Fail closed: als het evalueren van deze poort een fout geeft (geen normale mislukking), wordt de update geweigerd. Uit (fail open) gaat de update door en wordt de fout gelogd en geaudit."
+      },
       "disabledFor": {
         "title": "Uitgeschakeld voor",
         "hint": "Deze gate draait niet voor de hier vermelde domeinen, dataproducten en datacontracten (een domein omvat zijn producten en contracten). Elke keer dat de gate wordt overgeslagen, wordt dat gelogd en geaudit.",
@@ -337,6 +341,9 @@
       "stepConfigMissing": "Stap \"{{step}}\" mist verplichte instellingen: {{fields}}.",
       "assignTagValueSourceUnknown": "Stap \"{{step}}\" gebruikt de onbekende waardebron \"{{source}}\".",
       "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
+      "updateGate": {
+        "stepNotAllowed": "Stap \"{{step}}\" ({{type}}) kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow."
+      },
       "branch": {
         "on_pass": "succes",
         "on_fail": "fout"
@@ -548,6 +555,7 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "De WHERE-clausule van beleid '{{policyName}}' kon niet worden geëvalueerd op {{entityType}} {{entityId}}",
       "tag_not_found": "Tag '{{tag}}' is niet gevonden in de tagcatalogus, dus die is niet toegekend",
+      "update_gate_step_not_allowed": "Een {{stepType}}-stap kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow.",
       "approval_rejected": "Verzoek afgewezen",
       "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
       "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",

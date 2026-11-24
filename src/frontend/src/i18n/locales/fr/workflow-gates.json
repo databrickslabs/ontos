@@ -18,6 +18,12 @@
   "invalidStatus": "{{status}} n'est pas un statut du cycle de vie. Utilisez l'un de : {{allowed}}.",
   "gateError": "Le changement de statut de {{fromStatus}} à {{toStatus}} a été refusé : la porte de workflow {{workflows}} n'a pas pu être évaluée. Demandez à un administrateur de vérifier le workflow.",
   "gateErrorUnnamed": "Le changement de statut de {{fromStatus}} à {{toStatus}} a été refusé : une porte de workflow n'a pas pu être évaluée. Demandez à un administrateur de vérifier le workflow.",
+  "updateGate": {
+    "error": "La mise à jour a été refusée : le gate de workflow {{workflows}} n'a pas pu être évalué. Demandez à un administrateur de vérifier le workflow.",
+    "errorUnnamed": "La mise à jour a été refusée : un gate de workflow n'a pas pu être évalué. Demandez à un administrateur de vérifier le workflow.",
+    "tagWriteFailed": "La mise à jour a été refusée : une modification de tag de ses gates de workflow n'a pas pu être enregistrée. Demandez à un administrateur de vérifier le journal du serveur.",
+    "tagListWriteFailed": "La mise à jour a été refusée : ses tags, vérifiés par ses gates de workflow, n'ont pas pu être enregistrés. Demandez à un administrateur de vérifier le journal du serveur."
+  },
   "certifiedDeprecationRequiresApproval": "{{name}} est certifié : il ne peut être rendu obsolète que par une demande de changement de statut approuvée. Demandez plutôt le changement de statut.",
   "requestInstead": "Demander le changement de statut",
   "certifiedGuard": {

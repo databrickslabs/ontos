@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Descrizione del workflow",
       "failClosed": "Rifiuta la transizione se questo gate non può essere valutato",
       "failClosedHint": "Fail closed: se la valutazione di questo gate genera un errore (non un normale fallimento), il cambio di stato viene rifiutato. Disattivato (fail open), il cambio avviene e l'errore viene registrato e sottoposto ad audit.",
+      "updateGate": {
+        "failClosed": "Rifiuta l'aggiornamento se questo gate non può essere valutato",
+        "failClosedHint": "Fail closed: se la valutazione di questo gate genera un errore (non un normale fallimento), l'aggiornamento viene rifiutato. Disattivato (fail open), l'aggiornamento avviene e l'errore viene registrato e sottoposto ad audit."
+      },
       "disabledFor": {
         "title": "Disattivato per",
         "hint": "Questo gate non viene eseguito per i domini, i prodotti dati e i contratti dati elencati qui (un dominio copre i suoi prodotti e contratti). Ogni salto viene registrato e sottoposto ad audit.",
@@ -337,6 +341,9 @@
       "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
       "assignTagValueSourceUnknown": "Il passaggio «{{step}}» usa la sorgente di valore sconosciuta «{{source}}».",
       "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
+      "updateGate": {
+        "stepNotAllowed": "Il passaggio \"{{step}}\" ({{type}}) non può essere eseguito in un gate before update: ciò che fa resterebbe eseguito quando l'aggiornamento viene rifiutato. Rimuovi il passaggio o spostalo in un workflow on update."
+      },
       "branch": {
         "on_pass": "successo",
         "on_fail": "errore"
@@ -548,6 +555,7 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "Non è stato possibile valutare la clausola WHERE della policy '{{policyName}}' su {{entityType}} {{entityId}}",
       "tag_not_found": "Il tag '{{tag}}' non è stato trovato nel catalogo, quindi non è stato assegnato",
+      "update_gate_step_not_allowed": "Un passaggio {{stepType}} non può essere eseguito in un gate before update: ciò che fa resterebbe eseguito quando l'aggiornamento viene rifiutato. Rimuovi il passaggio o spostalo in un workflow on update.",
       "approval_rejected": "Richiesta rifiutata",
       "output_port_contracts_missing": "Impossibile pubblicare: le porte di output {{ports}} devono avere contratti di dati assegnati",
       "output_port_contracts_unapproved": "Impossibile pubblicare: queste porte di output hanno contratti non approvati: {{ports}}. I contratti devono prima essere approvati.",

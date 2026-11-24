@@ -134,7 +134,8 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 Validation, conditional and policy check steps evaluate their rule on `obj`:
 
 - For data products and data contracts, `obj` is the **stored entity** (the fields maturity gates use, such as `status`, `has_owner`, `has_description`, `output_port_contract_count`, `certification_level`, `is_published`) merged with the trigger payload; payload fields win.
-- For other entity types, and for `before_update` gates (whose payload is the proposed change), `obj` is the trigger payload only.
+- For `before_update` gates, `obj` is the contract **as it will be after the update**: the stored contract with the update's fields over it (a field the update leaves out or sends as `null` keeps its stored value), the tags it will have (a `tags` list replaces the stored ones, tag steps of the gate go on top), and the derived fields (`has_owner`, `has_purpose`, `schema_object_count`) for that future state; `quality_check_count` (the contract's quality items from the quality API, not its ODCS `qualityRules`) and the relationship counts keep their stored values, which a contract update doesn't change. `c.domain` is the primary domain's name and `c.domain_id` its id, whether or not the update changes the domain. Other request fields (`contract_schema`, `servers`, `team`, `sla`, ...) appear in the request's shape, which differs from what the other triggers see, so write rules on the fields above.
+- For other entity types, `obj` is the trigger payload only.
 - If the stored entity can't be loaded, the step fails with the code `rule_entity_load_failed` instead of evaluating the rule on the payload alone.
 
 A field that doesn't exist on `obj` makes comparisons like `obj.field != ''` true. Check fields that exist; the defaults use `obj.output_port_contract_count > 0`, `obj.schema_object_count > 0` and `obj.has_owner = true`.
@@ -303,7 +304,15 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 **A gate that errors.** A gate whose evaluation raises an error (an exception, not a Fail step) is logged and the change goes ahead (#1103). A `PUT /api/data-products/{id}` or `PUT /api/data-contracts/{id}` that changes `status` doesn't run gates at all. STATUS_PR changes both: the trigger's `on_error` decides what a gate error does (`fail_open`, the default, lets the change through with a `GATE_ERROR` audit entry; `fail_closed` refuses it with `status_change_gate_error`), `disabled_for: {domains, data_products, data_contracts}` switches a gate off for those entities (audited as `GATE_SKIPPED`), and a `PUT` with a different `status` is refused with `status_change_requires_transition`.
 
+A `before_update` gate has the same `on_error` setting ("Refuse the update if this gate can't be evaluated" in the designer): `fail_open`, the default, lets the update through with a `GATE_ERROR` audit entry; `fail_closed` refuses it (HTTP 400, code `update_gate_error`, with the gates in `params.workflows`). This also applies when the gates can't even be listed: the `fail_closed` `before_update` gates are then read from the workflows table.
+
 **Don't put an approval in a gate.** A gate with an approval step pauses, which is not `succeeded`, so the change is refused with "waiting for approval", and approving later doesn't apply the change. To require an approval for a status change, use a status change request (`on_request_status_change`), which applies the change when it is approved.
+
+For a `before_update` gate this means: the `PUT` answers 400 "Pre-update validation failed" with the gate `paused`. Approving it runs the gate's remaining steps on the update as it was sent then, but nothing writes the update afterwards (and their tag steps write no tags). The user has to send the update again, which runs the gate again and starts a new approval round. A `before_update` gate with an approval step therefore never lets an update through.
+
+**Tag steps in a `before_update` gate** don't write while the gate runs: the update writes their tag change, after its own `tags` list and in the same commit, so a refused or failed update leaves no tag assigned or removed. Later steps of the same gate, and the gates that run after it (in workflow name order), already see the tag change (on top of the update's `tags` list, when it sends one). If the tag change can't be written, the update is refused (`update_gate_tag_write_failed`), whatever `on_error` says. Likewise, when the update's own `tags` list, which the gates checked, can't be written, the update is refused (`update_gate_tag_list_write_failed`); without gates such an update is saved with the old tags, as before.
+
+**No side-effect steps in a `before_update` gate.** Entity actions (certify, publish, unpublish), asset reviews, deliveries and permission grants commit, or act outside Ontos, as they run, so they would stay done when a later step refuses the update. Saving a `before_update` workflow with one of these steps is refused (`update_gate_step_not_allowed`, with the step type in `params.stepType`); one saved before fails at that step without running it, and the gate ends there as failed whatever the step's `on_fail`, so the update is refused. Put the step in an `on_update` workflow instead. Webhook steps stay allowed (a webhook is often the check itself, and a call that only reads changes nothing), and notification steps still notify, also when the update is then refused.
 
 ## Failures, Retries and Cancellation
 
@@ -313,7 +322,7 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 | `on_pass` / `on_fail` names a step that doesn't exist | Saving the workflow is refused (HTTP 400, `Step '<id>' references unknown step '<name>'`) |
 | An `on_*` workflow fails | The action that fired it is already done and stays done |
 | A gate fails or pauses | The action is refused |
-| A gate's evaluation raises an error | The action goes ahead (STATUS_PR adds `on_error: fail_closed` to refuse it) |
+| A gate's evaluation raises an error | The action goes ahead (STATUS_PR adds `on_error: fail_closed` to refuse it; a `before_update` gate has it too) |
 | The server restarts while an execution is paused | It stays paused and can still be decided |
 
 **Retry** (admins, failed executions only, `POST /api/workflows/executions/{id}/retry` or the Retry action in Recent Executions) runs the same execution again from the first step, with the trigger payload it was started with. Its previous step results are replaced, and every step runs again: notifications are sent again and webhooks called again.

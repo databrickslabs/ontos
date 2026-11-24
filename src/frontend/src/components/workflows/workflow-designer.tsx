@@ -1626,6 +1626,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
       ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
       ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
+      ...(triggerType === 'before_update' ? { on_error: triggerOnError } : {}),
       // Both sent, even empty: an empty schedule gets the backend's schedule_required
       ...(triggerType === 'scheduled'
         ? { schedule: triggerSchedule.trim(), timezone: triggerTimezone.trim() || null }
@@ -2228,14 +2229,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     />
                   )}
 
-                  {triggerType === 'before_status_change' && (
+                  {(triggerType === 'before_status_change' || triggerType === 'before_update') && (
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <Label htmlFor="trigger-on-error">
-                          {t('workflows:designer.triggerConfig.failClosed')}
+                          {triggerType === 'before_update'
+                            ? t('workflows:designer.triggerConfig.updateGate.failClosed')
+                            : t('workflows:designer.triggerConfig.failClosed')}
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          {t('workflows:designer.triggerConfig.failClosedHint')}
+                          {triggerType === 'before_update'
+                            ? t('workflows:designer.triggerConfig.updateGate.failClosedHint')
+                            : t('workflows:designer.triggerConfig.failClosedHint')}
                         </p>
                       </div>
                       <Switch

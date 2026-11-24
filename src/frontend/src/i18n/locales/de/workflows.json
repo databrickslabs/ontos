@@ -410,6 +410,8 @@
       "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
     },
     "errors": {
+      "access_terms_invalid_duration": "Die Dauer muss zwischen {{min}} und {{max}} Tagen liegen.",
+      "access_terms_invalid_permission": "Diese Berechtigungsstufe kann nicht erteilt werden.",
       "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
       "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
       "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",

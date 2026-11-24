@@ -1,0 +1,64 @@
+/**
+ * #1615: an access request's approval dialog preselects the requested permission level.
+ * The select offered CAN_READ / CAN_USE / ... while access requests carry READ / WRITE /
+ * MANAGE, so the requested level matched no option and the select showed empty.
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import i18n from '@/i18n/config';
+import WorkflowApprovalResponseDialog from './workflow-approval-response-dialog';
+
+const api = vi.hoisted(() => ({
+  get: async () => ({ data: null }),
+  post: vi.fn(async (_url: string, _body: Record<string, unknown>) => ({ data: {} })),
+  toast: () => {},
+}));
+
+vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get: api.get, post: api.post }) }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: api.toast }) }));
+
+function renderDialog() {
+  return render(
+    <WorkflowApprovalResponseDialog
+      isOpen
+      onOpenChange={() => {}}
+      payload={{
+        execution_id: 'e-1',
+        entity_type: 'access_grant',
+        entity_name: 'Orders',
+        permission_level: 'READ',
+        requested_duration_days: 30,
+      } as never}
+    />,
+  );
+}
+
+afterEach(async () => {
+  api.post.mockClear();
+  await i18n.changeLanguage('en');
+});
+
+describe('WorkflowApprovalResponseDialog permission level', () => {
+  it('shows the requested level selected', async () => {
+    renderDialog();
+    expect(await screen.findByRole('combobox')).toHaveTextContent('Read Only');
+  });
+
+  it('shows it in the UI language', async () => {
+    await i18n.changeLanguage('pt');
+    renderDialog();
+    const expected = i18n.t('access-grants:permissionOptions.READ');
+    expect(expected).not.toBe('Read Only');
+    expect(await screen.findByRole('combobox')).toHaveTextContent(expected);
+  });
+
+  it('sends the requested level with the approval', async () => {
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: /Approve/ }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0][1]).toEqual(expect.objectContaining({
+      approved: true, permission_level: 'READ', granted_duration_days: 30,
+    }));
+  });
+});

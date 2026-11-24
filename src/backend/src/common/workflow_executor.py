@@ -1690,6 +1690,23 @@ class ApprovalStepHandler(StepHandler):
         return _resolve_role_to_users(self._db, approvers, context)
 
 
+def _notification_subtitle(context: StepContext) -> Optional[str]:
+    """Subtitle of a notification step: the entity's type and name (else its id).
+
+    An access request runs on the proxy ``access_grant`` whose id is the request's: the
+    subtitle names the requested entity instead (#1615), by the name sent with the request
+    (never one looked up for the recipient), else its id.
+    """
+    if (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES:
+        entity = context.entity if isinstance(context.entity, dict) else {}
+        underlying_type = entity.get('entity_type')
+        ref = entity.get('entity_name') or entity.get('entity_id') or context.entity_id
+        if underlying_type and ref:
+            return f"{_humanize_entity_type(str(underlying_type))}: {ref}"
+    ref = context.entity_name or context.entity_id
+    return f"{context.entity_type}: {ref}" if ref else None
+
+
 class NotificationStepHandler(StepHandler):
     """Handler for notification steps - sends notifications via NotificationsManager."""
 
@@ -1755,8 +1772,7 @@ class NotificationStepHandler(StepHandler):
             
             # Typed-ID manual runs have no entity name: fall back to the id and
             # leave the subtitle out when neither is known.
-            subtitle_ref = context.entity_name or context.entity_id
-            subtitle = f"{context.entity_type}: {subtitle_ref}" if subtitle_ref else None
+            subtitle = _notification_subtitle(context)
 
             created_count = 0
             email_count = 0

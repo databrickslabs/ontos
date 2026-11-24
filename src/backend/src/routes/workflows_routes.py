@@ -1611,6 +1611,94 @@ def _is_own_definition_change_request(
     return bool(requester) and requester.lower() in caller
 
 
+def _access_request_of_execution(db: Session, execution_id: str) -> Optional[str]:
+    """The access request an execution was started for (``on_request_access``), if any.
+
+    The trigger runs on the proxy entity ``access_grant`` whose id is the request's id.
+    """
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None or not execution.trigger_context:
+        return None
+    try:
+        context = json.loads(execution.trigger_context) or {}
+    except (TypeError, ValueError):
+        return None
+    if str(context.get('entity_type') or '').lower() != EntityType.ACCESS_GRANT.value:
+        return None
+    request_id = (context.get('entity_data') or {}).get('request_id') or context.get('entity_id')
+    return str(request_id) if request_id else None
+
+
+def _access_terms(body: Dict[str, Any]) -> tuple:
+    """The approver's terms for an access request: (duration in days, permission level).
+
+    Either may be None (the requested one is kept). Checked before the decision is
+    recorded, so terms that can't be granted don't approve the workflow.
+    """
+    from src.models.access_grants import PermissionLevel
+
+    days = body.get('granted_duration_days')
+    level = body.get('permission_level')
+    if days is not None and (
+        isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365
+    ):
+        raise HTTPException(
+            status_code=400,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'access_terms_invalid_duration',
+                'message': 'The duration must be between 1 and 365 days.',
+                'params': {'min': 1, 'max': 365},
+            },
+        )
+    if level is not None and level not in {p.value for p in PermissionLevel}:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                'code': 'access_terms_invalid_permission',
+                'message': 'Unknown permission level.',
+                'params': {'allowed': [p.value for p in PermissionLevel]},
+            },
+        )
+    return days, level
+
+
+def _record_access_decision(
+    request: Request, db: Session, notifications_manager: NotificationsManager,
+    request_id: str, approved: bool, status: Any, decided_by: Optional[str],
+    terms: tuple, message: Optional[str],
+) -> None:
+    """Carry an access workflow's outcome to its access request (#1615).
+
+    When the execution has ended: approved and succeeded grants the access with the
+    approver's terms; rejected denies it. An execution paused at a further step, or
+    approved but failed later, leaves the request pending. Best effort, after the
+    decision's commit: a failure here is logged, the decision stays recorded.
+    """
+    from src.controller.access_grants_manager import AccessGrantsManager
+    from src.models.process_workflows import ExecutionStatus
+
+    status = getattr(status, 'value', status)
+    if status == ExecutionStatus.PAUSED.value or (
+        approved and status != ExecutionStatus.SUCCEEDED.value
+    ):
+        return
+    days, level = terms
+    try:
+        manager = getattr(request.app.state, 'access_grants_manager', None) or (
+            AccessGrantsManager(notifications_manager=notifications_manager)
+        )
+        manager.apply_workflow_decision(
+            db, request_id, approved=approved, decided_by=decided_by or 'workflow',
+            granted_duration_days=days, permission_level=level, message=message,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to record the workflow decision on access request %s", request_id)
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -2011,6 +2099,10 @@ async def handle_workflow_approval(
             user_info=current_user,
         )
 
+        # An access request's approval: the approver's terms are checked up front
+        access_request_id = _access_request_of_execution(db, execution_id)
+        access_terms = _access_terms(body) if access_request_id else (None, None)
+
         # require_all (#1119): each resolved approver decides once (a user for
         # themselves, any one member for a group or role). The execution stays
         # paused until all have approved; any rejection resumes it as rejected.
@@ -2095,7 +2187,13 @@ async def handle_workflow_approval(
         )
         
         db.commit()
-        
+
+        if access_request_id:
+            _record_access_decision(
+                request, db, notifications_manager, access_request_id, bool(approved),
+                result.status, user_email, access_terms, message,
+            )
+
         logger.info(f"Workflow approval handled for execution {execution_id}: {'approved' if approved else 'rejected'}")
         
         return {

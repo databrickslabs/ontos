@@ -410,6 +410,8 @@
       "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
+      "access_terms_invalid_duration": "期間は {{min}} 日から {{max}} 日の間で指定してください。",
+      "access_terms_invalid_permission": "この権限レベルは付与できません。",
       "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
       "own_change_request_approval": "自分の変更リクエストは承認できません。",
       "approval_already_decided": "この承認はすでにあなたが判断済みです。",

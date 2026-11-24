@@ -288,7 +288,9 @@ class AccessGrantsManager:
         self,
         db: Session,
         admin_email: str,
-        payload: AccessGrantHandlePayload
+        payload: AccessGrantHandlePayload,
+        *,
+        notify_requester: bool = True,
     ) -> Tuple[AccessGrantRequestResponse, Optional[AccessGrantResponse]]:
         """
         Handle (approve/deny) an access grant request.
@@ -297,6 +299,8 @@ class AccessGrantsManager:
             db: Database session
             admin_email: Email of the admin handling the request
             payload: Decision payload
+            notify_requester: Tell the requester about the decision. Off when a
+                workflow decided the request: its own steps notify the requester.
             
         Returns:
             Tuple of (updated request, created grant if approved)
@@ -342,13 +346,14 @@ class AccessGrantsManager:
             grant.is_active = grant_db.is_active
             
             # Notify requester of approval
-            self._notify_requester_decision(
-                db, 
-                request, 
-                approved=True, 
-                message=payload.message,
-                expires_at=expires_at
-            )
+            if notify_requester:
+                self._notify_requester_decision(
+                    db,
+                    request,
+                    approved=True,
+                    message=payload.message,
+                    expires_at=expires_at
+                )
             
             logger.info(
                 f"Approved access request {request.id}: {request.requester_email} "
@@ -366,7 +371,10 @@ class AccessGrantsManager:
             )
             
             # Notify requester of denial
-            self._notify_requester_decision(db, request, approved=False, message=payload.message)
+            if notify_requester:
+                self._notify_requester_decision(
+                    db, request, approved=False, message=payload.message,
+                )
             
             logger.info(f"Denied access request {request.id}")
 
@@ -380,6 +388,45 @@ class AccessGrantsManager:
         
         return request_response, grant
     
+    def apply_workflow_decision(
+        self,
+        db: Session,
+        request_id: str,
+        *,
+        approved: bool,
+        decided_by: str,
+        granted_duration_days: Optional[int] = None,
+        permission_level: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> Optional[AccessGrantRequestResponse]:
+        """Record an approval workflow's decision on the access request it was started for.
+
+        An access request fires ``on_request_access``; its approval step is decided through
+        ``/api/workflows/handle-approval``, which before this left the request pending, with
+        no grant (#1615). Approved: the grant with the approver's terms (else the requested
+        ones); rejected: denied. The workflow notifies the requester itself.
+
+        Returns None when there is nothing to record: the request doesn't exist or another
+        decision (e.g. a second access workflow, or the Access Grants page) handled it.
+        """
+        try:
+            request = self._request_repo.get_by_id(db, uuid.UUID(str(request_id)))
+        except ValueError:
+            return None
+        if request is None or request.status != AccessGrantRequestStatus.PENDING.value:
+            return None
+        payload = AccessGrantHandlePayload(
+            request_id=request.id,
+            approved=approved,
+            granted_duration_days=(
+                (granted_duration_days or request.requested_duration_days) if approved else None
+            ),
+            permission_level=(permission_level or request.permission_level) if approved else None,
+            message=message,
+        )
+        response, _ = self.handle_request(db, decided_by, payload, notify_requester=False)
+        return response
+
     def get_pending_requests_for_entity(
         self,
         db: Session,

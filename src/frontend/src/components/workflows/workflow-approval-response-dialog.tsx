@@ -28,6 +28,9 @@ import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 
+/** Permission levels of an access grant (backend ``PermissionLevel``). */
+const ACCESS_PERMISSION_LEVELS = ['READ', 'WRITE', 'MANAGE'] as const;
+
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
   workflow_id: string;
@@ -307,7 +310,9 @@ export default function WorkflowApprovalResponseDialog({
         toast({
           title: t('common:toast.error'),
           description: response.errorCode
-            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, { defaultValue: response.error })
+            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, {
+              ...(response.errorParams ?? {}), defaultValue: response.error,
+            })
             : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
@@ -409,6 +414,7 @@ export default function WorkflowApprovalResponseDialog({
                       id="granted-days"
                       type="number"
                       min={1}
+                      max={365}
                       value={grantedDays}
                       onChange={(e) => setGrantedDays(e.target.value === '' ? '' : Number(e.target.value))}
                       disabled={submitting}
@@ -424,10 +430,13 @@ export default function WorkflowApprovalResponseDialog({
                         <SelectValue placeholder={t('common:placeholders.selectPermission')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CAN_READ">CAN_READ</SelectItem>
-                        <SelectItem value="CAN_USE">CAN_USE</SelectItem>
-                        <SelectItem value="CAN_EDIT">CAN_EDIT</SelectItem>
-                        <SelectItem value="CAN_MANAGE">CAN_MANAGE</SelectItem>
+                        {/* The access request's levels (READ / WRITE / MANAGE): the
+                            requested one must be an option to show selected (#1615) */}
+                        {ACCESS_PERMISSION_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {t(`access-grants:permissionOptions.${level}`)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

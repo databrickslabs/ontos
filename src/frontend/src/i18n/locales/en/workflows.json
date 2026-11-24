@@ -410,6 +410,8 @@
       "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
+      "access_terms_invalid_duration": "The duration must be between {{min}} and {{max}} days.",
+      "access_terms_invalid_permission": "This permission level can't be granted.",
       "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
       "own_change_request_approval": "You can't approve your own change request.",
       "approval_already_decided": "You have already decided this approval.",

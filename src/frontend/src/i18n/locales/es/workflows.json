@@ -410,6 +410,8 @@
       "waitingForApprovers_other": "Faltan {{count}} aprobadores más."
     },
     "errors": {
+      "access_terms_invalid_duration": "La duración debe estar entre {{min}} y {{max}} días.",
+      "access_terms_invalid_permission": "Este nivel de permiso no se puede conceder.",
       "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
       "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
       "approval_already_decided": "Ya has decidido esta aprobación.",

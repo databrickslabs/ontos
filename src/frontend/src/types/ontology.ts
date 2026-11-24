@@ -74,7 +74,11 @@ export interface OntologyProperty {
 export interface OntologyConcept {
   iri: string;
   label?: string;  // Primary label (computed from labels dict)
-  label_maps?: { prefLabel?: Record<string, string>; rdfsLabel?: Record<string, string> };  // prefLabel / rdfs:label kept apart
+  // prefLabel / rdfs:label kept apart
+  label_maps?: {
+    prefLabel?: Record<string, string>;
+    rdfsLabel?: Record<string, string>;
+  };
   labels?: Record<string, string>;  // Multi-language labels: {"en": "Dataset", "ja": "データセット"}
   comment?: string;  // Primary comment (computed from comments dict)
   comments?: Record<string, string>;  // Multi-language comments: {"en": "A curated...", "ja": "..."}

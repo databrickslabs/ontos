@@ -21,7 +21,7 @@ from src.common.uc_comments import (
     CommentWriteError, NOT_FOUND, PERMISSION_DENIED, SINGLE_READ_TIMEOUT_SECONDS,
     normalize_comment, read_comment,
 )
-from src.controller.asset_description_history import SOURCE_UC_RESET
+from src.controller.asset_description_history import SOURCE_UC_RESET, description_source
 from src.controller.assets_manager import AssetsManager
 from src.controller.uc_description_sync_manager import (
     METRIC_VIEW_TABLE_TYPE, UcDescriptionSyncManager, uc_comment_target,
@@ -171,9 +171,10 @@ class UcDescriptionResetManager:
 
         # The mark goes with the change (one commit, in update_asset)
         self._sync.clear_state(db, asset)
-        self._assets.update_asset(
-            db, asset_id=asset_id, asset_in=AssetUpdate(description=uc_comment),
-            current_user_id=username, description_source=SOURCE_UC_RESET)
+        with description_source(SOURCE_UC_RESET):
+            self._assets.update_asset(
+                db, asset_id=asset_id, asset_in=AssetUpdate(description=uc_comment),
+                current_user_id=username)
         asset = db.get(AssetDb, asset_id)
         AssetsManager.update_table_column_snapshot(db, asset)
         audit['outcome'] = 'reset'

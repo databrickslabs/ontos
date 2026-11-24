@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -6,6 +6,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import type {
@@ -54,7 +55,9 @@ interface LoadError {
   params?: Record<string, unknown> | null;
 }
 
-function TextPane({ title, text, tone }: { title: string; text?: string | null; tone: 'old' | 'new' }) {
+function TextPane({ title, text, tone }: {
+  title: string; text?: string | null; tone: 'old' | 'new';
+}) {
   const { t } = useTranslation(['assets']);
   const toneClass = tone === 'old'
     ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40'
@@ -64,7 +67,10 @@ function TextPane({ title, text, tone }: { title: string; text?: string | null; 
       <div className="text-xs font-medium text-muted-foreground">{title}</div>
       <div
         data-testid={`description-reset-${tone}`}
-        className={`max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md border p-2 text-sm ${toneClass}`}
+        className={cn(
+          'max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md border p-2 text-sm',
+          toneClass,
+        )}
       >
         {text ? text : (
           <span className="italic text-muted-foreground">{t(`${PREFIX}.empty`)}</span>
@@ -89,24 +95,25 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<LoadError | null>(null);
 
+  const load = useCallback(async (keepError?: LoadError | null) => {
+    setLoading(true);
+    const res = await get<AssetUcCommentPreview>(`/api/assets/${assetId}/description/uc-comment`);
+    if (res.error || !res.data) {
+      setPreview(null);
+      setError({ code: res.errorCode, message: res.error, params: res.errorParams });
+    } else {
+      setPreview(res.data);
+      setError(keepError ?? null);
+    }
+    setLoading(false);
+  }, [assetId, get]);
+
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
     setPreview(null);
     setError(null);
-    setLoading(true);
-    get<AssetUcCommentPreview>(`/api/assets/${assetId}/description/uc-comment`)
-      .then((res) => {
-        if (cancelled) return;
-        if (res.error || !res.data) {
-          setError({ code: res.errorCode, message: res.error, params: res.errorParams });
-        } else {
-          setPreview(res.data);
-        }
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [open, assetId, get]);
+    void load();
+  }, [open, load]);
 
   const confirm = async () => {
     if (!preview) return;
@@ -117,7 +124,10 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
         { expected_uc_comment: preview.uc_comment ?? null },
       );
       if (res.error || !res.data) {
-        setError({ code: res.errorCode, message: res.error, params: res.errorParams });
+        const failure = { code: res.errorCode, message: res.error, params: res.errorParams };
+        setError(failure);
+        // The comment changed since it was shown: show the new one, and keep the message
+        if (res.errorCode === 'uc_reset_uc_changed') await load(failure);
         return;
       }
       const warning: AssetCodedWarning | undefined = res.data.warnings?.[0];
@@ -163,7 +173,9 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
             className="flex items-start gap-2 text-sm text-red-700 dark:text-red-400"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{descriptionResetText(t, 'errors', error.code, error.message, error.params)}</span>
+            <span>
+              {descriptionResetText(t, 'errors', error.code, error.message, error.params)}
+            </span>
           </div>
         )}
 
@@ -171,7 +183,9 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
           <div className="space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row">
               <TextPane title={t(`${PREFIX}.inOntos`)} text={preview.description} tone="old" />
-              <TextPane title={t(`${PREFIX}.inUnityCatalog`)} text={preview.uc_comment} tone="new" />
+              <TextPane
+                title={t(`${PREFIX}.inUnityCatalog`)} text={preview.uc_comment} tone="new"
+              />
             </div>
             {preview.in_sync && (
               <p role="status" className="text-sm text-muted-foreground">

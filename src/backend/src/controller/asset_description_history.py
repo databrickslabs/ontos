@@ -6,7 +6,9 @@ before and after and where the change came from. The entry is flushed in the
 caller's transaction (never committed here, never swallowed), so a change and
 its entry are stored together or not at all.
 """
-from typing import Any, Dict, Optional
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any, Dict, Iterator, Optional
 
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,28 @@ SOURCE_UC_IMPORT = 'uc_import'  # the description Unity Catalog had when the ass
 SOURCE_BULK_IMPORT = 'bulk_import'  # a CSV / XLSX import
 SOURCE_UC_RESET = 'uc_reset'  # "use the Unity Catalog comment"
 SOURCE_RESTORE = 'restore'  # an earlier description restored
+
+# The source a change made in the current context is logged with (``description_source``)
+_current_source: ContextVar[str] = ContextVar('asset_description_source', default=SOURCE_MANUAL)
+
+
+@contextmanager
+def description_source(source: str) -> Iterator[None]:
+    """Log the description changes made inside the ``with`` block with this ``source``.
+
+    ``AssetsManager.create_asset`` / ``update_asset`` take no source argument: a flow other
+    than a plain edit (an import, a reset, a restore) says what it is here.
+    """
+    token = _current_source.set(source)
+    try:
+        yield
+    finally:
+        _current_source.reset(token)
+
+
+def current_description_source() -> str:
+    return _current_source.get()
+
 
 # Asset types whose description is tracked (lower case)
 _TRACKED_TYPES = frozenset({'table', 'view', 'column'})

@@ -13,7 +13,8 @@ class UcCommentPreview(BaseModel):
     target: str = Field(..., description="The Unity Catalog object: catalog.schema.table[.column]")
     object_type: str = Field(..., description="table, view or column")
     description: Optional[str] = Field(None, description="The description in Ontos")
-    uc_comment: Optional[str] = Field(None, description="The comment in Unity Catalog, as the user reads it")
+    uc_comment: Optional[str] = Field(
+        None, description="The comment in Unity Catalog, as the user reads it")
     in_sync: bool = Field(..., description="Both texts are the same (as Unity Catalog stores them)")
     table_type: Optional[str] = Field(None, description="The Unity Catalog table type")
 

@@ -150,14 +150,14 @@ export default function AssetDetailView() {
 
   const showLineageTab = true;
 
-  // The description of a table, view or column on Databricks can be taken from Unity Catalog
-  const showDescriptionReset = canWrite && canResetDescription(entityType, asset?.platform);
-
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
   // Maturity levels apply to table and view assets (MATURITY_ASSET_TYPES in the backend)
   const hasMaturity = entityType === 'Table' || entityType === 'View';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
+
+  // The description of a table, view or column on Databricks can be taken from Unity Catalog
+  const showDescriptionReset = canWrite && canResetDescription(entityType, asset?.platform);
 
   const fetchAsset = useCallback(async () => {
     if (!assetId) return;

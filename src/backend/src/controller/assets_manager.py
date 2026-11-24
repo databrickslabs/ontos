@@ -27,7 +27,9 @@ from src.common.odcs_logical_types import column_logical_type, schemas_for_versi
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
-from src.controller.asset_description_history import SOURCE_MANUAL, record_description_change
+from src.controller.asset_description_history import (
+    current_description_source, record_description_change,
+)
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 
@@ -221,15 +223,8 @@ class AssetsManager(SearchableAsset):
 
     # --- Asset CRUD ---
 
-    def create_asset(
-        self, db: Session, *, asset_in: AssetCreate, current_user_id: str,
-        description_source: str = SOURCE_MANUAL,
-    ) -> AssetRead:
-        """Creates a new asset.
-
-        The description of a table, view or column is logged in the description history
-        (``description_source``: where it came from).
-        """
+    def create_asset(self, db: Session, *, asset_in: AssetCreate, current_user_id: str) -> AssetRead:
+        """Creates a new asset; a table, view or column description is logged in its history."""
         db_type = self._type_repo.get(db, asset_in.asset_type_id)
         if not db_type:
             raise NotFoundError(f"Asset type '{asset_in.asset_type_id}' not found.")
@@ -266,7 +261,7 @@ class AssetsManager(SearchableAsset):
             # Not best-effort: the history is stored with the asset, or the creation fails
             record_description_change(
                 db, db_asset, before=None, after=db_asset.description,
-                source=description_source, username=current_user_id)
+                source=current_description_source(), username=current_user_id)
             try:
                 change_log_manager.log_change(
                     db,
@@ -435,12 +430,7 @@ class AssetsManager(SearchableAsset):
             owned &= {UUID(str(i)) for i in restrict_to_ids}
         return sorted(owned, key=str)
 
-    def update_asset(
-        self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str,
-        description_source: str = SOURCE_MANUAL,
-    ) -> AssetRead:
-        """Updates an asset; a changed table, view or column description is logged in the
-        description history (``description_source``: where the change came from)."""
+    def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
@@ -505,7 +495,7 @@ class AssetsManager(SearchableAsset):
                 # Not best-effort: the history is stored with the change, or the save fails
                 record_description_change(
                     db, updated, before=previous_description, after=updated.description,
-                    source=description_source, username=current_user_id)
+                    source=current_description_source(), username=current_user_id)
             try:
                 change_log_manager.log_change_with_details(
                     db,

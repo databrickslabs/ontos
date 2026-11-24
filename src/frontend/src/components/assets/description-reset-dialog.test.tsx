@@ -88,7 +88,9 @@ describe('DescriptionResetDialog', () => {
   });
 
   it('does not offer to replace a description that already matches', async () => {
-    getMock.mockResolvedValue({ data: { ...preview, description: 'Same', uc_comment: 'Same', in_sync: true } });
+    getMock.mockResolvedValue({
+      data: { ...preview, description: 'Same', uc_comment: 'Same', in_sync: true },
+    });
     renderDialog();
 
     expect(await screen.findByText(/already matches/)).toBeInTheDocument();
@@ -118,8 +120,10 @@ describe('DescriptionResetDialog', () => {
     expect(screen.getByRole('button', { name: 'Replace description' })).toBeDisabled();
   });
 
-  it('shows the error of a comment that changed meanwhile and stays open', async () => {
-    getMock.mockResolvedValue({ data: preview });
+  it('shows the error of a comment that changed meanwhile, reloads it and stays open', async () => {
+    getMock
+      .mockResolvedValueOnce({ data: preview })
+      .mockResolvedValue({ data: { ...preview, uc_comment: 'Changed in Unity Catalog' } });
     postMock.mockResolvedValue({
       data: null,
       error: 'changed',
@@ -131,11 +135,19 @@ describe('DescriptionResetDialog', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Replace description' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('changed since you looked at it');
+    await waitFor(() =>
+      expect(screen.getByTestId('description-reset-new')).toHaveTextContent(
+        'Changed in Unity Catalog'
+      )
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('changed since you looked at it');
     expect(onReset).not.toHaveBeenCalled();
   });
 
   it('falls back to the server message for an unknown code', async () => {
-    getMock.mockResolvedValue({ data: null, error: 'english fallback', errorCode: 'something_new' });
+    getMock.mockResolvedValue({
+      data: null, error: 'english fallback', errorCode: 'something_new',
+    });
     renderDialog();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('english fallback');

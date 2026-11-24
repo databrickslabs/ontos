@@ -799,9 +799,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
-('01400101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'Market Data Subscriptions', 'Refinitiv + Bloomberg market-data feeds for trading analytics.', 'tools', NULL, 9800000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400102-0002-4000-8000-000000000002', 'data_product', '00700002-0002-4000-8000-000000000002', 'Risk Compute (DBU)',        'Daily Monte Carlo VaR + stress scenarios.',                       'infrastructure', NULL, 4200000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400103-0002-4000-8000-000000000003', 'data_product', '00700003-0002-4000-8000-000000000003', 'AML Tooling License',       'Annual AML detection and case management tooling.',               'tools', NULL, 1800000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+('01400101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'Market Data Subscriptions', 'Refinitiv + Bloomberg market-data feeds for trading analytics.', 'OTHER', 'Tools', 9800000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0002-4000-8000-000000000002', 'data_product', '00700002-0002-4000-8000-000000000002', 'Risk Compute (DBU)',        'Daily Monte Carlo VaR + stress scenarios.',                       'INFRASTRUCTURE', NULL, 4200000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0002-4000-8000-000000000003', 'data_product', '00700003-0002-4000-8000-000000000003', 'AML Tooling License',       'Annual AML detection and case management tooling.',               'OTHER', 'Tools', 1800000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

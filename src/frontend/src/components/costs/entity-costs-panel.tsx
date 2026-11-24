@@ -12,8 +12,8 @@ import { Loader2, Plus, RefreshCcw, Trash2, Pencil, ArrowLeft, ArrowRight } from
 import type { EntityKind, CostItem, CostItemCreate, CostItemUpdate, CostCenter, CostSummary } from '@/types/costs';
 import { formatCents } from '@/types/costs';
 import { useToast } from '@/hooks/use-toast';
-import { responseErrorText } from '@/lib/asset-access-error';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { readJsonResponse, responseErrorMessage } from '@/lib/http-response';
 
 type Props = { entityId: string; entityType: EntityKind };
 
@@ -51,18 +51,27 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
   });
   const [errors, setErrors] = React.useState<Record<string,string>>({});
   const { toast } = useToast();
+  const responseMessages = React.useMemo(() => ({
+    requestFailed: t('metadata:costs.messages.requestFailed'),
+    validationFailed: t('metadata:costs.messages.validationFailed'),
+    invalidResponse: t('metadata:costs.messages.invalidResponse'),
+  }), [t]);
 
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const list = await fetch(`/api/entities/${entityType}/${entityId}/cost-items?month=${month}`).then(r => r.json());
-      const sum = await fetch(`/api/entities/${entityType}/${entityId}/cost-items/summary?month=${month}`).then(r => r.json());
+      const [list, sum] = await Promise.all([
+        fetch(`/api/entities/${entityType}/${entityId}/cost-items?month=${month}`)
+          .then(response => readJsonResponse<CostItem[]>(response, responseMessages)),
+        fetch(`/api/entities/${entityType}/${entityId}/cost-items/summary?month=${month}`)
+          .then(response => readJsonResponse<CostSummary>(response, responseMessages)),
+      ]);
       setItems(Array.isArray(list) ? list : []);
       setSummary(sum || null);
     } catch (e: any) {
       toast({ title: t('metadata:costs.messages.loadFailed'), description: e?.message || String(e), variant: 'destructive' });
     } finally { setLoading(false); }
-  }, [entityId, entityType, month, toast]);
+  }, [entityId, entityType, month, responseMessages, t, toast]);
 
   React.useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -146,10 +155,10 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
     try {
       if (editing) {
         const resp = await fetch(`/api/cost-items/${editing.id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload as CostItemUpdate) });
-        if (!resp.ok) throw new Error(await responseErrorText(resp));
+        if (!resp.ok) throw new Error(await responseErrorMessage(resp, responseMessages));
       } else {
         const resp = await fetch(`/api/entities/${entityType}/${entityId}/cost-items`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-        if (!resp.ok) throw new Error(await responseErrorText(resp));
+        if (!resp.ok) throw new Error(await responseErrorMessage(resp, responseMessages));
       }
       toast({ title: editing ? t('metadata:costs.messages.updated') : t('metadata:costs.messages.added') });
       setShowForm(false); resetForm(); fetchData();
@@ -166,7 +175,7 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
     } else {
       toast({
         title: t('metadata:costs.messages.deleteFailed'),
-        description: await responseErrorText(resp),
+        description: await responseErrorMessage(resp, responseMessages),
         variant: 'destructive',
       });
     }

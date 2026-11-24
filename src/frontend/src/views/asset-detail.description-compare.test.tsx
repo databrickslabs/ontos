@@ -126,7 +126,8 @@ describe('AssetDetailView description comparison', () => {
     expect(within(stillOpen).getByText(/changed since you looked at it/)).toBeInTheDocument();
     expect(within(stillOpen).getByText('order_id', { selector: 'span.font-medium' }))
       .toBeInTheDocument();
-    // The page itself was not replaced by its loading skeleton
-    expect(screen.getByRole('heading', { name: 'orders' })).toBeInTheDocument();
+    // The page itself was not replaced by its loading skeleton (behind a modal dialog its
+    // elements are hidden from the accessibility tree, so look at the DOM)
+    expect(document.querySelector('h1')).toHaveTextContent('orders');
   });
 });

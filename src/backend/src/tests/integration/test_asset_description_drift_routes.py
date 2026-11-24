@@ -289,11 +289,9 @@ class TestResetSelected:
         # The table and the most columns a comparison lists (1000): "Select all" on a wide table
         from uuid import uuid4
 
-        from src.models.asset_description import MAX_COMPARED_COLUMNS
-
         user_ws.tables.get.return_value = _info('Orders (UC)', {})
         fields = [{'asset_id': str(tree.table.id)}] + [
-            {'asset_id': str(uuid4())} for _ in range(MAX_COMPARED_COLUMNS)]
+            {'asset_id': str(uuid4())} for _ in range(1000)]
         assert len(fields) == 1001
 
         response = self._post(client, tree.table, fields)

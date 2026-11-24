@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import HTTPException
 from databricks.sdk.service.sql import StatementState
 from sqlalchemy import event
 
@@ -254,3 +255,68 @@ class TestRestore:
         assert response.status_code == 200 and response.json()['description'] == 'k0'
         db_session.refresh(table)
         assert table.properties['schema']['columns'][0]['description'] == 'k0'
+
+
+class TestReadAccess:
+    """The history is as readable as the asset: the data-product scoping of GET /assets/{id}."""
+
+    @pytest.fixture
+    def reader(self, client, mock_test_user):
+        """The test user acts as a role with ``assets`` READ_ONLY (no write access)."""
+        from src.common.features import FeatureAccessLevel
+        from src.models.settings import AppRoleCreate
+
+        settings_manager = app.state.settings_manager
+        role = settings_manager.get_app_role_by_name('Assets history reader')
+        if role is None:
+            role = settings_manager.create_app_role(AppRoleCreate(
+                name='Assets history reader',
+                feature_permissions={'assets': FeatureAccessLevel.READ_ONLY}))
+        settings_manager.set_applied_role_override_for_user(
+            mock_test_user.email, str(role.id), caller_is_admin=True)
+        yield
+        settings_manager.set_applied_role_override_for_user(mock_test_user.email, None)
+
+    def _linked(self, monkeypatch, asset, linked):
+        from src.controller.assets_manager import AssetsManager
+
+        monkeypatch.setattr(
+            AssetsManager, 'is_asset_accessible',
+            lambda self, db, *, asset_id, data_products_manager, is_admin: linked)
+
+    def test_an_asset_outside_the_users_data_products_is_refused_like_the_asset(
+            self, client, table, reader, monkeypatch):
+        self._linked(monkeypatch, table, False)
+        asset = client.get(f'/api/assets/{table.id}')
+
+        history = client.get(f'/api/assets/{table.id}/description/history')
+
+        assert asset.status_code == 403
+        assert history.status_code == 403
+        assert history.json() == asset.json()
+
+    def test_an_asset_of_an_accessible_data_product_is_readable(
+            self, client, table, reader, monkeypatch):
+        self._linked(monkeypatch, table, True)
+
+        history = client.get(f'/api/assets/{table.id}/description/history')
+
+        assert history.status_code == 200, history.text
+
+    def test_a_restore_checks_the_read_access_too(self, client, table, monkeypatch):
+        """Even where the write permission is there, the same check runs first."""
+        from src.routes import assets_routes
+
+        calls = []
+
+        def refuse(request, db, current_user, manager, asset_id):
+            calls.append(asset_id)
+            raise HTTPException(status_code=403, detail='refused like GET /assets/{id}')
+
+        monkeypatch.setattr(assets_routes, '_ensure_asset_readable', refuse)
+
+        response = _restore(client, table, 'any-entry')
+
+        assert response.status_code == 403
+        assert response.json()['detail'] == 'refused like GET /assets/{id}'
+        assert calls == [table.id]

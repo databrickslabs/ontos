@@ -645,14 +645,19 @@ def reset_asset_description_to_uc(
 )
 def get_asset_description_history(
     asset_id: UUID,
+    request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     manager=Depends(get_assets_manager),
 ):
     """The changes of a table, view or column description, newest first: who, when, where the
     change came from (``source``), and the text before and after. Needs ``assets`` READ_ONLY
-    (not ``audit``), as past descriptions are as visible as the asset itself."""
+    (not ``audit``) and the same read access to the asset as ``GET /api/assets/{id}`` (an
+    asset outside the data products the user can access is refused alike): past descriptions
+    are as visible as the asset itself."""
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
     if not manager.asset_exists(db, asset_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
@@ -694,6 +699,8 @@ def restore_asset_description(
     details = {"params": {"asset_id": str(asset_id), "entry_id": restore_in.entry_id,
                           "version": restore_in.version}}
     try:
+        # The same read access as the history it restores from (and as GET /api/assets/{id})
+        _ensure_asset_readable(request, db, current_user, manager, asset_id)
         entry = get_description_entry(db, asset_id, restore_in.entry_id)
         if entry is None:
             raise HistoryEntryNotFoundError(
@@ -706,6 +713,9 @@ def restore_asset_description(
                 current_user.email, background_tasks, details)
         success = True
         return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status": e.status_code}
+        raise
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError"}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e

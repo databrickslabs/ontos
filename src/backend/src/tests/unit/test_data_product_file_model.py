@@ -89,12 +89,35 @@ def test_the_file_has_the_port_fields_odps_has_no_place_for(manager, db_session)
     assert DataProductFileModel.get_filename(product) == "orders-v1-0-0.yaml"
 
 
-def test_a_product_outside_a_session_is_not_serialized(manager, db_session):
+@pytest.fixture
+def app_sessions(db_session):
+    """The app's session factory, on the test database."""
+    from sqlalchemy.orm import sessionmaker
+    from src.common import database
+
+    previous = database._SessionLocal
+    database.set_session_factory(sessionmaker(bind=db_session.get_bind(), autoflush=False))
+    yield
+    database.set_session_factory(previous)
+
+
+def test_a_detached_product_is_serialized_in_a_session_of_its_own(
+    manager, db_session, app_sessions,
+):
+    """A delivery may get the product after its session closed (expired and detached):
+    it is read again by its id."""
     product = _stored_product(manager, db_session)
+    expected = manager.build_odps_export(product.id, db=db_session)
+    db_session.expire(product)
     db_session.expunge(product)
 
+    assert DataProductFileModel.get_filename(product) == "orders-v1-0-0.yaml"
+    assert DataProductFileModel.to_yaml_dict(product) == expected
+
+
+def test_a_product_that_is_not_stored_is_not_serialized():
     with pytest.raises(ValueError):
-        DataProductFileModel.to_yaml_dict(product)
+        DataProductFileModel.to_yaml_dict(DataProductDb(name="Never stored", version="1"))
 
 
 def test_an_imported_delivery_method_that_does_not_exist_here_is_not_kept(

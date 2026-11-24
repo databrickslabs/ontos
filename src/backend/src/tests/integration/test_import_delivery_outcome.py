@@ -80,3 +80,21 @@ def test_the_response_says_a_product_was_imported_but_not_delivered(client, git)
         "status": "failed", "code": "delivery_git_unavailable", "params": {"mode": "indirect"},
     }
     assert git.files == {}
+
+
+def test_an_api_update_writes_the_products_odps_document(client, git):
+    """A product update delivers outside the import (a background task of the
+    request): the Git file is the product's ODPS document too."""
+    product_id = _upload(client, "Updated Later")["created_ids"][0]
+    git.files.clear()
+    product = client.get(f"/api/data-products/{product_id}").json()
+    product["description"] = {"purpose": "Updated through the API"}
+
+    resp = client.put(f"/api/data-products/{product_id}", json=product)
+
+    assert resp.status_code == 200, resp.text
+    document = git.files["products/updated-later-v1-0-0.yaml"]
+    assert (document["apiVersion"], document["kind"], document["id"]) == (
+        "v1.0.0", "DataProduct", product_id)
+    assert document["description"] == {"purpose": "Updated through the API"}
+    assert document["outputPorts"][0]["name"] == "out"

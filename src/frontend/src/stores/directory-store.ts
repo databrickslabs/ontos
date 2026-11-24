@@ -12,7 +12,7 @@
 
 import { create } from 'zustand';
 
-import type { DirectoryStatus } from '@/types/directory';
+import type { DirectoryStatus, Principal } from '@/types/directory';
 
 interface DirectoryState {
   status: DirectoryStatus | null;
@@ -26,7 +26,17 @@ interface DirectoryState {
   /** In-flight promise so concurrent pickers share one network call. */
   _inflight: Promise<void> | null;
 
+  /**
+   * Users of the Ontos teams the caller can read (GET /api/teams), the
+   * picker's suggestions when it can't search the directory (#1618): a
+   * non-admin gets 403 from /api/directory/*. null until loaded.
+   */
+  knownUsers: Principal[] | null;
+  _knownUsersInflight: Promise<void> | null;
+
   fetchStatus: () => Promise<void>;
+  /** Load `knownUsers` once per page; [] when the teams can't be read. */
+  fetchKnownUsers: () => Promise<void>;
   /** Force a re-fetch -- used by the Settings tab after Save. */
   refresh: () => Promise<void>;
   markDegraded: () => void;
@@ -45,11 +55,66 @@ async function loadStatus(): Promise<DirectoryStatus | null> {
   }
 }
 
+interface TeamMemberRow {
+  member_type?: string;
+  member_identifier?: string;
+  member_name?: string | null;
+}
+
+interface TeamRow {
+  name?: string;
+  title?: string | null;
+  members?: TeamMemberRow[];
+}
+
+/** The user members of `teams`, once each (case-insensitive), sorted by name. */
+export function usersOfTeams(teams: TeamRow[]): Principal[] {
+  const byId = new Map<string, Principal>();
+  for (const team of teams) {
+    for (const m of team.members ?? []) {
+      const id = (m.member_identifier ?? '').trim();
+      if (m.member_type !== 'user' || !id || byId.has(id.toLowerCase())) continue;
+      byId.set(id.toLowerCase(), {
+        type: 'user',
+        id,
+        display_name: (m.member_name ?? '').trim() || id,
+        sub_label: id,
+      });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.display_name.localeCompare(b.display_name));
+}
+
+async function loadKnownUsers(): Promise<Principal[]> {
+  try {
+    const res = await fetch('/api/teams');
+    if (!res.ok) return [];
+    const teams = await res.json();
+    return Array.isArray(teams) ? usersOfTeams(teams) : [];
+  } catch {
+    return [];
+  }
+}
+
 export const useDirectoryStore = create<DirectoryState>((set, get) => ({
   status: null,
   loaded: false,
   degraded: false,
   _inflight: null,
+  knownUsers: null,
+  _knownUsersInflight: null,
+
+  fetchKnownUsers: async () => {
+    const { knownUsers, _knownUsersInflight } = get();
+    if (knownUsers) return;
+    if (_knownUsersInflight) return _knownUsersInflight;
+    const p = (async () => {
+      const users = await loadKnownUsers();
+      set({ knownUsers: users, _knownUsersInflight: null });
+    })();
+    set({ _knownUsersInflight: p });
+    return p;
+  },
 
   fetchStatus: async () => {
     const { loaded, _inflight } = get();
@@ -76,5 +141,8 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
 
   markDegraded: () => set({ degraded: true }),
 
-  reset: () => set({ status: null, loaded: false, degraded: false, _inflight: null }),
+  reset: () => set({
+    status: null, loaded: false, degraded: false, _inflight: null,
+    knownUsers: null, _knownUsersInflight: null,
+  }),
 }));

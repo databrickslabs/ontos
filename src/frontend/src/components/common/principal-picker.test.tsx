@@ -254,3 +254,66 @@ describe('PrincipalPicker — configured mode', () => {
     expect(onChange).toHaveBeenLastCalledWith(['alice@x.com']);
   });
 });
+
+// #1618: a non-admin gets 403 from /api/directory/status, so the reviewer
+// picker had no suggestions. It falls back to the users of the Ontos teams
+// the caller can read.
+describe('PrincipalPicker — known-user suggestions', () => {
+  const teams = [
+    {
+      name: 'analytics',
+      members: [
+        { member_type: 'user', member_identifier: 'sam@x.com', member_name: 'Sam Steward' },
+        { member_type: 'group', member_identifier: 'stewards', member_name: null },
+      ],
+    },
+    {
+      name: 'sales',
+      members: [{ member_type: 'user', member_identifier: 'SAM@x.com', member_name: 'Dup' }],
+    },
+  ];
+
+  function mockDeniedDirectory() {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/teams') {
+        return Promise.resolve(new Response(JSON.stringify(teams), { status: 200 }));
+      }
+      return Promise.resolve(new Response('{"detail":"forbidden"}', { status: 403 }));
+    });
+  }
+
+  it('suggests team users while typing and picks one', async () => {
+    mockDeniedDirectory();
+    const onChange = vi.fn();
+    renderWithProviders(
+      <PrincipalPicker value={null} onChange={onChange} accepts={['user']} suggestKnownUsers />,
+    );
+    const input = screen.getByTestId('principal-picker-input');
+    await userEvent.type(input, 'sam');
+    const list = await screen.findByTestId('principal-picker-suggestions');
+    const rows = within(list).getAllByTestId('principal-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Sam Steward');
+    await userEvent.click(rows[0]);
+    expect(onChange).toHaveBeenLastCalledWith('sam@x.com');
+    expect(fetchMock).toHaveBeenCalledWith('/api/teams');
+  });
+
+  it('does not load or suggest anything without the prop', async () => {
+    mockDeniedDirectory();
+    renderWithProviders(<PrincipalPicker value={null} onChange={() => {}} accepts={['user']} />);
+    await userEvent.type(screen.getByTestId('principal-picker-input'), 'sam');
+    await waitFor(() => expect(useDirectoryStore.getState().loaded).toBe(true));
+    expect(screen.queryByTestId('principal-picker-suggestions')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/teams');
+  });
+
+  it('never suggests to a picker that accepts only groups', async () => {
+    mockDeniedDirectory();
+    renderWithProviders(
+      <PrincipalPicker value={null} onChange={() => {}} accepts={['group']} suggestKnownUsers />,
+    );
+    await userEvent.type(screen.getByTestId('principal-picker-input'), 'sam');
+    expect(screen.queryByTestId('principal-picker-suggestions')).toBeNull();
+  });
+});

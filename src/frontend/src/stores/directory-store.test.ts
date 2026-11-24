@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useDirectoryStore } from './directory-store';
+import { useDirectoryStore, usersOfTeams } from './directory-store';
 
 const fetchMock = vi.fn();
 
@@ -89,5 +89,33 @@ describe('directory-store', () => {
     useDirectoryStore.setState({ loaded: false });
     // Don't actually call fetch; just verify the flag persists.
     expect(useDirectoryStore.getState().degraded).toBe(true);
+  });
+});
+
+describe('known users (#1618)', () => {
+  it('lists the user members of the teams once, by name', () => {
+    const users = usersOfTeams([
+      { members: [
+        { member_type: 'user', member_identifier: 'zoe@x.com', member_name: 'Zoe' },
+        { member_type: 'group', member_identifier: 'admins' },
+      ] },
+      { members: [
+        { member_type: 'user', member_identifier: 'ann@x.com', member_name: '' },
+        { member_type: 'user', member_identifier: 'ZOE@x.com', member_name: 'Zoe again' },
+      ] },
+    ]);
+    expect(users.map((u) => [u.id, u.display_name])).toEqual([
+      ['ann@x.com', 'ann@x.com'],
+      ['zoe@x.com', 'Zoe'],
+    ]);
+  });
+
+  it('loads /api/teams once and keeps [] when it is denied', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 403 }));
+    const { fetchKnownUsers } = useDirectoryStore.getState();
+    await Promise.all([fetchKnownUsers(), fetchKnownUsers()]);
+    await useDirectoryStore.getState().fetchKnownUsers();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useDirectoryStore.getState().knownUsers).toEqual([]);
   });
 });

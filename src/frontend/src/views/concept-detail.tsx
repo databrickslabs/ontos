@@ -1343,6 +1343,7 @@ export default function ConceptDetailView() {
               <PrincipalPicker
                 id="reviewer-email"
                 accepts={['user', 'group']}
+                suggestKnownUsers
                 value={reviewerEmail}
                 onChange={(next) => setReviewerEmail(next ?? null)}
                 placeholder={t('semantic-models:submitReview.reviewerPlaceholder', 'Select a reviewer...')}

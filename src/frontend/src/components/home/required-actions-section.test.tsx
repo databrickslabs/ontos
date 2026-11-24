@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import type { Notification } from '@/types/notification';
-import RequiredActionsSection from './required-actions-section';
+import RequiredActionsSection, { approvalEntityName } from './required-actions-section';
 
 function approval(
   id: string, entityName: string, extra: Record<string, unknown> = {},
@@ -116,5 +116,20 @@ describe('RequiredActionsSection approvals queue', () => {
     renderWithProviders(<RequiredActionsSection fetchQueue={false} />);
     await screen.findByText(/./);
     expect(fetchMock).not.toHaveBeenCalledWith('/api/approvals/queue', expect.anything());
+  });
+});
+
+describe('approvalEntityName (#1615)', () => {
+  it("names an access request's entity by the backend's name, never the requester's", () => {
+    expect(approvalEntityName({
+      entity_type: 'access_grant', entity_name: 'Spoofed', underlying_entity_name: 'Orders',
+      underlying_entity_id: 'p-1',
+    })).toBe('Orders');
+    expect(approvalEntityName({
+      entity_type: 'access_grant', entity_name: 'Spoofed', underlying_entity_id: 'p-1',
+    })).toBe('p-1');
+    expect(approvalEntityName({ entity_type: 'data_product', entity_name: 'Orders' }))
+      .toBe('Orders');
+    expect(approvalEntityName(null)).toBe('');
   });
 });

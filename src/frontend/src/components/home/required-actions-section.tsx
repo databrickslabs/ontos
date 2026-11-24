@@ -10,6 +10,19 @@ import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request
 import WorkflowApprovalResponseDialog, { type WorkflowApprovalResponseDialogPayload } from '@/components/workflows/workflow-approval-response-dialog';
 import { approvalActionPayload, notificationTitle } from '@/lib/notification-text';
 
+/**
+ * The entity an approval is for, as approvers may trust it: for an access request the
+ * name the backend read for the requested entity (else its id), never the requester's
+ * own entity_name (#1615).
+ */
+export function approvalEntityName(payload: Record<string, any> | null | undefined): string {
+  if (!payload) return '';
+  if (String(payload.entity_type ?? '').toLowerCase() === 'access_grant') {
+    return payload.underlying_entity_name || payload.underlying_entity_id || '';
+  }
+  return payload.entity_name || '';
+}
+
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
   products: { id: string; title?: string; status?: string }[];
@@ -133,7 +146,8 @@ export default function RequiredActionsSection({ fetchQueue = true }: RequiredAc
     ...workflowApprovalNotifications.map(n => ({
       id: n.id,
       type: 'workflow_approval' as const,
-      title: n.action_payload?.entity_name || notificationTitle(n, t) || t('requiredActionsSection.approvalRequest'),
+      title: approvalEntityName(n.action_payload) || notificationTitle(n, t)
+        || t('requiredActionsSection.approvalRequest'),
       subtitle: n.action_payload?.requester_email || n.subtitle,
       date: n.created_at,
       payload: approvalActionPayload(n, t),

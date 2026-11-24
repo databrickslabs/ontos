@@ -167,22 +167,76 @@ def test_a_rerun_recovers_when_the_second_build_fails(migration, engine, monkeyp
     assert valid is True and unique is False
 
 
-def test_it_runs_through_env_py_with_a_target_schema(migration, engine):
+def _env_py_config(engine, script_location):
+    cfg = Config()
+    cfg.set_main_option('script_location', str(script_location))
+    cfg.attributes['engine'] = create_engine(_PG_URL, future=True)
+    cfg.attributes['target_schema'] = engine.test_schema
+    return cfg
+
+
+@pytest.fixture
+def autocommit_block_states(monkeypatch):
+    """Record, at each ``autocommit_block()``, whether a transaction is open and Alembic's."""
+    states = []
+    real = MigrationContext.autocommit_block
+
+    def spy(self):
+        states.append((self.connection.in_transaction(), self._transaction is not None))
+        return real(self)
+
+    monkeypatch.setattr(MigrationContext, 'autocommit_block', spy)
+    return states
+
+
+def _assert_alembic_owned(states):
+    """A transaction may be open, but it must be one Alembic began (``_transaction`` set)."""
+    assert states
+    assert all(owned for in_transaction, owned in states if in_transaction)
+
+
+def test_it_runs_through_env_py_with_a_target_schema(migration, engine, autocommit_block_states):
     """``alembic/env.py`` sets the search_path on its AUTOCOMMIT engine before configuring.
 
     SQLAlchemy autobegins on that statement; if env.py left it open, Alembic's
     ``autocommit_block`` would hit an AssertionError. This drives the real env.py.
     """
     backend = Path(__file__).resolve().parents[3]
-    cfg = Config()
-    cfg.set_main_option('script_location', str(backend / 'alembic'))
-    cfg.attributes['engine'] = create_engine(_PG_URL, future=True)
-    cfg.attributes['target_schema'] = engine.test_schema
+    cfg = _env_py_config(engine, backend / 'alembic')
     command.stamp(cfg, migration.down_revision)
 
     command.upgrade(cfg, 'head')
 
+    _assert_alembic_owned(autocommit_block_states)
     assert _state(engine, _ACTION)[1] is True
     assert _state(engine, _CREATED)[1] is True
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT version_num FROM alembic_version')).scalar() == _NAME
+
+
+def test_it_runs_through_env_py_after_other_pending_revisions(
+    migration, engine, autocommit_block_states, tmp_path,
+):
+    """Same, on a database where two revisions run before o4 (the version table is read first)."""
+    backend = Path(__file__).resolve().parents[3]
+    script_dir = tmp_path / 'alembic'
+    (script_dir / 'versions').mkdir(parents=True)
+    for name in ('env.py', 'script.py.mako'):
+        (script_dir / name).write_bytes((backend / 'alembic' / name).read_bytes())
+    for name, parent in (('x1', None), ('x2', 'x1')):
+        (script_dir / 'versions' / f'{name}.py').write_text(
+            f"revision = {name!r}\ndown_revision = {parent!r}\n"
+            "from alembic import op\n\n\ndef upgrade():\n    op.execute('SELECT 1')\n\n\n"
+            "def downgrade():\n    pass\n"
+        )
+    source = (backend / 'alembic' / 'versions' / f'{_NAME}.py').read_text()
+    (script_dir / 'versions' / f'{_NAME}.py').write_text(
+        source.replace(repr(migration.down_revision), "'x2'")
+    )
+
+    command.upgrade(_env_py_config(engine, script_dir), 'head')
+
+    _assert_alembic_owned(autocommit_block_states)
+    assert _state(engine, _ACTION)[1] is True and _state(engine, _CREATED)[1] is True
     with engine.connect() as conn:
         assert conn.execute(text('SELECT version_num FROM alembic_version')).scalar() == _NAME

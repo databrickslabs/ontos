@@ -101,7 +101,22 @@ def _port_ontos_properties(port: Any) -> List[Dict[str, Any]]:
         props.append({"property": ONTOS_PORT_CONTAINS_PII_PROPERTY, "value": True})
     if port.autoApprove:
         props.append({"property": ONTOS_PORT_AUTO_APPROVE_PROPERTY, "value": True})
-    return props
+    if port.deliveryMethodId:
+        props.append({
+            "property": ONTOS_PORT_DELIVERY_METHOD_PROPERTY, "value": str(port.deliveryMethodId),
+        })
+    return props + _port_asset_properties(port)
+
+
+def _port_asset_properties(port: Any) -> List[Dict[str, Any]]:
+    """A port's Databricks asset (an Ontos extension), as ``ontos*`` custom properties."""
+    return [
+        {"property": prop, "value": value}
+        for prop, value in (
+            (ONTOS_PORT_ASSET_TYPE_PROPERTY, port.assetType),
+            (ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY, port.assetIdentifier),
+        ) if value
+    ]
 
 
 def _odps_authoritative_definition(ad: Any) -> Dict[str, Any]:
@@ -172,6 +187,9 @@ from src.models.data_products import (
     ONTOS_PORT_SERVER_PROPERTY,
     ONTOS_PORT_CONTAINS_PII_PROPERTY,
     ONTOS_PORT_AUTO_APPROVE_PROPERTY,
+    ONTOS_PORT_DELIVERY_METHOD_PROPERTY,
+    ONTOS_PORT_ASSET_TYPE_PROPERTY,
+    ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY,
     ONTOS_OWNER_TEAM_PROPERTY,
 )
 from src.models.assets import public_properties
@@ -594,6 +612,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except ValidationError as e:
                 logger.error(f"Validation failed for ODPS product: {e}")
                 raise ValueError(f"Invalid ODPS product data: {e}") from e
+            if import_links is not None:
+                self._drop_unknown_delivery_methods(db_session, product_api_model)
 
             # Extract tags (handled separately)
             tags_data = product_data.get('tags', [])
@@ -3826,6 +3846,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise
 
     @staticmethod
+    def _drop_unknown_delivery_methods(session: Session, product: DataProductCreate) -> None:
+        """Clear an imported output port's delivery method that doesn't exist here (an
+        export from another Ontos): the port would otherwise fail its foreign key."""
+        from src.repositories.delivery_methods_repository import delivery_method_repo
+        for port in product.outputPorts or []:
+            if not port.deliveryMethodId:
+                continue
+            try:
+                known = delivery_method_repo.get(session, uuid.UUID(str(port.deliveryMethodId)))
+            except ValueError:  # not a UUID
+                known = None
+            if known is None:
+                logger.info("Imported output port %r: delivery method %s not found, not kept",
+                            port.name, port.deliveryMethodId)
+                port.deliveryMethodId = None
+
+    @staticmethod
     def _end_savepoint(savepoint) -> bool:
         """Roll back a savepoint that is still open, also when a failed flush
         deactivated it (``is_active`` is then False, but it needs a rollback).
@@ -4563,10 +4600,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         if product.inputPorts:
             odps["inputPorts"] = [
-                {k: v for k, v in {
-                    "name": p.name, "version": p.version,
-                    "contractId": p.contractId,
-                }.items() if v}
+                _odps_non_empty(
+                    name=p.name, version=p.version, contractId=p.contractId,
+                    customProperties=_port_asset_properties(p) or None,
+                )
                 for p in product.inputPorts
             ]
 
@@ -4579,8 +4616,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     inputContracts=[
                         {"id": c.id, "version": c.version} for c in p.inputContracts or []
                     ],
-                    # ODPS has no port status, server, PII or auto-approve: carried as
-                    # custom properties.
+                    # ODPS has no port status, server, PII, auto-approve, delivery
+                    # method or asset: carried as custom properties.
                     customProperties=_port_ontos_properties(p) or None,
                 )
                 for p in product.outputPorts

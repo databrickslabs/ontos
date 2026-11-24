@@ -1,72 +1,120 @@
-"""The Git (Indirect) delivery serializes a stored product (#1385).
+"""The Git (Indirect) delivery writes a data product as its ODPS export (#1385).
 
-``to_yaml_dict`` read ``entity.descriptions``, ``entity.tags`` and other
-attributes ``DataProductDb`` doesn't have, so every Git delivery of a product failed.
+The file is the document ``GET /data-products/{id}/odps/export`` returns, not wrapped,
+so an ODPS import reads it back (the round trip is in
+``tests/integration/test_product_git_file_roundtrip.py``).
 """
+import json
 import uuid
+from pathlib import Path
+from unittest.mock import MagicMock
 
-from src.db_models.data_products import (
-    DataProductDb, DescriptionDb, InputPortDb, OutputPortDb, SupportDb,
-)
-from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
+import jsonschema
+import pytest
+import yaml
+
+from src.controller.data_products_manager import DataProductsManager
+from src.controller.tags_manager import TagsManager
+from src.db_models.data_products import DataProductDb
+from src.db_models.delivery_methods import DeliveryMethodDb
 from src.file_models.data_products import DataProductFileModel
+from src.models.data_products import (
+    ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY,
+    ONTOS_PORT_ASSET_TYPE_PROPERTY,
+    ONTOS_PORT_CONTAINS_PII_PROPERTY,
+    ONTOS_PORT_DELIVERY_METHOD_PROPERTY,
+)
+
+SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "odps-json-schema-v1.0.0.json"
 
 
-def _product(db_session) -> DataProductDb:
-    product = DataProductDb(
-        id=str(uuid.uuid4()), name="Orders", version="1.0.0", status="draft",
-        description=DescriptionDb(purpose="Sales orders", usage="Reporting"),
-        output_ports=[OutputPortDb(
-            name="orders", version="1.0.0", contract_id="c-1", port_type="table",
-            asset_type="table", asset_identifier="main.sales.orders",
-        )],
-        input_ports=[InputPortDb(name="raw", version="1.0.0", contract_id="c-0")],
-        support_channels=[SupportDb(channel="sales", url="https://chat/sales", tool="slack")],
+@pytest.fixture
+def manager(db_session) -> DataProductsManager:
+    return DataProductsManager(
+        db=db_session, ws_client=MagicMock(), notifications_manager=MagicMock(),
+        tags_manager=TagsManager(),
     )
-    namespace = TagNamespaceDb(name="default")
-    db_session.add_all([product, namespace])
+
+
+def _props(node: dict) -> dict:
+    return {cp["property"]: cp["value"] for cp in node.get("customProperties") or []}
+
+
+def _stored_product(manager, db_session) -> DataProductDb:
+    method = DeliveryMethodDb(name=f"share-{uuid.uuid4().hex[:8]}")
+    db_session.add(method)
     db_session.flush()
-    tag = TagDb(name="gold", namespace_id=namespace.id)
-    db_session.add(tag)
-    db_session.flush()
-    db_session.add(EntityTagAssociationDb(
-        tag_id=tag.id, entity_id=product.id, entity_type="data_product",
-    ))
-    db_session.flush()
-    return product
+    created = manager.create_product({
+        "name": "Orders", "version": "1.0.0", "productType": "sourceAligned",
+        "description": {"purpose": "Sales orders", "usage": "Reporting"},
+        "outputPorts": [{
+            "name": "orders", "version": "1.0.0", "contractId": "c-1", "type": "table",
+            "deliveryMethodId": str(method.id), "containsPii": True,
+            "assetType": "table", "assetIdentifier": "main.sales.orders",
+        }],
+        "inputPorts": [{
+            "name": "raw", "version": "1.0.0", "contractId": "c-0",
+            "assetType": "table", "assetIdentifier": "main.raw.orders",
+        }],
+        "support": [{"channel": "sales", "url": "https://chat/sales", "tool": "slack"}],
+    }, db=db_session, user="a@b.com")
+    return db_session.get(DataProductDb, created.id)
 
 
-def test_a_stored_product_is_serialized_with_its_real_fields(db_session):
-    product = _product(db_session)
+def test_the_file_is_the_products_odps_export(manager, db_session):
+    product = _stored_product(manager, db_session)
 
-    result = DataProductFileModel.to_yaml_dict(product)
+    document = DataProductFileModel.to_yaml_dict(product)
 
-    assert result["name"] == "Orders"
-    assert result["description"] == {"purpose": "Sales orders", "usage": "Reporting"}
-    assert result["tags"] == ["default/gold"]
-    assert result["outputPorts"] == [{
-        "name": "orders", "version": "1.0.0", "type": "table", "contractId": "c-1",
-        "assetType": "table", "assetIdentifier": "main.sales.orders",
-    }]
-    assert result["inputPorts"] == [{"name": "raw", "version": "1.0.0", "contractId": "c-0"}]
-    assert result["supportChannels"] == [
-        {"channel": "sales", "url": "https://chat/sales", "tool": "slack"}
-    ]
+    assert document == manager.build_odps_export(product.id, db=db_session)
+    assert DataProductFileModel.wrap_as_resource(product, document) is document
+    schema = json.loads(SCHEMA_PATH.read_text())
+    assert list(jsonschema.Draft202012Validator(schema).iter_errors(document)) == []
 
 
-def test_a_product_without_optional_parts_is_serialized(db_session):
-    product = DataProductDb(id=str(uuid.uuid4()), name="Bare", version="0.1", status="draft")
-    db_session.add(product)
-    db_session.flush()
+def test_the_file_has_the_port_fields_odps_has_no_place_for(manager, db_session):
+    product = _stored_product(manager, db_session)
 
-    assert DataProductFileModel.to_yaml_dict(product) == {
-        "name": "Bare", "version": "0.1", "status": "draft",
+    document = DataProductFileModel.to_yaml_dict(product)
+
+    output = _props(document["outputPorts"][0])
+    assert output[ONTOS_PORT_DELIVERY_METHOD_PROPERTY] == str(
+        product.output_ports[0].delivery_method_id)
+    assert output[ONTOS_PORT_CONTAINS_PII_PROPERTY] is True
+    assert output[ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY] == "main.sales.orders"
+    assert _props(document["inputPorts"][0]) == {
+        ONTOS_PORT_ASSET_TYPE_PROPERTY: "table",
+        ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY: "main.raw.orders",
+    }
+    assert DataProductFileModel.get_filename(product) == "orders-v1-0-0.yaml"
+
+
+def test_a_product_outside_a_session_is_not_serialized(manager, db_session):
+    product = _stored_product(manager, db_session)
+    db_session.expunge(product)
+
+    with pytest.raises(ValueError):
+        DataProductFileModel.to_yaml_dict(product)
+
+
+def test_an_imported_delivery_method_that_does_not_exist_here_is_not_kept(
+    manager, db_session,
+):
+    document = {
+        "apiVersion": "v1.0.0", "kind": "DataProduct", "name": "Elsewhere",
+        "version": "1.0.0", "status": "draft",
+        "outputPorts": [{
+            "name": "out", "version": "1.0.0",
+            "customProperties": [{
+                "property": ONTOS_PORT_DELIVERY_METHOD_PROPERTY, "value": str(uuid.uuid4()),
+            }],
+        }],
     }
 
+    result = manager.create_products_from_files(
+        [("p.yaml", yaml.safe_dump(document).encode())], user="a@b.com",
+    )
 
-def test_a_product_is_wrapped_and_named_for_delivery(db_session):
-    product = _product(db_session)
-
-    assert DataProductFileModel.get_filename(product) == "orders-v1-0-0.yaml"
-    assert DataProductFileModel.wrap_as_resource(
-        product, DataProductFileModel.to_yaml_dict(product))
+    assert result.created == 1, result.items
+    stored = db_session.get(DataProductDb, result.created_ids[0])
+    assert stored.output_ports[0].delivery_method_id is None

@@ -207,6 +207,27 @@ def test_a_table_is_bound_through_identifier(code, statement):
     )
 
 
+@pytest.mark.parametrize('code, statement', [
+    ('SELECT * FROM t WHERE a IS DISTINCT FROM ${v}',
+     'SELECT * FROM t WHERE a IS DISTINCT FROM :p0'),
+    ('SELECT * FROM t WHERE a IS NOT DISTINCT FROM ${v}',
+     'SELECT * FROM t WHERE a IS NOT DISTINCT FROM :p0'),
+    ('SELECT EXTRACT(YEAR FROM ${v})', 'SELECT EXTRACT(YEAR FROM :p0)'),
+    ("SELECT TRIM(BOTH ' ' FROM ${v})", "SELECT TRIM(BOTH ' ' FROM :p0)"),
+    ('SELECT SUBSTRING(s FROM ${v})', 'SELECT SUBSTRING(s FROM :p0)'),
+    ('SELECT * FROM ${v}', 'SELECT * FROM IDENTIFIER(:p0)'),
+    ('SELECT * FROM (SELECT * FROM ${v})', 'SELECT * FROM (SELECT * FROM IDENTIFIER(:p0))'),
+    ('SELECT * FROM t WHERE x IN (WITH c AS (SELECT 1) SELECT a FROM ${v})',
+     'SELECT * FROM t WHERE x IN (WITH c AS (SELECT 1) SELECT a FROM IDENTIFIER(:p0))'),
+    # a closed function call before the FROM does not hide it
+    ('SELECT EXTRACT(YEAR FROM d), (SELECT 1 FROM ${v})',
+     'SELECT EXTRACT(YEAR FROM d), (SELECT 1 FROM IDENTIFIER(:p0))'),
+    ('SELECT max(x) FROM ${v}', 'SELECT max(x) FROM IDENTIFIER(:p0)'),
+])
+def test_from_names_a_table_only_where_a_table_can_stand(code, statement):
+    assert bind_sql_placeholders(code, _resolver({'v': 'val'}))[0] == statement
+
+
 def test_an_unresolved_placeholder_is_left_as_written_and_takes_no_number():
     statement, params = bind_sql_placeholders(
         "SELECT * FROM t WHERE a = ${known} AND b = ${missing} AND c = {{known}}",

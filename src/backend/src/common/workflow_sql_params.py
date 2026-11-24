@@ -5,7 +5,9 @@ resolved value is sent as a named parameter (``:p0``, ``:p1``...). Where it is
 written decides how:
 
 - after ``FROM``, ``JOIN``, ``INTO``, ``UPDATE`` or ``TABLE`` it names a table:
-  ``IDENTIFIER(:pN)``;
+  ``IDENTIFIER(:pN)``. ``FROM`` counts only outside parentheses or directly inside
+  a subquery, and never after ``DISTINCT``: ``a IS DISTINCT FROM ${v}`` and
+  ``EXTRACT(YEAR FROM ${ts})`` take a value;
 - as a whole quoted literal (``'${name}'``) it is that literal: ``:pN``;
 - anywhere else (``= ${name}``, ``IDENTIFIER(${name})``, ``concat('%', ${name})``)
   it is a value: ``:pN``.
@@ -47,6 +49,8 @@ _TYPED_LITERAL_WORDS = frozenset((
     'DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMP_NTZ', 'TIMESTAMP_LTZ', 'INTERVAL', 'X', 'BINARY',
 ))
 _WORD_BEFORE = re.compile(r'([A-Za-z0-9_]+)(\s*)$')
+_SUBQUERY_START = re.compile(r'^\s*(?:SELECT|WITH)\b', re.IGNORECASE)
+_DISTINCT_BEFORE = re.compile(r'\bDISTINCT\s*$', re.IGNORECASE)
 _IN_LIST_BEFORE = re.compile(r'\bIN\s*\(\s*$', re.IGNORECASE)
 _LIST_END_AFTER = re.compile(r'^\s*\)')
 _IDENTIFIER_CHAR = re.compile(r'[A-Za-z0-9_.]')
@@ -101,6 +105,28 @@ def _literal_prefix(plain: List[str], start: int) -> str:
         return ''
     word, gap = found.groups()
     return word if not gap or word.upper() in _TYPED_LITERAL_WORDS else ''
+
+
+def _is_table_position(before: str) -> bool:
+    """Whether a placeholder after ``before`` (code outside quotes and comments)
+    names a table. FROM only counts at parenthesis depth 0 or directly inside a
+    subquery, and never after DISTINCT (IS DISTINCT FROM, EXTRACT(.. FROM ..))
+    are value positions."""
+    found = _TABLE_KEYWORD_BEFORE.search(before)
+    if not found:
+        return False
+    if found.group(0).upper().startswith('FROM'):
+        head = before[:found.start()]
+        if _DISTINCT_BEFORE.search(head):
+            return False
+        opened: List[int] = []
+        for at, char in enumerate(head):
+            if char == '(':
+                opened.append(at)
+            elif char == ')' and opened:
+                opened.pop()
+        return not opened or bool(_SUBQUERY_START.match(head[opened[-1] + 1:]))
+    return True
 
 
 def _string_end(code: str, start: int, quote: str) -> int:
@@ -177,7 +203,7 @@ def _scan(code: str) -> List[_Placeholder]:
             placeholder.kind = SQL_PLACEHOLDER_IN_IDENTIFIER
         elif _IN_LIST_BEFORE.search(before) and _LIST_END_AFTER.match(after):
             placeholder.kind = SQL_PLACEHOLDER_AS_LIST
-        elif _TABLE_KEYWORD_BEFORE.search(before):
+        elif _is_table_position(before):
             placeholder.kind = 'table'
         else:
             placeholder.kind = 'value'

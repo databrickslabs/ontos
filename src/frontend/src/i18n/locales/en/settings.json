@@ -430,10 +430,12 @@
         "title": "Home Sections",
         "description": "Select which sections appear on the home page for users with this role.",
         "labels": {
-          "JOURNEY": "Journey home"
+          "JOURNEY": "Journey home",
+          "MARKETPLACE": "Marketplace home"
         },
         "descriptions": {
-          "JOURNEY": "Replaces the full home page with Find, Understand, Trust, Publish and Maintain. It can't be combined with other sections."
+          "JOURNEY": "Replaces the full home page with Find, Understand, Trust, Publish and Maintain. It can't be combined with other sections.",
+          "MARKETPLACE": "Replaces the full home page with the marketplace. It can't be combined with other sections."
         }
       },
       "approvalPrivileges": {
@@ -585,6 +587,62 @@
       "submitFailed": "Failed to submit role access request",
       "sending": "Sending Request...",
       "send": "Send Request"
+    }
+  },
+  "navigationPresets": {
+    "title": "Navigation presets",
+    "help": "Set the menus and home page of the default roles in one step. A preset changes only what the menus and the home page show, never access levels. Roles are matched by name, and each role stays editable afterwards.",
+    "loadFailed": "Could not load the navigation presets.",
+    "presets": {
+      "essentials": {
+        "name": "Essentials",
+        "description": "Journey home and a short menu: catalog, assets and concepts, plus reviews and compliance for stewards and governance."
+      },
+      "data-consumer": {
+        "name": "Data Consumer",
+        "description": "Marketplace home for data consumers, with Marketplace and My Products in the menu."
+      }
+    },
+    "preview": {
+      "role": "Role",
+      "menu": "Menu after apply",
+      "home": "Home page",
+      "status": "Status",
+      "menuEmpty": "No menu entries",
+      "homeUnchanged": "Unchanged",
+      "noAccess": "Not shown: the role has no access to {{features}}."
+    },
+    "status": {
+      "changes": "Changes",
+      "noChange": "No change",
+      "notFound": "Role not found"
+    },
+    "actions": {
+      "apply": "Apply preset",
+      "undo": "Undo last preset"
+    },
+    "nothingToApply": "Every role already matches this preset.",
+    "lastApplied": "Last applied: {{preset}} by {{user}}, {{date}}",
+    "unknownUser": "unknown user",
+    "confirm": {
+      "applyTitle": "Apply the {{preset}} preset?",
+      "applyDescription_one": "This changes the menu and home page of {{count}} role. Access levels stay the same, and you can undo it afterwards.",
+      "applyDescription_other": "This changes the menus and home pages of {{count}} roles. Access levels stay the same, and you can undo it afterwards.",
+      "undoTitle": "Undo the last preset?",
+      "undoDescription_one": "This restores the menu and home page that {{preset}} changed on {{count}} role.",
+      "undoDescription_other": "This restores the menus and home pages that {{preset}} changed on {{count}} roles."
+    },
+    "applied": "{{preset}} preset applied",
+    "nothingChanged": "Nothing to change",
+    "appliedSummary": "Changed: {{changed}}, unchanged: {{unchanged}}, not found: {{missing}}.",
+    "applyFailed": "Could not apply the preset",
+    "undone": "{{preset}} preset undone",
+    "undoneSummary": "Restored: {{restored}}, not found: {{missing}}.",
+    "undoFailed": "Could not undo the preset",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "There is no preset application to undo.",
+      "navigation_preset_unknown": "This preset does not exist.",
+      "generic": "The request failed. Try again."
     }
   },
   "mcpTokens": {

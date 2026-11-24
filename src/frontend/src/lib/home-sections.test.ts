@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { HomeSection } from '@/types/settings';
 import { homeSectionBlocked, normalizeHomeSections } from './home-sections';
 
-const { JOURNEY, DISCOVERY, DATA_CURATION } = HomeSection;
+const { JOURNEY, MARKETPLACE, DISCOVERY, DATA_CURATION } = HomeSection;
 
 describe('home sections in the role editor', () => {
   it('blocks the journey while another section is selected', () => {
@@ -13,6 +13,15 @@ describe('home sections in the role editor', () => {
   it('blocks the other sections while the journey is selected', () => {
     expect(homeSectionBlocked([JOURNEY], DISCOVERY)).toBe(true);
     expect(homeSectionBlocked([JOURNEY], DATA_CURATION)).toBe(true);
+  });
+
+  it('treats the marketplace home like the journey: alone, and not with the journey', () => {
+    expect(homeSectionBlocked([DISCOVERY], MARKETPLACE)).toBe(true);
+    expect(homeSectionBlocked([], MARKETPLACE)).toBe(false);
+    expect(homeSectionBlocked([MARKETPLACE], DISCOVERY)).toBe(true);
+    expect(homeSectionBlocked([MARKETPLACE], JOURNEY)).toBe(true);
+    expect(homeSectionBlocked([JOURNEY], MARKETPLACE)).toBe(true);
+    expect(homeSectionBlocked([MARKETPLACE], MARKETPLACE)).toBe(false);
   });
 
   it('keeps the other sections combinable', () => {

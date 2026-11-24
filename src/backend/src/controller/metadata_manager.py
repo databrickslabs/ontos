@@ -822,7 +822,7 @@ class MetadataManager(SearchableAsset):
         sources: List[Tuple[str, str]],
         can_read_source: Optional[Callable[[str, Any], bool]],
     ) -> List[Tuple[str, str]]:
-        """Drop retired or missing sources and those ``can_read_source`` rejects.
+        """Drop retired-category or missing sources and those ``can_read_source`` rejects.
 
         ``can_read_source(kind, row)`` gets the contract or asset row; ``None``
         skips the caller check (internal use). Fails closed on errors.
@@ -830,6 +830,7 @@ class MetadataManager(SearchableAsset):
         from uuid import UUID
         from src.db_models.assets import AssetDb
         from src.db_models.data_contracts import DataContractDb
+        from src.controller.lifecycle_service import lifecycle_service
 
         contract_ids = [ident for kind, ident in sources if kind == "data_contract"]
         asset_ids = []
@@ -850,7 +851,7 @@ class MetadataManager(SearchableAsset):
         kept: List[Tuple[str, str]] = []
         for source in sources:
             row = rows.get(source)
-            if row is None or (getattr(row, "status", "") or "").strip().lower() == "retired":
+            if row is None or lifecycle_service.category_of_row(row, db) == "retired":
                 continue
             if can_read_source is not None:
                 try:

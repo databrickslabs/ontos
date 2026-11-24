@@ -29,7 +29,6 @@ interface Props {
   onGoToDetails?: () => void;
   // Inheritance support (for Data Products and Datasets)
   contractIds?: string[];
-  maxLevelInheritance?: number;
 }
 
 function slugify(text: string): string {
@@ -68,7 +67,6 @@ export default function EntityInfoDialog({
   showBackButton = false,
   onGoToDetails,
   contractIds,
-  maxLevelInheritance,
 }: Props) {
   const { t } = useTranslation(['metadata', 'common']);
   // Products and contracts inherit metadata (sources are resolved server-side);
@@ -80,8 +78,7 @@ export default function EntityInfoDialog({
   const mergedMetadata = useMergedMetadata(
     entityType, 
     useMerged ? entityId || undefined : undefined, 
-    contractIds, 
-    maxLevelInheritance
+    contractIds,
   );
   
   const { richTexts, documents, links, loading, error } = useMerged 

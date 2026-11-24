@@ -115,3 +115,38 @@ def test_unknown_source_kind_is_rejected(db_session, scoped):
     can_read = routes.build_inheritance_source_access(_request(), db_session, _user(), True)
 
     assert not can_read("data_product", SimpleNamespace(id="p-1"))
+
+
+def _custom_group(db_session):
+    from src.controller.lifecycle_service import lifecycle_service
+
+    def stage(key, category, order, initial=False):
+        return {'key': key, 'label': key.title(), 'category': category, 'color': None,
+                'order': order, 'is_initial': initial}
+
+    return lifecycle_service.save_group(db_session, {
+        'name': 'Custom', 'description': None, 'entity_type': 'data_contract',
+        'is_default_for_type': False,
+        'stages': [stage('intake', 'draft', 0, True), stage('live', 'active', 1),
+                   stage('gone', 'retired', 2)],
+        'transitions': [{'from_key': 'intake', 'to_key': 'live'},
+                        {'from_key': 'live', 'to_key': 'gone'}],
+    }, 'admin')
+
+
+def test_source_in_a_retired_category_stage_is_not_inherited(db_session):
+    from src.controller.lifecycle_service import lifecycle_service
+    from src.controller.metadata_manager import MetadataManager
+
+    lifecycle_service.invalidate()
+    group = _custom_group(db_session)
+    live = _contract(db_session, status="live")
+    gone = _contract(db_session, status="gone")
+    live.lifecycle_stage_group_id = gone.lifecycle_stage_group_id = group.id
+    db_session.flush()
+    sources = [("data_contract", live.id), ("data_contract", gone.id)]
+
+    kept = MetadataManager()._readable_sources(db_session, sources, None)
+
+    assert kept == [("data_contract", live.id)]
+    lifecycle_service.invalidate()

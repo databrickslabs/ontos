@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Klärung anfordern",
+    "messageRequiredTitle": "Nachricht erforderlich",
+    "messageRequiredDesc": "Schreiben Sie, was der Antragsteller klären soll.",
+    "requestedTitle": "Klärung angefordert",
+    "requestedDesc": "Der Antragsteller wurde um weitere Informationen zu '{{name}}' gebeten.",
+    "errors": {
+      "clarify_not_supported": "Dieser Genehmigungsschritt unterstützt keine Klärung.",
+      "clarification_message_required": "Eine Klärung braucht eine Nachricht an den Antragsteller."
+    }
+  },
   "designer": {
     "newWorkflow": "Neuer Workflow",
     "newStepName": "Neuer {{type}}-Schritt",

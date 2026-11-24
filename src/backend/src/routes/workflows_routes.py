@@ -28,7 +28,9 @@ from src.common.logging import get_logger
 from src.common.timestamps import utc_now
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
-from src.common.workflow_executor import WorkflowExecutor, public_result_data
+from src.common.workflow_executor import (
+    ClarifyNotSupportedError, WorkflowExecutor, public_result_data,
+)
 from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.notifications import NotificationDb
@@ -2216,9 +2218,27 @@ async def handle_workflow_approval(
         message = body.get('message') or body.get('reason')
         # The step the caller decides, from the notification (optional)
         step_id = body.get('step_id') if isinstance(body.get('step_id'), str) else None
+        # Request clarification: neither approved nor rejected; the step's
+        # on_clarify branch runs, with the approver's message
+        clarify = body.get('clarify') is True
 
         if not execution_id:
             raise HTTPException(status_code=400, detail="execution_id is required")
+        if clarify:
+            approved = False
+            if not str(message or '').strip():
+                raise HTTPException(status_code=400, detail={
+                    'code': 'clarification_message_required',
+                    'message': 'A clarification needs the message for the requester',
+                    'params': {},
+                })
+            refusal = executor.clarify_refusal(execution_id)
+            if refusal:
+                raise HTTPException(status_code=400, detail={
+                    'code': refusal,
+                    'message': 'This approval step does not take a clarification',
+                    'params': {},
+                })
 
         # A late decision, on a step that has ended: 409, not 404 (#1119)
         _assert_approval_still_pending(
@@ -2268,7 +2288,7 @@ async def handle_workflow_approval(
         # themselves, any one member for a group or role). The execution stays
         # paused until all have approved; any rejection resumes it as rejected.
         decides_for = notifications_manager.recipient_matcher(current_user)
-        required = executor.record_required_approval(
+        required = None if clarify else executor.record_required_approval(
             execution_id,
             bool(approved),
             decides_for=decides_for,
@@ -2331,20 +2351,28 @@ async def handle_workflow_approval(
             current_user.email if current_user else None,
             current_user.username if current_user else None,
         ):
-            result = executor.resume_workflow(
-                execution_id=execution_id,
-                step_result=approved,
-                result_data={
-                    'message': message,
-                    'reason': message,
-                    'decision': 'approved' if approved else 'rejected',
-                    # Kept with the step: applied later if recording it below fails
-                    **({ACCESS_DECISION_KEY: _access_decision_record(
-                        access_row, bool(approved), user_email, access_terms, message,
-                    )} if access_row is not None else {}),
-                },
-                user_email=user_email,
-            )
+            try:
+                result = executor.resume_workflow(
+                    execution_id=execution_id,
+                    step_result=approved,
+                    result_data={
+                        'message': message,
+                        'reason': message,
+                        'decision': (
+                            'clarify' if clarify else ('approved' if approved else 'rejected')
+                        ),
+                        # Kept with the step: applied later if recording it below fails
+                        **({ACCESS_DECISION_KEY: _access_decision_record(
+                            access_row, bool(approved), user_email, access_terms, message,
+                        )} if access_row is not None else {}),
+                    },
+                    user_email=user_email,
+                    clarify=clarify,
+                )
+            except ClarifyNotSupportedError as e:
+                raise HTTPException(status_code=400, detail={
+                    'code': e.code, 'message': str(e), 'params': {},
+                }) from e
 
         if not result:
             # Another decision ended the step meanwhile: 409, as above

@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Demander des précisions",
+    "messageRequiredTitle": "Message requis",
+    "messageRequiredDesc": "Indiquez ce que le demandeur doit préciser.",
+    "requestedTitle": "Précisions demandées",
+    "requestedDesc": "Des informations supplémentaires ont été demandées au demandeur sur '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Cette étape d'approbation n'accepte pas de demande de précisions.",
+      "clarification_message_required": "Une demande de précisions nécessite un message pour le demandeur."
+    }
+  },
   "designer": {
     "newWorkflow": "Nouveau workflow",
     "newStepName": "Nouvelle étape {{type}}",

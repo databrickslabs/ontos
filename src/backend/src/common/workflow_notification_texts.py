@@ -329,3 +329,90 @@ def lifecycle_notice(
     message = '\n'.join(line['text'] for line in lines)
     data = {'i18n': {'title': template_title_key(template), 'descriptionLines': lines}}
     return message, data, link
+
+
+# --- Status change decisions (default "Status Change Request" workflow) ----
+
+# The notify steps of a status change request's workflow, by template: the
+# decision each one tells the requester (approved / denied / clarification)
+STATUS_CHANGE_DECISION_TEMPLATES: Dict[str, str] = {
+    'status_change_approved': 'approved',
+    'status_change_denied': 'denied',
+    'status_change_clarification': 'clarification',
+}
+
+# The approval step's decision each notice reports (``decision`` of its result)
+_DECISION_STEP_VALUES: Dict[str, str] = {
+    'approved': 'approved',
+    'denied': 'rejected',
+    'clarification': 'clarify',
+}
+
+STATUS_CHANGE_DECISION_TITLES: Dict[str, str] = {
+    'approved': "Status Change Approved",
+    'denied': "Status Change Denied",
+    'clarification': "Status Change - Clarification Needed",
+}
+
+STATUS_CHANGE_DECISION_TEXTS: Dict[str, str] = {
+    'approved': (
+        "Your request to change the status of '{name}' to '{toStatus}' "
+        "has been approved by '{approver}'."
+    ),
+    'denied': (
+        "Your request to change the status of '{name}' to '{toStatus}' "
+        "has been denied by '{approver}'."
+    ),
+    'clarification': (
+        "Your request to change the status of '{name}' to '{toStatus}' "
+        "requires clarification from '{approver}'."
+    ),
+}
+
+STATUS_CHANGE_KEY_PREFIX = 'notifications:statusChangeDecision'
+
+
+def status_change_decision_notice(
+    template: str,
+    entity_type: Optional[str],
+    entity_name: Optional[str],
+    entity_id: Optional[str],
+    to_status: Optional[str],
+    approver: Optional[str],
+    decision_results: List[Mapping[str, Any]],
+) -> Optional[tuple]:
+    """Title, message and ``data`` of a status change decision notice, else None.
+
+    ``decision_results`` are the approval step's results (``step_results``
+    entries) that carry the decision and the approver's message. The English
+    texts are built here from params; the frontend translates them with the
+    keys of ``notifications:statusChangeDecision`` (``data.i18n``).
+    """
+    decision = STATUS_CHANGE_DECISION_TEMPLATES.get(template)
+    if decision is None:
+        return None
+    step_value = _DECISION_STEP_VALUES[decision]
+    message = None
+    for result in decision_results:
+        if isinstance(result, Mapping) and result.get('decision') == step_value:
+            message = result.get('message') or result.get('reason') or message
+    name = str(entity_name or entity_id or '')
+    params: Dict[str, Any] = {
+        'name': name,
+        'toStatus': str(to_status or ''),
+        'approver': str(approver or ''),
+    }
+    if message:
+        params['message'] = str(message)
+    description_key = f"{STATUS_CHANGE_KEY_PREFIX}.{decision}"
+    text = STATUS_CHANGE_DECISION_TEXTS[decision].format(**params)
+    if message:
+        description_key += 'WithMessage'
+        text += f"\n\nApprover message: {message}"
+    data = notification_i18n_data(
+        f"{STATUS_CHANGE_KEY_PREFIX}.{decision}Title", description_key, **params,
+    )
+    data['i18n']['statusNamespace'] = (
+        'data-contracts' if (entity_type or '').lower() == 'data_contract' else 'data-products'
+    )
+    return STATUS_CHANGE_DECISION_TITLES[decision], text, data

@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Solicitar esclarecimento",
+    "messageRequiredTitle": "Mensagem obrigatória",
+    "messageRequiredDesc": "Escreva o que o solicitante precisa esclarecer.",
+    "requestedTitle": "Esclarecimento solicitado",
+    "requestedDesc": "O solicitante foi questionado sobre mais informações sobre '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Esta etapa de aprovação não aceita pedido de esclarecimento.",
+      "clarification_message_required": "Um pedido de esclarecimento precisa de uma mensagem para o solicitante."
+    }
+  },
   "designer": {
     "newWorkflow": "Novo fluxo de trabalho",
     "newStepName": "Nova etapa {{type}}",

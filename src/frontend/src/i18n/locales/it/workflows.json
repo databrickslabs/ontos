@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Richiedi chiarimento",
+    "messageRequiredTitle": "Messaggio obbligatorio",
+    "messageRequiredDesc": "Scrivi cosa deve chiarire il richiedente.",
+    "requestedTitle": "Chiarimento richiesto",
+    "requestedDesc": "Al richiedente è stato chiesto di fornire ulteriori informazioni su '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Questo passaggio di approvazione non prevede un chiarimento.",
+      "clarification_message_required": "Un chiarimento richiede un messaggio per il richiedente."
+    }
+  },
   "designer": {
     "newWorkflow": "Nuovo workflow",
     "newStepName": "Nuovo passaggio {{type}}",

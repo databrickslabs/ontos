@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Statuswijziging goedgekeurd",
+    "approved": "Je verzoek om de status van '{{name}}' naar '{{toStatus}}' te wijzigen is goedgekeurd door '{{approver}}'.",
+    "approvedWithMessage": "Je verzoek om de status van '{{name}}' naar '{{toStatus}}' te wijzigen is goedgekeurd door '{{approver}}'.\n\nBericht van de goedkeurder: {{message}}",
+    "deniedTitle": "Statuswijziging afgewezen",
+    "denied": "Je verzoek om de status van '{{name}}' naar '{{toStatus}}' te wijzigen is afgewezen door '{{approver}}'.",
+    "deniedWithMessage": "Je verzoek om de status van '{{name}}' naar '{{toStatus}}' te wijzigen is afgewezen door '{{approver}}'.\n\nBericht van de goedkeurder: {{message}}",
+    "clarificationTitle": "Statuswijziging: verduidelijking nodig",
+    "clarification": "Je verzoek om de status van '{{name}}' naar '{{toStatus}}' te wijzigen vraagt om verduidelijking van '{{approver}}'.",
+    "clarificationWithMessage": "Je verzoek om de status van '{{name}}' naar '{{toStatus}}' te wijzigen vraagt om verduidelijking van '{{approver}}'.\n\nBericht van de goedkeurder: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definitie van de metric view gewijzigd",
     "description": "De definitie van de metric view {{fqn}} in Unity Catalog komt niet meer overeen met de baseline in Ontos."
@@ -142,9 +153,7 @@
         "notify-rejected": "Uw toegangsaanvraag is geweigerd. Neem contact op met een beheerder voor meer informatie."
       },
       "status-change-request": {
-        "notify-requester": "Uw aanvraag voor een statuswijziging is ter goedkeuring ingediend.",
-        "notify-approved": "Uw aanvraag voor een statuswijziging is goedgekeurd.",
-        "notify-rejected": "Uw aanvraag voor een statuswijziging is geweigerd."
+        "notify-requester": "Uw aanvraag voor een statuswijziging is ter goedkeuring ingediend."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Er is een nieuwe beoordelingsaanvraag voor een data-asset aan u toegewezen.",

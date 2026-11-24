@@ -55,6 +55,7 @@ from src.common.workflow_notification_texts import (
     approval_notification_i18n,
     lifecycle_notice,
     notification_step_i18n,
+    status_change_decision_notice,
 )
 
 logger = get_logger(__name__)
@@ -1028,6 +1029,39 @@ def _underlying_entity(context: 'StepContext') -> Tuple[str, str]:
     return underlying_type, underlying_id
 
 
+class ClarifyNotSupportedError(CodedValueError):
+    """A clarification asked of an approval step with no on_clarify branch."""
+
+    code = 'clarify_not_supported'
+
+
+CLARIFY_NOT_SUPPORTED = ClarifyNotSupportedError.code
+
+
+def _step_clarify_target(step: 'WorkflowStep') -> Optional[str]:
+    """The step a clarification of this approval step goes to (config.on_clarify), if any."""
+    config = getattr(step, 'config', None) or {}
+    target = config.get('on_clarify') if isinstance(config, dict) else None
+    return target if isinstance(target, str) and target else None
+
+
+def _approval_result(step_result: bool, clarify: bool, decision: bool = False) -> str:
+    """The approval's outcome: the approval_result (or, with decision, the decision) text."""
+    if clarify:
+        return 'clarify' if decision else 'clarification_requested'
+    return 'approved' if step_result else 'rejected'
+
+
+def _status_change_target(context: 'StepContext') -> Optional[str]:
+    """The status a status change request asks for (the trigger's to_status)."""
+    trigger_context = getattr(context, 'trigger_context', None)
+    to_status = getattr(trigger_context, 'to_status', None)
+    if to_status:
+        return to_status
+    entity_data = getattr(trigger_context, 'entity_data', None) or {}
+    return entity_data.get('target_status') if isinstance(entity_data, dict) else None
+
+
 def _requester_email(context: 'StepContext') -> Optional[str]:
     """The user who made the request the workflow handles.
 
@@ -1674,6 +1708,9 @@ class ApprovalStepHandler(StepHandler):
                             # fields today.
                             **facets,
                             "workflow_message": approval_message or None,
+                            # The step has an on_clarify branch: the dialog offers
+                            # "Request clarification" (config.on_clarify)
+                            "can_clarify": bool(self._config.get('on_clarify')),
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,
@@ -1774,16 +1811,27 @@ class NotificationStepHandler(StepHandler):
             # Resolve recipients
             resolved_recipients = self._resolve_recipients(recipients, context)
             
-            # Build notification message with variable substitution
-            raw_message = custom_message or self._get_template_message(template, context)
-            message = substitute_template(raw_message, context)
-            title = substitute_template(self._get_template_title(template, context), context)
-            # Keys of the built-in texts, so the bell shows them in the user's language
-            i18n_data = notification_step_i18n(
-                template, custom_message, context.entity_type,
-                context.entity_name or context.entity_id,
-                lambda name: substitute_template('${' + name + '}', context),
+            # The decision of a status change request (approved / denied /
+            # clarification): the product, target status, approver and the
+            # approver's message, built from params (translated by the frontend)
+            decision_notice = None if custom_message else status_change_decision_notice(
+                template, context.entity_type, context.entity_name, context.entity_id,
+                _status_change_target(context), context.user_email,
+                list((context.step_results or {}).values()),
             )
+            if decision_notice:
+                title, message, i18n_data = decision_notice
+            else:
+                # Build notification message with variable substitution
+                raw_message = custom_message or self._get_template_message(template, context)
+                message = substitute_template(raw_message, context)
+                title = substitute_template(self._get_template_title(template, context), context)
+                # Keys of the built-in texts, so the bell shows them in the user's language
+                i18n_data = notification_step_i18n(
+                    template, custom_message, context.entity_type,
+                    context.entity_name or context.entity_id,
+                    lambda name: substitute_template('${' + name + '}', context),
+                )
             link = None
             if not custom_message and template in LIFECYCLE_TEMPLATES:
                 # Reason, sunset date and replacement, each on its own line when set
@@ -1968,13 +2016,15 @@ class NotificationStepHandler(StepHandler):
         """Get notification type based on template."""
         from src.models.notifications import NotificationType
         
-        if template in ('validation_failed', 'request_rejected', 'product_rejected', 'pii_detected'):
+        if template in ('validation_failed', 'request_rejected', 'product_rejected', 'pii_detected',
+                         'status_change_denied'):
             return NotificationType.ERROR
         elif template in ('approval_requested',):
             return NotificationType.ACTION_REQUIRED
         elif template in LIFECYCLE_TEMPLATES:
             return NotificationType.WARNING
-        elif template in ('validation_passed', 'request_approved', 'product_approved'):
+        elif template in ('validation_passed', 'request_approved', 'product_approved',
+                          'status_change_approved'):
             return NotificationType.SUCCESS
         else:
             return NotificationType.INFO
@@ -4321,6 +4371,29 @@ class WorkflowExecutor:
             restored[key] = entry
         return restored
 
+    def clarify_refusal(self, execution_id: str) -> Optional[str]:
+        """The code refusing a clarification of the paused step, or None.
+
+        A clarification needs the paused approval step's ``on_clarify`` branch,
+        and no ``require_all`` (each approver's decision is then counted).
+        """
+        from src.repositories.process_workflows_repository import process_workflow_repo
+        from src.controller.workflows_manager import WorkflowsManager
+
+        db_execution = workflow_execution_repo.get(self._db, execution_id)
+        if not db_execution or db_execution.status != 'paused':
+            return None
+        db_workflow = process_workflow_repo.get(self._db, db_execution.workflow_id)
+        if not db_workflow:
+            return None
+        workflow = WorkflowsManager(self._db)._db_to_model(db_workflow)
+        step = next((s for s in workflow.steps if s.step_id == db_execution.current_step_id), None)
+        if step is None or step.step_type != StepType.APPROVAL:
+            return None
+        if not _step_clarify_target(step) or (step.config or {}).get('require_all'):
+            return CLARIFY_NOT_SUPPORTED
+        return None
+
     def resume_workflow(
         self,
         execution_id: str,
@@ -4329,6 +4402,7 @@ class WorkflowExecutor:
         result_data: Optional[Dict[str, Any]] = None,
         user_email: Optional[str] = None,
         failure_message: Optional[str] = None,
+        clarify: bool = False,
     ) -> Optional[WorkflowExecution]:
         """Resume a paused workflow after approval/external action.
         
@@ -4380,6 +4454,13 @@ class WorkflowExecutor:
         
         current_step = steps_by_id[current_step_id]
         
+        # A clarification is no approval nor rejection: it follows the step's
+        # on_clarify target (config), and only a step that has one can take it
+        if clarify:
+            step_result = False
+            if not _step_clarify_target(current_step):
+                raise ClarifyNotSupportedError("This approval step has no clarification branch")
+        
         # Claim the paused step before anything commits: the commit below,
         # which releases the lock, already says the execution has left
         # 'paused', so a decision waiting for the lock finds it decided
@@ -4408,7 +4489,7 @@ class WorkflowExecutor:
             status=StepExecutionStatus.SUCCEEDED.value if step_result else StepExecutionStatus.FAILED.value,
             passed=step_result,
             result_data={
-                'approval_result': 'approved' if step_result else 'rejected',
+                'approval_result': _approval_result(step_result, clarify),
                 'responded_by': user_email,
                 **(result_data or {}),
                 **({'decisions': decisions} if decisions else {}),
@@ -4427,7 +4508,10 @@ class WorkflowExecutor:
         )
         
         # Determine next step based on approval result
-        next_step_id = current_step.on_pass if step_result else current_step.on_fail
+        if clarify:
+            next_step_id = _step_clarify_target(current_step)
+        else:
+            next_step_id = current_step.on_pass if step_result else current_step.on_fail
         
         logger.info(
             f"Resuming workflow {execution_id} from step '{current_step_id}' "
@@ -4471,7 +4555,7 @@ class WorkflowExecutor:
                 **self._restored_step_results(execution_id, steps_by_id),
                 current_step_id: {
                     'passed': step_result,
-                    'decision': 'approved' if step_result else 'rejected',
+                    'decision': _approval_result(step_result, clarify, decision=True),
                     # Flatten result_data so ${step_results.approve.reason} works directly
                     **(result_data or {}),
                 },
@@ -4673,6 +4757,7 @@ class WorkflowExecutor:
                 responded_by=user_email,
                 approved=step_result,
                 execution_id=execution_id,
+                clarified=clarify,
             )
         
         # Return updated execution
@@ -4877,6 +4962,7 @@ class WorkflowExecutor:
         responded_by: Optional[str] = None,
         approved: Optional[bool] = None,
         execution_id: Optional[str] = None,
+        clarified: bool = False,
     ) -> None:
         """Handle entity status updates when a workflow completes.
         
@@ -5021,7 +5107,9 @@ class WorkflowExecutor:
                 ):
                     close_request(
                         self._db, entity_type, entity_id, request_id,
-                        'workflow_approved' if approved_request else 'workflow_rejected',
+                        'workflow_clarified' if clarified else (
+                            'workflow_approved' if approved_request else 'workflow_rejected'
+                        ),
                         responded_by,
                     )
                     

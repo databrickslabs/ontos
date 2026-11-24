@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Request clarification",
+    "messageRequiredTitle": "Message required",
+    "messageRequiredDesc": "Write what the requester needs to clarify.",
+    "requestedTitle": "Clarification requested",
+    "requestedDesc": "The requester was asked for more information about '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "This approval step does not take a clarification.",
+      "clarification_message_required": "A clarification needs a message for the requester."
+    }
+  },
   "designer": {
     "newWorkflow": "New Workflow",
     "newStepName": "New {{type}} Step",

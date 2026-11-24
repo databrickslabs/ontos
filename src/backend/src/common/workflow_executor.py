@@ -4846,7 +4846,9 @@ class WorkflowExecutor:
         )
 
     # Notification templates that tell the requester their request was approved
-    _APPROVAL_NOTICE_TEMPLATES = ('request_approved', 'product_approved')
+    _APPROVAL_NOTICE_TEMPLATES = (
+        'request_approved', 'product_approved', 'status_change_approved',
+    )
 
     def _withdraw_approval_notices(self, execution_id: Optional[str], recipient: Optional[str]) -> int:
         """Delete the "approved" notices this run sent ``recipient``.

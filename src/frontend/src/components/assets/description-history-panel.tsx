@@ -75,14 +75,14 @@ export function DescriptionHistoryPanel({
       `/api/assets/${assetId}/description/history?skip=${skip}&limit=${PAGE_SIZE}`
     );
     if (res.error || !res.data) {
-      setError(res.error || t(`${PREFIX}.loadError`));
+      setError(res.error || '');
     } else {
       setError(null);
       setTotal(res.data.total);
       setItems((previous) => (skip === 0 ? res.data.items : [...previous, ...res.data.items]));
     }
     setLoading(false);
-  }, [assetId, get, t]);
+  }, [assetId, get]);
 
   useEffect(() => {
     void load(0);
@@ -126,8 +126,12 @@ export function DescriptionHistoryPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
-        {!error && !loading && items.length === 0 && (
+        {error !== null && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+            {error || t(`${PREFIX}.loadError`)}
+          </p>
+        )}
+        {error === null && !loading && items.length === 0 && (
           <p className="text-sm text-muted-foreground">{t(`${PREFIX}.none`)}</p>
         )}
         {items.map((entry) => (

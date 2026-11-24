@@ -1,0 +1,16 @@
+# Navigation preset "data-consumer" (#1325): a marketplace-first menu for data consumers.
+#
+# Applying it gives the Data Consumer role the Marketplace and My Products menu entries and
+# the marketplace home page (banner and search box). Every other menu entry the role has
+# access to, including Products, is hidden. Roles are matched by name (the default role
+# name), so a renamed or deleted role is reported as not found and left alone. Admin roles
+# are never changed.
+#
+# A preset changes menus and home pages only, never access levels (feature permissions).
+# An entry listed under "shown" that the role has no access to stays absent from its menu.
+# Search and My Requests have no menu flag, so a preset can't hide them.
+id: data-consumer
+roles:
+  Data Consumer:
+    shown: [marketplace, my-products]
+    home_sections: [MARKETPLACE]

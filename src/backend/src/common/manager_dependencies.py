@@ -32,6 +32,9 @@ from src.controller.business_owners_manager import BusinessOwnersManager
 from src.controller.delivery_methods_manager import DeliveryMethodsManager
 from src.controller.ontology_generator_manager import OntologyGeneratorManager
 from src.controller.directory_manager import DirectoryManager
+from src.controller.navigation_presets_manager import (
+    NavigationPresetsManager, load_navigation_presets,
+)
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -49,6 +52,23 @@ def get_settings_manager(request: Request) -> SettingsManager:
         logger.critical("SettingsManager not found in application state during request!")
         raise HTTPException(status_code=503, detail="Settings service not configured.")
     return manager
+
+_navigation_presets = None
+
+
+def get_navigation_presets_manager(
+    settings_manager: SettingsManager = Depends(get_settings_manager),
+) -> NavigationPresetsManager:
+    """The navigation presets manager (#1325), built on the request's settings manager.
+
+    It has no state of its own: the preset files are read once per process, the roles and
+    the last-applied snapshot live in the database.
+    """
+    global _navigation_presets
+    if _navigation_presets is None:
+        _navigation_presets = load_navigation_presets()
+    return NavigationPresetsManager(settings_manager, presets=_navigation_presets)
+
 
 def get_auth_manager(request: Request) -> AuthorizationManager:
     manager = getattr(request.app.state, "authorization_manager", None) # Corrected attribute name

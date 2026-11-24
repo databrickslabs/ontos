@@ -215,6 +215,12 @@ export function canUserModifyProduct(args: {
   return args.canWrite && (args.canEditInPlace || args.isPersonalDraft);
 }
 
+/** Path of a product's active business owners (query-param form, #1612). */
+export function productOwnersPath(productId: string): string {
+  const id = encodeURIComponent(productId);
+  return `/api/business-owners/by-object/data_product?object_id=${id}&active_only=true`;
+}
+
 /**
  * Resolve the human-readable domain label for a product. Falls back to the
  * raw domain id when the lookup misses, and to a "not assigned" sentinel when
@@ -748,7 +754,7 @@ export default function DataProductDetails() {
     (async () => {
       try {
         const res = await get<Array<{ user_name?: string | null; user_email: string; role_name?: string | null; is_active: boolean }>>(
-          `/api/business-owners/by-object/data_product/${productId}?active_only=true`
+          productOwnersPath(productId),
         );
         if (!res.error && Array.isArray(res.data)) {
           setSidebarOwners(res.data.filter((o) => o.is_active));

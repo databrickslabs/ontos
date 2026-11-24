@@ -104,9 +104,9 @@ describe('known users (#1618)', () => {
         { member_type: 'user', member_identifier: 'ZOE@x.com', member_name: 'Zoe again' },
       ] },
     ]);
-    expect(users.map((u) => [u.id, u.display_name])).toEqual([
-      ['ann@x.com', 'ann@x.com'],
-      ['zoe@x.com', 'Zoe'],
+    expect(users.map((u) => [u.id, u.display_name, u.sub_label])).toEqual([
+      ['ann@x.com', 'ann@x.com', null],
+      ['zoe@x.com', 'Zoe', 'zoe@x.com'],
     ]);
   });
 

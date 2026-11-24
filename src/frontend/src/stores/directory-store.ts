@@ -74,11 +74,10 @@ export function usersOfTeams(teams: TeamRow[]): Principal[] {
     for (const m of team.members ?? []) {
       const id = (m.member_identifier ?? '').trim();
       if (m.member_type !== 'user' || !id || byId.has(id.toLowerCase())) continue;
+      const name = (m.member_name ?? '').trim();
+      // The e-mail on row two only when the name row doesn't already show it
       byId.set(id.toLowerCase(), {
-        type: 'user',
-        id,
-        display_name: (m.member_name ?? '').trim() || id,
-        sub_label: id,
+        type: 'user', id, display_name: name || id, sub_label: name ? id : null,
       });
     }
   }

@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "プレースホルダーは引用符やバッククォートの中 ('%${entity_name}%')、長い名前の一部 (main.${entity_id})、IN (...) のリスト全体には使えません。代わりに concat('%', ${entity_name}, '%')、IDENTIFIER(concat('main.', ${entity_id}))、array_contains(from_json(${variable}, 'array<string>'), column) と書いてください。 DATE '${entity_name}' のような型付きリテラルにも使えません。CAST('${entity_name}' AS DATE) と書いてください。",
+      "placeholderRules": "プレースホルダーは引用符やバッククォートの中 ('%${entity_name}%')、長い名前の一部 (main.${entity_id})、IN (...) のリスト全体には使えません。代わりに concat('%', ${entity_name}, '%')、IDENTIFIER(concat('main.', ${entity_id}))、array_contains(from_json(${variable}, 'array<string>'), column) と書いてください。 DATE '${entity_name}' のような型付きリテラルにも使えません。CAST('${entity_name}' AS DATE) と書いてください。 それ以外の位置のテーブル名には IDENTIFIER(${entity_id}) と書いてください。値はその中にバインドされます。",
       "errors": {
         "script_python_disabled": "Python スクリプトステップは無効です。ステップを SQL で書き直すか、削除してください。",
         "script_sql_placeholder_in_quotes": "プレースホルダー {{placeholder}} が引用符またはバッククォートの中にあり、値をパラメーターとして送れません。単独で書いてください: name = {{placeholder}}、concat('%', {{placeholder}}, '%')、または IDENTIFIER({{placeholder}})。",

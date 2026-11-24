@@ -7,7 +7,11 @@ written decides how:
 - after ``FROM``, ``JOIN``, ``INTO``, ``UPDATE`` or ``TABLE`` it names a table:
   ``IDENTIFIER(:pN)``. ``FROM`` counts only outside parentheses or directly inside
   a subquery, and never after ``DISTINCT``: ``a IS DISTINCT FROM ${v}`` and
-  ``EXTRACT(YEAR FROM ${ts})`` take a value;
+  ``EXTRACT(YEAR FROM ${ts})`` take a value. The other table positions are
+  ``USING`` (in a ``MERGE``), ``OVERWRITE``, ``OPTIMIZE``, ``VACUUM``,
+  ``DESCRIBE [TABLE|EXTENDED|DETAIL|HISTORY]``, an ``IF [NOT] EXISTS`` after any
+  of them, and the next tables of a comma-separated ``FROM`` list. Anywhere else,
+  write ``IDENTIFIER(${name})``: the value is bound inside it;
 - as a whole quoted literal (``'${name}'``) it is that literal: ``:pN``;
 - anywhere else (``= ${name}``, ``IDENTIFIER(${name})``, ``concat('%', ${name})``)
   it is a value: ``:pN``.
@@ -41,9 +45,20 @@ SQL_PLACEHOLDER_IN_IDENTIFIER = 'script_sql_placeholder_in_identifier'
 SQL_PLACEHOLDER_AS_LIST = 'script_sql_placeholder_as_list'
 SQL_PLACEHOLDER_TYPED_LITERAL = 'script_sql_placeholder_typed_literal'
 
-# Keywords after which a placeholder names a table.
-_TABLE_KEYWORDS = ('FROM', 'JOIN', 'INTO', 'UPDATE', 'TABLE')
-_TABLE_KEYWORD_BEFORE = re.compile(r'\b(?:' + '|'.join(_TABLE_KEYWORDS) + r')\s*$', re.IGNORECASE)
+# Keywords after which a placeholder names a table, with an optional IF [NOT] EXISTS.
+_TABLE_KEYWORD_BEFORE = re.compile(
+    r'\b(?:FROM|JOIN|INTO|UPDATE|TABLE|OVERWRITE|OPTIMIZE|VACUUM|USING'
+    r'|DESCRIBE(?:\s+(?:TABLE|EXTENDED|DETAIL|HISTORY))*)'
+    r'(?:\s+IF(?:\s+NOT)?\s+EXISTS)?\s*$',
+    re.IGNORECASE,
+)
+_MERGE = re.compile(r'\bMERGE\b', re.IGNORECASE)
+# Words that end the table list of a FROM clause.
+_CLAUSE_WORD = re.compile(
+    r'\b(FROM|WHERE|GROUP|ORDER|JOIN|ON|LIMIT|HAVING|UNION|SELECT|SET|VALUES|WINDOW|QUALIFY'
+    r'|INTERSECT|EXCEPT|LATERAL|USING)\b',
+    re.IGNORECASE,
+)
 # Words that turn the quoted text after them into a typed literal.
 _TYPED_LITERAL_WORDS = frozenset((
     'DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMP_NTZ', 'TIMESTAMP_LTZ', 'INTERVAL', 'X', 'BINARY',
@@ -107,25 +122,63 @@ def _literal_prefix(plain: List[str], start: int) -> str:
     return word if not gap or word.upper() in _TYPED_LITERAL_WORDS else ''
 
 
+def _open_parens(head: str) -> List[int]:
+    """Indexes of the parentheses still open at the end of ``head``."""
+    opened: List[int] = []
+    for at, char in enumerate(head):
+        if char == '(':
+            opened.append(at)
+        elif char == ')' and opened:
+            opened.pop()
+    return opened
+
+
+def _from_is_table(head: str) -> bool:
+    """Whether a FROM that follows ``head`` opens a table list: at depth 0 or
+    directly inside a subquery, never after DISTINCT."""
+    if _DISTINCT_BEFORE.search(head):
+        return False
+    opened = _open_parens(head)
+    return not opened or bool(_SUBQUERY_START.match(head[opened[-1] + 1:]))
+
+
+def _in_from_list(before: str) -> bool:
+    """Whether the placeholder follows a comma of a FROM table list at its depth."""
+    if not before.rstrip().endswith(','):
+        return False
+    opened = _open_parens(before)
+    start = opened[-1] + 1 if opened else 0
+    kept: List[Tuple[int, str]] = []  # (index, char) of this depth, nested parens dropped
+    depth = 0
+    for at in range(start, len(before)):
+        char = before[at]
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+        elif depth == 0:
+            kept.append((at, char))
+    level = ''.join(char for _, char in kept)
+    words = list(_CLAUSE_WORD.finditer(level))
+    if not words or words[-1].group(1).upper() != 'FROM':
+        return False
+    return _from_is_table(before[:kept[words[-1].start()][0]])
+
+
 def _is_table_position(before: str) -> bool:
     """Whether a placeholder after ``before`` (code outside quotes and comments)
     names a table. FROM only counts at parenthesis depth 0 or directly inside a
-    subquery, and never after DISTINCT (IS DISTINCT FROM, EXTRACT(.. FROM ..))
-    are value positions."""
+    subquery, and never after DISTINCT (IS DISTINCT FROM, EXTRACT(.. FROM ..)
+    are value positions). A comma-separated FROM list continues the table
+    position; USING counts in a MERGE."""
     found = _TABLE_KEYWORD_BEFORE.search(before)
     if not found:
-        return False
-    if found.group(0).upper().startswith('FROM'):
-        head = before[:found.start()]
-        if _DISTINCT_BEFORE.search(head):
-            return False
-        opened: List[int] = []
-        for at, char in enumerate(head):
-            if char == '(':
-                opened.append(at)
-            elif char == ')' and opened:
-                opened.pop()
-        return not opened or bool(_SUBQUERY_START.match(head[opened[-1] + 1:]))
+        return _in_from_list(before)
+    word = found.group(0).upper()
+    if word.startswith('FROM'):
+        return _from_is_table(before[:found.start()])
+    if word.startswith('USING'):
+        return bool(_MERGE.search(before))
     return True
 
 

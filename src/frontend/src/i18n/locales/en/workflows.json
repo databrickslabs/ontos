@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "A placeholder can't be inside quotes or backticks ('%${entity_name}%'), part of a longer name (main.${entity_id}) or the whole list of an IN (...). Write concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) or array_contains(from_json(${variable}, 'array<string>'), column) instead. A typed literal such as DATE '${entity_name}' can't take one either: write CAST('${entity_name}' AS DATE).",
+      "placeholderRules": "A placeholder can't be inside quotes or backticks ('%${entity_name}%'), part of a longer name (main.${entity_id}) or the whole list of an IN (...). Write concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) or array_contains(from_json(${variable}, 'array<string>'), column) instead. A typed literal such as DATE '${entity_name}' can't take one either: write CAST('${entity_name}' AS DATE). For a table name in any other position, write IDENTIFIER(${entity_id}): the value is bound inside it.",
       "errors": {
         "script_python_disabled": "Python script steps are disabled: rewrite the step in SQL or remove it.",
         "script_sql_placeholder_in_quotes": "The placeholder {{placeholder}} is inside quotes or backticks, where its value can't be sent as a parameter. Write it on its own: name = {{placeholder}}, concat('%', {{placeholder}}, '%') or IDENTIFIER({{placeholder}}).",

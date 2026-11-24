@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "Um marcador não pode ficar entre aspas ou crases ('%${entity_name}%'), fazer parte de um nome maior (main.${entity_id}) nem ser a lista inteira de um IN (...). Escreva concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) ou array_contains(from_json(${variable}, 'array<string>'), coluna). Um literal tipado como DATE '${entity_name}' também não aceita: escreva CAST('${entity_name}' AS DATE).",
+      "placeholderRules": "Um marcador não pode ficar entre aspas ou crases ('%${entity_name}%'), fazer parte de um nome maior (main.${entity_id}) nem ser a lista inteira de um IN (...). Escreva concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) ou array_contains(from_json(${variable}, 'array<string>'), coluna). Um literal tipado como DATE '${entity_name}' também não aceita: escreva CAST('${entity_name}' AS DATE). Para um nome de tabela em qualquer outra posição, escreva IDENTIFIER(${entity_id}): o valor é vinculado dentro dele.",
       "errors": {
         "script_python_disabled": "Etapas de script Python estão desativadas: reescreva a etapa em SQL ou remova-a.",
         "script_sql_placeholder_in_quotes": "O marcador {{placeholder}} está entre aspas ou crases, onde o valor não pode ir como parâmetro. Escreva-o sozinho: name = {{placeholder}}, concat('%', {{placeholder}}, '%') ou IDENTIFIER({{placeholder}}).",

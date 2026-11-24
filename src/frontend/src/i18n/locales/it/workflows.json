@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "Un segnaposto non può stare tra virgolette o apici inversi ('%${entity_name}%'), far parte di un nome più lungo (main.${entity_id}) né essere l'intera lista di un IN (...). Scrivi invece concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) o array_contains(from_json(${variable}, 'array<string>'), colonna). Nemmeno un letterale tipizzato come DATE '${entity_name}' ne accetta uno: scrivi CAST('${entity_name}' AS DATE).",
+      "placeholderRules": "Un segnaposto non può stare tra virgolette o apici inversi ('%${entity_name}%'), far parte di un nome più lungo (main.${entity_id}) né essere l'intera lista di un IN (...). Scrivi invece concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) o array_contains(from_json(${variable}, 'array<string>'), colonna). Nemmeno un letterale tipizzato come DATE '${entity_name}' ne accetta uno: scrivi CAST('${entity_name}' AS DATE). Per un nome di tabella in qualsiasi altra posizione, scrivi IDENTIFIER(${entity_id}): il valore viene associato al suo interno.",
       "errors": {
         "script_python_disabled": "I passaggi di script Python sono disattivati: riscrivi il passaggio in SQL o rimuovilo.",
         "script_sql_placeholder_in_quotes": "Il segnaposto {{placeholder}} è tra virgolette o apici inversi, dove il suo valore non può essere inviato come parametro. Scrivilo da solo: name = {{placeholder}}, concat('%', {{placeholder}}, '%') o IDENTIFIER({{placeholder}}).",

@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "Ein Platzhalter darf nicht in Anführungszeichen oder Backticks stehen ('%${entity_name}%'), nicht Teil eines längeren Namens sein (main.${entity_id}) und nicht die ganze Liste eines IN (...) bilden. Schreiben Sie stattdessen concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) oder array_contains(from_json(${variable}, 'array<string>'), spalte). Auch ein typisiertes Literal wie DATE '${entity_name}' nimmt keinen an: schreiben Sie CAST('${entity_name}' AS DATE).",
+      "placeholderRules": "Ein Platzhalter darf nicht in Anführungszeichen oder Backticks stehen ('%${entity_name}%'), nicht Teil eines längeren Namens sein (main.${entity_id}) und nicht die ganze Liste eines IN (...) bilden. Schreiben Sie stattdessen concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) oder array_contains(from_json(${variable}, 'array<string>'), spalte). Auch ein typisiertes Literal wie DATE '${entity_name}' nimmt keinen an: schreiben Sie CAST('${entity_name}' AS DATE). Für einen Tabellennamen an jeder anderen Stelle schreiben Sie IDENTIFIER(${entity_id}): Der Wert wird darin gebunden.",
       "errors": {
         "script_python_disabled": "Python-Skriptschritte sind deaktiviert: Schreiben Sie den Schritt in SQL um oder entfernen Sie ihn.",
         "script_sql_placeholder_in_quotes": "Der Platzhalter {{placeholder}} steht in Anführungszeichen oder Backticks, wo sein Wert nicht als Parameter übergeben werden kann. Schreiben Sie ihn allein: name = {{placeholder}}, concat('%', {{placeholder}}, '%') oder IDENTIFIER({{placeholder}}).",

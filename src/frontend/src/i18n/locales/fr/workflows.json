@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "Un espace réservé ne peut pas être entre guillemets ou accents graves ('%${entity_name}%'), faire partie d'un nom plus long (main.${entity_id}) ni constituer toute la liste d'un IN (...). Écrivez plutôt concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) ou array_contains(from_json(${variable}, 'array<string>'), colonne). Un littéral typé comme DATE '${entity_name}' n'en accepte pas non plus : écrivez CAST('${entity_name}' AS DATE).",
+      "placeholderRules": "Un espace réservé ne peut pas être entre guillemets ou accents graves ('%${entity_name}%'), faire partie d'un nom plus long (main.${entity_id}) ni constituer toute la liste d'un IN (...). Écrivez plutôt concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) ou array_contains(from_json(${variable}, 'array<string>'), colonne). Un littéral typé comme DATE '${entity_name}' n'en accepte pas non plus : écrivez CAST('${entity_name}' AS DATE). Pour un nom de table à toute autre position, écrivez IDENTIFIER(${entity_id}) : la valeur y est liée.",
       "errors": {
         "script_python_disabled": "Les étapes de script Python sont désactivées : réécrivez l'étape en SQL ou supprimez-la.",
         "script_sql_placeholder_in_quotes": "L'espace réservé {{placeholder}} est entre guillemets ou accents graves, où sa valeur ne peut pas être envoyée comme paramètre. Écrivez-le seul : name = {{placeholder}}, concat('%', {{placeholder}}, '%') ou IDENTIFIER({{placeholder}}).",

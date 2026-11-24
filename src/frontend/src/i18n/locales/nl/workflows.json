@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "Een placeholder mag niet tussen aanhalingstekens of backticks staan ('%${entity_name}%'), geen deel zijn van een langere naam (main.${entity_id}) en niet de hele lijst van een IN (...) vormen. Schrijf in plaats daarvan concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) of array_contains(from_json(${variable}, 'array<string>'), kolom). Ook een getypeerde literal zoals DATE '${entity_name}' accepteert er geen: schrijf CAST('${entity_name}' AS DATE).",
+      "placeholderRules": "Een placeholder mag niet tussen aanhalingstekens of backticks staan ('%${entity_name}%'), geen deel zijn van een langere naam (main.${entity_id}) en niet de hele lijst van een IN (...) vormen. Schrijf in plaats daarvan concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) of array_contains(from_json(${variable}, 'array<string>'), kolom). Ook een getypeerde literal zoals DATE '${entity_name}' accepteert er geen: schrijf CAST('${entity_name}' AS DATE). Voor een tabelnaam op elke andere plek schrijf je IDENTIFIER(${entity_id}): de waarde wordt daarin gebonden.",
       "errors": {
         "script_python_disabled": "Python-scriptstappen zijn uitgeschakeld: herschrijf de stap in SQL of verwijder hem.",
         "script_sql_placeholder_in_quotes": "De placeholder {{placeholder}} staat tussen aanhalingstekens of backticks, waar zijn waarde niet als parameter kan worden meegegeven. Schrijf hem los: name = {{placeholder}}, concat('%', {{placeholder}}, '%') of IDENTIFIER({{placeholder}}).",

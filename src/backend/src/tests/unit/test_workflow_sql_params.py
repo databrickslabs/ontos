@@ -228,6 +228,49 @@ def test_from_names_a_table_only_where_a_table_can_stand(code, statement):
     assert bind_sql_placeholders(code, _resolver({'v': 'val'}))[0] == statement
 
 
+@pytest.mark.parametrize('code, statement', [
+    ('SELECT * FROM ${v}, ${v}', 'SELECT * FROM IDENTIFIER(:p0), IDENTIFIER(:p1)'),
+    ('SELECT * FROM a, ${v} WHERE a.id = 1', 'SELECT * FROM a, IDENTIFIER(:p0) WHERE a.id = 1'),
+    ('SELECT * FROM a x, b y, ${v} z', 'SELECT * FROM a x, b y, IDENTIFIER(:p0) z'),
+    ('SELECT * FROM (SELECT * FROM a, ${v})', 'SELECT * FROM (SELECT * FROM a, IDENTIFIER(:p0))'),
+    ('CREATE TABLE IF NOT EXISTS ${v} (a INT)',
+     'CREATE TABLE IF NOT EXISTS IDENTIFIER(:p0) (a INT)'),
+    ('DROP TABLE IF EXISTS ${v}', 'DROP TABLE IF EXISTS IDENTIFIER(:p0)'),
+    ('MERGE INTO x USING ${v} ON x.id = 1', 'MERGE INTO x USING IDENTIFIER(:p0) ON x.id = 1'),
+    ('INSERT OVERWRITE ${v} SELECT 1', 'INSERT OVERWRITE IDENTIFIER(:p0) SELECT 1'),
+    ('OPTIMIZE ${v}', 'OPTIMIZE IDENTIFIER(:p0)'),
+    ('VACUUM ${v}', 'VACUUM IDENTIFIER(:p0)'),
+    ('DESCRIBE ${v}', 'DESCRIBE IDENTIFIER(:p0)'),
+    ('DESCRIBE TABLE ${v}', 'DESCRIBE TABLE IDENTIFIER(:p0)'),
+    ('DESCRIBE EXTENDED ${v}', 'DESCRIBE EXTENDED IDENTIFIER(:p0)'),
+    ('DESCRIBE DETAIL ${v}', 'DESCRIBE DETAIL IDENTIFIER(:p0)'),
+    ('DESCRIBE HISTORY ${v}', 'DESCRIBE HISTORY IDENTIFIER(:p0)'),
+    ('ANALYZE TABLE ${v} COMPUTE STATISTICS', 'ANALYZE TABLE IDENTIFIER(:p0) COMPUTE STATISTICS'),
+])
+def test_more_table_positions_bind_through_identifier(code, statement):
+    assert bind_sql_placeholders(code, _resolver({'v': 'val'}))[0] == statement
+
+
+@pytest.mark.parametrize('code, statement', [
+    # an explicit IDENTIFIER keeps working: bound inside, not wrapped twice
+    ('SELECT * FROM IDENTIFIER(${v})', 'SELECT * FROM IDENTIFIER(:p0)'),
+    ('SELECT * FROM a, IDENTIFIER(${v})', 'SELECT * FROM a, IDENTIFIER(:p0)'),
+    ('OPTIMIZE IDENTIFIER(${v})', 'OPTIMIZE IDENTIFIER(:p0)'),
+    # commas elsewhere are values
+    ('SELECT a, ${v} FROM t', 'SELECT a, :p0 FROM t'),
+    ('SELECT * FROM t WHERE a IN (1, ${v})', 'SELECT * FROM t WHERE a IN (1, :p0)'),
+    ('SELECT * FROM t WHERE a = 1 AND b IN (SELECT 1), ${v}',
+     'SELECT * FROM t WHERE a = 1 AND b IN (SELECT 1), :p0'),
+    ('SELECT concat(a, ${v}) FROM t', 'SELECT concat(a, :p0) FROM t'),
+    ('SELECT EXTRACT(YEAR FROM a), ${v} FROM t', 'SELECT EXTRACT(YEAR FROM a), :p0 FROM t'),
+    ('CREATE TABLE t USING delta LOCATION ${v}', 'CREATE TABLE t USING delta LOCATION :p0'),
+    ('SELECT * FROM a JOIN b USING (id) WHERE x = ${v}',
+     'SELECT * FROM a JOIN b USING (id) WHERE x = :p0'),
+])
+def test_other_positions_stay_values(code, statement):
+    assert bind_sql_placeholders(code, _resolver({'v': 'val'}))[0] == statement
+
+
 def test_an_unresolved_placeholder_is_left_as_written_and_takes_no_number():
     statement, params = bind_sql_placeholders(
         "SELECT * FROM t WHERE a = ${known} AND b = ${missing} AND c = {{known}}",

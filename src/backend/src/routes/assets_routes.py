@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
@@ -70,6 +70,24 @@ def get_assets_manager(request: Request = None) -> AssetsManager:
 _get_data_products_manager = get_data_products_manager
 _user_has_assets_feature = user_has_assets_feature
 _ensure_asset_readable = ensure_asset_readable
+
+
+def _schedule_maturity_evaluation(
+    db, background_tasks: BackgroundTasks, request: Request, asset_id, user_email,
+) -> None:
+    """Re-evaluate a table/view asset's maturity after the response is sent.
+
+    Commits the request's changes first: the background task opens its own session
+    and must see the asset as it is now, whatever the dependency teardown order.
+    """
+    from src.common.run_identity import RunIdentity
+    from src.controller.maturity_evaluator import evaluate_asset_maturity_on_change
+    db.commit()
+    # The user's write: their own token reads the UC table, not the app's
+    background_tasks.add_task(
+        evaluate_asset_maturity_on_change, str(asset_id), evaluated_by=user_email,
+        run_identity=RunIdentity.for_request(request),
+    )
 
 
 # ===================== Asset Types =====================
@@ -257,6 +275,7 @@ def create_asset(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
     manager=Depends(get_assets_manager),
 ):
     """Creates a new asset.
@@ -278,12 +297,14 @@ def create_asset(
             db, settings, request, result.id,
             description_sent=True, previous_description=None, label=result.location,
         )
-        success = True
-        created_id = str(result.id)
         result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
         result.description_sync = outcome.state
         if outcome.audit:
             details["uc_comment"] = outcome.audit
+        # Commits: the audit says success only once the asset is stored
+        _schedule_maturity_evaluation(db, background_tasks, request, result.id, current_user.email)
+        success = True
+        created_id = str(result.id)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -428,9 +449,10 @@ def update_asset(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
     manager=Depends(get_assets_manager),
 ):
-    """Updates an existing asset."""
+    """Updates an existing asset; a table or view is re-evaluated for maturity afterwards."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
     if asset_in.properties is not None:
@@ -466,6 +488,8 @@ def update_asset(
             details["uc_description_warning"] = outcome.warning.code
         if outcome.audit:
             details["uc_comment"] = outcome.audit
+        # Commits: the audit says success only once the change is stored
+        _schedule_maturity_evaluation(db, background_tasks, request, asset_id, current_user.email)
         success = True
         return result
     except NotFoundError as e:

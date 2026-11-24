@@ -41,6 +41,12 @@ class TriggerEvent:
     scope_id: Optional[str] = None
 
 
+# Entity types an asset's maturity change fires as; their payload has no levels
+_MATURITY_ASSET_ENTITY_TYPES = frozenset({
+    EntityType.TABLE, EntityType.VIEW, EntityType.METRIC_VIEW,
+})
+
+
 class TriggerRegistry:
     """Registry for workflow triggers.
     
@@ -575,10 +581,20 @@ class TriggerRegistry:
         to_level: Optional[int] = None,
         blocking: bool = False,
     ) -> List[WorkflowExecution]:
-        """Fire when an entity's maturity level changes."""
+        """Fire when an entity's maturity level changes.
+
+        The payload carries ``from_maturity_level`` / ``to_maturity_level``, except
+        for an asset (table, view, metric view): its levels can come from another
+        user's Unity Catalog read, and the payload is stored on the execution and
+        shown to approvers. An asset's levels stay in its gated maturity history.
+        """
         data = dict(entity_data or {})
-        data["from_maturity_level"] = from_level
-        data["to_maturity_level"] = to_level
+        if entity_type in _MATURITY_ASSET_ENTITY_TYPES:
+            data.pop("from_maturity_level", None)
+            data.pop("to_maturity_level", None)
+        else:
+            data["from_maturity_level"] = from_level
+            data["to_maturity_level"] = to_level
         event = TriggerEvent(
             trigger_type=TriggerType.ON_MATURITY_CHANGE,
             entity_type=entity_type,

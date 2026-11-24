@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Geen eigenaar",
+    "notOwnerMessage": "U kunt dit product bekijken, maar niet bewerken. Alleen het eigenaarsteam, leden van het project, de eigenaar van het concept of een beheerder van dataproducten kunnen het bewerken."
+  },
   "title": "Dataproducten",
   "subtitle": "Beheer je dataproducten",
   "newProduct": "Nieuw Dataproduct",

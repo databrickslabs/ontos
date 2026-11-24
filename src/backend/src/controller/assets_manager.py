@@ -324,7 +324,12 @@ class AssetsManager(SearchableAsset):
         asset_ids = data_products_manager.list_linked_asset_ids_for_products(
             db, product_ids=dp_ids,
         )
-        return list(asset_ids)
+        # The tree the product page's hierarchy shows (#1614): the product's
+        # datasets, their tables and views, and those tables' and views' columns.
+        from src.repositories.entity_relationships_repository import entity_relationship_repo
+
+        tree = entity_relationship_repo.get_product_tree_asset_ids(db, product_ids=dp_ids)
+        return list(set(asset_ids) | tree)
 
     def is_asset_accessible(
         self,

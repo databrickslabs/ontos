@@ -24,6 +24,8 @@ import {
   canUserModifyProduct,
   isProductActive,
   putProductUpdate,
+  productOwnersPath,
+  productAccessPath,
 } from './data-product-details';
 import { FeatureAccessLevel } from '@/types/settings';
 
@@ -433,6 +435,32 @@ describe('canUserModifyProduct', () => {
     ).toBe(false);
   });
 
+  // #1613: a writer who reads a product they don't own (its reviewer) must not
+  // get Edit; the backend says so with can_write=false.
+  it('writer cannot modify an editable product the backend says they cannot write', () => {
+    expect(
+      canUserModifyProduct({
+        canAdmin: false,
+        canWrite: true,
+        canEditInPlace: true,
+        isPersonalDraft: false,
+        productWritable: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('unknown product access keeps the role and status gate', () => {
+    expect(
+      canUserModifyProduct({
+        canAdmin: false,
+        canWrite: true,
+        canEditInPlace: true,
+        isPersonalDraft: false,
+        productWritable: null,
+      }),
+    ).toBe(true);
+  });
+
   it('non-writer non-admin can never modify', () => {
     expect(
       canUserModifyProduct({
@@ -500,5 +528,27 @@ describe('putProductUpdate', () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'conflict' }));
     const call = putProductUpdate('p1', {}, false, 'Failed to add deliverable', fetchFn);
     await expect(call).rejects.toThrow('Failed to add deliverable (409)');
+  });
+});
+
+describe('productOwnersPath', () => {
+  // #1612: the owners route takes object_id as a query parameter (IRIs survive
+  // the Apps proxy); the old path form 404s.
+  it('passes the product id as the object_id query parameter', () => {
+    expect(productOwnersPath('p-1')).toBe(
+      '/api/business-owners/by-object/data_product?object_id=p-1&active_only=true',
+    );
+  });
+
+  it('encodes ids that are IRIs', () => {
+    expect(productOwnersPath('urn:x/y#z')).toBe(
+      '/api/business-owners/by-object/data_product?object_id=urn%3Ax%2Fy%23z&active_only=true',
+    );
+  });
+});
+
+describe('productAccessPath', () => {
+  it('builds the my-access path with an encoded id', () => {
+    expect(productAccessPath('urn:x/y')).toBe('/api/data-products/urn%3Ax%2Fy/my-access');
   });
 });

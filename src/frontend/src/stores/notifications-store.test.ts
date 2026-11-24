@@ -513,6 +513,24 @@ describe('Notifications Store', () => {
       expect(state.error).toBeNull();
     });
 
+    it('keeps the refusal across a fetch and clears it on clearDeleteError', async () => {
+      const detail = { code: 'notification_not_deletable', message: 'text' };
+      act(() => {
+        useNotificationsStore.setState({ notifications: [], deleteError: detail });
+      });
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true, text: async () => JSON.stringify([]),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().fetchNotifications();
+      });
+      expect(useNotificationsStore.getState().deleteError).toEqual(detail);
+
+      act(() => useNotificationsStore.getState().clearDeleteError());
+      expect(useNotificationsStore.getState().deleteError).toBeNull();
+    });
+
     it('treats a 404 as already deleted: the row stays removed, no error', async () => {
       const note = {
         id: '1', type: 'info', title: 'Gone', created_at: '2026-01-01', read: true,

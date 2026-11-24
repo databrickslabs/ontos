@@ -125,4 +125,19 @@ describe('NotificationBell', () => {
 
     expect(await screen.findAllByRole('button', { name: 'Delete notification' })).toHaveLength(1);
   });
+
+  it('clears the refusal when the dropdown closes', async () => {
+    const clearDeleteError = vi.fn();
+    useNotificationsStore.setState({
+      deleteError: { code: 'notification_not_deletable' }, clearDeleteError,
+    } as never);
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationBell />);
+    await user.click(screen.getByRole('button', { name: /2/ }));
+    expect(clearDeleteError).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+
+    expect(clearDeleteError).toHaveBeenCalled();
+  });
 });

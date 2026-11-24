@@ -59,6 +59,7 @@ export default function NotificationBell() {
   const fetchNotifications = useNotificationsStore(state => state.fetchNotifications);
   const markAsRead = useNotificationsStore(state => state.markAsRead);
   const deleteNotification = useNotificationsStore(state => state.deleteNotification);
+  const clearDeleteError = useNotificationsStore(state => state.clearDeleteError);
 
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [selectedNotificationPayload, setSelectedNotificationPayload] = useState<Record<string, any> | null>(null);
@@ -214,7 +215,12 @@ export default function NotificationBell() {
 
   return (
     <>
-    <DropdownMenu onOpenChange={(open) => { if (open) fetchNotifications() }}>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) fetchNotifications();
+        else clearDeleteError();
+      }}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>

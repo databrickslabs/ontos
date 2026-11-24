@@ -14,12 +14,13 @@ interface NotificationsState {
   unreadCount: number;
   isLoading: boolean;
   error: string | null;
-  /** Why the last delete was refused; shown in the bell, cleared by the next fetch or delete. */
+  /** Why the last delete was refused; kept across fetches, cleared by a delete or on close. */
   deleteError: DeleteError | null;
   fetchNotifications: () => Promise<void>;
   refreshNotifications: () => void; // Simple alias to trigger fetch
   markAsRead: (notificationId: string) => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
+  clearDeleteError: () => void;
   startPolling: () => void; // Action to start polling
   stopPolling: () => void; // Action to stop polling
   resumePollingInterval: () => void; // Internal: (re)start the interval + fetch now
@@ -120,7 +121,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }
     
     // Set loading state immediately before creating the promise
-    set({ isLoading: true, error: null, deleteError: null });
+    set({ isLoading: true, error: null });
     
     // Create the fetch promise
     const fetchPromise = (async () => {
@@ -198,6 +199,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
        // Optionally trigger a toast notification here
     }
   },
+
+  clearDeleteError: () => set({ deleteError: null }),
 
   deleteNotification: async (notificationId: string) => {
     const originalNotifications = get().notifications;

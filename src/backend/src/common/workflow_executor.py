@@ -4232,6 +4232,34 @@ class WorkflowExecutor:
             'rejection': rejection,
         }
 
+    def record_decision_terms(
+        self, execution_id: str, decided_by: Optional[str], terms: Dict[str, Any],
+    ) -> bool:
+        """Keep what an approval grants with its ``require_all`` decision.
+
+        An access request's checked terms (duration, level) are stored on the caller's
+        approving decisions of the paused step, so the step's outcome can grant the
+        narrowest of every approver's. Call right after ``record_required_approval``.
+        Flushed, not committed. Whether a decision was found.
+        """
+        paused = self._paused_approval(execution_id, lock=True)
+        if paused is None or paused[1] is None or not decided_by:
+            return False
+        _, record, data = paused
+        decisions = [d for d in (data.get('decisions') or []) if isinstance(d, dict)]
+        who = decided_by.strip().lower()
+        found = False
+        for decision in decisions:
+            if (str(decision.get('decided_by') or '').strip().lower() == who
+                    and decision.get('decision') == 'approved' and 'terms' not in decision):
+                decision['terms'] = terms
+                found = True
+        if found:
+            record.result_data = json.dumps({**data, 'decisions': decisions})
+            self._db.add(record)
+            self._db.flush()
+        return found
+
     def _restored_step_results(
         self, execution_id: str, steps_by_id: Dict[str, Any],
     ) -> Dict[str, Dict[str, Any]]:

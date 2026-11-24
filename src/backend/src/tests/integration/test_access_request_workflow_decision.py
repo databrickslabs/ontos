@@ -38,18 +38,28 @@ def as_user(mock_test_user):
     mock_test_user.user = 'test_user'
 
 
-def _workflow(client, as_user, approvers):
+DENIED_NOTICE = 'Your access request was denied (workflow on_fail).'
+
+
+def _workflow(client, as_user, approvers, require_all=False, active=True):
     as_user(ADMIN)
     response = client.post('/api/workflows', json={
         'name': f'Access {uuid.uuid4().hex[:8]}',
         'trigger': {'type': 'on_request_access', 'entity_types': ['access_grant']},
-        'is_active': True,
+        'is_active': active,
         'steps': [
             {
                 'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
-                'config': {'approvers': approvers}, 'on_pass': 'ok', 'on_fail': 'no',
+                'config': {'approvers': approvers, 'require_all': require_all},
+                'on_pass': 'ok', 'on_fail': 'tell',
             },
             {'step_id': 'ok', 'name': 'Granted', 'step_type': 'pass'},
+            {
+                'step_id': 'tell', 'name': 'Tell', 'step_type': 'notification',
+                'config': {'recipients': 'requester', 'template': 'request_rejected',
+                           'custom_message': DENIED_NOTICE},
+                'on_pass': 'no',
+            },
             {'step_id': 'no', 'name': 'Denied', 'step_type': 'fail'},
         ],
     })
@@ -275,16 +285,14 @@ class TestAccessRequestWorkflowDecision:
     def test_a_request_decided_meanwhile_gets_409_and_the_workflow_waits(
         self, client, as_user, db_session, access_workflow,
     ):
-        from src.controller.access_grants_manager import AccessGrantsManager
-        from src.models.access_grants import AccessGrantHandlePayload
+        from src.db_models.access_grants import AccessGrantRequestDb
 
         request_id = _request_access(client, as_user)
         execution_id = _execution_of(db_session, access_workflow, request_id)
-        # Decided on the Access Grants page first
-        AccessGrantsManager().handle_request(db_session, 'admin@example.com',
-                                             AccessGrantHandlePayload(
-                                                 request_id=uuid.UUID(request_id),
-                                                 approved=False, message='No.'))
+        # Decided by a concurrent decision that committed just before this one (the
+        # Access Grants page also closes the workflow, see TestDecidedOutsideItsWorkflow)
+        db_session.get(AccessGrantRequestDb, uuid.UUID(request_id)).status = 'denied'
+        db_session.flush()
 
         response, untouched = _refused_before_any_change(
             lambda: _decide(client, as_user, execution_id, True))
@@ -309,6 +317,106 @@ class TestAccessRequestWorkflowDecision:
         assert response.status_code == 403, response.text
         assert response.json()['detail']['code'] == 'access_request_resume_refused'
         assert untouched
+
+
+BEN = ('ben@example.com', ['data-consumers'])  # a second approver
+
+
+def _open_approvals(db_session, execution_id):
+    from src.db_models.notifications import NotificationDb
+
+    db_session.expire_all()
+    return [
+        n for n in db_session.query(NotificationDb).filter_by(action_type='workflow_approval')
+        if json.loads(n.action_payload)['execution_id'] == execution_id
+        and not json.loads(n.action_payload).get('handled')
+    ]
+
+
+def _denied_notices(db_session):
+    from src.db_models.notifications import NotificationDb
+
+    db_session.expire_all()
+    return db_session.query(NotificationDb).filter_by(
+        recipient=RITA[0], description=DENIED_NOTICE).all()
+
+
+class TestRequireAllTerms:
+    """Every approver's checked terms count: the narrowest of them is granted."""
+
+    @pytest.mark.parametrize('first, second', [
+        ((ANA, {'granted_duration_days': 7, 'permission_level': 'READ'}), (BEN, {})),
+        ((BEN, {}), (ANA, {'granted_duration_days': 7, 'permission_level': 'READ'})),
+    ])
+    def test_the_narrowest_terms_are_granted(
+        self, client, as_user, db_session, first, second,
+    ):
+        workflow_id = _workflow(client, as_user, f'{ANA[0]},{BEN[0]}', require_all=True)
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+
+        (who, terms), (then, more) = first, second
+        pending = _decide(client, as_user, execution_id, True, identity=who, **terms)
+        assert pending.status_code == 200, pending.text
+        assert pending.json()['status'] == 'paused'
+        assert _grants(db_session, request_id) == []
+        response = _decide(client, as_user, execution_id, True, identity=then, **more)
+
+        assert response.status_code == 200, response.text
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'READ'
+        assert _days(grant) in (6, 7)
+
+
+class TestDecidedOutsideItsWorkflow:
+    """A decided request closes its other access workflows: cancelled, no on_fail."""
+
+    def test_an_access_grants_decision_closes_the_workflow(
+        self, client, as_user, db_session, access_workflow,
+    ):
+        from datetime import timedelta
+
+        from src.controller.access_grants_manager import AccessGrantsManager
+        from src.controller.approval_timeouts_manager import remind_overdue_approvals
+        from src.models.access_grants import AccessGrantHandlePayload
+
+        request_id = _request_access(client, as_user)
+        execution_id = _execution_of(db_session, access_workflow, request_id)
+        assert len(_open_approvals(db_session, execution_id)) == 1
+
+        AccessGrantsManager().handle_request(db_session, 'admin@example.com',
+                                             AccessGrantHandlePayload(
+                                                 request_id=uuid.UUID(request_id),
+                                                 approved=True, granted_duration_days=30))
+
+        assert _status(db_session, execution_id) == 'cancelled'
+        assert _open_approvals(db_session, execution_id) == []
+        assert _denied_notices(db_session) == []
+        from src.common.timestamps import utc_now
+        assert remind_overdue_approvals(db_session, utc_now() + timedelta(days=30)) == 0
+
+    def test_one_workflow_deciding_closes_the_other(
+        self, client, as_user, db_session, access_workflow,
+    ):
+        from src.db_models.process_workflows import ProcessWorkflowDb
+
+        # Two active access workflows for one event (the API refuses the overlap; demo
+        # data or older databases can have it)
+        other = _workflow(client, as_user, BEN[0], active=False)
+        db_session.get(ProcessWorkflowDb, other).is_active = True
+        db_session.flush()
+        request_id = _request_access(client, as_user)
+        execution_id = _execution_of(db_session, access_workflow, request_id)
+        other_id = _execution_of(db_session, other, request_id)
+
+        response = _decide(client, as_user, execution_id, False, message='No.')
+
+        assert response.status_code == 200, response.text
+        assert _my_request(db_session, request_id)['status'] == 'denied'
+        assert _status(db_session, other_id) == 'cancelled'
+        assert _open_approvals(db_session, other_id) == []
+        # Only the deciding workflow's own on_fail told the requester
+        assert len(_denied_notices(db_session)) == 1
 
 
 def test_both_decision_paths_lock_the_request_row(db_session):

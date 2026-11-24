@@ -337,6 +337,8 @@ class AccessGrantsManager:
             payload.permission_level.value if payload.permission_level else None,
             payload.message, notify_requester=notify_requester,
         )
+        # Its access workflows have nothing left to decide: closed, not failed
+        self.close_request_workflows(db, request.id, closed_by=admin_email)
 
         db.commit()
         # After the commit: the handle path commits, and rolls back on an error
@@ -489,6 +491,67 @@ class AccessGrantsManager:
             f"for {duration_days} days"
         )
         return grant
+
+    def close_request_workflows(
+        self,
+        db: Session,
+        request_id: Any,
+        *,
+        closed_by: Optional[str],
+        except_execution: Optional[str] = None,
+    ) -> List[str]:
+        """Close the paused access workflows of a request that is decided now.
+
+        Their approvals would only get ``access_request_already_decided`` and be reminded
+        when overdue. Each is ended as cancelled, without its ``on_fail`` (so the requester
+        isn't told they were denied), and its open approval notifications are marked handled
+        (``cancelled``), so My Actions clears. ``except_execution``: the one deciding it.
+        Flushed, not committed. Returns the closed execution ids.
+        """
+        from src.common.workflow_approvals import open_execution_approvals
+        from src.db_models.process_workflows import WorkflowExecutionDb
+
+        request_key = str(request_id)
+        closed: List[str] = []
+        rows = db.query(WorkflowExecutionDb).filter(
+            WorkflowExecutionDb.status == 'paused',
+            WorkflowExecutionDb.trigger_context.contains(json.dumps(request_key)),
+        ).all()
+        now = utc_now()
+        for execution in rows:
+            if execution.id == except_execution:
+                continue
+            try:
+                context = json.loads(execution.trigger_context or '{}') or {}
+            except (TypeError, ValueError):
+                continue
+            if str(context.get('entity_type') or '').lower() != 'access_grant' or str(
+                context.get('entity_id')
+            ) != request_key:
+                continue
+            execution.status = 'cancelled'
+            execution.error_message = 'Closed: the access request was decided'
+            execution.finished_at = now
+            for notification in open_execution_approvals(db, execution.id):
+                try:
+                    payload = json.loads(notification.action_payload or '{}')
+                except (TypeError, ValueError):
+                    continue
+                if payload.get('execution_id') != execution.id:
+                    continue
+                payload.update({
+                    'handled': True, 'decision': 'cancelled', 'handled_by': closed_by,
+                    'handled_at': now.isoformat(),
+                })
+                notification.action_payload = json.dumps(payload)
+                notification.read = True
+            closed.append(execution.id)
+        if closed:
+            db.flush()
+            logger.info(
+                f"Closed {len(closed)} access workflow(s) of decided request {request_key}"
+            )
+        return closed
 
     def mark_request_notifications_handled(self, db: Session, request_id: Any) -> None:
         """Public form of ``_mark_request_notifications_handled`` for a decided request."""

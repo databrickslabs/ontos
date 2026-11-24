@@ -143,6 +143,27 @@ class TestRemindOverdueApprovals:
         assert remind_overdue_approvals(db_session, ASKED + timedelta(days=6)) == 0
         assert remind_overdue_approvals(db_session, ASKED + timedelta(days=7)) == 1
 
+    def test_not_for_an_access_request_decided_elsewhere(self, db_session):
+        from src.db_models.access_grants import AccessGrantRequestDb
+
+        decided = AccessGrantRequestDb(
+            id=uuid.uuid4(), requester_email='rita@example.com', entity_type='data_product',
+            entity_id='p1', requested_duration_days=30, permission_level='READ',
+            status='approved',
+        )
+        db_session.add(decided)
+        execution = _paused(db_session)
+        execution.trigger_context = json.dumps({
+            'entity_type': 'access_grant', 'entity_id': str(decided.id),
+            'trigger_type': 'on_request_access', 'user_email': 'rita@example.com',
+        })
+        db_session.flush()
+
+        assert remind_overdue_approvals(db_session, ASKED + timedelta(days=30)) == 0
+        decided.status = 'pending'
+        db_session.flush()
+        assert remind_overdue_approvals(db_session, ASKED + timedelta(days=30)) == 1
+
     def test_timeout_values(self):
         assert timeout_of({}) == timedelta(days=7)
         assert timeout_of({'timeout_days': '2'}) == timedelta(days=2)

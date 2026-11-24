@@ -13,7 +13,7 @@ into it) opens new notifications and so a new period. Run by the workflow schedu
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
@@ -136,8 +136,11 @@ def remind_overdue_approvals(db: Session, now: Optional[datetime] = None) -> int
         WorkflowExecutionDb.id.in_(list(by_execution)),
         WorkflowExecutionDb.status == 'paused',
     ).all()
+    decided = _decided_access_executions(db, paused)
     reminded = 0
     for execution in paused:
+        if execution.id in decided:
+            continue  # its access request was decided: nothing left to remind about
         rows = [
             row for row in by_execution[execution.id]
             if _payload(row).get('step_id') in (None, execution.current_step_id)
@@ -155,6 +158,33 @@ def remind_overdue_approvals(db: Session, now: Optional[datetime] = None) -> int
         db.commit()
         logger.info(f"Reminded {reminded} overdue approval step(s)")
     return reminded
+
+
+def _decided_access_executions(db: Session, executions: List[Any]) -> set:
+    """Ids of the access workflows among ``executions`` whose request is no longer pending.
+
+    One query, only when there are access workflows (deciding a request closes its other
+    workflows; this is the defence in depth).
+    """
+    from src.db_models.access_grants import AccessGrantRequestDb, AccessGrantRequestStatus
+
+    request_of: Dict[str, Any] = {}
+    for execution in executions:
+        try:
+            context = json.loads(execution.trigger_context or '{}') or {}
+            if str(context.get('entity_type') or '').lower() == 'access_grant':
+                request_of[execution.id] = UUID(str(context.get('entity_id')))
+        except (TypeError, ValueError):
+            continue
+    if not request_of:
+        return set()
+    pending = {
+        row.id for row in db.query(AccessGrantRequestDb.id).filter(
+            AccessGrantRequestDb.id.in_(set(request_of.values())),
+            AccessGrantRequestDb.status == AccessGrantRequestStatus.PENDING.value,
+        ).all()
+    }
+    return {eid for eid, rid in request_of.items() if rid not in pending}
 
 
 def _remind(

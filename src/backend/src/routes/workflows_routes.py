@@ -1676,8 +1676,14 @@ def _access_grants_manager(request: Request, notifications_manager: Notification
 
 
 def _lock_pending_access_request(db: Session, manager: Any, request_id: str) -> Any:
-    """The access request, locked until the decision's commit; 409 when it was decided
-    meanwhile (e.g. on the Access Grants page), before the workflow state changes."""
+    """The access request, locked until the route's commit; 409 when it was decided
+    meanwhile (e.g. on the Access Grants page), before the workflow state changes.
+
+    The lock is held by the route's session (``DBSessionDep``). The executor commits the
+    workflow's steps on its own session (``get_workflow_executor``), and no step writes
+    access requests, so those commits don't release it: it holds until the route commits
+    the decision (or returns early, deciding nothing, in ``_respond_to_pending_approval``).
+    """
     from src.db_models.access_grants import AccessGrantRequestStatus
 
     row = manager.lock_request(db, request_id)
@@ -1713,9 +1719,38 @@ def _checked_access_terms(db: Session, manager: Any, row: Any, body: Dict[str, A
         )
 
 
+def _terms_record(terms: Optional[tuple]) -> Optional[Dict[str, Any]]:
+    """Checked terms as stored with a ``require_all`` decision."""
+    if not terms:
+        return None
+    days, level = terms
+    return {'granted_duration_days': days, 'permission_level': level}
+
+
+def _narrowest_terms(decisions: List[Dict[str, Any]], current: Optional[tuple]) -> Optional[tuple]:
+    """The narrowest terms of a ``require_all`` step's approvals: the shortest duration and
+    the lowest level any approver granted (each was checked when it was decided)."""
+    from src.controller.access_grants_manager import PERMISSION_ORDER
+
+    terms = [current] if current else []
+    for decision in decisions:
+        stored = decision.get('terms') if decision.get('decision') == 'approved' else None
+        if isinstance(stored, dict) and stored.get('granted_duration_days') and (
+            stored.get('permission_level') in PERMISSION_ORDER
+        ):
+            terms.append((int(stored['granted_duration_days']), stored['permission_level']))
+    if not terms:
+        return current
+    return (
+        min(days for days, _ in terms),
+        min((level for _, level in terms), key=PERMISSION_ORDER.index),
+    )
+
+
 def _record_access_decision(
     db: Session, manager: Any, row: Any, approved: bool, status: Any,
     decided_by: Optional[str], terms: Optional[tuple], message: Optional[str],
+    execution_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Carry an access workflow's outcome to its access request (#1615); the applied terms.
 
@@ -1738,6 +1773,10 @@ def _record_access_decision(
             manager.apply_workflow_decision(
                 db, row, approved=approved, decided_by=decided_by or 'workflow',
                 terms=terms, message=message,
+            )
+            # Another access workflow of the same request has nothing left to decide
+            manager.close_request_workflows(
+                db, row.id, closed_by=decided_by, except_execution=execution_id,
             )
     except Exception:
         logger.exception("Failed to record the workflow decision on access request %s", row.id)
@@ -2182,6 +2221,14 @@ async def handle_workflow_approval(
             username=current_user.username if current_user else None,
             reason=message,
         )
+        if access_terms and required is not None and required['outcome'] in (
+            'pending', 'approved',
+        ):
+            # Kept with the decision: the step grants the narrowest of every approver's
+            executor.record_decision_terms(
+                execution_id, (current_user.email or current_user.username) if current_user
+                else None, _terms_record(access_terms),
+            )
         if required is not None and required['outcome'] in (
             'pending', 'already_decided', 'no_longer_pending', 'not_an_approver',
         ):
@@ -2199,6 +2246,9 @@ async def handle_workflow_approval(
             if rejection:
                 user_email = rejection.get('decided_by') or user_email
                 message = rejection.get('reason')
+            if approved and access_row is not None:
+                # Every approver's checked terms count: the narrowest of them is granted
+                access_terms = _narrowest_terms(required['decisions'], access_terms)
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
@@ -2247,7 +2297,7 @@ async def handle_workflow_approval(
         if access_row is not None:
             access_decision = _record_access_decision(
                 db, access_manager, access_row, bool(approved), result.status,
-                user_email, access_terms, message,
+                user_email, access_terms, message, execution_id=execution_id,
             )
 
         audit_manager.log_action(

@@ -66,8 +66,16 @@ class DeliveryMixin:
             delivery_service = get_delivery_service()
             
             # Check if any delivery modes are active
-            if not delivery_service or not delivery_service.get_active_modes():
-                logger.debug(f"No active delivery modes, skipping delivery for {self.DELIVERY_ENTITY_TYPE}")
+            if not delivery_service:
+                logger.debug("Delivery service is unavailable, skipping delivery for %s", self.DELIVERY_ENTITY_TYPE)
+                return False
+
+            active_modes = delivery_service.get_active_modes()
+            if not active_modes:
+                logger.debug(
+                    "No active delivery modes, skipping delivery for %s",
+                    self.DELIVERY_ENTITY_TYPE,
+                )
                 return False
             
             # Extract entity ID
@@ -82,19 +90,44 @@ class DeliveryMixin:
                 user=user,
             )
             
-            if background_tasks:
-                # Queue for async execution
-                background_tasks.add_task(delivery_service.deliver, payload)
-                logger.info(f"Queued delivery for {self.DELIVERY_ENTITY_TYPE} {entity_id}")
-            else:
-                # Execute synchronously (not ideal, but works for testing)
-                result = delivery_service.deliver(payload)
-                logger.info(f"Delivered {self.DELIVERY_ENTITY_TYPE} {entity_id}: {result.all_success}")
+            from src.controller.delivery_service import DeliveryMode
+
+            # Indirect delivery serializes ORM relationships. Do it while the
+            # request's session is still open; a FastAPI background task runs
+            # after the session dependency closes and receives a detached ORM
+            # object whose lazy relationships cannot be loaded.
+            indirect_modes = [mode for mode in active_modes if mode == DeliveryMode.INDIRECT]
+            background_modes = [mode for mode in active_modes if mode != DeliveryMode.INDIRECT]
+
+            if indirect_modes:
+                result = delivery_service.deliver(payload, modes=indirect_modes)
+                logger.info(
+                    "Delivered %s %s synchronously via indirect mode: %s",
+                    self.DELIVERY_ENTITY_TYPE,
+                    entity_id,
+                    result.all_success,
+                )
+
+            if background_tasks and background_modes:
+                background_tasks.add_task(delivery_service.deliver, payload, background_modes)
+                logger.info("Queued delivery for %s %s", self.DELIVERY_ENTITY_TYPE, entity_id)
+            elif background_modes:
+                result = delivery_service.deliver(payload, modes=background_modes)
+                logger.info(
+                    "Delivered %s %s: %s",
+                    self.DELIVERY_ENTITY_TYPE,
+                    entity_id,
+                    result.all_success,
+                )
                 
             return True
             
         except Exception as e:
-            logger.warning(f"Failed to queue delivery for {self.DELIVERY_ENTITY_TYPE}: {e}")
+            logger.warning(
+                "Failed to queue delivery for %s: %s",
+                self.DELIVERY_ENTITY_TYPE,
+                e,
+            )
             return False
     
     def _get_entity_id(self, entity: Any) -> str:

@@ -94,7 +94,7 @@ class DataContractFileModel(FileModel[DataContractDb]):
         for obj in schema_objects:
             schema_obj: Dict[str, Any] = {
                 'name': obj.name,
-                'type': obj.type or 'table',
+                'type': obj.physical_type or obj.logical_type or 'table',
             }
             if obj.description:
                 schema_obj['description'] = obj.description
@@ -115,23 +115,16 @@ class DataContractFileModel(FileModel[DataContractDb]):
         for prop in properties:
             col: Dict[str, Any] = {
                 'name': prop.name,
-                'type': prop.type,
+                'type': prop.logical_type,
             }
-            if prop.description:
-                col['description'] = prop.description
+            description = getattr(prop, 'description', None)
+            if description:
+                col['description'] = description
             if prop.primary_key:
                 col['primaryKey'] = True
-            if prop.is_nullable is not None:
-                col['nullable'] = prop.is_nullable
+            col['nullable'] = not prop.required
             if prop.classification:
                 col['classification'] = prop.classification
-            
-            # Quality rules
-            if hasattr(prop, 'quality_rules') and prop.quality_rules:
-                col['qualityRules'] = [
-                    {'type': rule.type, 'expression': rule.expression}
-                    for rule in prop.quality_rules
-                ]
             
             result.append(col)
         return result
@@ -190,7 +183,7 @@ class DataContractFileModel(FileModel[DataContractDb]):
         """Serialize SLA properties."""
         sla = {}
         for prop in sla_props:
-            sla[prop.property_name] = prop.property_value
+            sla[prop.property] = prop.value
         return sla
     
     @classmethod
@@ -198,6 +191,6 @@ class DataContractFileModel(FileModel[DataContractDb]):
         """Serialize custom properties."""
         result = {}
         for prop in custom_props:
-            result[prop.property_name] = prop.property_value
+            result[prop.property] = prop.value
         return result
 

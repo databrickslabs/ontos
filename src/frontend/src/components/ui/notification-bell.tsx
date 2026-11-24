@@ -43,6 +43,7 @@ function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
 
 // The refusals of DELETE /api/notifications/{id}, by the code of the error
 const DELETE_REFUSED_KEYS: Record<string, string> = {
+  generic: 'notifications:deleteRefused.generic',
   notification_not_deletable: 'notifications:deleteRefused.notDeletable',
   notification_access_denied: 'notifications:deleteRefused.accessDenied',
 };
@@ -240,9 +241,7 @@ export default function NotificationBell() {
         <ScrollArea className="h-[400px]">
           {deleteError && (
             <div role="alert" className="border-b p-2 text-xs text-red-600">
-              {t(
-                DELETE_REFUSED_KEYS[deleteError.code ?? ''] ?? 'notifications:deleteRefused.generic',
-              )}
+              {t(DELETE_REFUSED_KEYS[deleteError.code ?? ''] ?? DELETE_REFUSED_KEYS.generic)}
             </div>
           )}
           {isLoading ? (

@@ -1,4 +1,4 @@
-"""``DELETE /api/notifications/{id}`` checks the notification, not only the feature permission (#675).
+"""``DELETE /api/notifications/{id}`` checks the notification, not only the permission (#675).
 
 The route was guarded by ``notifications: Admin`` alone. A caller holding only that
 permission, in no admin role, could delete a ``can_delete=False`` notification (one that

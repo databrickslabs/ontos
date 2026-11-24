@@ -212,6 +212,38 @@ def test_refused_move_through_the_tool_releases_the_lock(pg, lock_key):
     assert _parent_of(pg, a_id) is None
 
 
+def test_refused_move_through_the_tool_keeps_earlier_tool_work(pg, lock_key):
+    """A write an earlier tool call left for the end-of-request commit survives a refused
+    domain move in the same session, and the lock is free afterwards."""
+    a_id, b_id = _roots(pg, 'A', 'B')
+    with Session(bind=pg) as db:
+        db.query(DataDomain).filter(DataDomain.id == b_id).update({'parent_id': a_id})
+        db.commit()
+    tool_session, other = Session(bind=pg), Session(bind=pg)
+    try:
+        # An earlier tool call (e.g. a draft product) flushed its row without committing
+        pending_id = str(uuid.uuid4())
+        tool_session.add(DataDomain(id=pending_id, name='Pending', created_by='t@example.com'))
+        tool_session.flush()
+
+        ctx = ToolContext(db=tool_session, settings=None)
+        result = asyncio.run(UpdateDomainTool().execute(ctx, domain_id=a_id, parent_id=b_id))
+        assert result.success is False
+
+        taken = other.execute(
+            text('SELECT pg_try_advisory_xact_lock(:key)'), {'key': lock_key}
+        ).scalar()
+        assert taken is True, 'the refused move still holds the hierarchy lock'
+        other.rollback()
+        tool_session.commit()  # the end of the request
+    finally:
+        tool_session.close()
+        other.close()
+    with Session(bind=pg) as db:
+        assert db.get(DataDomain, pending_id) is not None, 'the earlier tool work was lost'
+    assert _parent_of(pg, a_id) is None
+
+
 def test_lock_is_a_noop_on_sqlite():
     """SQLite runs one writer at a time and has no advisory locks: nothing is sent."""
     engine = create_engine('sqlite://')

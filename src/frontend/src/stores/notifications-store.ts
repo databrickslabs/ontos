@@ -59,7 +59,9 @@ const apiPut = async (endpoint: string): Promise<{ error?: string }> => {
     }
 };
 
-const apiDelete = async (endpoint: string): Promise<{ error?: string; detail?: DeleteError }> => {
+const apiDelete = async (
+    endpoint: string,
+): Promise<{ error?: string; status?: number; detail?: DeleteError }> => {
      try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
          if (!response.ok && response.status !== 204) { // Allow 204 No Content
@@ -68,15 +70,14 @@ const apiDelete = async (endpoint: string): Promise<{ error?: string; detail?: D
                 const body = await response.json();
                 if (body?.detail && typeof body.detail === 'object') {
                     detail = body.detail as DeleteError;
-                } else if (typeof body?.detail === 'string') {
-                    detail = { message: body.detail };
                 }
             } catch {
                 // No JSON body: the status line below is the error
             }
             return {
                 error: `API Error: ${response.status} ${response.statusText}`,
-                detail: detail ?? {},
+                status: response.status,
+                detail,
             };
         }
         return {}; // Success
@@ -214,9 +215,13 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
     try {
        const response = await apiDelete(`/api/notifications/${notificationId}`);
+        if (response.status === 404) {
+            // Already deleted (elsewhere, or by a cleanup): the optimistic removal stands
+            return;
+        }
         if (response.error) {
-            if (response.detail) {
-                // The server refused (403): keep the list, say why in the bell
+            if (response.status === 403 && response.detail?.code) {
+                // The server refused with a coded error: keep the list, say why in the bell
                 console.error("Delete of notification", notificationId, "refused:", response.error);
                 set({
                     notifications: originalNotifications,

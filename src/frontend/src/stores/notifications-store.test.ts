@@ -512,6 +512,52 @@ describe('Notifications Store', () => {
       expect(state.deleteError).toEqual(detail);
       expect(state.error).toBeNull();
     });
+
+    it('treats a 404 as already deleted: the row stays removed, no error', async () => {
+      const note = {
+        id: '1', type: 'info', title: 'Gone', created_at: '2026-01-01', read: true,
+        can_delete: true,
+      } as Notification;
+      act(() => {
+        useNotificationsStore.setState({ notifications: [note], unreadCount: 0, error: null });
+      });
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false, status: 404, statusText: 'Not Found',
+        json: async () => ({ detail: 'Notification not found' }),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().deleteNotification('1');
+      });
+
+      const state = useNotificationsStore.getState();
+      expect(state.notifications).toHaveLength(0);
+      expect(state.deleteError).toBeNull();
+      expect(state.error).toBeNull();
+    });
+
+    it('takes the error path on a 500: the row comes back, error is set, no refusal', async () => {
+      const note = {
+        id: '1', type: 'info', title: 'Kept', created_at: '2026-01-01', read: true,
+        can_delete: true,
+      } as Notification;
+      act(() => {
+        useNotificationsStore.setState({ notifications: [note], unreadCount: 0, error: null });
+      });
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false, status: 500, statusText: 'Server Error',
+        json: async () => ({ detail: 'Internal server error deleting notification.' }),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().deleteNotification('1');
+      });
+
+      const state = useNotificationsStore.getState();
+      expect(state.notifications).toHaveLength(1);
+      expect(state.deleteError).toBeNull();
+      expect(state.error).toContain('500');
+    });
   });
 
   describe('Polling', () => {

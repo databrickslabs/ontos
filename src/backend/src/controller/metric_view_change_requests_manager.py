@@ -558,6 +558,7 @@ class MetricViewChangeRequestsManager:
     def on_workflow_completed(
         self, request_id: Optional[str], *, approved: Optional[bool],
         responded_by: Optional[str], execution_id: Optional[str] = None,
+        clarified: bool = False,
     ) -> None:
         """Record the review's decision and deliver an approved request.
 
@@ -577,6 +578,15 @@ class MetricViewChangeRequestsManager:
         now = _now()
         values: Dict[str, Any] = {'decided_by': responded_by, 'decided_at': now,
                                   'decision_message': self._decision_message(execution_id)}
+        if clarified:
+            # A clarification is no decision, but no workflow is left to decide:
+            # the request is closed with the approver's message for the requester
+            if self._repo.set_status_if(self._db, row, 'in_review',
+                                        {**values, 'status': 'rejected'}):
+                self._db.commit()
+                _audit('METRIC_VIEW_CHANGE_REQUEST_CLARIFIED', row, responded_by,
+                       execution_id=execution_id)
+            return
         own = bool(responded_by) and responded_by.lower() == row.requested_by.lower()
         if approved and not own:
             if self._repo.set_status_if(self._db, row, 'in_review',

@@ -4988,9 +4988,15 @@ class WorkflowExecutor:
         # A clarification is "no decision yet": the entity keeps its status and
         # only the notification goes out. A status change request is the one
         # exception: it is still closed ('workflow_clarified') below.
+        # The request-based branches (a status change request, a metric view
+        # change request) still close their request, or it would stay open
+        # with no workflow left.
         if clarified and not (
-            entity_type in ('data_product', 'data_contract')
-            and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')
+            (entity_type in ('data_product', 'data_contract')
+             and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE'))
+            or (entity_type == 'metric_view'
+                and trigger_type in ('on_request_definition_change',
+                                     'ON_REQUEST_DEFINITION_CHANGE'))
         ):
             return
 
@@ -5071,6 +5077,7 @@ class WorkflowExecutor:
                 MetricViewChangeRequestsManager(self._db).on_workflow_completed(
                     (trigger_context.entity_data or {}).get('request_id'),
                     approved=approved, responded_by=responded_by, execution_id=execution_id,
+                    clarified=clarified,
                 )
 
             # Handle data product activation completion

@@ -525,6 +525,8 @@ asset_bulk_routes.register_routes(app)
 business_roles_routes.register_routes(app)
 business_owners_routes.register_routes(app)
 delivery_methods_routes.register_routes(app)
+from src.routes import delivery_routes
+delivery_routes.register_routes(app)  # delivery outbox (#1688)
 
 # Governance - Standards and approval workflows
 semantic_models_routes.register_routes(app)

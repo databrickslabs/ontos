@@ -87,6 +87,31 @@
       "uc_description_empty": "{{object}} には Unity Catalog のコメントがないため、Ontos の説明は保持されました。"
     }
   },
+  "descriptionHistory": {
+    "title": "説明の履歴",
+    "none": "説明はまだ変更されていません。",
+    "loading": "履歴を読み込み中...",
+    "loadError": "説明の履歴を読み込めませんでした。",
+    "unknownUser": "不明なユーザー",
+    "empty": "（空）",
+    "before": "変更前",
+    "after": "変更後",
+    "restoreAfter": "新しいテキストを復元",
+    "restoreBefore": "以前のテキストを復元",
+    "restored": "説明を復元しました",
+    "restoreFailed": "説明を復元できませんでした",
+    "showMore": "さらに {{count}} 件を表示",
+    "sources": {
+      "manual": "編集",
+      "uc_import": "Unity Catalog からのインポート",
+      "bulk_import": "ファイルのインポート（CSV/XLSX）",
+      "uc_reset": "Unity Catalog のコメント",
+      "restore": "復元"
+    },
+    "errors": {
+      "description_history_entry_not_found": "この変更はこのアセットの履歴にありません。"
+    }
+  },
   "deleteDialog": {
     "title": "アセットを削除しますか？",
     "description": "この操作は元に戻せません。アセットとそのすべての関係が完全に削除されます。",

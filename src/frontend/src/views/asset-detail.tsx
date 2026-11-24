@@ -17,6 +17,9 @@ import { DescriptionSyncNotice } from '@/components/assets/description-sync-noti
 import {
   DescriptionResetDialog, canResetDescription,
 } from '@/components/assets/description-reset-dialog';
+import {
+  DescriptionHistoryPanel, hasDescriptionHistory,
+} from '@/components/assets/description-history-panel';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -458,6 +461,17 @@ export default function AssetDetailView() {
             <div data-testid="asset-maturity">
               <MaturityPanel entityType="Asset" entityId={asset.id} />
             </div>
+          )}
+
+          {/* Who changed the description of a table, view or column, and restore a version */}
+          {hasDescriptionHistory(entityType) && (
+            <DescriptionHistoryPanel
+              assetId={asset.id}
+              currentDescription={asset.description}
+              canRestore={canWrite}
+              refreshKey={asset.updated_at}
+              onRestored={() => fetchAsset()}
+            />
           )}
 
           {/* Type-specific: BusinessTerm - Definition & Synonyms */}

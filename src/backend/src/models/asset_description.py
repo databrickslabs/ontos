@@ -1,5 +1,6 @@
-"""API models of the Unity Catalog description reset of an asset."""
-from typing import List, Optional
+"""API models of the description reset (Unity Catalog comment) and history of an asset."""
+from datetime import datetime
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -32,3 +33,28 @@ class DescriptionResetResult(BaseModel):
     previous_description: Optional[str] = None
     description: Optional[str] = None
     warnings: List[CodedWarning] = Field(default_factory=list)
+
+
+class DescriptionHistoryEntry(BaseModel):
+    """One change of the description of an asset."""
+    id: str
+    timestamp: datetime
+    username: Optional[str] = None
+    source: Optional[str] = Field(
+        None, description="manual, uc_import, bulk_import, uc_reset, restore (more may come)")
+    object_type: Optional[str] = None
+    before: Optional[str] = None
+    after: Optional[str] = None
+    restored_from: Optional[str] = Field(None, description="The entry a restore came from")
+
+
+class DescriptionHistory(BaseModel):
+    asset_id: UUID
+    total: int
+    items: List[DescriptionHistoryEntry]
+
+
+class DescriptionRestoreRequest(BaseModel):
+    """Restore the text an entry set (``after``) or the one it replaced (``before``)."""
+    entry_id: str
+    version: Literal['after', 'before'] = 'after'

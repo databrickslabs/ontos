@@ -8,13 +8,15 @@ its entry are stored together or not at all.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
 from src.db_models.assets import AssetDb
+from src.db_models.change_log import ChangeLogDb
 
 logger = get_logger(__name__)
 
@@ -33,22 +35,35 @@ SOURCE_RESTORE = 'restore'  # an earlier description restored
 _current_source: ContextVar[str] = ContextVar('asset_description_source', default=SOURCE_MANUAL)
 
 
+# Extra fields of the entries made in the current context (e.g. the entry a restore came from)
+_current_extra: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
+    'asset_description_extra', default=None)
+
+
 @contextmanager
-def description_source(source: str) -> Iterator[None]:
-    """Log the description changes made inside the ``with`` block with this ``source``.
+def description_source(source: str, **extra: Any) -> Iterator[None]:
+    """Log the description changes made inside the ``with`` block with this ``source``
+    (and the ``extra`` fields, e.g. ``restored_from``).
 
     ``AssetsManager.create_asset`` / ``update_asset`` take no source argument: a flow other
     than a plain edit (an import, a reset, a restore) says what it is here.
     """
-    token = _current_source.set(source)
+    token, extra_token = _current_source.set(source), _current_extra.set(extra or None)
     try:
         yield
     finally:
         _current_source.reset(token)
+        _current_extra.reset(extra_token)
 
 
 def current_description_source() -> str:
     return _current_source.get()
+
+
+class HistoryEntryNotFoundError(CodedValueError):
+    """No such description change on this asset."""
+
+    code = 'description_history_entry_not_found'
 
 
 # Asset types whose description is tracked (lower case)
@@ -84,6 +99,7 @@ def record_description_change(
         'after': after or None,
         'source': source,
     }
+    details.update(_current_extra.get() or {})
     if extra:
         details.update(extra)
     change_log_manager.log_change_with_details(
@@ -91,3 +107,28 @@ def record_description_change(
         action=ACTION_DESCRIPTION_CHANGED, username=username, details=details, commit=False,
     )
     return True
+
+
+def list_description_history(
+    db: Session, asset_id: Any, *, skip: int = 0, limit: int = 20,
+) -> Tuple[int, List[ChangeLogDb]]:
+    """``(total, entries)``: the description changes of an asset, newest first."""
+    query = db.query(ChangeLogDb).filter(
+        ChangeLogDb.entity_type == ENTITY_TYPE, ChangeLogDb.entity_id == str(asset_id),
+        ChangeLogDb.action == ACTION_DESCRIPTION_CHANGED,
+    )
+    total = query.count()
+    entries = (
+        query.order_by(ChangeLogDb.timestamp.desc(), ChangeLogDb.id.desc())
+        .offset(skip).limit(limit).all()
+    )
+    return total, entries
+
+
+def get_description_entry(db: Session, asset_id: Any, entry_id: str) -> Optional[ChangeLogDb]:
+    """One description change of the asset, or None (also for another asset's entry)."""
+    return db.query(ChangeLogDb).filter(
+        ChangeLogDb.id == str(entry_id), ChangeLogDb.entity_type == ENTITY_TYPE,
+        ChangeLogDb.entity_id == str(asset_id),
+        ChangeLogDb.action == ACTION_DESCRIPTION_CHANGED,
+    ).one_or_none()

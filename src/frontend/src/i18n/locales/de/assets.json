@@ -87,6 +87,31 @@
       "uc_description_empty": "Unity Catalog hat keinen Kommentar zu {{object}}, daher wurde die Beschreibung in Ontos beibehalten."
     }
   },
+  "descriptionHistory": {
+    "title": "Beschreibungsverlauf",
+    "none": "Die Beschreibung wurde noch nicht geändert.",
+    "loading": "Verlauf wird geladen...",
+    "loadError": "Der Beschreibungsverlauf konnte nicht geladen werden.",
+    "unknownUser": "Unbekannter Benutzer",
+    "empty": "(leer)",
+    "before": "Vorher",
+    "after": "Nachher",
+    "restoreAfter": "Neuen Text wiederherstellen",
+    "restoreBefore": "Vorherigen Text wiederherstellen",
+    "restored": "Beschreibung wiederhergestellt",
+    "restoreFailed": "Die Beschreibung wurde nicht wiederhergestellt",
+    "showMore": "{{count}} weitere anzeigen",
+    "sources": {
+      "manual": "Bearbeitung",
+      "uc_import": "Unity-Catalog-Import",
+      "bulk_import": "Dateiimport (CSV/XLSX)",
+      "uc_reset": "Unity-Catalog-Kommentar",
+      "restore": "Wiederherstellung"
+    },
+    "errors": {
+      "description_history_entry_not_found": "Diese Änderung ist nicht im Verlauf dieses Assets."
+    }
+  },
   "deleteDialog": {
     "title": "Asset löschen?",
     "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies löscht das Asset und alle seine Beziehungen dauerhaft.",

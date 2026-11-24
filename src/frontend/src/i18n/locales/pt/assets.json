@@ -87,6 +87,31 @@
       "uc_description_empty": "O Unity Catalog não tem comentário em {{object}}, então a descrição dele no Ontos foi mantida."
     }
   },
+  "descriptionHistory": {
+    "title": "Histórico da descrição",
+    "none": "A descrição ainda não teve alterações.",
+    "loading": "Carregando histórico...",
+    "loadError": "Não foi possível carregar o histórico da descrição.",
+    "unknownUser": "Usuário desconhecido",
+    "empty": "(vazio)",
+    "before": "Antes",
+    "after": "Depois",
+    "restoreAfter": "Restaurar o texto novo",
+    "restoreBefore": "Restaurar o texto anterior",
+    "restored": "Descrição restaurada",
+    "restoreFailed": "A descrição não foi restaurada",
+    "showMore": "Mostrar mais {{count}}",
+    "sources": {
+      "manual": "Edição",
+      "uc_import": "Importação do Unity Catalog",
+      "bulk_import": "Importação de arquivo (CSV/XLSX)",
+      "uc_reset": "Comentário do Unity Catalog",
+      "restore": "Restauração"
+    },
+    "errors": {
+      "description_history_entry_not_found": "Essa alteração não está no histórico deste ativo."
+    }
+  },
   "deleteDialog": {
     "title": "Excluir Ativo?",
     "description": "Esta ação não pode ser desfeita. Isso excluirá permanentemente o ativo e todos os seus relacionamentos.",

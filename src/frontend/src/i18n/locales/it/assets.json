@@ -87,6 +87,31 @@
       "uc_description_empty": "Unity Catalog non ha un commento su {{object}}, quindi la descrizione in Ontos è stata mantenuta."
     }
   },
+  "descriptionHistory": {
+    "title": "Cronologia della descrizione",
+    "none": "La descrizione non ha ancora modifiche.",
+    "loading": "Caricamento della cronologia...",
+    "loadError": "Non è stato possibile caricare la cronologia della descrizione.",
+    "unknownUser": "Utente sconosciuto",
+    "empty": "(vuoto)",
+    "before": "Prima",
+    "after": "Dopo",
+    "restoreAfter": "Ripristina il testo nuovo",
+    "restoreBefore": "Ripristina il testo precedente",
+    "restored": "Descrizione ripristinata",
+    "restoreFailed": "La descrizione non è stata ripristinata",
+    "showMore": "Mostra altri {{count}}",
+    "sources": {
+      "manual": "Modifica",
+      "uc_import": "Importazione da Unity Catalog",
+      "bulk_import": "Importazione da file (CSV/XLSX)",
+      "uc_reset": "Commento di Unity Catalog",
+      "restore": "Ripristino"
+    },
+    "errors": {
+      "description_history_entry_not_found": "Questa modifica non è nella cronologia di questo asset."
+    }
+  },
   "deleteDialog": {
     "title": "Eliminare l'asset?",
     "description": "Questa azione non può essere annullata. Eliminerà permanentemente l'asset e tutte le sue relazioni.",

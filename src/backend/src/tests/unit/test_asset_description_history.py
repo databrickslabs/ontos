@@ -10,14 +10,14 @@ from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.change_log import ChangeLogDb
 
 
-def _asset(db, type_name='Table', description='Old'):
+def _asset(db, type_name='Table', description='Old', location='main.sales.orders'):
     found = db.query(AssetTypeDb).filter(AssetTypeDb.name == type_name).first()
     if found is None:
         found = AssetTypeDb(name=type_name, category='data')
         db.add(found)
         db.flush()
-    row = AssetDb(name='orders', asset_type_id=found.id, platform='databricks',
-                  location='main.sales.orders', description=description)
+    row = AssetDb(name=location.split('.')[-1], asset_type_id=found.id, platform='databricks',
+                  location=location, description=description)
     db.add(row)
     db.flush()
     db.refresh(row)
@@ -94,3 +94,50 @@ def test_a_failure_to_write_the_entry_is_raised(db_session, monkeypatch):
     with pytest.raises(RuntimeError):
         history.record_description_change(
             db_session, asset, before='a', after='b', source='manual', username='u')
+
+
+def test_the_source_of_a_change_comes_from_its_context(db_session):
+    asset = _asset(db_session)
+
+    history.record_description_change(
+        db_session, asset, before='a', after='b', source=history.current_description_source(),
+        username='u')
+    with history.description_source(history.SOURCE_RESTORE, restored_from='e1'):
+        assert history.current_description_source() == 'restore'
+        history.record_description_change(
+            db_session, asset, before='b', after='c', source=history.current_description_source(),
+            username='u')
+    assert history.current_description_source() == 'manual'
+
+    [first, second] = [d for _a, _u, d in _entries(db_session, asset)]
+    assert first['source'] == 'manual' and 'restored_from' not in first
+    assert (second['source'], second['restored_from']) == ('restore', 'e1')
+
+
+def test_the_context_is_restored_after_an_error():
+    with pytest.raises(RuntimeError):
+        with history.description_source('uc_reset'):
+            raise RuntimeError('boom')
+
+    assert history.current_description_source() == 'manual'
+
+
+def test_the_history_of_an_asset_is_paged_and_scoped(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    asset = _asset(db_session)
+    other = _asset(db_session, location='main.sales.items')
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for index, target in enumerate((asset, asset, asset, other)):
+        entry = history.change_log_manager.log_change_with_details(
+            db_session, entity_type='asset', entity_id=str(target.id),
+            action='description_changed', username='u', details={'after': str(index)},
+            commit=False)
+        entry.timestamp = base + timedelta(seconds=index)
+    db_session.flush()
+
+    total, page = history.list_description_history(db_session, asset.id, skip=1, limit=1)
+
+    assert total == 3 and [e.details['after'] for e in page] == ['1']
+    assert history.get_description_entry(db_session, asset.id, page[0].id) is not None
+    assert history.get_description_entry(db_session, other.id, page[0].id) is None

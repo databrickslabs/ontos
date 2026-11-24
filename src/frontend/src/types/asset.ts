@@ -125,6 +125,25 @@ export interface AssetDescriptionResetResult {
   warnings: AssetCodedWarning[];
 }
 
+/** One change of the description of an asset (GET /api/assets/{id}/description/history). */
+export interface AssetDescriptionHistoryEntry {
+  id: string;
+  timestamp: string;
+  username?: string | null;
+  /** manual, uc_import, bulk_import, uc_reset, restore (more may come) */
+  source?: string | null;
+  object_type?: string | null;
+  before?: string | null;
+  after?: string | null;
+  restored_from?: string | null;
+}
+
+export interface AssetDescriptionHistory {
+  asset_id: string;
+  total: number;
+  items: AssetDescriptionHistoryEntry[];
+}
+
 /** PUT /api/assets/{id}: the saved asset, with what the save could not do. */
 export interface AssetUpdateResult extends AssetRead {
   warnings?: AssetCodedWarning[];

@@ -24,8 +24,13 @@ from src.controller.uc_description_reset_manager import (
 from src.controller.uc_description_sync_manager import (
     SyncOutcome, UcDescriptionSyncManager, write_failed_warning,
 )
+from src.controller.asset_description_history import (
+    HistoryEntryNotFoundError, SOURCE_RESTORE, description_source, get_description_entry,
+    list_description_history,
+)
 from src.models.asset_description import (
-    DescriptionResetRequest, DescriptionResetResult, UcCommentPreview,
+    DescriptionHistory, DescriptionHistoryEntry, DescriptionResetRequest, DescriptionResetResult,
+    DescriptionRestoreRequest, UcCommentPreview,
 )
 from src.db_models.assets import AssetDb
 from src.models.metric_views import MetricViewRead
@@ -466,36 +471,9 @@ def update_asset(
         asset_in = asset_in.model_copy(
             update={"properties": without_internal_properties(asset_in.properties)})
     try:
-        # Read under the row lock this save holds until its commit, so a concurrent save of
-        # the asset can't change the description in between (that would look like a
-        # comment someone else wrote in Unity Catalog)
-        existing = (
-            db.query(AssetDb).filter(AssetDb.id == asset_id)
-            .with_for_update().populate_existing().one_or_none()
-        )
-        previous_description = existing.description if existing is not None else None
-        if existing is not None and 'description' in asset_in.model_fields_set:
-            UcDescriptionSyncManager(settings).keep_baseline(db, existing)
-        result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
-        # The save is committed before Unity Catalog is written, so Unity Catalog never
-        # gets ahead of a save that failed to commit. With the setting on, a changed
-        # table, view or column description is then written as the user. A failed
-        # write doesn't fail the save: the response carries a coded warning and the
-        # asset's description_sync state.
-        db.commit()
-        outcome = _write_back_description(
-            db, settings, request, asset_id,
-            description_sent='description' in asset_in.model_fields_set,
-            previous_description=previous_description, label=result.location,
-        )
-        result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
-        result.description_sync = outcome.state
-        if outcome.warning:
-            details["uc_description_warning"] = outcome.warning.code
-        if outcome.audit:
-            details["uc_comment"] = outcome.audit
-        # Commits: the audit says success only once the change is stored
-        _schedule_maturity_evaluation(db, background_tasks, request, asset_id, current_user.email)
+        result = _save_asset_edit(
+            db, settings, request, manager, asset_id, asset_in, current_user.email,
+            background_tasks, details)
         success = True
         return result
     except NotFoundError as e:
@@ -524,6 +502,50 @@ def update_asset(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="UPDATE_ASSET", success=success, details=details,
         )
+
+
+def _save_asset_edit(
+    db, settings, request: Request, manager, asset_id: UUID, asset_in: AssetUpdate,
+    user_email: str, background_tasks: BackgroundTasks, details: dict,
+) -> AssetUpdateResult:
+    """Save an edit of an asset, write a changed description to Unity Catalog (when the setting
+    is on) and schedule the maturity evaluation. Fills the audit ``details``.
+
+    The edit of a PUT and a restored description go through here, so a restore follows the
+    same write-back rules, snapshot, search index and maturity evaluation as any edit.
+    """
+    # Read under the row lock this save holds until its commit, so a concurrent save of
+    # the asset can't change the description in between (that would look like a
+    # comment someone else wrote in Unity Catalog)
+    existing = (
+        db.query(AssetDb).filter(AssetDb.id == asset_id)
+        .with_for_update().populate_existing().one_or_none()
+    )
+    previous_description = existing.description if existing is not None else None
+    if existing is not None and 'description' in asset_in.model_fields_set:
+        UcDescriptionSyncManager(settings).keep_baseline(db, existing)
+    result = manager.update_asset(
+        db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=user_email)
+    # The save is committed before Unity Catalog is written, so Unity Catalog never
+    # gets ahead of a save that failed to commit. With the setting on, a changed
+    # table, view or column description is then written as the user. A failed
+    # write doesn't fail the save: the response carries a coded warning and the
+    # asset's description_sync state.
+    db.commit()
+    outcome = _write_back_description(
+        db, settings, request, asset_id,
+        description_sent='description' in asset_in.model_fields_set,
+        previous_description=previous_description, label=result.location,
+    )
+    result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
+    result.description_sync = outcome.state
+    if outcome.warning:
+        details["uc_description_warning"] = outcome.warning.code
+    if outcome.audit:
+        details["uc_comment"] = outcome.audit
+    # Commits: the audit says success only once the change is stored
+    _schedule_maturity_evaluation(db, background_tasks, request, asset_id, user_email)
+    return result
 
 
 @assets_router.get(
@@ -612,6 +634,100 @@ def reset_asset_description_to_uc(
             db=db, username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="RESET_ASSET_DESCRIPTION", success=success,
+            details=details,
+        )
+
+
+@assets_router.get(
+    "/{asset_id}/description/history",
+    response_model=DescriptionHistory,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def get_asset_description_history(
+    asset_id: UUID,
+    db: DBSessionDep,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    manager=Depends(get_assets_manager),
+):
+    """The changes of a table, view or column description, newest first: who, when, where the
+    change came from (``source``), and the text before and after. Needs ``assets`` READ_ONLY
+    (not ``audit``), as past descriptions are as visible as the asset itself."""
+    if not manager.asset_exists(db, asset_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    total, entries = list_description_history(db, asset_id, skip=skip, limit=limit)
+    items = []
+    for entry in entries:
+        data = entry.details
+        items.append(DescriptionHistoryEntry(
+            id=entry.id, timestamp=entry.timestamp, username=entry.username,
+            source=data.get('source'), object_type=data.get('object_type'),
+            before=data.get('before'), after=data.get('after'),
+            restored_from=data.get('restored_from'),
+        ))
+    return DescriptionHistory(asset_id=asset_id, total=total, items=items)
+
+
+@assets_router.post(
+    "/{asset_id}/description/restore",
+    response_model=AssetUpdateResult,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def restore_asset_description(
+    asset_id: UUID,
+    request: Request,
+    restore_in: DescriptionRestoreRequest,
+    settings: SettingsDep,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
+    manager=Depends(get_assets_manager),
+):
+    """Restores a description of the history: a normal edit whose history entry has the source
+    ``restore``, so the Unity Catalog write-back rules, the column snapshot, the search index
+    and the maturity evaluation apply as for any edit. ``version`` is the text the entry set
+    (``after``) or the one it replaced (``before``). 404 ``description_history_entry_not_found``
+    for an entry that isn't a description change of this asset."""
+    success = False
+    details = {"params": {"asset_id": str(asset_id), "entry_id": restore_in.entry_id,
+                          "version": restore_in.version}}
+    try:
+        entry = get_description_entry(db, asset_id, restore_in.entry_id)
+        if entry is None:
+            raise HistoryEntryNotFoundError(
+                "No such description change on this asset.", entry_id=restore_in.entry_id)
+        text = entry.details.get(restore_in.version)
+        with description_source(
+                SOURCE_RESTORE, restored_from=entry.id, restored_version=restore_in.version):
+            result = _save_asset_edit(
+                db, settings, request, manager, asset_id, AssetUpdate(description=text),
+                current_user.email, background_tasks, details)
+        success = True
+        return result
+    except NotFoundError as e:
+        details["exception"] = {"type": "NotFoundError"}
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except HistoryEntryNotFoundError as e:
+        details["exception"] = {"type": "HistoryEntryNotFoundError"}
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except CodedValueError as e:
+        details["exception"] = {"type": type(e).__name__}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to restore the description of asset %s", asset_id)
+        details["exception"] = {"type": type(e).__name__}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to restore the description") from e
+    finally:
+        if success:
+            details["updated_resource_id"] = str(asset_id)
+        audit_manager.log_action(
+            db=db, username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID, action="RESTORE_ASSET_DESCRIPTION", success=success,
             details=details,
         )
 

@@ -87,6 +87,31 @@
       "uc_description_empty": "Unity Catalog heeft geen opmerking bij {{object}}, dus de beschrijving in Ontos is behouden."
     }
   },
+  "descriptionHistory": {
+    "title": "Beschrijvingsgeschiedenis",
+    "none": "De beschrijving is nog niet gewijzigd.",
+    "loading": "Geschiedenis wordt geladen...",
+    "loadError": "De beschrijvingsgeschiedenis kon niet worden geladen.",
+    "unknownUser": "Onbekende gebruiker",
+    "empty": "(leeg)",
+    "before": "Voor",
+    "after": "Na",
+    "restoreAfter": "Nieuwe tekst herstellen",
+    "restoreBefore": "Vorige tekst herstellen",
+    "restored": "Beschrijving hersteld",
+    "restoreFailed": "De beschrijving is niet hersteld",
+    "showMore": "{{count}} meer tonen",
+    "sources": {
+      "manual": "Bewerking",
+      "uc_import": "Unity Catalog-import",
+      "bulk_import": "Bestandsimport (CSV/XLSX)",
+      "uc_reset": "Unity Catalog-opmerking",
+      "restore": "Herstel"
+    },
+    "errors": {
+      "description_history_entry_not_found": "Deze wijziging staat niet in de geschiedenis van dit asset."
+    }
+  },
   "deleteDialog": {
     "title": "Asset verwijderen?",
     "description": "Deze actie kan niet ongedaan worden gemaakt. Dit zal de asset en al zijn relaties permanent verwijderen.",

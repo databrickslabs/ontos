@@ -87,6 +87,31 @@
       "uc_description_empty": "Unity Catalog has no comment on {{object}}, so its description in Ontos was kept."
     }
   },
+  "descriptionHistory": {
+    "title": "Description history",
+    "none": "No changes to the description yet.",
+    "loading": "Loading history...",
+    "loadError": "The description history could not be loaded.",
+    "unknownUser": "Unknown user",
+    "empty": "(empty)",
+    "before": "Before",
+    "after": "After",
+    "restoreAfter": "Restore the new text",
+    "restoreBefore": "Restore the previous text",
+    "restored": "Description restored",
+    "restoreFailed": "The description was not restored",
+    "showMore": "Show {{count}} more",
+    "sources": {
+      "manual": "Edit",
+      "uc_import": "Unity Catalog import",
+      "bulk_import": "File import (CSV/XLSX)",
+      "uc_reset": "Unity Catalog comment",
+      "restore": "Restore"
+    },
+    "errors": {
+      "description_history_entry_not_found": "That change is not in the history of this asset."
+    }
+  },
   "deleteDialog": {
     "title": "Delete Asset?",
     "description": "This action cannot be undone. This will permanently delete the asset and all its relationships.",

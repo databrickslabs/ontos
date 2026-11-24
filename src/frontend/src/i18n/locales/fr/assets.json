@@ -87,6 +87,31 @@
       "uc_description_empty": "Unity Catalog n'a pas de commentaire sur {{object}}, la description dans Ontos a donc été conservée."
     }
   },
+  "descriptionHistory": {
+    "title": "Historique de la description",
+    "none": "La description n'a pas encore été modifiée.",
+    "loading": "Chargement de l'historique...",
+    "loadError": "L'historique de la description n'a pas pu être chargé.",
+    "unknownUser": "Utilisateur inconnu",
+    "empty": "(vide)",
+    "before": "Avant",
+    "after": "Après",
+    "restoreAfter": "Restaurer le nouveau texte",
+    "restoreBefore": "Restaurer le texte précédent",
+    "restored": "Description restaurée",
+    "restoreFailed": "La description n'a pas été restaurée",
+    "showMore": "Afficher {{count}} de plus",
+    "sources": {
+      "manual": "Modification",
+      "uc_import": "Import depuis Unity Catalog",
+      "bulk_import": "Import de fichier (CSV/XLSX)",
+      "uc_reset": "Commentaire d'Unity Catalog",
+      "restore": "Restauration"
+    },
+    "errors": {
+      "description_history_entry_not_found": "Cette modification n'est pas dans l'historique de cet actif."
+    }
+  },
   "deleteDialog": {
     "title": "Supprimer l'actif ?",
     "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement l'actif et toutes ses relations.",

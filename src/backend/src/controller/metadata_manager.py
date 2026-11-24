@@ -6,7 +6,6 @@ from typing import List, Optional, Dict, Any, Tuple
 from collections.abc import Callable
 from uuid import UUID, uuid4
 
-from sqlalchemy import event
 from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
@@ -30,56 +29,14 @@ from src.repositories.metadata_repository import (
     SHARED_ENTITY_ID,
 )
 from src.repositories.change_log_repository import change_log_repo
+from src.common.after_commit import run_after_commit
 from src.db_models.change_log import ChangeLogDb
 from src.db_models.metadata import DocumentMetadataDb, MetadataAttachmentDb
 
 logger = get_logger(__name__)
 
-# Session.info keys of the document files to delete once the session commits.
-_PENDING_FILES_KEY = "ontos_pending_document_files"
-_PENDING_FILES_LISTENING = "ontos_pending_document_files_listening"
 # Name of the directory each uploaded file gets of its own: <base_dir>/<uuid hex>/<filename> (#1691).
 _UPLOAD_DIR_NAME = re.compile(r"[0-9a-f]{32}")
-# Session.info keys of the imported documents to drop from search once it commits.
-_PENDING_UNINDEX_KEY = "ontos_pending_document_unindex"
-_PENDING_UNINDEX_LISTENING = "ontos_pending_document_unindex_listening"
-
-
-def _drop_pending_files(session: Session, previous_transaction) -> None:
-    """On a rollback the document rows come back: keep their files.
-
-    ``after_soft_rollback`` also fires when the session's transaction is joined
-    to an outer one (``after_rollback`` doesn't); a savepoint rollback keeps
-    the paths, since they are queued only once their savepoint is released.
-    """
-    if previous_transaction.nested:
-        return
-    pending = session.info.pop(_PENDING_FILES_KEY, [])
-    if pending:
-        logger.info("Rolled back: %d document file(s) kept in the volume", len(pending))
-
-
-def _within(transaction, ancestor) -> bool:
-    while transaction is not None:
-        if transaction is ancestor:
-            return True
-        transaction = transaction.parent
-    return False
-
-
-def _drop_pending_unindex(session: Session, previous_transaction) -> None:
-    """On a rollback the document rows come back: keep them in the search index.
-
-    A savepoint rollback drops only the ids queued inside that savepoint.
-    """
-    if not previous_transaction.nested:
-        session.info.pop(_PENDING_UNINDEX_KEY, None)
-        return
-    pending = session.info.get(_PENDING_UNINDEX_KEY)
-    if pending:
-        pending[:] = [(document_id, transaction) for document_id, transaction in pending
-                      if not _within(transaction, previous_transaction)]
-
 
 # Where the search result of an imported document leads: the page of its entity.
 _ENTITY_LINKS = {
@@ -527,19 +484,7 @@ class MetadataManager(SearchableAsset):
         """
         if not document_ids:
             return
-        # With the (innermost) transaction they were queued in: a savepoint
-        # rolled back drops its own ids.
-        transaction = db.get_nested_transaction() or db.get_transaction()
-        db.info.setdefault(_PENDING_UNINDEX_KEY, []).extend(
-            (document_id, transaction) for document_id in document_ids)
-        if not db.info.get(_PENDING_UNINDEX_LISTENING):
-            db.info[_PENDING_UNINDEX_LISTENING] = True
-            event.listen(db, 'after_commit', self._unindex_pending_documents)
-            event.listen(db, 'after_soft_rollback', _drop_pending_unindex)
-
-    def _unindex_pending_documents(self, session: Session) -> None:
-        for document_id, _ in session.info.pop(_PENDING_UNINDEX_KEY, []):
-            self.remove_document_from_index(document_id)
+        run_after_commit(db, lambda: [self.remove_document_from_index(i) for i in document_ids])
 
     def delete_document_files(
         self, ws: Optional[WorkspaceClient], paths: List[str],
@@ -594,27 +539,20 @@ class MetadataManager(SearchableAsset):
         The rows that point to the files are deleted in ``db``'s transaction;
         deleting the files before the commit would leave rows pointing to
         missing files if the transaction rolls back. The paths wait in
-        ``db.info`` and are deleted on the next commit, or dropped (the files
-        kept) on a rollback of the session's transaction. The counts are logged, never raised.
+        ``db.info`` and are deleted when the outermost transaction commits, or dropped
+        (the files kept) when it, or the savepoint they were queued in, rolls back.
+        The counts are logged, never raised.
         """
         paths = [path for path in paths if path]
         if not paths:
             return
-        pending = db.info.setdefault(_PENDING_FILES_KEY, [])
-        pending.extend((path, ws) for path in paths)
-        if not db.info.get(_PENDING_FILES_LISTENING):
-            db.info[_PENDING_FILES_LISTENING] = True
-            event.listen(db, 'after_commit', self._delete_pending_files)
-            event.listen(db, 'after_soft_rollback', _drop_pending_files)
 
-    def _delete_pending_files(self, session: Session) -> None:
-        pending = session.info.pop(_PENDING_FILES_KEY, [])
-        if not pending:
-            return
-        ws = next((client for _, client in pending if client is not None), None)
-        deleted, failed = self.delete_document_files(ws, [path for path, _ in pending])
-        logger.info("Deleted %d document file(s) from the volume after commit, %d failed",
-                    deleted, failed)
+        def delete() -> None:
+            deleted, failed = self.delete_document_files(ws, paths)
+            logger.info("Deleted %d document file(s) from the volume after commit, %d failed",
+                        deleted, failed)
+
+        run_after_commit(db, delete)
 
     # =========================================================================
     # Shared Assets Management

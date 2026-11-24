@@ -145,7 +145,8 @@ describe('layoutLineageGraph (System nodes)', () => {
   }
 
   for (const infraFirst of [true, false]) {
-    it(`keeps the real flow edge over a System edge (${infraFirst ? 'infra' : 'flow'} first)`, () => {
+    const order = infraFirst ? 'infra' : 'flow';
+    it(`keeps the real flow edge over a System edge (${order} first)`, () => {
       const infra = edge('Table:u', 'System:s', 'belongsToSystem', true);
       const feeds = edge('Table:u', 'System:s', 'feeds', true);
       const l = layoutLineageGraph({

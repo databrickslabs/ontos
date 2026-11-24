@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
 
@@ -323,6 +323,7 @@ class SearchOntosHandbookTool(BaseTool):
     required_params = ["query"]
     # Handbook docs are public grounding material; no scope gate.
     required_scope = None  # type: ignore[assignment]
+    required_permission = ANY_CALLER
 
     async def execute(
         self,

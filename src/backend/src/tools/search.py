@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from src.common.logging import get_logger
 from src.tools import read_access
 from src.tools import visibility as vis
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -76,6 +76,7 @@ class GlobalSearchTool(BaseTool):
     }
     required_params = ["query"]
     required_scope = "search:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,

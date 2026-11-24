@@ -15,6 +15,7 @@ import src.tools as tools_pkg
 from src.common.features import FeatureAccessLevel
 from src.routes.mcp_routes import MCPHandler
 from src.tools.base import (
+    ANY_CALLER,
     TOOL_FAILED_CODE,
     ToolCaller,
     ToolContext,
@@ -104,6 +105,7 @@ def test_no_tool_puts_exception_text_in_error():
 def test_registry_catch_all_hides_text_and_sets_code(caplog):
     class Boom:
         name = "boom"
+        required_permission = ANY_CALLER
 
         async def execute(self, ctx, **kwargs):
             raise RuntimeError(SECRET)
@@ -133,6 +135,7 @@ def test_mcp_exception_branch_hides_text(caplog):
 
     class Boom:
         required_scope = None
+        required_permission = ANY_CALLER
 
         async def execute(self, ctx, **kwargs):
             raise RuntimeError(SECRET)

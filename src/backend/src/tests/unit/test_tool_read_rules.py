@@ -423,6 +423,12 @@ class _Graph:
 
 
 def _graph_ctx(world, caller, graph):
+    # The graph tools need Read-only on semantic-models (the level of their REST routes,
+    # tested in test_tool_authz_fail_closed); what is tested here is the read rule on top.
+    if caller is not None:
+        caller = dataclasses.replace(
+            caller,
+            permissions={**caller.permissions, 'semantic-models': FeatureAccessLevel.READ_ONLY})
     ctx = _ctx(world, caller)
     ctx.semantic_models_manager = graph
     return ctx
@@ -443,6 +449,9 @@ class TestGraphNodes:
             res = _run(create_default_registry().execute(
                 'get_concept_neighbors', ctx,
                 {'concept_iri': 'urn:ontos:entity-type:data_product'}))
+            if PERSONAS[persona] is None:  # no identity: refused before the read rule
+                assert res.success is False and res.error_code == 'tool_not_permitted'
+                continue
             got = {n['step_iri'] for n in res.data['incoming']}
             assert got == {nodes[k] for k in readable}, persona
 

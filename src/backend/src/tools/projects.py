@@ -12,7 +12,7 @@ from src.common.search_interfaces import SearchIndexItem
 from src.controller import search_scoring
 from src.models.search_config import SearchConfig
 from src.tools import read_access
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -44,6 +44,7 @@ class SearchProjectsTool(BaseTool):
     }
     required_params = ["query"]
     required_scope = "projects:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -113,6 +114,7 @@ class GetProjectTool(BaseTool):
     }
     required_params = ["project_id"]
     required_scope = "projects:read"
+    required_permission = ANY_CALLER
     
     async def execute(
         self,

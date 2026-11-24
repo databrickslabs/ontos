@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from src.common.workflow_executor import (
-    resolve_template_variable,
+    _resolved_variable,
     substitute_template,
     NotificationStepHandler,
     StepContext,
@@ -207,10 +207,10 @@ class TestSubstituteTemplateMissing:
 
 
 # =========================================================================
-# resolve_template_variable — one variable's text (SQL steps bind it as a parameter)
+# _resolved_variable — one variable's text (SQL steps bind it as a parameter)
 # =========================================================================
 
-class TestResolveTemplateVariable:
+class TestResolvedVariable:
     """One name's text as substitute_template gives it; None when unresolved."""
 
     @pytest.mark.parametrize('name, expected', [
@@ -222,20 +222,24 @@ class TestResolveTemplateVariable:
         ('context.entity_type', 'table'),
     ])
     def test_resolves_a_variable(self, name, expected):
-        assert resolve_template_variable(name, _make_context()) == expected
+        assert _resolved_variable(name, _make_context()) == expected
 
     @pytest.mark.parametrize('name', [
         'nonexistent_var', 'entity.missing_field', 'step_results.missing.field',
         'other.namespace', 'context.nothing',
     ])
     def test_an_unresolved_variable_is_none(self, name):
-        assert resolve_template_variable(name, _make_context()) is None
+        assert _resolved_variable(name, _make_context()) is None
+
+    def test_a_value_is_not_substituted_again(self):
+        ctx = _make_context(entity_name='{{user_email}} ${entity_id}')
+        assert _resolved_variable('entity_name', ctx) == '{{user_email}} ${entity_id}'
 
     def test_agrees_with_substitute_template(self):
         ctx = _make_context()
         for name in ('entity_name', 'entity.owner', 'step_results.validate.score'):
             assert substitute_template('${' + name + '}', ctx) == (
-                resolve_template_variable(name, ctx)
+                _resolved_variable(name, ctx)
             )
 
 

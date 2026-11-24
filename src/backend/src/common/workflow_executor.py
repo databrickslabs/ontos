@@ -89,25 +89,9 @@ def substitute_template(template: str, context: 'StepContext') -> str:
                                      (e.g. ${context.on_behalf_of.value}).
                                      Top-level scalar attrs like
                                      ${context.entity_type} also work.
-
-    Unresolved placeholders are left intact. SQL steps don't use this: their
-    values are bound as parameters (``src.common.workflow_sql_params``).
     """
     import re
 
-    def _replace(match):
-        resolved = resolve_template_variable(match.group(1), context)
-        # leave placeholder intact when unresolved
-        return match.group(0) if resolved is None else resolved
-
-    # Support both ${var} and {{var}} syntax
-    result = re.sub(r'\$\{([^}]+)\}', _replace, template)
-    result = re.sub(r'\{\{([^}]+)\}\}', _replace, result)
-    return result
-
-
-def resolve_template_variable(var_name: str, context: 'StepContext') -> Optional[str]:
-    """The text of one placeholder's variable (see ``substitute_template``), None if unresolved."""
     flat_subs = {
         'entity_type': context.entity_type,
         'entity_id': context.entity_id,
@@ -149,20 +133,34 @@ def resolve_template_variable(var_name: str, context: 'StepContext') -> Optional
                 return None
         return _render_template_value(obj)
 
-    # 1) flat top-level scalars
-    if var_name in flat_subs:
-        return _render_template_value(flat_subs[var_name])
-    # 2) namespaced paths
-    if '.' in var_name:
-        head, _, tail = var_name.partition('.')
-        parts = tail.split('.') if tail else []
-        if head == 'entity':
-            return _walk_dict(context.entity, parts)
-        if head == 'step_results':
-            return _walk_dict(context.step_results, parts)
-        if head == 'context':
-            return _lookup_context(parts)
-    return None
+    def _replace(match):
+        var_name = match.group(1)
+        # 1) flat top-level scalars
+        if var_name in flat_subs:
+            return _render_template_value(flat_subs[var_name])
+        # 2) namespaced paths
+        if '.' in var_name:
+            head, _, tail = var_name.partition('.')
+            parts = tail.split('.') if tail else []
+            if head == 'entity':
+                resolved = _walk_dict(context.entity, parts)
+                if resolved is not None:
+                    return resolved
+            elif head == 'step_results':
+                resolved = _walk_dict(context.step_results, parts)
+                if resolved is not None:
+                    return resolved
+            elif head == 'context':
+                resolved = _lookup_context(parts)
+                if resolved is not None:
+                    return resolved
+        # leave placeholder intact when unresolved
+        return match.group(0)
+
+    # Support both ${var} and {{var}} syntax
+    result = re.sub(r'\$\{([^}]+)\}', _replace, template)
+    result = re.sub(r'\{\{([^}]+)\}\}', _replace, result)
+    return result
 
 
 @dataclass
@@ -2324,6 +2322,14 @@ class ConditionalStepHandler(StepHandler):
             return _rule_step_error(e)
 
 
+def _resolved_variable(name: str, context: StepContext) -> Optional[str]:
+    """The value of one template variable (``substitute_template``), None when unresolved."""
+    # The {{ }} form is substituted last, so a value is not substituted again
+    placeholder = '{{' + name + '}}'
+    resolved = substitute_template(placeholder, context)
+    return None if resolved == placeholder else resolved
+
+
 def _coded_step_failure(code: str, message: str, **params: Any) -> StepResult:
     """A failed step with ``error_code`` / ``error_params`` in its data (the UI's text)."""
     return StepResult(
@@ -2396,7 +2402,7 @@ class ScriptStepHandler(StepHandler):
             # Values are bound as named parameters, never pasted into the SQL text
             from databricks.sdk.service.sql import StatementParameterListItem
             resolved_sql, bound = bind_sql_placeholders(
-                code, lambda name: resolve_template_variable(name, context),
+                code, lambda name: _resolved_variable(name, context),
             )
             parameters = [
                 StatementParameterListItem(name=name, value=value) for name, value in bound

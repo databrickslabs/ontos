@@ -123,6 +123,10 @@
     "title": "Meine Aktionen",
     "approvals": "Genehmigungen"
   },
+  "approvalOverdue": {
+    "badge": "Überfällig",
+    "hint": "Wartet über die Frist hinaus; die Genehmigenden und der Antragsteller wurden erinnert."
+  },
   "quickActions": {
     "title": "Schnellzugriff",
     "loading": "Wird geladen...",

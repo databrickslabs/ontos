@@ -123,6 +123,10 @@
     "title": "Mes actions",
     "approvals": "Approbations"
   },
+  "approvalOverdue": {
+    "badge": "En retard",
+    "hint": "En attente au-delà du délai ; les approbateurs et le demandeur ont été relancés."
+  },
   "quickActions": {
     "title": "Actions rapides",
     "loading": "Chargement...",

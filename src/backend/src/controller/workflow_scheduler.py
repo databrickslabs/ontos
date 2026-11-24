@@ -50,6 +50,11 @@ recipients resolve to nobody. The 5-minute minimum is a save-time rule; here a
 slot less than 5 minutes after the last claimed one (a 29 February pair, a
 schedule saved without the validator) is skipped, not the workflow.
 
+Overdue approval steps (#1119, ``approval_timeouts_manager``) are looked for on the
+passes that read the database anyway (the first one, and a change check a request woke),
+at most once per ``APPROVAL_TIMEOUTS_INTERVAL`` slot across instances (claimed as
+``approval-timeouts``): no timer of its own.
+
 Missed runs are coalesced: after downtime only the latest slot runs, if it is at
 most one interval and at most 24 hours old, and its claim's
 ``outcome.coalesced_slots`` counts the slots it stands for. A slot before the
@@ -100,6 +105,10 @@ DEFAULT_DRAIN_SECONDS = 30
 CLAIM_RETENTION = timedelta(days=30)
 # ... at most this often per instance, after a claim (the database is awake then).
 PRUNE_INTERVAL = timedelta(hours=24)
+# Overdue approval steps (#1119) are looked for at most once per slot of this length,
+# across instances (claimed like a scheduled run), and only while the database is awake.
+APPROVAL_TIMEOUTS_TASK_KEY = 'approval-timeouts'
+APPROVAL_TIMEOUTS_INTERVAL = timedelta(minutes=15)
 
 _schedulers: 'weakref.WeakSet[WorkflowScheduler]' = weakref.WeakSet()
 _schedulers_lock = threading.Lock()
@@ -220,8 +229,11 @@ class WorkflowScheduler:
         max_workers: int = DEFAULT_MAX_WORKERS,
         run_executor: Optional[Executor] = None,
         drain_seconds: float = DEFAULT_DRAIN_SECONDS,
+        remind_overdue_approvals: bool = True,
     ):
         self._drain_seconds = max(0.0, float(drain_seconds))
+        # Look for overdue approval steps on the passes that read the database (#1119)
+        self._remind_overdue = remind_overdue_approvals
         self._session_factory = session_factory
         # Runs go to this pool; the scheduler thread only claims slots.
         self._max_workers = max(1, int(max_workers))
@@ -234,6 +246,8 @@ class WorkflowScheduler:
         self._own_engine = None
         # When this instance last deleted old claims.
         self._last_prune: Optional[datetime] = None
+        # The last slot this instance looked for overdue approvals in (claimed or not).
+        self._timeouts_slot: Optional[datetime] = None
         # Workflow id -> the future of its run in progress on this instance.
         self._in_flight: Dict[str, Future] = {}
         # Future -> (task key, slot, coalesced count) of that run, for the drain.
@@ -414,8 +428,10 @@ class WorkflowScheduler:
             check_requested, self._change_check_requested = self._change_check_requested, False
             if self._has_scheduled is None:
                 self._refresh(now)
+                self._remind_overdue_approvals(now)
             elif check_requested or self._idle_recheck_due(now):
                 self._check_for_changes(now)
+                self._remind_overdue_approvals(now)
             if self._has_scheduled and any(
                 self._due_slot(s, now) for s in self._schedules.values()
             ):
@@ -438,6 +454,40 @@ class WorkflowScheduler:
                     return float(ERROR_RETRY_SECONDS)
                 return delay
             return self._sleep_seconds(now)
+
+    def _remind_overdue_approvals(self, now: datetime) -> None:
+        """Remind the overdue approval steps (#1119), once per slot across instances.
+
+        Only on passes that read the database anyway (start, a change check when a
+        request woke the database): no timer of its own, so an idle Lakebase stays idle.
+        A reminder is in-app, seen when the app is used. Failures are only logged.
+        """
+        from src.controller.approval_timeouts_manager import remind_overdue_approvals
+
+        if not self._remind_overdue:
+            return
+        interval = APPROVAL_TIMEOUTS_INTERVAL.total_seconds()
+        slot = datetime.fromtimestamp(now.timestamp() // interval * interval, tz=timezone.utc)
+        if self._timeouts_slot is not None and slot <= self._timeouts_slot:
+            return
+        self._timeouts_slot = slot
+        db = self._session()
+        try:
+            if not scheduler_claims_repo.claim(
+                db, task_key=APPROVAL_TIMEOUTS_TASK_KEY, slot=slot,
+                claimed_by=self._claimed_by, outcome={'status': 'claimed'},
+            ):
+                return  # another instance looks in this slot
+            reminded = remind_overdue_approvals(db, now)
+            scheduler_claims_repo.record_outcome(
+                db, task_key=APPROVAL_TIMEOUTS_TASK_KEY, slot=slot,
+                outcome={'status': 'done', 'reminded': reminded},
+            )
+        except Exception as e:
+            logger.error(f"Looking for overdue approvals failed: {e}", exc_info=True)
+            db.rollback()
+        finally:
+            db.close()
 
     def _session(self) -> Session:
         if self._session_factory is not None:

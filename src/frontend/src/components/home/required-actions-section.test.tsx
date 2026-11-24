@@ -76,6 +76,20 @@ describe('RequiredActionsSection workflow approvals', () => {
 
     expect(await screen.findByText('Read But Pending')).toBeInTheDocument();
   });
+
+  it('marks an approval past its timeout_days as overdue (#1119)', async () => {
+    setNotifications([
+      approval('late', 'Late Product', { overdue_since: '2026-11-09T12:00:00Z' }),
+      approval('on-time', 'On Time Product'),
+    ]);
+
+    renderWithProviders(<RequiredActionsSection />);
+
+    const late = (await screen.findByText('Late Product')).closest('tr')!;
+    expect(late).toHaveTextContent('Overdue');
+    const onTime = screen.getByText('On Time Product').closest('tr')!;
+    expect(onTime).not.toHaveTextContent('Overdue');
+  });
 });
 
 describe('RequiredActionsSection approvals queue', () => {

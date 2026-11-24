@@ -384,6 +384,11 @@
     "adjustTerms": "Genehmigungsbedingungen anpassen",
     "durationDays": "Dauer (Tage)",
     "permissionLevel": "Berechtigungsstufe",
+    "accessDecision": {
+      "adminHint": "Als Admin können Sie Ihren eigenen Antrag entscheiden und mehr gewähren als beantragt. Das Audit-Protokoll vermerkt dies als Übersteuerung.",
+      "failedTitle": "Entscheidung gespeichert, Zugriff noch nicht aktualisiert",
+      "failed": "Der Workflow hat Ihre Entscheidung, aber der Zugriffsantrag konnte nicht aktualisiert werden. Es wird automatisch erneut versucht."
+    },
     "reasonLabel": "Grund für Genehmigung oder Ablehnung",
     "reasonPlaceholder": "Geben Sie Ihren Grund ein...",
     "approved": "Genehmigt",

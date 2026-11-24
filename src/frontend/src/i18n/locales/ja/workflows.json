@@ -384,6 +384,11 @@
     "adjustTerms": "承認条件を調整",
     "durationDays": "期間（日）",
     "permissionLevel": "権限レベル",
+    "accessDecision": {
+      "adminHint": "管理者は自分のリクエストを判断し、リクエストより多くを付与できます。監査ログにはオーバーライドとして記録されます。",
+      "failedTitle": "判断は記録されましたが、アクセスはまだ更新されていません",
+      "failed": "ワークフローには判断が記録されましたが、アクセスリクエストを更新できませんでした。自動的に再試行されます。"
+    },
     "reasonLabel": "承認または却下の理由",
     "reasonPlaceholder": "理由を入力...",
     "approved": "承認済み",

@@ -480,7 +480,11 @@ class WorkflowScheduler:
         On the first pass and when a request (the database is awake) notes that a new
         slot began: no timer of its own, so an idle Lakebase stays idle.
         A reminder is in-app, seen when the app is used. Failures are only logged.
+
+        The same slot applies the decisions of ended access workflows that couldn't be
+        recorded on their request (``AccessGrantsManager.reconcile_workflow_decisions``).
         """
+        from src.controller.access_grants_manager import AccessGrantsManager
         from src.controller.approval_timeouts_manager import remind_overdue_approvals
 
         if not self._remind_overdue:
@@ -497,9 +501,15 @@ class WorkflowScheduler:
             ):
                 return  # another instance looks in this slot
             reminded = remind_overdue_approvals(db, now)
+            try:
+                reconciled = AccessGrantsManager().reconcile_workflow_decisions(db, now)
+            except Exception as e:
+                logger.error(f"Reconciling access workflow decisions failed: {e}", exc_info=True)
+                db.rollback()
+                reconciled = None
             scheduler_claims_repo.record_outcome(
                 db, task_key=APPROVAL_TIMEOUTS_TASK_KEY, slot=slot,
-                outcome={'status': 'done', 'reminded': reminded},
+                outcome={'status': 'done', 'reminded': reminded, 'reconciled': reconciled},
             )
         except Exception as e:
             logger.error(f"Looking for overdue approvals failed: {e}", exc_info=True)

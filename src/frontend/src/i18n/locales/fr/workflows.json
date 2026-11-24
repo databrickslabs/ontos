@@ -384,6 +384,11 @@
     "adjustTerms": "Ajuster les conditions d'approbation",
     "durationDays": "Durée (jours)",
     "permissionLevel": "Niveau de permission",
+    "accessDecision": {
+      "adminHint": "En tant qu'administrateur, vous pouvez décider de votre propre demande et accorder plus que ce qui a été demandé. Le journal d'audit l'enregistre comme une dérogation.",
+      "failedTitle": "Décision enregistrée, accès pas encore mis à jour",
+      "failed": "Le workflow a votre décision, mais la demande d'accès n'a pas pu être mise à jour. Une nouvelle tentative aura lieu automatiquement."
+    },
     "reasonLabel": "Raison de l'approbation ou du rejet",
     "reasonPlaceholder": "Saisissez votre raison...",
     "approved": "Approuvé",

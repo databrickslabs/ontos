@@ -235,7 +235,8 @@ class TestSchedulerLooksForOverdueApprovals:
 
         assert len(_reminders(db_session)) == 3
         [claim] = _claims(db_session)
-        assert (claim.claimed_by, claim.outcome) == ('a', {'status': 'done', 'reminded': 1})
+        assert (claim.claimed_by, claim.outcome) == (
+            'a', {'status': 'done', 'reminded': 1, 'reconciled': 0})
 
     def test_without_requests_it_doesnt_look_again(self, db_session):
         first = WorkflowScheduler(_Sessions(db_session), instance_id='a')
@@ -289,3 +290,118 @@ class TestSchedulerLooksForOverdueApprovals:
 
         assert _reminders(db_session) == []
         assert _claims(db_session) == []
+
+
+def _ended_access_execution(db, *, status='succeeded', approved=True, decided=True,
+                            finished=ASKED):
+    """An access workflow that ended with a decision its request never got (pending)."""
+    from src.db_models.process_workflows import WorkflowStepExecutionDb
+    from src.repositories.access_grants_repository import access_grant_request_repo
+
+    request = access_grant_request_repo.create(
+        db, requester_email='rita@example.com', entity_type='data_product',
+        entity_id=str(uuid.uuid4()), requested_duration_days=30, permission_level='WRITE',
+    )
+    workflow = ProcessWorkflowDb(
+        id=str(uuid.uuid4()), name=f'wf-{uuid.uuid4().hex[:6]}',
+        trigger_config=json.dumps({'type': 'on_request_access'}),
+    )
+    db.add(workflow)
+    db.flush()
+    execution = WorkflowExecutionDb(
+        id=str(uuid.uuid4()), workflow_id=workflow.id, status=status, finished_at=finished,
+        trigger_context=json.dumps({
+            'entity_type': 'access_grant', 'entity_id': str(request.id),
+            'trigger_type': 'on_request_access', 'user_email': 'rita@example.com',
+        }),
+    )
+    db.add(execution)
+    result = {'approval_result': 'approved' if approved else 'rejected'}
+    if decided:
+        result['access_decision'] = {
+            'request_id': str(request.id), 'approved': approved,
+            'decided_by': 'ana@example.com', 'message': None,
+            'terms': {'granted_duration_days': 7, 'permission_level': 'READ'}
+            if approved else None,
+        }
+    db.add(WorkflowStepExecutionDb(
+        id=str(uuid.uuid4()), execution_id=execution.id, step_key='approve',
+        status='succeeded' if approved else 'failed', passed=approved,
+        result_data=json.dumps(result),
+    ))
+    db.flush()
+    return request
+
+
+def _reconcile(db, now=ASKED + timedelta(hours=1)):
+    from src.controller.access_grants_manager import AccessGrantsManager
+
+    return AccessGrantsManager().reconcile_workflow_decisions(db, now)
+
+
+class TestReconcileAccessDecisions:
+    """The decision of an ended access workflow whose request is still pending (#1687
+    review: recording it failed after the workflow step committed) is applied later."""
+
+    def test_applies_the_kept_decision_once(self, db_session):
+        from src.db_models.access_grants import AccessGrantDb
+
+        approved = _ended_access_execution(db_session)
+        denied = _ended_access_execution(db_session, status='failed', approved=False)
+
+        assert _reconcile(db_session) == 2
+        assert _reconcile(db_session) == 0
+
+        db_session.expire_all()
+        assert (approved.status, approved.handled_by) == ('approved', 'ana@example.com')
+        assert denied.status == 'denied'
+        [grant] = db_session.query(AccessGrantDb).filter_by(request_id=approved.id).all()
+        assert grant.permission_level == 'READ'
+        assert db_session.query(AccessGrantDb).filter_by(request_id=denied.id).all() == []
+
+    def test_leaves_what_it_cant_decide(self, db_session):
+        # Approved but failed later; no decision kept (before this change); out of the window
+        kept = [
+            _ended_access_execution(db_session, status='failed'),
+            _ended_access_execution(db_session, decided=False),
+            _ended_access_execution(db_session, finished=ASKED - timedelta(days=8)),
+        ]
+
+        assert _reconcile(db_session) == 0
+        db_session.expire_all()
+        assert {r.status for r in kept} == {'pending'}
+
+    def test_reads_a_fixed_number_of_statements(self, db_session):
+        """Three reads, whatever the number of executions; then per request it decides."""
+        from sqlalchemy import event
+
+        for _ in range(5):
+            _ended_access_execution(db_session)
+        _paused(db_session)  # not an access workflow, not ended
+        engine = db_session.get_bind()
+        statements = []
+
+        def count(conn, cursor, statement, *args):
+            if statement.lstrip().upper().startswith('SELECT'):
+                statements.append(statement)
+
+        event.listen(engine, 'before_cursor_execute', count)
+        try:
+            assert _reconcile(db_session) == 5
+            statements.clear()
+            assert _reconcile(db_session) == 0
+            decided = len(statements)
+        finally:
+            event.remove(engine, 'before_cursor_execute', count)
+        # The ended access executions, then their pending requests: none left
+        assert decided == 2
+
+    def test_runs_in_the_scheduler_slot(self, db_session):
+        _ended_access_execution(db_session)
+        db_session.commit()
+
+        WorkflowScheduler(_Sessions(db_session), instance_id='a').run_once(
+            ASKED + timedelta(hours=1))
+
+        [claim] = _claims(db_session)
+        assert claim.outcome == {'status': 'done', 'reminded': 0, 'reconciled': 1}

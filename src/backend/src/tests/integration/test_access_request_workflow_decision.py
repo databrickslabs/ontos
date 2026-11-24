@@ -73,8 +73,9 @@ def access_workflow(client, as_user):
     return _workflow(client, as_user, ANA[0])
 
 
-def _request_access(client, as_user, permission='READ', days=30, entity_type='data_product'):
-    as_user(RITA)
+def _request_access(client, as_user, permission='READ', days=30, entity_type='data_product',
+                    identity=RITA):
+    as_user(identity)
     response = client.post('/api/access-grants/request', json={
         'entity_type': entity_type,
         'entity_id': str(uuid.uuid4()),
@@ -126,12 +127,12 @@ def _refused_before_any_change(call):
     return response, not resume.called and not create_grant.called
 
 
-def _my_request(db_session, request_id):
+def _my_request(db_session, request_id, requester=RITA):
     """The request as My Requests lists it (``get_my_requests``)."""
     from src.controller.access_grants_manager import AccessGrantsManager
 
     db_session.expire_all()
-    rows = AccessGrantsManager().get_my_requests(db_session, RITA[0]).requests
+    rows = AccessGrantsManager().get_my_requests(db_session, requester[0]).requests
     [row] = [r for r in rows if str(r.id) == request_id]
     return row.model_dump(mode='json')
 
@@ -426,3 +427,260 @@ def test_both_decision_paths_lock_the_request_row(db_session):
     query = AccessGrantsManager.locked_request_query(db_session, uuid.uuid4())
     sql = str(query.statement.compile(dialect=postgresql.dialect()))
     assert sql.rstrip().endswith('FOR UPDATE')
+
+
+# Holds access-grants Read/Write (Data Producer): may use the Access Grants page, isn't an admin
+RITA_PRODUCER = (RITA[0], ['data-producers'])
+ANA_PRODUCER = (ANA[0], ['data-producers'])
+
+
+def _handle(client, as_user, request_id, approved, identity, **terms):
+    """A decision on the Access Grants page (``POST /api/access-grants/handle``)."""
+    as_user(identity)
+    return client.post('/api/access-grants/handle', json={
+        'request_id': request_id, 'approved': approved, **terms,
+    })
+
+
+def _handled_audit(log_action_background):
+    """The details of the Access Grants page's audit entry for a decision."""
+    [details] = [c.kwargs['details'] for c in log_action_background.call_args_list
+                 if c.kwargs.get('action') == 'HANDLE_REQUEST']
+    return details
+
+
+def _approval_audit(log_action):
+    [details] = [c.kwargs['details'] for c in log_action.call_args_list
+                 if c.kwargs.get('action') == 'HANDLE_APPROVAL']
+    return details
+
+
+class TestAccessGrantsPageRule:
+    """The Access Grants page decides by the workflow path's rule (#1687 review): someone
+    who isn't an admin can't decide their own request nor grant more than was requested;
+    an admin can, and the audit entry records the override."""
+
+    def test_a_requester_cant_decide_their_own_request(self, client, as_user, db_session):
+        request_id = _request_access(client, as_user)
+
+        response, untouched = _refused_before_any_change(
+            lambda: _handle(client, as_user, request_id, True, RITA_PRODUCER))
+
+        assert response.status_code == 403, response.text
+        assert response.json()['detail']['code'] == 'own_access_request_approval'
+        assert untouched
+
+    @pytest.mark.parametrize('terms, code', [
+        ({'permission_level': 'MANAGE'}, 'access_terms_exceed_requested_permission'),
+        ({'granted_duration_days': 60}, 'access_terms_exceed_requested_duration'),
+    ])
+    def test_terms_may_only_narrow_the_request(
+        self, client, as_user, db_session, terms, code,
+    ):
+        request_id = _request_access(client, as_user, permission='READ', days=30)
+
+        response, untouched = _refused_before_any_change(
+            lambda: _handle(client, as_user, request_id, True, ANA_PRODUCER, **terms))
+
+        assert response.status_code == 400, response.text
+        assert response.json()['detail']['code'] == code
+        assert untouched
+
+    def test_an_admin_decides_their_own_request_audited(self, client, as_user, db_session):
+        from src.controller.audit_manager import AuditManager
+
+        request_id = _request_access(client, as_user, identity=ADMIN)
+
+        with patch.object(AuditManager, 'log_action_background') as log_action_background:
+            response = _handle(client, as_user, request_id, True, ADMIN)
+
+        assert response.status_code == 200, response.text
+        assert _my_request(db_session, request_id, ADMIN)['status'] == 'approved'
+        details = _handled_audit(log_action_background)
+        assert (details['override'], details['overridden']) == (True, ['self_approval'])
+
+    def test_an_admin_grants_more_than_requested_audited(self, client, as_user, db_session):
+        from src.controller.audit_manager import AuditManager
+
+        request_id = _request_access(client, as_user, permission='READ', days=30)
+
+        with patch.object(AuditManager, 'log_action_background') as log_action_background:
+            response = _handle(client, as_user, request_id, True, ADMIN,
+                               permission_level='MANAGE', granted_duration_days=60)
+
+        assert response.status_code == 200, response.text
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'MANAGE'
+        assert _days(grant) in (59, 60)
+        details = _handled_audit(log_action_background)
+        assert (details['override'], details['overridden']) == (True, ['terms'])
+
+    def test_a_decision_within_the_rules_is_no_override(self, client, as_user, db_session):
+        from src.controller.audit_manager import AuditManager
+
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+
+        with patch.object(AuditManager, 'log_action_background') as log_action_background:
+            response = _handle(client, as_user, request_id, True, ANA_PRODUCER,
+                               permission_level='READ', granted_duration_days=14)
+
+        assert response.status_code == 200, response.text
+        assert 'override' not in _handled_audit(log_action_background)
+
+    def test_an_admin_stays_within_the_allowed_durations(self, client, as_user, db_session):
+        from src.db_models.access_grants import AccessGrantDurationConfigDb
+
+        entity_type = f'type_{uuid.uuid4().hex[:6]}'
+        db_session.add(AccessGrantDurationConfigDb(
+            entity_type=entity_type, allowed_durations=[7, 30, 90],
+        ))
+        db_session.flush()
+        request_id = _request_access(client, as_user, days=30, entity_type=entity_type)
+
+        response, untouched = _refused_before_any_change(
+            lambda: _handle(client, as_user, request_id, True, ADMIN, granted_duration_days=60))
+
+        assert response.status_code == 400, response.text
+        assert response.json()['detail']['code'] == 'access_terms_duration_not_allowed'
+        assert untouched
+
+
+class TestAdminOverrideOnTheWorkflowPath:
+    def test_an_admin_decides_their_own_access_request_audited(
+        self, client, as_user, db_session,
+    ):
+        from src.controller.audit_manager import AuditManager
+
+        workflow_id = _workflow(client, as_user, f'{ADMIN[0]},{ANA[0]}')
+        request_id = _request_access(client, as_user, identity=ADMIN)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+
+        with patch.object(AuditManager, 'log_action') as log_action:
+            response = _decide(client, as_user, execution_id, True, identity=ADMIN)
+
+        assert response.status_code == 200, response.text
+        assert len(_grants(db_session, request_id)) == 1
+        details = _approval_audit(log_action)
+        assert (details['override'], details['overridden']) == (True, ['self_approval'])
+
+    def test_an_admin_grants_more_than_requested_audited(
+        self, client, as_user, db_session, access_workflow,
+    ):
+        from src.controller.audit_manager import AuditManager
+
+        request_id = _request_access(client, as_user, permission='READ', days=30)
+        execution_id = _execution_of(db_session, access_workflow, request_id)
+
+        with patch.object(AuditManager, 'log_action') as log_action:
+            response = _decide(client, as_user, execution_id, True, identity=ADMIN,
+                               permission_level='MANAGE', granted_duration_days=90)
+
+        assert response.status_code == 200, response.text
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'MANAGE'
+        assert _days(grant) in (89, 90)
+        details = _approval_audit(log_action)
+        assert (details['override'], details['overridden']) == (True, ['terms'])
+        assert details['access_grant']['permission_level'] == 'MANAGE'
+
+
+def _failing_record():
+    """The decision can't be recorded on the request (after the workflow step committed)."""
+    from src.controller.access_grants_manager import AccessGrantsManager
+
+    return patch.object(AccessGrantsManager, 'apply_workflow_decision',
+                        side_effect=RuntimeError('database went away'))
+
+
+def _reconcile(db_session):
+    from src.controller.access_grants_manager import AccessGrantsManager
+
+    db_session.expire_all()
+    return AccessGrantsManager().reconcile_workflow_decisions(db_session)
+
+
+class TestFailedDecisionRecord:
+    """A decision the route couldn't record on the request (#1687 review): the approver is
+    told, and the reconciliation applies the decision the workflow step kept."""
+
+    def test_the_approver_is_told_and_the_grant_follows(
+        self, client, as_user, db_session, access_workflow,
+    ):
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+        execution_id = _execution_of(db_session, access_workflow, request_id)
+
+        with _failing_record():
+            response = _decide(client, as_user, execution_id, True,
+                               granted_duration_days=14, permission_level='READ')
+
+        assert response.status_code == 200, response.text
+        warning = response.json()['warning']
+        assert (warning['code'], warning['params']) == (
+            'access_decision_failed', {'access_request': request_id})
+        assert _my_request(db_session, request_id)['status'] == 'pending'
+        assert _grants(db_session, request_id) == []
+
+        assert _reconcile(db_session) == 1
+
+        row = _my_request(db_session, request_id)
+        assert (row['status'], row['handled_by']) == ('approved', ANA[0])
+        [grant] = _grants(db_session, request_id)
+        assert (grant.permission_level, grant.granted_by) == ('READ', ANA[0])
+        assert _days(grant) in (13, 14)
+        # Idempotent: nothing left to reconcile
+        assert _reconcile(db_session) == 0
+        assert len(_grants(db_session, request_id)) == 1
+
+    def test_a_rejection_is_reconciled_to_denied(
+        self, client, as_user, db_session, access_workflow,
+    ):
+        request_id = _request_access(client, as_user)
+        execution_id = _execution_of(db_session, access_workflow, request_id)
+
+        with _failing_record():
+            response = _decide(client, as_user, execution_id, False, message='Not needed.')
+
+        assert response.status_code == 200, response.text
+        assert response.json()['warning']['code'] == 'access_decision_failed'
+        assert _my_request(db_session, request_id)['status'] == 'pending'
+
+        assert _reconcile(db_session) == 1
+
+        row = _my_request(db_session, request_id)
+        assert (row['status'], row['admin_message']) == ('denied', 'Not needed.')
+        assert _grants(db_session, request_id) == []
+        assert _reconcile(db_session) == 0
+
+    def test_require_all_reconciles_to_the_narrowest_terms(
+        self, client, as_user, db_session,
+    ):
+        workflow_id = _workflow(client, as_user, f'{ANA[0]},{BEN[0]}', require_all=True)
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+        first = _decide(client, as_user, execution_id, True, identity=ANA,
+                        granted_duration_days=7, permission_level='READ')
+        assert first.json()['status'] == 'paused', first.text
+
+        with _failing_record():
+            response = _decide(client, as_user, execution_id, True, identity=BEN)
+
+        assert response.json()['warning']['code'] == 'access_decision_failed', response.text
+        assert _reconcile(db_session) == 1
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'READ'
+        assert _days(grant) in (6, 7)
+
+    def test_a_request_decided_meanwhile_is_left_alone(
+        self, client, as_user, db_session, access_workflow,
+    ):
+        from src.db_models.access_grants import AccessGrantRequestDb
+
+        request_id = _request_access(client, as_user)
+        execution_id = _execution_of(db_session, access_workflow, request_id)
+        with _failing_record():
+            _decide(client, as_user, execution_id, True)
+        db_session.get(AccessGrantRequestDb, uuid.UUID(request_id)).status = 'cancelled'
+        db_session.flush()
+
+        assert _reconcile(db_session) == 0
+        assert _grants(db_session, request_id) == []

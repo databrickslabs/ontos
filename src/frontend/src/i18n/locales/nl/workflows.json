@@ -384,6 +384,11 @@
     "adjustTerms": "Goedkeuringsvoorwaarden aanpassen",
     "durationDays": "Duur (dagen)",
     "permissionLevel": "Machtigingsniveau",
+    "accessDecision": {
+      "adminHint": "Als beheerder kunt u over uw eigen aanvraag beslissen en meer toekennen dan is aangevraagd. Het auditlogboek legt dit vast als overschrijving.",
+      "failedTitle": "Beslissing vastgelegd, toegang nog niet bijgewerkt",
+      "failed": "De workflow heeft uw beslissing, maar de toegangsaanvraag kon niet worden bijgewerkt. Dit wordt automatisch opnieuw geprobeerd."
+    },
     "reasonLabel": "Reden voor goedkeuring of afwijzing",
     "reasonPlaceholder": "Voer je reden in...",
     "approved": "Goedgekeurd",

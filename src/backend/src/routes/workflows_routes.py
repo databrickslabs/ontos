@@ -15,6 +15,7 @@ from src.common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
     get_user_details_from_sdk,
+    is_ontos_admin,
 )
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
@@ -1656,15 +1657,15 @@ def _access_request_of_execution(db: Session, execution_id: str) -> Optional[str
 def _is_own_access_request(db: Session, execution_id: str, user_info: UserInfo) -> bool:
     """Whether ``user_info`` made the access request the execution decides.
 
-    A requester never decides their own access request, whatever the approvers are
-    (a role, group or email that includes them).
+    A requester who isn't an admin never decides their own access request, whatever the
+    approvers are (a role, group or email that includes them).
     """
+    from src.controller.access_grants_manager import is_own_request
+
     context = _access_trigger(db, execution_id)
-    requester = (context or {}).get('user_email')
-    if not requester:
-        return False
-    caller = {(user_info.email or '').lower(), (user_info.username or '').lower()} - {''}
-    return str(requester).lower() in caller
+    return is_own_request(
+        (context or {}).get('user_email'), (user_info.email, user_info.username),
+    )
 
 
 def _access_grants_manager(request: Request, notifications_manager: NotificationsManager):
@@ -1700,8 +1701,11 @@ def _lock_pending_access_request(db: Session, manager: Any, request_id: str) -> 
     return row
 
 
-def _checked_access_terms(db: Session, manager: Any, row: Any, body: Dict[str, Any]) -> tuple:
-    """The approver's terms (days, level), checked: they may only narrow the request.
+def _checked_access_terms(
+    db: Session, manager: Any, row: Any, body: Dict[str, Any], admin: bool = False,
+) -> tuple:
+    """The approver's terms (days, level), checked: they may only narrow the request, an
+    admin may go past it (``AccessGrantsManager.check_terms``).
 
     Coded 400 (``access_terms_*``) otherwise. Only for an approval: a rejection grants
     nothing, so its terms are ignored.
@@ -1711,6 +1715,7 @@ def _checked_access_terms(db: Session, manager: Any, row: Any, body: Dict[str, A
     try:
         return manager.check_terms(
             db, row, body.get('granted_duration_days'), body.get('permission_level'),
+            admin=admin,
         )
     except AccessTermsError as e:
         raise HTTPException(
@@ -1719,12 +1724,9 @@ def _checked_access_terms(db: Session, manager: Any, row: Any, body: Dict[str, A
         )
 
 
-def _terms_record(terms: Optional[tuple]) -> Optional[Dict[str, Any]]:
-    """Checked terms as stored with a ``require_all`` decision."""
-    if not terms:
-        return None
-    days, level = terms
-    return {'granted_duration_days': days, 'permission_level': level}
+def _override_details(overridden: List[str]) -> Dict[str, Any]:
+    """An admin's override, for the audit entry: what the decision went past."""
+    return {'override': True, 'overridden': list(overridden)} if overridden else {}
 
 
 def _narrowest_terms(decisions: List[Dict[str, Any]], current: Optional[tuple]) -> Optional[tuple]:
@@ -1747,47 +1749,47 @@ def _narrowest_terms(decisions: List[Dict[str, Any]], current: Optional[tuple]) 
     )
 
 
+def _access_decision_record(
+    row: Any, approved: bool, decided_by: Optional[str], terms: Optional[tuple],
+    message: Optional[str],
+) -> Dict[str, Any]:
+    """The decision an access workflow's approval step keeps in its result, so a decision
+    that couldn't be recorded on the request is applied later
+    (``AccessGrantsManager.reconcile_workflow_decisions``)."""
+    from src.controller.access_grants_manager import terms_record
+
+    return {
+        'request_id': str(row.id), 'approved': bool(approved), 'decided_by': decided_by,
+        'terms': terms_record(terms) if approved else None, 'message': message,
+    }
+
+
+ACCESS_DECISION_FAILED = 'access_decision_failed'
+
+
 def _record_access_decision(
     db: Session, manager: Any, row: Any, approved: bool, status: Any,
     decided_by: Optional[str], terms: Optional[tuple], message: Optional[str],
     execution_id: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """Carry an access workflow's outcome to its access request (#1615); the applied terms.
+) -> tuple:
+    """Carry an access workflow's outcome to its access request (#1615).
 
-    When the execution has ended: approved and succeeded grants the access with the
-    checked terms; rejected denies it. An execution paused at a further step, or approved
-    but failed later, leaves the request pending (None). In the route's transaction, which
-    holds the request's lock; a failure rolls back only this part (a savepoint) and is
-    logged. The workflow's own step commits run in the executor's session first, so the
-    two can't share one transaction.
+    ``AccessGrantsManager.record_workflow_outcome``, in the route's transaction, which
+    holds the request's lock. The workflow's own step commits run in the executor's
+    session first, so the two can't share one transaction: a failure rolls back only
+    this part (a savepoint), is logged and returned, so the approver is told; the
+    reconciliation applies the decision the step kept (``_access_decision_record``).
+    Returns (the applied decision or None, whether recording it failed).
     """
-    from src.models.process_workflows import ExecutionStatus
-
-    status = getattr(status, 'value', status)
-    if status == ExecutionStatus.PAUSED.value or (
-        approved and status != ExecutionStatus.SUCCEEDED.value
-    ):
-        return None
     try:
         with db.begin_nested():
-            manager.apply_workflow_decision(
-                db, row, approved=approved, decided_by=decided_by or 'workflow',
-                terms=terms, message=message,
-            )
-            # Another access workflow of the same request has nothing left to decide
-            manager.close_request_workflows(
-                db, row.id, closed_by=decided_by, except_execution=execution_id,
-            )
+            return manager.record_workflow_outcome(
+                db, row, approved=approved, status=status, decided_by=decided_by,
+                terms=terms, message=message, execution_id=execution_id,
+            ), False
     except Exception:
         logger.exception("Failed to record the workflow decision on access request %s", row.id)
-        return None
-    if not approved:
-        return {'access_request': str(row.id), 'decision': 'denied'}
-    days, level = terms
-    return {
-        'access_request': str(row.id), 'decision': 'approved',
-        'granted_duration_days': days, 'permission_level': level,
-    }
+        return None, True
 
 
 def _assert_caller_authorized_for_execution(
@@ -1797,6 +1799,7 @@ def _assert_caller_authorized_for_execution(
     user_info: UserInfo,
     *,
     for_read: bool = False,
+    own_access_request_allowed: bool = False,
 ) -> List[Notification]:
     """Authorize ``user_info`` to act on the paused workflow execution.
 
@@ -1829,6 +1832,9 @@ def _assert_caller_authorized_for_execution(
     nor a shared role or group row whose ``decided_by_users`` names the caller
     (they decided the step through another target, #1552).
 
+    ``own_access_request_allowed``: an admin may decide their own access request (the
+    override is audited by the caller); anyone else gets ``own_access_request_approval``.
+
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
     """
@@ -1852,7 +1858,9 @@ def _assert_caller_authorized_for_execution(
                 'message': "You can't approve your own change request.",
             },
         )
-    if not for_read and _is_own_access_request(db, execution_id, user_info):
+    if not for_read and not own_access_request_allowed and _is_own_access_request(
+        db, execution_id, user_info,
+    ):
         raise HTTPException(
             status_code=403,
             # code: translated by the UI (workflows:approvalResponse.errors.*)
@@ -2089,11 +2097,13 @@ def _respond_to_pending_approval(
     approved: bool,
     required: Dict[str, Any],
     decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]] = None,
+    audit_details: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Answer a require_all decision that doesn't end the step (#1119).
 
     ``decides_for``: the caller's recipient check, to tell the shared rows they
-    are a member of (see ``_mark_decided_approver_notifications``).
+    are a member of (see ``_mark_decided_approver_notifications``). ``audit_details``:
+    more for the audit entry (an admin's override).
     """
     if required['outcome'] == 'not_an_approver':
         raise HTTPException(
@@ -2129,6 +2139,7 @@ def _respond_to_pending_approval(
         details={
             'execution_id': execution_id, 'approved': approved,
             'pending_approvers': required['pending_approvers'],
+            **(audit_details or {}),
         },
     )
     db.commit()
@@ -2189,6 +2200,11 @@ async def handle_workflow_approval(
             db, notifications_manager, execution_id, step_id, current_user,
         )
 
+        # An access request: an Ontos admin may decide their own and grant more than
+        # was requested (the rule of the Access Grants page too); audited as an override
+        access_request_id = _access_request_of_execution(db, execution_id)
+        access_admin = bool(access_request_id) and is_ontos_admin(request, current_user)
+
         # Per-execution authorization (PR K). Raises 403 if the caller
         # isn't a recipient/role-member of any approval notification for
         # this execution. Must run BEFORE resume_workflow side effects.
@@ -2197,17 +2213,30 @@ async def handle_workflow_approval(
             notifications_manager=notifications_manager,
             execution_id=execution_id,
             user_info=current_user,
+            own_access_request_allowed=access_admin,
         )
 
         # An access request: still pending (locked until the commit) and, to approve it,
-        # terms that only narrow it; checked before the workflow state changes
-        access_request_id = _access_request_of_execution(db, execution_id)
+        # terms that only narrow it (an admin's may go past it); checked before the
+        # workflow state changes
         access_manager = access_row = access_terms = None
+        overridden: List[str] = []
         if access_request_id:
+            from src.controller.access_grants_manager import (
+                ACCESS_DECISION_KEY, OVERRIDE_SELF_APPROVAL, OVERRIDE_TERMS,
+                terms_exceed_request, terms_record,
+            )
+
             access_manager = _access_grants_manager(request, notifications_manager)
             access_row = _lock_pending_access_request(db, access_manager, access_request_id)
+            if access_admin and _is_own_access_request(db, execution_id, current_user):
+                overridden.append(OVERRIDE_SELF_APPROVAL)
             if approved:
-                access_terms = _checked_access_terms(db, access_manager, access_row, body)
+                access_terms = _checked_access_terms(
+                    db, access_manager, access_row, body, admin=access_admin,
+                )
+                if terms_exceed_request(access_row, access_terms):
+                    overridden.append(OVERRIDE_TERMS)
 
         # require_all (#1119): each resolved approver decides once (a user for
         # themselves, any one member for a group or role). The execution stays
@@ -2227,14 +2256,14 @@ async def handle_workflow_approval(
             # Kept with the decision: the step grants the narrowest of every approver's
             executor.record_decision_terms(
                 execution_id, (current_user.email or current_user.username) if current_user
-                else None, _terms_record(access_terms),
+                else None, terms_record(access_terms),
             )
         if required is not None and required['outcome'] in (
             'pending', 'already_decided', 'no_longer_pending', 'not_an_approver',
         ):
             return _respond_to_pending_approval(
                 db, request, audit_manager, current_user, execution_id, bool(approved),
-                required, decides_for,
+                required, decides_for, audit_details=_override_details(overridden),
             )
 
         user_email = current_user.email if current_user else None
@@ -2269,6 +2298,10 @@ async def handle_workflow_approval(
                     'message': message,
                     'reason': message,
                     'decision': 'approved' if approved else 'rejected',
+                    # Kept with the step: applied later if recording it below fails
+                    **({ACCESS_DECISION_KEY: _access_decision_record(
+                        access_row, bool(approved), user_email, access_terms, message,
+                    )} if access_row is not None else {}),
                 },
                 user_email=user_email,
             )
@@ -2293,9 +2326,9 @@ async def handle_workflow_approval(
                 decider=current_user, decides_for=decides_for, open_ids=open_before,
             )
 
-        access_decision = None
+        access_decision, access_failed = None, False
         if access_row is not None:
-            access_decision = _record_access_decision(
+            access_decision, access_failed = _record_access_decision(
                 db, access_manager, access_row, bool(approved), result.status,
                 user_email, access_terms, message, execution_id=execution_id,
             )
@@ -2310,6 +2343,8 @@ async def handle_workflow_approval(
             details={
                 'execution_id': execution_id, 'approved': approved,
                 **({'access_grant': access_decision} if access_decision else {}),
+                **({ACCESS_DECISION_FAILED: True} if access_failed else {}),
+                **_override_details(overridden),
             },
         )
 
@@ -2323,11 +2358,23 @@ async def handle_workflow_approval(
 
         logger.info(f"Workflow approval handled for execution {execution_id}: {'approved' if approved else 'rejected'}")
         
-        return {
+        response = {
             'execution_id': result.id,
             'status': result.status.value,
             'message': f"Request {'approved' if approved else 'rejected'} successfully",
         }
+        if access_failed:
+            # The workflow has the decision; the request gets it on a later pass
+            # code: translated by the UI (workflows:approvalResponse.accessDecision.*)
+            response['warning'] = {
+                'code': ACCESS_DECISION_FAILED,
+                'message': (
+                    "The decision was recorded, but the access request could not be "
+                    "updated yet. It is retried automatically."
+                ),
+                'params': {'access_request': str(access_row.id)},
+            }
+        return response
         
     except HTTPException:
         raise

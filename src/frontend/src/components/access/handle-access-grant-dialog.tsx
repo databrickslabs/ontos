@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
+import { useIsOntosAdmin } from '@/hooks/use-is-ontos-admin';
+import { grantableLevels } from '@/components/workflows/workflow-approval-response-dialog';
 import { 
   Loader2, 
   Clock, 
@@ -51,6 +53,14 @@ const PERMISSION_LABELS: Record<PermissionLevel, string> = {
 
 const DEFAULT_DURATION_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
 
+/**
+ * The durations an approver may grant: up to the requested one; an admin any allowed one
+ * (the backend checks the same and audits an admin's wider grant as an override).
+ */
+export function grantableDurations(options: number[], requested: number, admin: boolean): number[] {
+  return admin ? options : options.filter((d) => d <= requested);
+}
+
 export default function HandleAccessGrantDialog({
   isOpen,
   onOpenChange,
@@ -59,8 +69,9 @@ export default function HandleAccessGrantDialog({
 }: HandleAccessGrantDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
-  const { t } = useTranslation(['access-grants', 'common']);
+  const { t } = useTranslation(['access-grants', 'common', 'workflows']);
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
+  const isAdmin = useIsOntosAdmin();
 
   const [message, setMessage] = useState('');
   const [grantedDuration, setGrantedDuration] = useState<number>(request.requested_duration_days);
@@ -114,7 +125,12 @@ export default function HandleAccessGrantDialog({
       const response = await post('/api/access-grants/handle', payload);
 
       if (response.error) {
-        throw new Error(response.error);
+        // Coded refusals (own request, terms past the request): the workflow path's texts
+        throw new Error(response.errorCode
+          ? t(`workflows:approvalResponse.errors.${response.errorCode}`, {
+            ...(response.errorParams ?? {}), defaultValue: response.error,
+          })
+          : response.error);
       }
 
       toast({
@@ -228,6 +244,11 @@ export default function HandleAccessGrantDialog({
             <div className="text-sm font-medium text-green-700 dark:text-green-300">
               {t('access-grants:handle.adjustNote', 'If approving, you can adjust the granted access:')}
             </div>
+            {isAdmin && (
+              <p className="text-xs text-muted-foreground">
+                {t('workflows:approvalResponse.accessDecision.adminHint')}
+              </p>
+            )}
 
             {/* Duration to Grant */}
             <div className="space-y-1">
@@ -243,7 +264,9 @@ export default function HandleAccessGrantDialog({
                   <SelectValue placeholder={t('access-grants:request.duration.placeholder', 'Select duration')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {durationOptions.map((d) => (
+                  {grantableDurations(
+                    durationOptions, request.requested_duration_days, isAdmin,
+                  ).map((d) => (
                     <SelectItem key={d} value={d.toString()}>
                       {formatDuration(d)}
                       {d === request.requested_duration_days && t('access-grants:handle.requestedSuffix', ' (requested)')}
@@ -267,9 +290,10 @@ export default function HandleAccessGrantDialog({
                   <SelectValue placeholder={t('access-grants:permissionSelectPlaceholder', 'Select permission level')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(PERMISSION_LABELS).map(([level, label]) => (
+                  {grantableLevels(request.permission_level, isAdmin).map((level) => (
                     <SelectItem key={level} value={level}>
-                      {t(`access-grants:permissionOptions.${level}`, label)}
+                      {t(`access-grants:permissionOptions.${level}`,
+                        PERMISSION_LABELS[level as PermissionLevel])}
                       {level === request.permission_level && t('access-grants:handle.requestedSuffix', ' (requested)')}
                     </SelectItem>
                   ))}

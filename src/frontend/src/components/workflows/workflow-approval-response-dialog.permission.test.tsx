@@ -8,17 +8,20 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import i18n from '@/i18n/config';
 import WorkflowApprovalResponseDialog, {
+  MAX_GRANT_DAYS,
   grantableLevels,
 } from './workflow-approval-response-dialog';
 
 const api = vi.hoisted(() => ({
+  admin: false,
   get: async () => ({ data: null }),
-  post: vi.fn(async (_url: string, _body: Record<string, unknown>) => ({ data: {} })),
-  toast: () => {},
+  post: vi.fn(async (_url: string, _body: Record<string, unknown>) => ({ data: {} }) as any),
+  toast: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get: api.get, post: api.post }) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: api.toast }) }));
+vi.mock('@/hooks/use-is-ontos-admin', () => ({ useIsOntosAdmin: () => api.admin }));
 
 function renderDialog() {
   return render(
@@ -37,7 +40,9 @@ function renderDialog() {
 }
 
 afterEach(async () => {
+  api.admin = false;
   api.post.mockClear();
+  api.toast.mockClear();
   await i18n.changeLanguage('en');
 });
 
@@ -74,5 +79,36 @@ describe('WorkflowApprovalResponseDialog permission level', () => {
   it('caps the duration at the requested one', async () => {
     renderDialog();
     expect(await screen.findByLabelText(/Duration/)).toHaveAttribute('max', '30');
+  });
+});
+
+describe('WorkflowApprovalResponseDialog admin override (#1687 review)', () => {
+  it('lets an admin grant any level and a longer duration, and says so', async () => {
+    api.admin = true;
+    renderDialog();
+    expect(await screen.findByLabelText(/Duration/)).toHaveAttribute('max', String(MAX_GRANT_DAYS));
+    expect(screen.getByText(/As an admin/)).toBeInTheDocument();
+    expect(grantableLevels('READ', true)).toEqual(['READ', 'WRITE', 'MANAGE']);
+  });
+
+  it("doesn't tell an approver who isn't an admin about the override", async () => {
+    renderDialog();
+    await screen.findByLabelText(/Duration/);
+    expect(screen.queryByText(/As an admin/)).toBeNull();
+  });
+});
+
+describe('WorkflowApprovalResponseDialog failed access decision (#1687 review)', () => {
+  it('warns the approver instead of a plain success', async () => {
+    api.post.mockResolvedValueOnce({
+      data: { status: 'succeeded', warning: { code: 'access_decision_failed' } },
+    });
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: /Approve/ }));
+    await waitFor(() => expect(api.toast).toHaveBeenCalledTimes(1));
+    expect(api.toast.mock.calls[0][0]).toEqual(expect.objectContaining({
+      title: i18n.t('workflows:approvalResponse.accessDecision.failedTitle'),
+      variant: 'destructive',
+    }));
   });
 });

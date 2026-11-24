@@ -10,8 +10,9 @@ Manages time-limited access grants to assets including:
 
 import json
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -49,11 +50,31 @@ logger = get_logger(__name__)
 # Access levels from the narrowest; an approver may grant the requested one or a narrower one
 PERMISSION_ORDER = ('READ', 'WRITE', 'MANAGE')
 
+# The longest grant an admin may give past the request when the entity type has no
+# duration config (the Access Grants page's own limit, ``AccessGrantHandlePayload``)
+MAX_GRANT_DAYS = 365
+
+# Key of the decision an access workflow's approval step recorded for its request, in the
+# step's result (``reconcile_workflow_decisions``)
+ACCESS_DECISION_KEY = 'access_decision'
+# How far back the reconciliation looks for ended access workflows
+RECONCILE_WINDOW = timedelta(days=7)
+
+# What an admin's decision went past, as the audit entry records it (``override``)
+OVERRIDE_SELF_APPROVAL = 'self_approval'
+OVERRIDE_TERMS = 'terms'
+
 
 class AccessRequestAlreadyDecidedError(CodedValueError):
     """The access request was decided meanwhile (e.g. on the Access Grants page)."""
 
     code = 'access_request_already_decided'
+
+
+class OwnAccessRequestError(CodedValueError):
+    """A requester who isn't an admin deciding their own access request."""
+
+    code = 'own_access_request_approval'
 
 
 class AccessTermsError(CodedValueError):
@@ -62,6 +83,56 @@ class AccessTermsError(CodedValueError):
     def __init__(self, code: str, message: str, **params):
         super().__init__(message, **params)
         self.code = code
+
+
+@dataclass
+class AccessDecision:
+    """A decided request (``decide_request``): what the Access Grants page answers."""
+
+    request: AccessGrantRequestResponse
+    grant: Optional[AccessGrantResponse]
+    # What an admin went past: ``OVERRIDE_SELF_APPROVAL``, ``OVERRIDE_TERMS``
+    overridden: List[str] = field(default_factory=list)
+
+
+def is_own_request(requester_email: Optional[str], caller_ids: Iterable[Optional[str]]) -> bool:
+    """Whether one of the caller's identities (email, username) made the request."""
+    requester = (requester_email or '').strip().lower()
+    return bool(requester) and requester in {
+        (c or '').strip().lower() for c in caller_ids
+    } - {''}
+
+
+def _stored_terms(stored: Any) -> Optional[Tuple[int, str]]:
+    """Terms as an approval step's result keeps them (``terms_record``); None if unreadable."""
+    if not isinstance(stored, dict):
+        return None
+    days, level = stored.get('granted_duration_days'), stored.get('permission_level')
+    if isinstance(days, bool) or not isinstance(days, int) or days < 1 or (
+        level not in PERMISSION_ORDER
+    ):
+        return None
+    return days, level
+
+
+def terms_record(terms: Optional[Tuple[int, str]]) -> Optional[Dict[str, Any]]:
+    """Checked terms (days, level) as stored with a decision."""
+    if not terms:
+        return None
+    days, level = terms
+    return {'granted_duration_days': days, 'permission_level': level}
+
+
+def terms_exceed_request(request: AccessGrantRequestDb, terms: Optional[Tuple[int, str]]) -> bool:
+    """Whether checked ``terms`` (days, level) grant more than the request asked for."""
+    if not terms:
+        return False
+    days, level = terms
+    requested = request.permission_level
+    return days > request.requested_duration_days or (
+        requested in PERMISSION_ORDER and level in PERMISSION_ORDER
+        and PERMISSION_ORDER.index(level) > PERMISSION_ORDER.index(requested)
+    )
 
 
 class AccessGrantsManager:
@@ -309,6 +380,8 @@ class AccessGrantsManager:
         payload: AccessGrantHandlePayload,
         *,
         notify_requester: bool = True,
+        admin: bool = False,
+        caller_ids: Iterable[Optional[str]] = (),
     ) -> Tuple[AccessGrantRequestResponse, Optional[AccessGrantResponse]]:
         """
         Handle (approve/deny) an access grant request.
@@ -319,9 +392,34 @@ class AccessGrantsManager:
             payload: Decision payload
             notify_requester: Tell the requester about the decision. Off when a
                 workflow decided the request: its own steps notify the requester.
+            admin, caller_ids: see ``decide_request``
             
         Returns:
             Tuple of (updated request, created grant if approved)
+        """
+        decision = self.decide_request(
+            db, admin_email, payload, notify_requester=notify_requester, admin=admin,
+            caller_ids=caller_ids,
+        )
+        return decision.request, decision.grant
+
+    def decide_request(
+        self,
+        db: Session,
+        decided_by: str,
+        payload: AccessGrantHandlePayload,
+        *,
+        notify_requester: bool = True,
+        admin: bool = False,
+        caller_ids: Iterable[Optional[str]] = (),
+    ) -> AccessDecision:
+        """Approve or deny a pending request, by the rule of the workflow path too.
+
+        Someone who isn't an admin (``admin``: an Ontos admin, see ``is_ontos_admin``)
+        can't decide their own request (``OwnAccessRequestError``; ``caller_ids``: their
+        email and username, ``decided_by`` is one), and may only narrow its terms
+        (``check_terms``). An admin may do both: the returned ``overridden`` says which,
+        for the audit entry. Commits.
         """
         # Locked until the commit: two decisions can't both find it pending (no-op on SQLite)
         request = self.lock_request(db, payload.request_id)
@@ -329,16 +427,32 @@ class AccessGrantsManager:
             raise ValueError(f"Request {payload.request_id} not found")
         
         if request.status != AccessGrantRequestStatus.PENDING.value:
-            raise ValueError(f"Request {payload.request_id} is not pending (status: {request.status})")
+            raise AccessRequestAlreadyDecidedError(
+                'This access request has already been decided.', status=request.status,
+            )
+
+        overridden: List[str] = []
+        if is_own_request(request.requester_email, [decided_by, *caller_ids]):
+            if not admin:
+                raise OwnAccessRequestError("You can't decide your own access request.")
+            overridden.append(OVERRIDE_SELF_APPROVAL)
+        terms = None
+        if payload.approved:
+            terms = self.check_terms(
+                db, request, payload.granted_duration_days,
+                payload.permission_level.value if payload.permission_level else None,
+                admin=admin,
+            )
+            if terms_exceed_request(request, terms):
+                overridden.append(OVERRIDE_TERMS)
 
         grant = self._decide(
-            db, request, admin_email, payload.approved,
-            payload.granted_duration_days,
-            payload.permission_level.value if payload.permission_level else None,
+            db, request, decided_by, payload.approved,
+            terms[0] if terms else None, terms[1] if terms else None,
             payload.message, notify_requester=notify_requester,
         )
         # Its access workflows have nothing left to decide: closed, not failed
-        self.close_request_workflows(db, request.id, closed_by=admin_email)
+        self.close_request_workflows(db, request.id, closed_by=decided_by)
 
         db.commit()
         # After the commit: the handle path commits, and rolls back on an error
@@ -348,7 +462,7 @@ class AccessGrantsManager:
         db.refresh(request)
         request_response = AccessGrantRequestResponse.model_validate(request)
         
-        return request_response, grant
+        return AccessDecision(request_response, grant, overridden)
     
     def lock_request(self, db: Session, request_id: Any) -> Optional[AccessGrantRequestDb]:
         """The request, its row locked until the transaction ends (``FOR UPDATE``; SQLite
@@ -372,28 +486,36 @@ class AccessGrantsManager:
         request: AccessGrantRequestDb,
         granted_duration_days: Optional[int],
         permission_level: Optional[str],
+        *,
+        admin: bool = False,
     ) -> Tuple[int, str]:
         """The terms an approver grants: (days, level), the requested ones when not given.
 
         An approver may only narrow the request: a level up to the requested one, a
         duration up to the requested one and allowed for the entity type (the check of
         request creation). Raises ``AccessTermsError`` otherwise.
+
+        ``admin``: an admin may go past the request (any level, a longer duration), still
+        within the entity type's allowed durations, or ``MAX_GRANT_DAYS`` without them.
         """
         days = request.requested_duration_days if granted_duration_days is None else (
             granted_duration_days)
         level = permission_level or request.permission_level
-        if isinstance(days, bool) or not isinstance(days, int) or days < 1:
+        config = self._config_repo.get_by_entity_type(db, request.entity_type)
+        longest = MAX_GRANT_DAYS if admin else request.requested_duration_days
+        if isinstance(days, bool) or not isinstance(days, int) or days < 1 or (
+            admin and not config and days > MAX_GRANT_DAYS
+        ):
             raise AccessTermsError(
                 'access_terms_invalid_duration', 'The duration must be at least 1 day.',
-                min=1, max=request.requested_duration_days,
+                min=1, max=longest,
             )
-        if days > request.requested_duration_days:
+        if not admin and days > request.requested_duration_days:
             raise AccessTermsError(
                 'access_terms_exceed_requested_duration',
                 'The duration can be at most the requested one.',
                 requested=request.requested_duration_days,
             )
-        config = self._config_repo.get_by_entity_type(db, request.entity_type)
         if config and not config.is_duration_allowed(days):
             raise AccessTermsError(
                 'access_terms_duration_not_allowed', 'This duration is not allowed.',
@@ -405,7 +527,7 @@ class AccessGrantsManager:
                 allowed=list(PERMISSION_ORDER),
             )
         requested = request.permission_level
-        if requested in PERMISSION_ORDER and (
+        if not admin and requested in PERMISSION_ORDER and (
             PERMISSION_ORDER.index(level) > PERMISSION_ORDER.index(requested)
         ):
             raise AccessTermsError(
@@ -561,6 +683,136 @@ class AccessGrantsManager:
             return
         if request is not None:
             self._mark_request_notifications_handled(db, request)
+
+    def record_workflow_outcome(
+        self,
+        db: Session,
+        request: AccessGrantRequestDb,
+        *,
+        approved: bool,
+        status: Any,
+        decided_by: Optional[str],
+        terms: Optional[Tuple[int, str]],
+        message: Optional[str],
+        execution_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Carry an access workflow's outcome to its pending, locked ``request`` (#1615).
+
+        When the execution (``status``) has ended: approved and succeeded grants the
+        access with the checked ``terms``; rejected denies it. Paused at a further step,
+        or approved but failed later: the request stays pending (None). Its other access
+        workflows are closed. Flushed, not committed. The applied decision, as audited.
+        """
+        status = getattr(status, 'value', status)
+        if status == 'paused' or (approved and status != 'succeeded'):
+            return None
+        self.apply_workflow_decision(
+            db, request, approved=approved, decided_by=decided_by or 'workflow',
+            terms=terms, message=message,
+        )
+        # Another access workflow of the same request has nothing left to decide
+        self.close_request_workflows(
+            db, request.id, closed_by=decided_by, except_execution=execution_id,
+        )
+        if not approved:
+            return {'access_request': str(request.id), 'decision': 'denied'}
+        days, level = terms if terms else (
+            request.requested_duration_days, request.permission_level)
+        return {
+            'access_request': str(request.id), 'decision': 'approved',
+            'granted_duration_days': days, 'permission_level': level,
+        }
+
+    def reconcile_workflow_decisions(self, db: Session, now: Optional[datetime] = None) -> int:
+        """Apply the decisions of ended access workflows whose request is still pending.
+
+        ``/api/workflows/handle-approval`` records an access workflow's decision on its
+        request after the workflow's steps committed (another session). When that fails
+        the request stays pending; the approval step's result keeps the decision
+        (``ACCESS_DECISION_KEY``: approved or not, by whom, the checked terms, the
+        narrowest of a ``require_all`` step's), and this applies it later: run with the
+        overdue scan, once per scheduler slot.
+
+        Three reads, whatever the number of executions: the access executions ended in the
+        last ``RECONCILE_WINDOW`` (succeeded or failed), their requests still pending, and
+        the decided approval steps of those. Then, per request to reconcile, its row
+        locked and read again (a decision meanwhile wins). Idempotent: a reconciled
+        request is no longer pending. Executions without a recorded decision (before
+        this, or not decided by an approver) are left alone. Returns the number of
+        requests decided; commits when there is one.
+        """
+        from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepExecutionDb
+
+        now = now or utc_now()
+        ended = db.query(
+            WorkflowExecutionDb.id, WorkflowExecutionDb.status,
+            WorkflowExecutionDb.trigger_context,
+        ).filter(
+            WorkflowExecutionDb.status.in_(('succeeded', 'failed')),
+            WorkflowExecutionDb.finished_at >= now - RECONCILE_WINDOW,
+            WorkflowExecutionDb.trigger_context.contains('access_grant'),
+        ).all()
+        request_of: Dict[str, uuid.UUID] = {}
+        status_of: Dict[str, str] = {}
+        for execution_id, status, trigger_context in ended:
+            try:
+                context = json.loads(trigger_context or '{}') or {}
+                if str(context.get('entity_type') or '').lower() == 'access_grant':
+                    request_of[execution_id] = uuid.UUID(str(context.get('entity_id')))
+                    status_of[execution_id] = status
+            except (TypeError, ValueError, AttributeError):
+                continue
+        if not request_of:
+            return 0
+        pending = {
+            row.id for row in db.query(AccessGrantRequestDb.id).filter(
+                AccessGrantRequestDb.id.in_(set(request_of.values())),
+                AccessGrantRequestDb.status == AccessGrantRequestStatus.PENDING.value,
+            ).all()
+        }
+        candidates = [eid for eid, rid in request_of.items() if rid in pending]
+        if not candidates:
+            return 0
+        latest: Dict[str, Tuple[Any, Dict[str, Any]]] = {}
+        for step in db.query(WorkflowStepExecutionDb).filter(
+            WorkflowStepExecutionDb.execution_id.in_(candidates),
+            WorkflowStepExecutionDb.result_data.contains(f'"{ACCESS_DECISION_KEY}"'),
+        ).all():
+            try:
+                decision = (json.loads(step.result_data or '{}') or {}).get(ACCESS_DECISION_KEY)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(decision, dict):
+                continue
+            # The execution's last decided approval step decides the request
+            if step.execution_id not in latest or step.started_at >= latest[
+                step.execution_id][0]:
+                latest[step.execution_id] = (step.started_at, decision)
+        reconciled: List[AccessGrantRequestDb] = []
+        for execution_id, (_, decision) in latest.items():
+            row = self.lock_request(db, request_of[execution_id])
+            if row is None or row.status != AccessGrantRequestStatus.PENDING.value:
+                continue  # decided meanwhile
+            approved = decision.get('approved') is True
+            terms = _stored_terms(decision.get('terms')) if approved else None
+            if approved and terms is None:
+                terms = (row.requested_duration_days, row.permission_level)
+            applied = self.record_workflow_outcome(
+                db, row, approved=approved, status=status_of[execution_id],
+                decided_by=decision.get('decided_by'), terms=terms,
+                message=decision.get('message'), execution_id=execution_id,
+            )
+            if applied:
+                reconciled.append(row)
+                logger.info(
+                    f"Reconciled access request {row.id} with the decision of workflow "
+                    f"execution {execution_id}: {applied['decision']}"
+                )
+        if reconciled:
+            db.commit()
+            for row in reconciled:
+                self._mark_request_notifications_handled(db, row)
+        return len(reconciled)
 
     def get_pending_requests_for_entity(
         self,

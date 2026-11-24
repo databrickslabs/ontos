@@ -384,6 +384,11 @@
     "adjustTerms": "Ajustar los términos de aprobación",
     "durationDays": "Duración (días)",
     "permissionLevel": "Nivel de permiso",
+    "accessDecision": {
+      "adminHint": "Como administrador puede decidir su propia solicitud y conceder más de lo solicitado. El registro de auditoría lo registra como una anulación.",
+      "failedTitle": "Decisión registrada, acceso aún no actualizado",
+      "failed": "El flujo de trabajo tiene su decisión, pero no se pudo actualizar la solicitud de acceso. Se reintentará automáticamente."
+    },
     "reasonLabel": "Motivo de la aprobación o el rechazo",
     "reasonPlaceholder": "Introduce tu motivo...",
     "approved": "Aprobado",

@@ -384,6 +384,11 @@
     "adjustTerms": "Ajustar termos da aprovação",
     "durationDays": "Duração (dias)",
     "permissionLevel": "Nível de permissão",
+    "accessDecision": {
+      "adminHint": "Como administrador, você pode decidir sua própria solicitação e conceder mais do que foi solicitado. O log de auditoria registra isso como uma substituição.",
+      "failedTitle": "Decisão registrada, acesso ainda não atualizado",
+      "failed": "O workflow tem sua decisão, mas a solicitação de acesso não pôde ser atualizada. Isso será tentado novamente de forma automática."
+    },
     "reasonLabel": "Motivo da aprovação ou rejeição",
     "reasonPlaceholder": "Digite seu motivo...",
     "approved": "Aprovado",

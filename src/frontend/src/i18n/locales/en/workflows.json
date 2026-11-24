@@ -384,6 +384,11 @@
     "adjustTerms": "Adjust approval terms",
     "durationDays": "Duration (days)",
     "permissionLevel": "Permission level",
+    "accessDecision": {
+      "adminHint": "As an admin you can decide your own request and grant more than was requested. The audit log records it as an override.",
+      "failedTitle": "Decision recorded, access not updated yet",
+      "failed": "The workflow has your decision, but the access request could not be updated. It is retried automatically."
+    },
     "reasonLabel": "Reason for approval or rejection",
     "reasonPlaceholder": "Enter your reason...",
     "approved": "Approved",

@@ -23,28 +23,11 @@ import {
 import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useIsOntosAdmin } from '@/hooks/use-is-ontos-admin';
 import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
-import { useIsOntosAdmin } from '@/hooks/use-is-ontos-admin';
-
-/** Permission levels of an access grant (backend ``PermissionLevel``). */
-const ACCESS_PERMISSION_LEVELS = ['READ', 'WRITE', 'MANAGE'] as const;
-
-/**
- * The levels an approver may grant: the requested one or a narrower one. An admin may
- * grant any level (the backend audits it as an override).
- */
-export function grantableLevels(requested?: string, admin = false): string[] {
-  const index = ACCESS_PERMISSION_LEVELS.indexOf(requested as never);
-  return admin || index < 0
-    ? [...ACCESS_PERMISSION_LEVELS]
-    : ACCESS_PERMISSION_LEVELS.slice(0, index + 1);
-}
-
-/** The longest grant an admin may give past the request (backend ``MAX_GRANT_DAYS``). */
-export const MAX_GRANT_DAYS = 365;
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
@@ -232,6 +215,23 @@ function buildDetailRows(
 
   return rows;
 }
+
+/** Permission levels of an access grant (backend ``PermissionLevel``). */
+const ACCESS_PERMISSION_LEVELS = ['READ', 'WRITE', 'MANAGE'] as const;
+
+/**
+ * The levels an approver may grant: the requested one or a narrower one. An admin may
+ * grant any level (the backend audits it as an override).
+ */
+export function grantableLevels(requested?: string, admin = false): string[] {
+  const index = ACCESS_PERMISSION_LEVELS.indexOf(requested as never);
+  return admin || index < 0
+    ? [...ACCESS_PERMISSION_LEVELS]
+    : ACCESS_PERMISSION_LEVELS.slice(0, index + 1);
+}
+
+/** The longest grant an admin may give past the request (backend ``MAX_GRANT_DAYS``). */
+export const MAX_GRANT_DAYS = 365;
 
 export default function WorkflowApprovalResponseDialog({
   isOpen,

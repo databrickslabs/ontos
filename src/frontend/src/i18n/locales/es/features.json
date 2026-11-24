@@ -23,6 +23,14 @@
     "name": "Productos",
     "description": "Agrupa y gestiona activos Databricks relacionados con etiquetas."
   },
+  "marketplace": {
+    "name": "Marketplace",
+    "description": "Explora y suscríbete a los productos de datos disponibles."
+  },
+  "my-products": {
+    "name": "Mis productos",
+    "description": "Consulta y gestiona los productos de datos a los que estás suscrito."
+  },
   "concepts": {
     "name": "Conceptos",
     "description": "Navegar, buscar y gestionar conceptos de negocio, esquemas de conceptos y jerarquías."

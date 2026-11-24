@@ -7,6 +7,7 @@ import {
   getLandingPageFeatures,
   getNavFeatureId,
   isHiddenInNav,
+  NAV_ENTRY_FEATURES,
 } from './features';
 
 describe('features config', () => {
@@ -95,10 +96,35 @@ describe('features config', () => {
       getNavigationGroups(['ga', 'beta', 'alpha'], hidden).flatMap((g) => g.items.map((i) => i.id));
 
     it('uses the permission id of an entry as its role feature id', () => {
+      const concepts = features.find((f) => f.id === 'concepts')!;
+      expect(getNavFeatureId(concepts)).toBe('semantic-models');
+      expect(isHiddenInNav(concepts, ['semantic-models'])).toBe(true);
+    });
+
+    it('gives Marketplace and My Products their own flag, apart from Products', () => {
       const marketplace = features.find((f) => f.id === 'marketplace')!;
-      expect(getNavFeatureId(marketplace)).toBe('data-products');
-      expect(isHiddenInNav(marketplace, ['data-products'])).toBe(true);
-      expect(isHiddenInNav(marketplace, new Set(['marketplace']))).toBe(false);
+      const myProducts = features.find((f) => f.id === 'my-products')!;
+      const products = features.find((f) => f.id === 'data-products')!;
+      expect(getNavFeatureId(marketplace)).toBe('marketplace');
+      expect(getNavFeatureId(myProducts)).toBe('my-products');
+      expect(getNavFeatureId(products)).toBe('data-products');
+      // Access checks still follow the Products permission.
+      expect(marketplace.permissionId).toBe('data-products');
+      expect(myProducts.permissionId).toBe('data-products');
+      expect(NAV_ENTRY_FEATURES).toEqual({
+        marketplace: 'data-products', 'my-products': 'data-products',
+      });
+
+      expect(isHiddenInNav(marketplace, ['data-products'])).toBe(false);
+      expect(isHiddenInNav(products, ['marketplace', 'my-products'])).toBe(false);
+      expect(isHiddenInNav(marketplace, new Set(['marketplace']))).toBe(true);
+      expect(isHiddenInNav(myProducts, new Set(['my-products']))).toBe(true);
+    });
+
+    it('lists My Products in the Build group unless it is hidden', () => {
+      expect(navIds([])).toContain('my-products');
+      expect(navIds(['my-products'])).not.toContain('my-products');
+      expect(navIds(['my-products'])).toContain('data-products');
     });
 
     it('drops hidden entries from the groups, from an array or a set', () => {

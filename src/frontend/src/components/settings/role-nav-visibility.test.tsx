@@ -3,9 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { FeatureAccessLevel } from '@/types/settings';
+import { features, NAV_ENTRY_FEATURES } from '@/config/features';
 import i18n from '@/i18n/config';
 import {
-  RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures, roleSaveErrorText,
+  RoleNavColumnHeader, RoleNavEntryRow, RoleNavVisibilityCell, cleanHiddenNavFeatures,
+  navEntriesOf, roleSaveErrorText,
 } from './role-nav-visibility';
 
 const renderCell = (props: Partial<Parameters<typeof RoleNavVisibilityCell>[0]> = {}) => {
@@ -83,6 +85,73 @@ describe('cleanHiddenNavFeatures', () => {
   it('treats a missing list or level as nothing hidden', () => {
     expect(cleanHiddenNavFeatures(undefined, undefined, ['assets'])).toEqual([]);
     expect(cleanHiddenNavFeatures(['assets'], {}, ['assets'])).toEqual([]);
+  });
+});
+
+describe('cleanHiddenNavFeatures with menu entries', () => {
+  const perms = { 'data-products': FeatureAccessLevel.READ_ONLY };
+
+  it('keeps Marketplace and My Products while Products has access', () => {
+    expect(cleanHiddenNavFeatures(
+      ['marketplace', 'my-products', 'data-products'], perms, ['data-products'],
+      NAV_ENTRY_FEATURES,
+    )).toEqual(['marketplace', 'my-products', 'data-products']);
+  });
+
+  it('drops them when Products is at None or the feature is unknown', () => {
+    expect(cleanHiddenNavFeatures(
+      ['marketplace', 'my-products'], { 'data-products': FeatureAccessLevel.NONE },
+      ['data-products'], NAV_ENTRY_FEATURES,
+    )).toEqual([]);
+    expect(cleanHiddenNavFeatures(
+      ['marketplace'], perms, ['assets'], NAV_ENTRY_FEATURES,
+    )).toEqual([]);
+  });
+
+  it('refuses the entry ids without the entry map', () => {
+    expect(cleanHiddenNavFeatures(['marketplace'], perms, ['data-products'])).toEqual([]);
+  });
+});
+
+describe('navEntriesOf and RoleNavEntryRow', () => {
+  it('lists Marketplace and My Products under Products only', () => {
+    expect(navEntriesOf('data-products').map((f) => f.navId))
+      .toEqual(['marketplace', 'my-products']);
+    expect(navEntriesOf('assets')).toEqual([]);
+    expect(navEntriesOf('marketplace')).toEqual([]);
+  });
+
+  const renderRow = (props: Partial<Parameters<typeof RoleNavEntryRow>[0]> = {}) => {
+    const onChange = vi.fn();
+    const entry = features.find((f) => f.navId === 'marketplace')!;
+    renderWithProviders(
+      <RoleNavEntryRow
+        entry={entry}
+        level={FeatureAccessLevel.READ_ONLY}
+        isAdminRole={false}
+        hidden={['data-products']}
+        onChange={onChange}
+        {...props}
+      />,
+    );
+    const name = 'Show Marketplace in navigation';
+    return { onChange, box: screen.getByRole('checkbox', { name }) };
+  };
+
+  it('has its own checkbox that is independent from the Products flag', () => {
+    const { box, onChange } = renderRow();
+    expect(screen.getByTestId('nav-entry-row-marketplace')).toBeInTheDocument();
+    expect(box).toBeChecked();
+    fireEvent.click(box);
+    expect(onChange).toHaveBeenCalledWith(['data-products', 'marketplace']);
+  });
+
+  it('is unchecked when its own flag is set', () => {
+    expect(renderRow({ hidden: ['marketplace'] }).box).not.toBeChecked();
+  });
+
+  it('is disabled at None and on the admin role', () => {
+    expect(renderRow({ level: FeatureAccessLevel.NONE }).box).toBeDisabled();
   });
 });
 

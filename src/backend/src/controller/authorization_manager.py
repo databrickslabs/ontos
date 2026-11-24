@@ -4,7 +4,9 @@ from collections import defaultdict
 
 from src.controller.settings_manager import SettingsManager
 from src.models.settings import AppRole
-from src.common.features import FeatureAccessLevel, ACCESS_LEVEL_ORDER, get_feature_config
+from src.common.features import (
+    FeatureAccessLevel, ACCESS_LEVEL_ORDER, NAV_ENTRY_FEATURES, get_feature_config,
+)
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -283,13 +285,14 @@ class AuthorizationManager:
         user_email: Optional[str] = None,
         team_role_names: Optional[Sequence[str]] = None,
     ) -> List[str]:
-        """Feature ids the viewer's menus hide (sidebar, home quick actions, About) (#1325).
+        """Feature and menu entry ids the viewer's menus hide (#1325).
 
         Roles are resolved like the permissions (``get_user_effective_role_ids``: the
         applied role override pins one role, otherwise group or email matches). A
         feature is hidden only when every resolved role that grants it at least
         Read-only hides it, so one role that shows it is enough. A resolved
-        ``is_admin`` role hides nothing. Visibility only: access is unchanged.
+        ``is_admin`` role hides nothing. Visibility only: access is unchanged. Marketplace
+        and My Products have their own ids and follow the roles that grant Products.
         """
         role_ids = self.get_user_effective_role_ids(
             user_groups,
@@ -305,7 +308,11 @@ class AuthorizationManager:
 
         read_only = ACCESS_LEVEL_ORDER[FeatureAccessLevel.READ_ONLY]
         hidden: List[str] = []
-        for feature_id in get_feature_config():
+        # Features, then menu entries with their own flag (Marketplace, My Products): those
+        # are shown or hidden by the roles that grant the feature they depend on.
+        entries = [(fid, fid) for fid in get_feature_config()]
+        entries += list(NAV_ENTRY_FEATURES.items())
+        for entry_id, feature_id in entries:
             granting = [
                 r for r in roles
                 if ACCESS_LEVEL_ORDER.get(
@@ -313,7 +320,7 @@ class AuthorizationManager:
                 ) >= read_only
             ]
             if granting and all(
-                feature_id in (r.hidden_nav_features or []) for r in granting
+                entry_id in (r.hidden_nav_features or []) for r in granting
             ):
-                hidden.append(feature_id)
+                hidden.append(entry_id)
         return hidden

@@ -292,7 +292,9 @@ The default persona set covers Admin, Data Governance Officer, Data
 Steward, Data Producer, Data Consumer, Security Officer, and an
 empty-groups "anon" persona for exercising fully-denied paths.
 
-Leave `TEST_USER_TOKEN` unset in production. When it is unset, the
+Leave `TEST_USER_TOKEN` unset in production: with `ENV=PROD` or
+`ENV=PRODUCTION` the app refuses to start when it (or `MOCK_USER_DETAILS`) is
+set, so a demo or test deployment that uses personas sets `ENV=DEV`. When it is unset, the
 persona headers are ignored and normal OBO resolution applies.
 
 **Customizing personas in a DABs deployment.** To change the persona list of a

@@ -596,7 +596,9 @@ Consumer, etc.) against the **same running backend**. No restarts are needed.
 
 > ⚠️ **Security:** anyone holding `TEST_USER_TOKEN` can act as any user and
 > any groups, including admin. Only enable it on local or dev/test
-> deployments, never in production. It is **off by default**: when the
+> deployments, never in production: the app refuses to start when it (or
+> `MOCK_USER_DETAILS`) is set with `ENV=PROD` or `ENV=PRODUCTION`, so test
+> deployments set `ENV=DEV`. It is **off by default**: when the
 > variable is unset, the `X-Test-*` headers are ignored, normal OBO resolution
 > applies, and `GET /api/test/personas` returns 404.
 

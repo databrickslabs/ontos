@@ -32,6 +32,10 @@ LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT = (
     "Be strict and flag anything suspicious."
 )
 
+# ENV values that refuse the test-identity settings (Settings.reject_test_identity_in_prod)
+PROD_ENV_NAMES = frozenset({'PROD', 'PRODUCTION'})
+
+
 class Settings(BaseSettings):
     """Application settings."""
 
@@ -392,8 +396,10 @@ class Settings(BaseSettings):
         TEST_USER_TOKEN (header impersonation with caller-chosen groups) and
         MOCK_USER_DETAILS (every request becomes a mock admin) are allowed on
         LOCAL/DEV test deployments, but in PROD either one lets anyone act as admin.
+        ``PRODUCTION`` counts as PROD: the app has no other meaning for it (every
+        ENV that isn't LOCAL* runs like PROD).
         """
-        if self.ENV.upper() == "PROD":
+        if (self.ENV or '').strip().upper() in PROD_ENV_NAMES:
             enabled = [
                 name for name, on in (
                     ("TEST_USER_TOKEN", bool(self.TEST_USER_TOKEN)),
@@ -402,7 +408,8 @@ class Settings(BaseSettings):
             ]
             if enabled:
                 raise ValueError(
-                    f"{', '.join(enabled)} must not be set when ENV=PROD "
+                    f"{', '.join(enabled)} must not be set when "
+                    f"ENV={self.ENV.strip().upper()} "
                     "(enables user impersonation)."
                 )
         return self

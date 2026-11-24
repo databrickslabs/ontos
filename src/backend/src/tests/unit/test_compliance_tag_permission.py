@@ -34,7 +34,22 @@ def _auth(tags_level):
     return auth
 
 
-USER = SimpleNamespace(username='author@example.com', groups=['compliance-editors'])
+USER = SimpleNamespace(username='author@example.com', email='author@example.com', groups=['compliance-editors'])
+
+
+def _request():
+    """A new request per check, as in the app.
+
+    The effective permissions are cached on ``request.state`` under a key that
+    includes ``id(auth_manager)``. A request shared across tests can hit an entry
+    left by an earlier test's mock once Python reuses its id, and so return that
+    test's level.
+    """
+    # No teams or role override in play: the levels come from the auth manager mock.
+    return SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(teams_manager=None, settings_manager=None)),
+        state=SimpleNamespace(),
+    )
 
 
 @pytest.mark.parametrize('rule, expected', [
@@ -47,19 +62,21 @@ def test_rule_changes_tags(rule, expected):
 @pytest.mark.parametrize('level', [FeatureAccessLevel.NONE, FeatureAccessLevel.READ_ONLY])
 def test_tag_actions_need_write_access_to_tags(level):
     with pytest.raises(HTTPException) as err:
-        require_tag_write_for_tag_actions(TAGGING, _auth(level), USER)
+        require_tag_write_for_tag_actions(TAGGING, _auth(level), USER, _request())
 
     assert err.value.status_code == 403
     assert 'requires write access to tags' in err.value.detail
 
 
 def test_tag_actions_are_allowed_with_write_access_to_tags():
-    require_tag_write_for_tag_actions(UNTAGGING, _auth(FeatureAccessLevel.READ_WRITE), USER)
+    require_tag_write_for_tag_actions(
+        UNTAGGING, _auth(FeatureAccessLevel.READ_WRITE), USER, _request()
+    )
 
 
 def test_rules_without_tag_actions_need_no_tag_access():
     auth = _auth(FeatureAccessLevel.NONE)
 
-    require_tag_write_for_tag_actions(PLAIN, auth, USER)
+    require_tag_write_for_tag_actions(PLAIN, auth, USER, _request())
 
     auth.get_user_effective_permissions.assert_not_called()

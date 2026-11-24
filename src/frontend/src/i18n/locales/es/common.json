@@ -6,9 +6,11 @@
     "loading": "Cargando...",
     "cancel": "Cancelar",
     "close": "Cerrar",
+    "openMenu": "Abrir menú",
     "delete": "Eliminar",
     "deleteSelected": "Eliminar seleccionados ({{count}})",
     "edit": "Editar",
+    "rename": "Cambiar nombre",
     "add": "Añadir",
     "create": "Crear",
     "update": "Actualizar",
@@ -41,6 +43,7 @@
     "discard": "Descartar",
     "apply": "Aplicar",
     "select": "Seleccionar",
+    "done": "Listo",
     "remove": "Eliminar",
     "link": "Vincular",
     "unlink": "Desvincular",
@@ -338,7 +341,8 @@
       "for_request_access": "Solicitar acceso (Asistente)",
       "for_request_publish": "Solicitar publicación (Asistente)",
       "for_request_certify": "Solicitar certificación (Asistente)",
-      "for_request_status_change": "Solicitar cambio de estado (Asistente)"
+      "for_request_status_change": "Solicitar cambio de estado (Asistente)",
+      "on_request_definition_change": "Solicitud de cambio de definición"
     },
     "entityTypes": {
       "catalog": "Catálogo",
@@ -355,7 +359,11 @@
       "data_asset_review": "Revisión de activo",
       "job": "Job",
       "subscription": "Suscripción",
-      "user": "Usuario"
+      "user": "Usuario",
+      "metric_view": "Metric View",
+      "ontology_concept": "Concepto",
+      "ontology_collection": "Colección",
+      "concept_changeset": "Conjunto de cambios de conceptos"
     },
     "stepTypes": {
       "validation": "Validación",
@@ -472,7 +480,13 @@
     "selectRelTypePrompt": "Seleccione un tipo de relación para encontrar entidades de destino",
     "createRelationship": "Crear relación",
     "relationshipCreated": "Relación creada",
-    "assetFallback": "Activo"
+    "assetFallback": "Activo",
+    "conceptRelationshipHint": "«{{relationship}}» vincula este elemento a un concepto como relación: aparece en Relaciones y en el linaje. Para mostrar el concepto en los detalles de este elemento y en {{conceptSection}} de la página del concepto, use {{section}}.",
+    "targetNotPickable": "{{type}} no se puede elegir aquí. Se gestiona en su propia página.",
+    "noAccessToTarget": "No tiene acceso a {{type}}. Pida acceso de lectura a un administrador para vincularlo."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "No se pudieron cargar las propiedades guardadas del activo, así que no se puede guardar aquí. Cierre el diálogo e inténtelo de nuevo."
   },
   "assetForm": {
     "groups": {
@@ -559,16 +573,25 @@
     "removeConfirm": "¿Seguro que desea quitar esta relación? Esta acción no se puede deshacer."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Seleccione {{kind}}…",
     "latestSuffix": "{{name}} (más reciente)",
     "pinVersionTitle": "Fijar una versión específica",
     "pinVersion": "Fijar versión",
     "followLatestTitle": "Seguir siempre la versión visible más reciente de la familia",
     "followLatest": "Seguir la más reciente",
-    "searchPlaceholder": "Buscar {{kind}}s…",
     "loading": "Cargando…",
-    "noMatching": "No hay {{kind}}s coincidentes.",
     "unnamed": "(sin nombre)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Seleccione un contrato…",
+      "search": "Buscar contratos…",
+      "noMatching": "No hay contratos coincidentes."
+    },
+    "product": {
+      "select": "Seleccione un producto…",
+      "search": "Buscar productos…",
+      "noMatching": "No hay productos coincidentes."
+    }
   },
   "entityTree": {
     "title": "Entidades relacionadas",
@@ -632,6 +655,8 @@
   "edit": "Editar",
   "error": "Error",
   "home": "Inicio",
+  "loading": "Cargando…",
+  "optional": "(opcional)",
   "refresh": "Actualizar",
   "retry": "Reintentar",
   "save": "Guardar",
@@ -762,5 +787,39 @@
     "createdSkipped": "Creados: {{created}}, omitidos: {{skipped}}.",
     "createdFailed": "Creados: {{created}}, con error: {{failed}}.",
     "createdSkippedFailed": "Creados: {{created}}, omitidos: {{skipped}}, con error: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Motivo de la obsolescencia",
+    "reasonPlaceholder": "¿Por qué queda obsoleto? Los consumidores verán este texto.",
+    "sunsetDate": "Fecha de retirada",
+    "replacement": "Reemplazo",
+    "noReplacement": "Sin reemplazo",
+    "reasonRequired": "Se requiere un motivo para marcarlo como obsoleto.",
+    "requestHint": "La justificación se usará como motivo de la obsolescencia.",
+    "errors": {
+      "deprecation_reason_required": "Se requiere un motivo para marcarlo como obsoleto.",
+      "sunset_date_in_past": "La fecha de retirada {{sunsetDate}} está en el pasado.",
+      "replacement_is_self": "Una entidad no puede ser su propio reemplazo.",
+      "replacement_not_found": "No se encontró el reemplazo {{replacementId}}.",
+      "replacement_retired": "El reemplazo {{replacementId}} está retirado.",
+      "replacement_deprecated": "El reemplazo {{replacementId}} está obsoleto.",
+      "replacement_deprecated_replaced": "El reemplazo {{replacementId}} está obsoleto; lo reemplaza {{replacedBy}}.",
+      "replacement_leads_back": "El reemplazo {{replacementId}} lleva de vuelta a esta entidad: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} no válido \"{{value}}\": se esperaba una fecha ISO.",
+      "replacement_is_self": "El reemplazo (ontosReplacedBy) no puede ser la propia entidad.",
+      "replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad: {{chain}}.",
+      "imported_replacement_dropped": "El reemplazo {{replacementId}} no está aquí, así que no se vinculó.",
+      "imported_replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad ({{chain}}), así que no se vinculó.",
+      "imported_status_mapped": "'{{status}}' no es un estado del ciclo de vida, así que se importó como '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' es un nombre de estado antiguo, así que se importó como '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' ya no es un estado, así que se importó como '{{mappedTo}}'. La certificación no se importa: certifica la entidad en Ontos."
+    },
+    "notice": {
+      "deprecated": "Obsoleto",
+      "retired": "Retirado",
+      "noReason": "No se registró un motivo"
+    }
   }
 }

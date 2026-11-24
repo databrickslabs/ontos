@@ -17,12 +17,36 @@ from pydantic import BaseModel, Field, field_serializer, field_validator, model_
 from .tags import AssignedTag, AssignedTagCreate
 
 from src.common.logging import get_logger
+from src.utils.odcs_values import typed_value
 logger = get_logger(__name__)
+
+# Server-managed publication fields (see DataProduct.publication_scope).
+_READ_ONLY = {"readOnly": True}
+_PUBLISH_HINT = (
+    "Read-only: ignored on create and update. Change it with "
+    "POST /data-products/{id}/publish, /set-publication-scope or /unpublish."
+)
 
 
 # ODPS has no status on an output port; the ODPS export carries Ontos's port status
 # as this port custom property, and imports read it back.
 ONTOS_PORT_STATUS_PROPERTY = "ontosPortStatus"
+# Likewise for the other stored port fields ODPS has no place for, and the owner team
+# (carried by name on the product; the import looks the team up).
+ONTOS_PORT_SERVER_PROPERTY = "ontosServer"
+ONTOS_PORT_CONTAINS_PII_PROPERTY = "ontosContainsPii"
+ONTOS_PORT_AUTO_APPROVE_PROPERTY = "ontosAutoApprove"
+ONTOS_OWNER_TEAM_PROPERTY = "ontosOwnerTeam"
+
+_PORT_FIELD_ALIASES = {'containsPii': 'contains_pii', 'autoApprove': 'auto_approve'}
+
+# Port custom property -> the OutputPort field it fills on import.
+_PORT_PROPERTY_FIELDS = {
+    ONTOS_PORT_STATUS_PROPERTY: 'status',
+    ONTOS_PORT_SERVER_PROPERTY: 'server',
+    ONTOS_PORT_CONTAINS_PII_PROPERTY: 'containsPii',
+    ONTOS_PORT_AUTO_APPROVE_PROPERTY: 'autoApprove',
+}
 
 
 # ============================================================================
@@ -93,6 +117,19 @@ class CustomProperty(BaseModel):
     property: str = Field(..., description="Property name in camelCase")
     value: Any = Field(None, description="Property value (can be any type, including null)")
     description: Optional[str] = Field(None, description="Optional description")
+
+    @model_validator(mode='before')
+    @classmethod
+    def _typed_stored_value(cls, data):
+        # A stored row holds the value as `typed_text` wrote it (plain text as is, any
+        # other value as JSON): read it back with its type. API input is typed already.
+        if isinstance(data, dict) or not hasattr(data, '_sa_instance_state'):
+            return data
+        return {
+            'property': data.property,
+            'value': typed_value(data.value),
+            'description': data.description,
+        }
 
     # Normalize the legacy literal string "null" back to None. Older writes
     # persisted a null value via json.dumps(None) == "null" (fixed on the write
@@ -223,24 +260,34 @@ class OutputPort(BaseModel):
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
 
+    @field_validator('containsPii', 'autoApprove', mode='before')
+    @classmethod
+    def _null_flag_is_false(cls, value):
+        # Both columns are nullable: read NULL as the False default on every reader,
+        # whatever wrote the row.
+        return False if value is None else value
+
     @model_validator(mode='before')
     @classmethod
     def _read_port_status_property(cls, data):
-        # An ODPS export carries the port status as the ontosPortStatus custom
-        # property; a bare `status` (older exports, the API) wins when both are set.
+        # An ODPS export carries the port status, server, PII and auto-approve flags as
+        # ontos* custom properties; a bare field (older exports, the API) wins when both
+        # are set.
         if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
             return data
         props = data['customProperties']
-        status_props = [
+        ours = [
             cp for cp in props
-            if isinstance(cp, dict) and cp.get('property') == ONTOS_PORT_STATUS_PROPERTY
+            if isinstance(cp, dict) and cp.get('property') in _PORT_PROPERTY_FIELDS
         ]
-        if not status_props:
+        if not ours:
             return data
         data = dict(data)
-        if data.get('status') is None:
-            data['status'] = status_props[0].get('value')
-        data['customProperties'] = [cp for cp in props if cp not in status_props] or None
+        for cp in ours:  # the first property of a name wins
+            field = _PORT_PROPERTY_FIELDS[cp['property']]
+            if data.get(field) is None and data.get(_PORT_FIELD_ALIASES.get(field)) is None:
+                data[field] = cp.get('value')
+        data['customProperties'] = [cp for cp in props if cp not in ours] or None
         return data
 
     @field_validator('deliveryMethodId', mode='before')
@@ -373,7 +420,15 @@ class DataProduct(BaseModel):
     apiVersion: str = Field("v1.0.0", alias="api_version", description="Version of the ODPS standard")
     kind: str = Field("DataProduct", description="Resource type")
     id: str = Field(..., description="Unique identifier")
-    status: str = Field(..., description="Status (proposed, draft, active, deprecated, retired)")
+    status: str = Field(..., description="Stage key of the product's lifecycle stage group")
+    # Lifecycle Stage Group (#1213); None = the default data product group
+    lifecycle_stage_group_id: Optional[str] = Field(
+        None, alias="lifecycleStageGroupId", serialization_alias="lifecycleStageGroupId",
+    )
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = Field(
+        None, alias="statusCategory", serialization_alias="statusCategory",
+    )
 
     # ODPS v1.0.0 optional fields
     name: Optional[str] = Field(None, description="Name of the data product")
@@ -455,9 +510,18 @@ class DataProduct(BaseModel):
     )
 
     # Publication fields
-    publication_scope: Optional[str] = Field("none", description="Publication scope: none, domain, organization, external")
-    published_at: Optional[datetime] = Field(None, description="When published")
-    published_by: Optional[str] = Field(None, description="Who published")
+    # Server-managed: only the publish routes change these (see _PUBLISH_HINT).
+    publication_scope: Optional[str] = Field(
+        "none",
+        description="Publication scope: none, domain, organization, external. " + _PUBLISH_HINT,
+        json_schema_extra=_READ_ONLY,
+    )
+    published_at: Optional[datetime] = Field(
+        None, description="When published. " + _PUBLISH_HINT, json_schema_extra=_READ_ONLY
+    )
+    published_by: Optional[str] = Field(
+        None, description="Who published. " + _PUBLISH_HINT, json_schema_extra=_READ_ONLY
+    )
 
     # Certification fields
     certification_level: Optional[int] = Field(None, description="Ordinal of assigned certification level")
@@ -466,6 +530,12 @@ class DataProduct(BaseModel):
     certified_by: Optional[str] = Field(None, description="Who granted certification")
     certification_expires_at: Optional[datetime] = Field(None, description="When certification expires")
     certification_notes: Optional[str] = Field(None, description="Certification notes")
+
+    # Deprecation lifecycle fields (set when the product moves to `deprecated`)
+    deprecation_reason: Optional[str] = Field(None, description="Why the product was deprecated")
+    sunset_date: Optional[date] = Field(None, description="Date after which it shouldn't be used")
+    replacement_product_id: Optional[str] = Field(None, description="Product replacing this one")
+    deprecated_at: Optional[datetime] = Field(None, description="When the product was deprecated")
 
     # consumer_principals is stored as JSON-encoded TEXT in DB. Decode to a
     # list of dicts at read time so Pydantic can build ConsumerPrincipal
@@ -495,6 +565,18 @@ class DataProduct(BaseModel):
                 coerced.append(item)
         return coerced
 
+    @model_validator(mode='before')
+    @classmethod
+    def drop_null_tags(cls, data):
+        """``tags: null`` in a payload means "not sent" (only ``[]`` clears the tags).
+
+        Without this, ``parse_tags`` would read it as ``[]``, which marks the field as set
+        and makes a whole-product PUT remove every tag (#1435).
+        """
+        if isinstance(data, dict) and 'tags' in data and data['tags'] is None:
+            data = {k: v for k, v in data.items() if k != 'tags'}
+        return data
+
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
     def parse_tags(cls, value):
@@ -520,6 +602,13 @@ class DataProduct(BaseModel):
                 pass
             return []
         return value or []
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
 
     model_config = {
         "from_attributes": True,
@@ -552,6 +641,8 @@ class DataProductCreate(BaseModel):
     kind: str = Field("DataProduct", description="Resource type")
     id: str = Field(..., description="Unique identifier")
     status: str = Field("draft", description="Initial status")
+    # Lifecycle Stage Group (#1213); None = the default data product group
+    lifecycle_stage_group_id: Optional[str] = Field(None, alias="lifecycleStageGroupId")
 
     # ODPS optional
     name: Optional[str] = Field(None, description="Product name")
@@ -571,6 +662,9 @@ class DataProductCreate(BaseModel):
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
     support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
     team: Optional[Team] = Field(None, description="Team")
+    productCreatedTs: Optional[datetime] = Field(
+        None, description="Creation timestamp (kept from an imported ODPS document)"
+    )
 
     # Versioning
     parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")
@@ -768,8 +862,26 @@ class SubscribersListResponse(BaseModel):
 # Status Change Request/Response Models
 # ============================================================================
 
-class ChangeStatusPayload(BaseModel):
-    """Payload for direct status change (admin/owner)."""
+class DeprecationPayload(BaseModel):
+    """Deprecation details (deprecation_reason is required to deprecate)."""
+    deprecation_reason: Optional[str] = Field(None, description="Why the entity is deprecated")
+    sunset_date: Optional[date] = Field(None, description="Date after which it should not be used")
+    replacement_id: Optional[str] = Field(None, description="Entity of the same type replacing it")
+
+    def deprecation_details(self):
+        from src.controller.lifecycle_fields import DeprecationDetails
+        return DeprecationDetails(
+            reason=self.deprecation_reason,
+            sunset_date=self.sunset_date,
+            replacement_id=self.replacement_id,
+        )
+
+
+class ChangeStatusPayload(DeprecationPayload):
+    """Payload for direct status change (admin/owner).
+
+    The deprecation fields are used when new_status is ``deprecated``.
+    """
     new_status: str = Field(..., description="Target status")
 
 
@@ -778,13 +890,20 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str = Field(..., description="Requested target status")
     justification: str = Field(..., description="Justification for the status change")
     current_status: Optional[str] = Field(None, description="Current status (for reference)")
+    sunset_date: Optional[str] = Field(
+        None, description="Requested deprecation: sunset date (YYYY-MM-DD, UTC)")
+    replacement_id: Optional[str] = Field(
+        None, description="Requested deprecation: the product replacing this one")
 
 
 class HandleStatusChangePayload(BaseModel):
     """Payload for handling a status change request (approve/deny)."""
     decision: str = Field(..., description="Decision: 'approve', 'deny', or 'clarify'")
     target_status: str = Field(..., description="The target status that was requested")
-    requester_email: str = Field(..., description="Email of the original requester")
+    requester_email: Optional[str] = Field(
+        None,
+        description="Deprecated; the original requester is resolved from the stored request",
+    )
     message: Optional[str] = Field(None, description="Optional message from approver")
 
 

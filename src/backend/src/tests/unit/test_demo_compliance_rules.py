@@ -474,9 +474,11 @@ def test_a_workflow_text_an_admin_edited_is_kept(db_session, preset):
             assert getattr(db_session.get(_model(table), row_id), column) == 'Our own text'
 
 
-# The Contract Purpose Gate (retail) is shipped disabled: its trigger never fires
+# The Contract Purpose Gate (retail) is shipped disabled: its policy check can't pass in a
+# workflow (#1149). Earlier installs hold it on the removed "dataset" type, which never fires.
 GATE_ID = '02a00002-0000-4000-8000-000000000002'
-GATE_TRIGGER = '{"type": "before_update", "entity_types": ["dataset"]}'
+GATE_TRIGGER = '{"type": "before_update", "entity_types": ["dataset"]}'  # earlier installs
+SHIPPED_GATE_TRIGGER = '{"type": "before_update", "entity_types": ["data_contract"]}'
 GATE_DEACTIVATION = re.compile(
     rf"^UPDATE process_workflows SET is_active = false\nWHERE id = '{GATE_ID}'\n.*?;$",
     re.M | re.S,
@@ -491,7 +493,7 @@ def _gate_insert():
 
 def test_the_contract_purpose_gate_is_inserted_inactive():
     insert = _gate_insert()
-    assert GATE_TRIGGER in insert
+    assert SHIPPED_GATE_TRIGGER in insert
     # ..., scope_config, is_active, is_default, version, ...
     assert re.search(r"'\{\"type\": \"all\"\}',\s*false, true, 1,", insert)
     assert '#1149' in _shipped_workflow_rows('retail')[
@@ -526,3 +528,64 @@ def test_a_contract_purpose_gate_an_admin_edited_is_kept(db_session, edit):
     _gate_row(db_session, **edit)
     _deactivate_gate(db_session)
     assert db_session.get(ProcessWorkflowDb, GATE_ID).is_active is True
+
+
+# Earlier installs of the retail preset hold triggers on entity types no code fires a
+# workflow for (#1151): "view" under before_create, and "dataset". Upgraded in place when
+# the trigger still has its shipped value.
+TRIGGER_FIXES = {  # id: (earlier trigger, shipped trigger)
+    '02a00001-0000-4000-8000-000000000001': (
+        '{"type": "before_create", "entity_types": ["catalog", "schema", "table", "view"]}',
+        '{"type": "before_create", "entity_types": ["catalog", "schema", "table"]}'),
+    GATE_ID: (GATE_TRIGGER, SHIPPED_GATE_TRIGGER),
+    '02a00005-0000-4000-8000-000000000005': (
+        '{"type": "before_create", "entity_types": ["table", "view"]}',
+        '{"type": "before_create", "entity_types": ["table"]}'),
+}
+TRIGGER_FIX = re.compile(
+    r"^UPDATE process_workflows\nSET trigger_config = .*?;$", re.M | re.S,
+)
+
+
+def _upgrade_triggers(db):
+    """The gate deactivation, then the trigger fixes, in the order the preset runs them."""
+    sql = _preset_sql('retail')
+    statements = [GATE_DEACTIVATION.search(sql), *TRIGGER_FIX.finditer(sql)]
+    assert all(statements) and len(statements) == 4
+    assert statements[0].start() < statements[1].start()
+    for statement in statements:
+        db.execute(text(statement.group(0)))
+    db.expire_all()
+
+
+def _workflow_row(db, wf_id, trigger, name='Contract Purpose Gate', active=True):
+    db.add(ProcessWorkflowDb(
+        id=wf_id, name=name, description='x', trigger_config=trigger, is_active=active))
+    db.flush()
+
+
+def test_the_retail_workflows_are_inserted_with_fired_triggers():
+    sql = _preset_sql('retail')
+    for wf_id, (earlier, shipped) in TRIGGER_FIXES.items():
+        start = sql.index(f"('{wf_id}'")
+        insert = sql[start:sql.index('\n\n', start)]
+        assert shipped in insert and earlier not in insert
+
+
+def test_earlier_retail_triggers_are_fixed_and_the_gate_stays_inactive(db_session):
+    for wf_id, (earlier, _) in TRIGGER_FIXES.items():
+        _workflow_row(db_session, wf_id, earlier)  # the gate as an install before #1149
+    _upgrade_triggers(db_session)
+    for wf_id, (_, shipped) in TRIGGER_FIXES.items():
+        assert db_session.get(ProcessWorkflowDb, wf_id).trigger_config == shipped
+    assert db_session.get(ProcessWorkflowDb, GATE_ID).is_active is False
+
+
+def test_a_retail_trigger_an_admin_edited_is_kept(db_session):
+    edited = '{"type": "before_create", "entity_types": ["table", "view"], "from_status": null}'
+    _workflow_row(db_session, '02a00005-0000-4000-8000-000000000005', edited)
+    _workflow_row(db_session, GATE_ID, GATE_TRIGGER, name='Our own gate', active=False)
+    _upgrade_triggers(db_session)
+    assert db_session.get(
+        ProcessWorkflowDb, '02a00005-0000-4000-8000-000000000005').trigger_config == edited
+    assert db_session.get(ProcessWorkflowDb, GATE_ID).trigger_config == GATE_TRIGGER

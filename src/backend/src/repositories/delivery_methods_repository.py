@@ -26,7 +26,7 @@ class DeliveryMethodRepository(CRUDBase[DeliveryMethodDb, DeliveryMethodCreate, 
             raise
 
     def get_multi_filtered(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         category: Optional[str] = None, status: Optional[str] = None
     ) -> List[DeliveryMethodDb]:
         """Gets multiple delivery methods with optional filters."""

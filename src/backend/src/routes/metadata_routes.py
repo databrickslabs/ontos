@@ -1,17 +1,26 @@
 from io import BytesIO
 from typing import Annotated, List, Optional
 
+from src.common.api_errors import CodedValueError
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Request, Query
 from fastapi.responses import StreamingResponse
 from fastapi import Response
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker
+from src.common.authorization import (
+    PermissionChecker, get_user_details_from_sdk, resolve_effective_permissions,
+)
+from src.common.entity_metadata_access import (
+    EntityMetadataPermission, document_permission, link_permission, readable_row_filter,
+    rich_text_permission,
+)
+from src.models.users import UserInfo
 from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
-from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
+from src.controller.metadata_manager import ENTITY_FEATURES, MetadataManager, SHARED_ENTITY_ID
 from src.common.manager_dependencies import get_metadata_manager
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
@@ -19,9 +28,14 @@ from src.models.metadata import (
     Document, DocumentCreate,
     MetadataAttachment, MetadataAttachmentCreate,
     SharedAssetListResponse, MergedMetadataResponse,
+    MarkdownImportRequest, MarkdownImportResult,
 )
+from src.controller.markdown_import_manager import MarkdownImportManager, TARGET_FEATURES
+from src.common.api_errors import CodedValueError
 from src.common.config import get_settings, Settings
-from src.common.workspace_client import get_workspace_client
+from src.common.workspace_client import (
+    get_workspace_client, get_obo_workspace_client, raise_user_token_required,
+)
 from databricks.sdk import WorkspaceClient
 
 logger = get_logger(__name__)
@@ -42,7 +56,7 @@ async def create_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
@@ -73,7 +87,7 @@ async def list_rich_texts(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_rich_texts(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -87,7 +101,7 @@ async def update_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(rich_text_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     updated = manager.update_rich_text(db, id=id, data=payload, user_email=current_user.email if current_user else None)
     if not updated:
@@ -114,7 +128,7 @@ async def delete_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(rich_text_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     ok = manager.delete_rich_text(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -144,7 +158,7 @@ async def create_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
@@ -175,7 +189,7 @@ async def list_links(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_links(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -189,7 +203,7 @@ async def update_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(link_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     updated = manager.update_link(db, id=id, data=payload, user_email=current_user.email if current_user else None)
     if not updated:
@@ -216,7 +230,7 @@ async def delete_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(link_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     ok = manager.delete_link(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -250,12 +264,24 @@ async def upload_document(
     manager: MetadataManager = Depends(get_metadata_manager),
     settings: Settings = Depends(get_settings),
     ws: WorkspaceClient = Depends(get_workspace_client),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         # Validate path components to prevent directory traversal
         if not is_safe_path_component(entity_type) or not is_safe_path_component(entity_id):
             raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
+
+        # Validate the request before touching the volume, so a rejected
+        # request never leaves an orphaned file behind.
+        try:
+            payload = DocumentCreate(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                title=title,
+                short_description=short_description,
+            )
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
         
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{entity_id}"
@@ -283,12 +309,6 @@ async def upload_document(
         # Upload file bytes to the UC Volume path (path, file-like object, overwrite)
         ws.files.upload(dest_path, BytesIO(content))
 
-        payload = DocumentCreate(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            title=title,
-            short_description=short_description,
-        )
         result = manager.create_document_record(
             db,
             data=payload,
@@ -312,6 +332,9 @@ async def upload_document(
         return result
     except HTTPException:
         raise
+    except CodedValueError as e:
+        # e.g. volume_invalid: the UI shows it translated from the code and params
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed uploading document for %s/%s", entity_type, entity_id)
         raise HTTPException(status_code=500, detail="Failed to upload document")
@@ -323,7 +346,7 @@ async def list_documents(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_documents(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -333,7 +356,7 @@ async def get_document(
     id: str,
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(document_permission(FeatureAccessLevel.READ_ONLY)),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:
@@ -349,7 +372,7 @@ async def delete_document(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(document_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     ok = manager.delete_document(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -512,6 +535,8 @@ async def upload_shared_document(
         return result
     except HTTPException:
         raise
+    except CodedValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed uploading shared document")
         raise HTTPException(status_code=500, detail="Failed to upload shared document")
@@ -531,7 +556,7 @@ async def attach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE, attaching=True)),
 ):
     """Attach a shared metadata asset to an entity."""
     try:
@@ -560,12 +585,17 @@ async def attach_shared_asset(
 async def list_attachments(
     entity_type: str,
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
     db: DBSessionDep,
+    user_details=Depends(get_user_details_from_sdk),
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     """List all shared asset attachments for an entity."""
-    return manager.list_attachments(db, entity_type=entity_type, entity_id=entity_id)
+    return manager.list_attachments(
+        db, entity_type=entity_type, entity_id=entity_id,
+        can_read_row=readable_row_filter(request, db, user_details),
+    )
 
 
 @router.delete("/entities/{entity_type}/attachments/{asset_type}/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -579,7 +609,7 @@ async def detach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     """Detach a shared metadata asset from an entity."""
     ok = manager.detach_shared_asset(
@@ -610,11 +640,15 @@ async def detach_shared_asset(
 async def get_merged_metadata(
     entity_type: str,
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
     db: DBSessionDep = None,
+    user_details=Depends(get_user_details_from_sdk),
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(
+        FeatureAccessLevel.READ_ONLY, contract_ids_need_domains=True,
+    )),
 ):
     """
     Get merged metadata for an entity, including inherited metadata from contracts.
@@ -625,8 +659,118 @@ async def get_merged_metadata(
     contract_id_list = [cid.strip() for cid in contract_ids.split(",")] if contract_ids else None
     return manager.get_merged_metadata(
         db, entity_type=entity_type, entity_id=entity_id,
-        contract_ids=contract_id_list, max_level_inheritance=max_level
+        contract_ids=contract_id_list, max_level_inheritance=max_level,
+        can_read_row=readable_row_filter(request, db, user_details),
     )
+
+
+# =========================================================================
+# Markdown import (volume folder -> documents on the entities it names)
+# =========================================================================
+
+def _user_workspace_client(request: Request) -> WorkspaceClient:
+    """The caller's client: an import reads only files the user can read.
+
+    Never the app's own client, not even where ``get_obo_workspace_client`` would fall
+    back to it (ENV=LOCAL, OBO_ALLOW_SP_FALLBACK): a file the app can read but the user
+    can't would be copied into the database. A request without the user's token is
+    refused (403 ``user_token_required``).
+    """
+    if not request.headers.get('x-forwarded-access-token'):
+        raise_user_token_required()
+    return get_obo_workspace_client(request)
+
+
+async def _writable_target_kinds(
+    request: Request, user: UserInfo = Depends(get_user_details_from_sdk),
+) -> set:
+    """Target kinds the caller may link documents to: Read/Write on the kind's feature."""
+    auth_manager = getattr(request.app.state, 'authorization_manager', None)
+    if auth_manager is None:
+        return set()
+    permissions = await resolve_effective_permissions(user.email, user.groups, request)
+    return {
+        kind for kind, feature in TARGET_FEATURES.items()
+        if auth_manager.has_permission(permissions, feature, FeatureAccessLevel.READ_WRITE)
+    }
+
+
+def _run_markdown_import(
+    payload: MarkdownImportRequest, request: Request, db, manager: MetadataManager,
+    ws: WorkspaceClient, writable_kinds: set, user_email: Optional[str], *, dry_run: bool,
+) -> MarkdownImportResult:
+    semantic_models_manager = getattr(request.app.state, 'semantic_models_manager', None)
+    importer = MarkdownImportManager(manager, semantic_models_manager=semantic_models_manager)
+    try:
+        return importer.import_from_volume(
+            db, ws, path=payload.path, user_email=user_email,
+            writable_kinds=writable_kinds, dry_run=dry_run,
+        )
+    except CodedValueError as e:
+        status_code = {
+            'markdown_import_path_not_found': 404,
+            'markdown_import_access_denied': 403,
+            'markdown_import_in_progress': 409,
+        }.get(e.code, 400)
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        logger.exception("Markdown import from a volume failed")
+        raise HTTPException(status_code=500, detail="Markdown import failed")
+
+
+# Plain ``def``: FastAPI runs it in its threadpool, so the volume reads don't
+# block the event loop.
+@router.post("/metadata/markdown-import/preview", response_model=MarkdownImportResult)
+def preview_markdown_import(
+    payload: MarkdownImportRequest,
+    request: Request,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    manager: MetadataManager = Depends(get_metadata_manager),
+    ws: WorkspaceClient = Depends(_user_workspace_client),
+    writable_kinds: set = Depends(_writable_target_kinds),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """What importing ``path`` would do, file by file (``dry_run``); nothing is stored."""
+    return _run_markdown_import(
+        payload, request, db, manager, ws, writable_kinds,
+        current_user.email if current_user else None, dry_run=True,
+    )
+
+
+@router.post("/metadata/markdown-import", response_model=MarkdownImportResult)
+def import_markdown_from_volume(
+    payload: MarkdownImportRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: MetadataManager = Depends(get_metadata_manager),
+    ws: WorkspaceClient = Depends(_user_workspace_client),
+    writable_kinds: set = Depends(_writable_target_kinds),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Import the ``.md`` files of a volume folder as documents on the entities their
+    front matter names; a re-run updates only the files that changed."""
+    result = _run_markdown_import(
+        payload, request, db, manager, ws, writable_kinds,
+        current_user.email if current_user else None, dry_run=False,
+    )
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature=FEATURE_ID,
+        action='IMPORT_MARKDOWN',
+        success=True,
+        details={
+            'path': result.path, 'added': result.added, 'updated': result.updated,
+            'unchanged': result.unchanged, 'unlinked': result.unlinked, 'failed': result.failed,
+            'removed': result.removed,
+        },
+    )
+    return result
 
 
 def register_routes(app):
@@ -634,19 +778,44 @@ def register_routes(app):
     logger.info("Metadata routes registered with prefix /api")
 
 
+async def _may_read_feature(request: Request, user: UserInfo, feature: str) -> bool:
+    auth_manager = getattr(request.app.state, 'authorization_manager', None)
+    if auth_manager is None:
+        return False
+    permissions = await resolve_effective_permissions(user.email, user.groups, request)
+    return auth_manager.has_permission(permissions, feature, FeatureAccessLevel.READ_ONLY)
+
+
 @router.get("/documents/{id}/content")
 async def get_document_content(
     id: str,
+    request: Request,
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    ws: WorkspaceClient = Depends(get_workspace_client),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    _: None = Depends(document_permission(FeatureAccessLevel.READ_ONLY)),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    if doc.source_path is not None:
+        # Imported Markdown is a copy of a volume file kept in the app: it's
+        # served to readers of its entity's feature (as search shows it), not
+        # only of data-domains, and never re-read from the volume.
+        feature = ENTITY_FEATURES.get(doc.entity_type)
+        if feature is None or not await _may_read_feature(request, user, feature):
+            raise HTTPException(status_code=403, detail="Document not readable")
+        text = manager.get_document_text(db, id=id) or ''
+        safe_filename = sanitize_filename_for_header(doc.original_filename, default="document.md")
+        return Response(
+            content=text.encode('utf-8'),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f"inline; filename=\"{safe_filename}\""},
+        )
     try:
         # Download file from UC Volumes. SDK returns a DownloadResponse with a generator method `.contents()`.
+        # The client is built only here: imported documents don't need it.
+        ws = get_workspace_client()
         downloaded = ws.files.download(doc.storage_path)
 
         # Log shape once to aid debugging if needed

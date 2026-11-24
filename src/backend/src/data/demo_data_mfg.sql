@@ -138,7 +138,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- work_orders table
 ('00600001-0003-4000-8000-000000000001', '00500001-0003-4000-8000-000000000001', 'work_order_id', 'string', true, true, true, false, 1, -1, true, 'MES work order number'),
 ('00600002-0003-4000-8000-000000000002', '00500001-0003-4000-8000-000000000001', 'part_number', 'string', true, false, false, false, -1, -1, true, 'Manufactured part number'),
@@ -759,9 +759,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
-('01400101-0003-4000-8000-000000000001', 'data_product', '00700001-0003-4000-8000-000000000001', 'MES Integration FTE', 'Two FTE for MES connectivity and master data alignment.', 'hr',             NULL, 3600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400102-0003-4000-8000-000000000002', 'data_product', '00700003-0003-4000-8000-000000000003', 'IIoT Sensor Refresh', 'Annual sensor refresh and calibration programme.',        'infrastructure', NULL, 1500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400103-0003-4000-8000-000000000003', 'data_product', '00700004-0003-4000-8000-000000000004', 'Supply Chain Tooling','Annual SCM platform license and integrations.',           'tools',          NULL, 1200000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+('01400101-0003-4000-8000-000000000001', 'data_product', '00700001-0003-4000-8000-000000000001', 'MES Integration FTE', 'Two FTE for MES connectivity and master data alignment.', 'HR',             NULL, 3600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0003-4000-8000-000000000002', 'data_product', '00700003-0003-4000-8000-000000000003', 'IIoT Sensor Refresh', 'Annual sensor refresh and calibration programme.',        'INFRASTRUCTURE', NULL, 1500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0003-4000-8000-000000000003', 'data_product', '00700004-0003-4000-8000-000000000004', 'Supply Chain Tooling','Annual SCM platform license and integrations.',           'OTHER',          'Tools', 1200000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

@@ -17,6 +17,7 @@ def _publish(entity_type, status, config=None, registry=None, **published):
     db = MagicMock()
     entity = SimpleNamespace(
         name='E', status=status, publication_scope='none', published_at=None, published_by=None,
+        output_ports=[],
     )
     for name, value in published.items():
         setattr(entity, name, value)
@@ -184,3 +185,50 @@ def test_assets_have_no_publication_trigger():
 
     assert result.passed is True, result.error
     registry.on_publish.assert_not_called()
+
+
+# --- the unpublish action ----------------------------------------------------
+
+_UNPUBLISH_ACTION = {'action': 'unpublish'}
+
+
+@pytest.mark.parametrize('entity_type', ['data_product', 'data_contract'])
+def test_unpublish_action_fires_on_unpublish_when_it_was_published(entity_type):
+    from src.models.process_workflows import EntityType
+
+    registry = MagicMock()
+    result, entity, _ = _publish(
+        entity_type, 'active', _UNPUBLISH_ACTION, registry=registry,
+        publication_scope='organization', published_by='alice@example.com',
+    )
+
+    assert result.passed is True, result.error
+    assert entity.publication_scope == 'none'
+    assert entity.published_by is None
+    registry.on_unpublish.assert_called_once()
+    assert registry.on_unpublish.call_args.args[:2] == (EntityType(entity_type), 'e-1')
+    registry.on_publish.assert_not_called()
+
+
+def test_unpublish_action_fires_nothing_when_it_was_not_published():
+    registry = MagicMock()
+    result, _, _ = _publish('data_product', 'active', _UNPUBLISH_ACTION, registry=registry)
+
+    assert result.passed is True, result.error
+    registry.on_unpublish.assert_not_called()
+
+
+def test_unpublish_action_trigger_error_keeps_the_unpublish_and_says_so():
+    registry = MagicMock()
+    registry.on_unpublish.side_effect = RuntimeError('workflow engine down')
+
+    result, entity, db = _publish(
+        'data_product', 'active', _UNPUBLISH_ACTION, registry=registry,
+        publication_scope='organization',
+    )
+
+    assert result.passed is True, result.error
+    assert entity.publication_scope == 'none'
+    db.commit.assert_called_once()
+    assert result.data['trigger_failed'] == 'on_unpublish'
+    assert 'the on_unpublish workflows did not run' in result.message

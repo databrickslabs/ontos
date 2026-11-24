@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactFlow, {
   Node,
@@ -9,6 +10,7 @@ import ReactFlow, {
   Background,
   MiniMap,
   useNodesState,
+  useReactFlow,
   useEdgesState,
   MarkerType,
   Panel,
@@ -75,8 +77,10 @@ import {
   Edit2,
   Check,
   X,
+  LayoutGrid,
 } from 'lucide-react';
 import ApprovalWizardDialog from './approval-wizard-dialog';
+import AssignTagStepForm from './assign-tag-step-form';
 
 import RequiredFieldsEditor, {
   type RequiredField,
@@ -94,6 +98,7 @@ import {
   ScriptNode,
   EndNode,
   PolicyCheckNode,
+  CompliancePolicyIdsContext,
   CreateAssetReviewNode,
   WebhookNode,
   EntityActionNode,
@@ -122,6 +127,7 @@ import type {
   ProcessWorkflow,
   ProcessWorkflowCreate,
   ProcessWorkflowUpdate,
+  WorkflowValidationResult,
   // WorkflowStep - unused
   WorkflowStepCreate,
   StepType,
@@ -133,6 +139,7 @@ import type {
   CompliancePolicyRef,
   HttpConnectionRef,
   WorkflowTypeValue,
+  AssignTagStepConfig,
 } from '@/types/process-workflow';
 import {
   ALL_ENTITY_TYPES,
@@ -144,13 +151,23 @@ import {
 } from '@/lib/workflow-labels';
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
+import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
+import { workflowIssueNodeIds, workflowWarningText } from './workflow-warnings';
+import { WorkflowWarningsPanel, type WorkflowIssueItem } from './workflow-warnings-panel';
+import {
+  DEFAULT_SCHEDULE_TIMEZONE, TriggerScheduleFields, isScheduleIssue,
+} from './trigger-schedule-fields';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
+import {
+  hasUsableLayout, newStepPosition, nonDragMoves, placeMissingSteps, triggerPositionFor, withNodePositions,
+} from './workflow-layout';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
   CONTRACT_APPROVER_TOKEN,
+  ASSET_OWNER_TOKEN,
   DOMAIN_OWNER_TOKEN,
   joinRoleAndPrincipals,
   roleSelectValue,
@@ -715,7 +732,39 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
   { type: 'deliver', label: 'Deliver', icon: Send },
 ];
 
+// Fit options of the canvas: on first load and after Rearrange
+const FIT_VIEW_OPTIONS = { maxZoom: 1, padding: 0.2 };
+
+// Fits the view after a confirmed Rearrange, so a layout taller than the view isn't left
+// partly off-screen. Rendered inside ReactFlow (the hook needs its context). Deferred one
+// tick so the store has the new node positions first.
+export function FitAfterRearrange({ version }: { version: number }) {
+  const { fitView } = useReactFlow();
+  const handled = useRef(version);
+  useEffect(() => {
+    if (version === handled.current) return undefined;
+    // Marked handled when the fit runs, not when it is scheduled: if fitView's identity
+    // changes first, the cleanup cancels the timer and the re-run must schedule it again.
+    const timer = setTimeout(() => {
+      handled.current = version;
+      fitView(FIT_VIEW_OPTIONS);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [version, fitView]);
+  return null;
+}
+
 // Layout helper
+// Label and colour of a step's outgoing edge. A conditional's edges are its true and
+// false branches: a false condition is a branch, not a failure (#1418).
+export function branchEdgeLook(sourceType: string | undefined, handle: 'pass' | 'fail', t: TFunction) {
+  const isPass = handle === 'pass';
+  const color = isPass ? '#22c55e' : '#ef4444';
+  const key = sourceType === 'conditional' ? (isPass ? 'true' : 'false') : handle;
+  const label = t(`workflows:designer.edgeLabels.${key}`);
+  return { label, labelStyle: { fill: color, fontWeight: 500 }, style: { stroke: color } };
+}
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -751,7 +800,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
 // Convert workflow to React Flow elements
 const workflowToElements = (
   workflow: ProcessWorkflow | null,
-  rolesMap: Record<string, string> = {}
+  rolesMap: Record<string, string>,
+  t: TFunction,
 ) => {
   if (!workflow) return { nodes: [], edges: [] };
 
@@ -767,6 +817,13 @@ const workflowToElements = (
     deletable: false,
   });
 
+  // Open as the user arranged it (steps without a position are placed next to the
+  // others); auto-arrange only when there is no usable stored layout.
+  const useStoredLayout = hasUsableLayout(workflow.steps);
+  const positionOf = new Map(
+    (useStoredLayout ? placeMissingSteps(workflow.steps) : workflow.steps).map(s => [s.step_id, s.position]),
+  );
+
   // Add step nodes (use 'default' for unregistered step_type so we never get an empty box)
   const stepNodeTypes = Object.keys(nodeTypes);
   workflow.steps.forEach((step, index) => {
@@ -775,7 +832,7 @@ const workflowToElements = (
       id: step.step_id,
       type: nodeType,
       data: { step, rolesMap },
-      position: step.position || { x: 0, y: (index + 1) * 120 },
+      position: positionOf.get(step.step_id) || { x: 0, y: (index + 1) * 120 },
     });
   });
 
@@ -793,10 +850,8 @@ const workflowToElements = (
         sourceHandle: 'pass',
         target: step.on_pass,
         type: 'deletable',
-        label: 'Pass',
-        labelStyle: { fill: '#22c55e', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'pass', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#22c55e' },
       });
     }
     if (step.on_fail) {
@@ -806,14 +861,16 @@ const workflowToElements = (
         sourceHandle: 'fail',
         target: step.on_fail,
         type: 'deletable',
-        label: 'Fail',
-        labelStyle: { fill: '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'fail', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#ef4444' },
       });
     }
   });
 
+  if (useStoredLayout && workflow.steps.length > 0) {
+    nodes[0] = { ...nodes[0], position: triggerPositionFor(positionOf.get(workflow.steps[0].step_id)!) };
+    return { nodes, edges };
+  }
   return getLayoutedElements(nodes, edges);
 };
 
@@ -843,7 +900,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   // Step whose config blocked the last save; its form shows the missing field.
   const [invalidStepId, setInvalidStepId] = useState<string | null>(null);
+  // Errors and warnings of the last Check, with the draft (draftKey) it checked
+  const [checkResult, setCheckResult] = useState<{
+    key: string;
+    errors: WorkflowValidationIssue[];
+    warnings: WorkflowValidationIssue[];
+  } | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
+  // False until the policy list loads: Policy Check nodes flag unknown ids only then
+  const [compliancePoliciesLoaded, setCompliancePoliciesLoaded] = useState(false);
+  const compliancePolicyIds = useMemo(
+    () => (compliancePoliciesLoaded ? compliancePolicies.map(p => p.id) : undefined),
+    [compliancePolicies, compliancePoliciesLoaded],
+  );
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
   // approverRoles is the approval-entity-filtered subset of availableRoles used
   // specifically in the Approvers (Role) picker. It is re-computed whenever
@@ -852,6 +922,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
+  const [rearrangeVersion, setRearrangeVersion] = useState(0);
   const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
@@ -864,10 +936,35 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [description, setDescription] = useState('');
   const [triggerType, setTriggerType] = useState<TriggerType>('on_create');
   const [entityTypes, setEntityTypes] = useState<EntityType[]>(['table']);
+  // Stored types this version doesn't know: shown apart, the user removes them to save
+  const [unknownEntityTypes, setUnknownEntityTypes] = useState<string[]>([]);
+  // Fallback to the static FE map while the catalog is loading or unavailable
+  const supportedEntityTypesFor = (type: TriggerType): string[] =>
+    triggerTypeOptions.find(o => o.value === type)?.entity_types
+    ?? ALL_ENTITY_TYPES.filter(et => isTriggerEntitySupported(type, et));
+  const supportedEntityTypes = supportedEntityTypesFor(triggerType);
+  const storedUnknownTypes = workflow?.trigger.unknown_entity_types ?? [];
+  // The stored trigger lists entity types and none fires: each is unknown, or a known type its
+  // trigger type never fires for (an empty supported list fires for any known type)
+  const storedSupported = workflow ? supportedEntityTypesFor(workflow.trigger.type) : [];
+  const storedMatchesNoEvent = !!workflow
+    && workflow.trigger.entity_types.length + storedUnknownTypes.length > 0
+    && !workflow.trigger.entity_types.some(
+      et => storedSupported.length === 0 || storedSupported.includes(et),
+    );
+  // Such a trigger matched nothing: emptied, a known type must be picked, as an empty list would
+  // match every entity (the backend refuses it too)
+  const needsKnownType = storedMatchesNoEvent
+    && unknownEntityTypes.length === 0 && entityTypes.length === 0
+    && supportedEntityTypes.length > 0;
   const [triggerFromStatus, setTriggerFromStatus] = useState('');
   const [triggerToStatus, setTriggerToStatus] = useState('');
   const [triggerOnError, setTriggerOnError] = useState<GateErrorMode>('fail_open');
   const [triggerDisabledFor, setTriggerDisabledFor] = useState<GateExemptions>(EMPTY_GATE_EXEMPTIONS);
+  // scheduled only: Quartz cron and IANA timezone, and the backend's error about them
+  const [triggerSchedule, setTriggerSchedule] = useState('');
+  const [triggerTimezone, setTriggerTimezone] = useState(DEFAULT_SCHEDULE_TIMEZONE);
+  const [scheduleIssue, setScheduleIssue] = useState<WorkflowValidationIssue | null>(null);
   // Selected exemptions whose entity was deleted: the backend refuses to save them
   const [missingExemptions, setMissingExemptions] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
@@ -892,6 +989,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               <>
                 <SelectItem value={DOMAIN_OWNER_TOKEN}>{t('workflows:designer.roles.domainOwners')}</SelectItem>
                 <SelectItem value={CONTRACT_APPROVER_TOKEN}>{t('workflows:designer.roles.contractApprovers')}</SelectItem>
+                <SelectItem value={ASSET_OWNER_TOKEN}>
+                  {t('workflows:designer.roles.assetOwners')}
+                </SelectItem>
               </>
             )}
           </SelectGroup>
@@ -940,6 +1040,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     description: string;
     triggerType: TriggerType;
     entityTypes: EntityType[];
+    schedule?: string;
+    timezone?: string;
     isActive: boolean;
     steps: WorkflowStepCreate[];
   }
@@ -947,7 +1049,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  // Read by the connect handlers, so they aren't recreated on every node change
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
+
+  // Wrap onNodesChange so moves without a drag (arrow keys on selected nodes) are
+  // copied onto the steps too; drags are handled by onNodeDragStop.
+  const handleNodesChange = useCallback((changes: import('reactflow').NodeChange[]) => {
+    onNodesChange(changes);
+    const moved = nonDragMoves(changes);
+    if (moved.length > 0) setSteps(prev => withNodePositions(prev, moved));
+  }, [onNodesChange]);
 
   // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
   const onEdgesChange = useCallback((changes: import('reactflow').EdgeChange[]) => {
@@ -997,17 +1110,24 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     if (name !== originalState.name) return true;
     if (description !== originalState.description) return true;
     if (triggerType !== originalState.triggerType) return true;
+    if (triggerType === 'scheduled' && (triggerSchedule !== (originalState.schedule ?? '')
+      || triggerTimezone !== (originalState.timezone ?? DEFAULT_SCHEDULE_TIMEZONE))) return true;
     if (isActive !== originalState.isActive) return true;
     
     // Compare entity types
     if (entityTypes.length !== originalState.entityTypes.length) return true;
     if (!entityTypes.every(et => originalState.entityTypes.includes(et))) return true;
+    if (unknownEntityTypes.length !== storedUnknownTypes.length) return true;
     
     // Compare steps (deep comparison via JSON)
     if (JSON.stringify(steps) !== JSON.stringify(originalState.steps)) return true;
     
     return false;
-  }, [originalState, name, description, triggerType, entityTypes, isActive, steps, isNew]);
+  }, [
+    originalState, name, description, triggerType, entityTypes, unknownEntityTypes,
+    storedUnknownTypes.length, triggerSchedule, triggerTimezone,
+    isActive, steps, isNew,
+  ]);
 
   // Set up breadcrumbs
   useEffect(() => {
@@ -1045,6 +1165,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // Load workflow
   useEffect(() => {
+    // A newer run (StrictMode, or id change) supersedes this one: its late results are dropped
+    let cancelled = false;
+    // A superseded edit load no longer clears it: a new workflow must not stay "loading"
+    if (isNew) setIsLoading(false);
     const loadData = async () => {
       // Load step types
       try {
@@ -1072,6 +1196,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         const policiesResponse = await get<CompliancePolicyRef[]>('/api/workflows/compliance-policies');
         if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
           setCompliancePolicies(policiesResponse.data);
+          setCompliancePoliciesLoaded(true);
         } else {
           setCompliancePolicies([]);
         }
@@ -1106,11 +1231,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         setHttpConnections([]);
       }
 
+      if (cancelled) return;
+
       // Load workflow if editing
       if (!isNew) {
         setIsLoading(true);
         try {
           const response = await get<ProcessWorkflow>(`/api/workflows/${id}`);
+          if (cancelled) return;
           if (response.data) {
             setWorkflow(response.data);
             setName(response.data.name);
@@ -1118,10 +1246,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setDescription(response.data.description || '');
             setTriggerType(response.data.trigger.type);
             setEntityTypes(response.data.trigger.entity_types);
+            setUnknownEntityTypes(response.data.trigger.unknown_entity_types ?? []);
             setTriggerFromStatus(response.data.trigger.from_status || '');
             setTriggerToStatus(response.data.trigger.to_status || '');
             setTriggerOnError(response.data.trigger.on_error || 'fail_open');
             setTriggerDisabledFor({ ...EMPTY_GATE_EXEMPTIONS, ...(response.data.trigger.disabled_for || {}) });
+            // The stored timezone as is (empty = UTC): a save that leaves both unchanged
+            // isn't checked again by the backend
+            setTriggerSchedule(response.data.trigger.schedule || '');
+            setTriggerTimezone(response.data.trigger.timezone || '');
             setIsActive(response.data.is_active);
             setWorkflowType((response.data.workflow_type as WorkflowTypeValue) || 'process');
             const loadedSteps = response.data.steps.map(s => ({
@@ -1142,13 +1275,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               description: response.data.description || '',
               triggerType: response.data.trigger.type,
               entityTypes: [...response.data.trigger.entity_types],
+              schedule: response.data.trigger.schedule || '',
+              timezone: response.data.trigger.timezone || '',
               isActive: response.data.is_active,
               steps: loadedSteps.map(s => ({ ...s })),
             });
             
             // Convert to flow elements - rolesMap will be empty initially, but nodes will be updated
             // when availableRoles loads (via updateNodesWithRoles effect)
-            const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {});
+            const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {}, t);
             setNodes(flowNodes);
             setEdges(flowEdges);
           }
@@ -1159,7 +1294,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             variant: 'destructive',
           });
         } finally {
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
         }
       } else {
         // Initialize with trigger node for new workflow
@@ -1184,6 +1319,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     };
 
     loadData();
+    return () => { cancelled = true; };
   }, [id, isNew, get, toast, setNodes, setEdges]);
 
   // Create rolesMap from availableRoles
@@ -1281,6 +1417,21 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setSelectedNodeId(node.id);
   }, []);
 
+  // Keep the layout the user arranges: dragged steps take their new positions
+  // (the trigger has no stored position, see workflow-layout.ts).
+  const onNodeDragStop = useCallback((_: React.MouseEvent, _node: Node, dragged: Node[]) => {
+    setSteps(prev => withNodePositions(prev, dragged));
+  }, []);
+
+  // Rearrange: auto-arrange every node, after the user confirmed (the layout is lost on save).
+  const rearrangeNodes = useCallback(() => {
+    const { nodes: arranged } = getLayoutedElements(nodes, edges);
+    setNodes(arranged);
+    setSteps(prev => withNodePositions(prev, arranged));
+    setShowRearrangeDialog(false);
+    setRearrangeVersion(v => v + 1);
+  }, [nodes, edges, setNodes]);
+
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
   const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     if (!newConnection.source || !newConnection.target) return;
@@ -1304,10 +1455,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         sourceHandle: handleType,
         target: newConnection.target!,
         type: 'deletable',
-        label: isPass ? 'Pass' : 'Fail',
-        labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(nodesRef.current.find(n => n.id === newConnection.source)?.type, isPass ? 'pass' : 'fail', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: isPass ? '#22c55e' : '#ef4444' },
       };
       return [...filtered, reconnectedEdge];
     });
@@ -1319,7 +1468,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       }
       return s;
     }));
-  }, [setEdges]);
+  }, [setEdges, t]);
 
   // Handle manual edge creation (drag from handle to handle)
   const onConnect = useCallback((connection: Connection) => {
@@ -1345,10 +1494,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       sourceHandle: handleType,
       target: connection.target,
       type: 'deletable',
-      label: isPass ? 'Pass' : 'Fail',
-      labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+      ...branchEdgeLook(nodesRef.current.find(n => n.id === connection.source)?.type, isPass ? 'pass' : 'fail', t),
       markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: isPass ? '#22c55e' : '#ef4444' },
     };
     setEdges(prev => [...prev, newEdge]);
 
@@ -1358,7 +1505,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         ? { ...s, [isPass ? 'on_pass' : 'on_fail']: connection.target }
         : s
     ));
-  }, [setEdges]);
+  }, [setEdges, t]);
 
   // Add new step
   const addStep = (type: StepType) => {
@@ -1369,6 +1516,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       step_type: type,
       config: type === 'entity_action' ? { action: 'certify' } : {},
       order: steps.length,
+      // Below the lowest node, on a spot no other node takes.
+      position: newStepPosition(nodes.map(n => n.position)),
     };
     
     setSteps(prev => [...prev, newStep]);
@@ -1378,7 +1527,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       id: stepId,
       type: type,
       data: { step: newStep, rolesMap },
-      position: { x: 100, y: (nodes.length + 1) * 120 },
+      position: newStep.position!,
     };
     setNodes(prev => [...prev, newNode]);
     
@@ -1465,6 +1614,98 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return null;
   };
 
+  // The workflow as the backend validates and saves it, with these steps
+  const buildWorkflowData = (draftSteps: WorkflowStepCreate[]): ProcessWorkflowCreate => ({
+    name,
+    description,
+    trigger: {
+      type: triggerType,
+      entity_types: entityTypes,
+      ...(unknownEntityTypes.length > 0 ? { unknown_entity_types: unknownEntityTypes } : {}),
+      ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
+      ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
+      ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
+      // Both sent, even empty: an empty schedule gets the backend's schedule_required
+      ...(triggerType === 'scheduled'
+        ? { schedule: triggerSchedule.trim(), timezone: triggerTimezone.trim() || null }
+        : {}),
+    },
+    workflow_type: workflowType || 'process',
+    is_active: isActive,
+    steps: draftSteps,
+  });
+
+  // Identifies the draft a Check ran on. Node positions don't change what is checked, so they are left out.
+  const draftKey = JSON.stringify(buildWorkflowData(steps.map((s, i) => ({ ...s, order: i, position: undefined }))));
+
+  // Check the draft for problems without saving it. Warnings don't block a save.
+  const handleCheck = async () => {
+    const key = draftKey;
+    setIsChecking(true);
+    try {
+      // A stored workflow is checked as its update (its stored trigger is kept, as PUT does)
+      const query = isNew || !id ? '' : `?workflow_id=${encodeURIComponent(id)}`;
+      const response = await post<WorkflowValidationResult>(
+        `/api/workflows/validate${query}`,
+        buildWorkflowData(steps.map((s, i) => ({ ...s, order: i }))),
+      );
+      if (response.error || !response.data) {
+        toast({
+          title: t('common:toast.error'),
+          description: response.error || t('common:errors.unknownError'),
+          variant: 'destructive',
+        });
+        return;
+      }
+      setCheckResult({
+        key,
+        errors: response.data.issues ?? [],
+        warnings: response.data.warning_issues ?? [],
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : t('common:errors.unknownError');
+      toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  // Problems of the last Check while it still describes the draft, and the stored trigger warnings
+  const activeCheck = checkResult && checkResult.key === draftKey ? checkResult : null;
+  const issueItems: WorkflowIssueItem[] = (() => {
+    const stepIds = steps.map(s => s.step_id);
+    return [
+      ...(activeCheck?.errors ?? []).map((issue, i) => ({
+        key: `error-${i}`,
+        tone: 'error' as const,
+        text: workflowValidationIssueText(issue, t),
+        nodeIds: workflowIssueNodeIds(issue, stepIds),
+      })),
+      // An unknown stored entity type is shown, with a remove button, by the notice in the
+      // trigger settings; the trigger node still gets its amber ring below
+      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])]
+        .filter(issue => issue.code !== 'stored_entity_type_unknown')
+        .map((issue, i) => ({
+          key: `warning-${i}`,
+          tone: 'warning' as const,
+          text: workflowWarningText(issue, t),
+          nodeIds: workflowIssueNodeIds(issue, stepIds),
+        })),
+    ];
+  })();
+
+  // Nodes a warning is about get an amber ring (the canvas state keeps its positions as they are)
+  const flowNodes = useMemo(() => {
+    const stepIds = steps.map(s => s.step_id);
+    const warned = new Set(
+      [...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])]
+        .flatMap(issue => workflowIssueNodeIds(issue, stepIds)),
+    );
+    return nodes.map(node => (warned.has(node.id)
+      ? { ...node, className: `${node.className ?? ''} ring-2 ring-amber-500 rounded-lg` }
+      : node));
+  }, [nodes, steps, workflow?.trigger_warnings, activeCheck]);
+
   // Save workflow
   const handleSave = async (confirmOverlap = false) => {
     if (!workflowType) {
@@ -1501,6 +1742,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     }
     setInvalidStepId(null);
 
+    if (needsKnownType) {
+      setSelectedNodeId('trigger');
+      toast({
+        title: t('workflows:designer.messages.validationError'),
+        description: t('workflows:triggerEntityChecks.requiredOnSave'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (triggerType === 'before_status_change' && missingExemptions.length > 0) {
       toast({
         title: t('workflows:designer.messages.validationError'),
@@ -1514,20 +1765,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
     setIsSaving(true);
     try {
-      const workflowData: ProcessWorkflowCreate = {
-        name,
-        description,
-        trigger: {
-          type: triggerType,
-          entity_types: entityTypes,
-          ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
-          ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
-          ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
-        },
-        workflow_type: workflowType || 'process',
-        is_active: isActive,
-        steps: steps.map((s, i) => ({ ...s, order: i })),
-      };
+      // The canvas is the source of truth for positions (also after an auto-arrange on load).
+      const workflowData: ProcessWorkflowCreate = buildWorkflowData(
+        withNodePositions(steps, nodes).map((s, i) => ({ ...s, order: i })),
+      );
 
       let response;
       const overlapQuery = confirmOverlap ? '?confirm_overlap=true' : '';
@@ -1550,9 +1791,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         const failedStep = issues
           ?.map(issue => issue.params?.step)
           .find(step => steps.some(s => s.step_id === step));
-        if (typeof failedStep === 'string') {
+        const failedSchedule = issues?.find(issue => isScheduleIssue(issue.code)) ?? null;
+        setScheduleIssue(failedSchedule);
+        if (failedSchedule) {
+          setSelectedNodeId('trigger');  // the error shows at the schedule field
+        } else if (typeof failedStep === 'string') {
           setInvalidStepId(failedStep);
           setSelectedNodeId(failedStep);
+        } else if (issues?.some(issue => issue.code.startsWith('trigger_entity_type_'))) {
+          setSelectedNodeId('trigger');  // where the entity types are fixed
         }
         toast({
           title: t('workflows:designer.messages.validationError'),
@@ -1571,6 +1818,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           description,
           triggerType,
           entityTypes: [...entityTypes],
+          schedule: triggerSchedule,
+          timezone: triggerTimezone,
           isActive,
           steps: steps.map(s => ({ ...s })),
         });
@@ -1671,6 +1920,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <span className="text-sm">{isActive ? t('common:labels.active') : t('common:labels.inactive')}</span>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCheck}
+            disabled={isChecking || isSaving || !workflowType}
+            title={t('workflows:designer.checks.buttonHint')}
+          >
+            {isChecking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ListChecks className="h-4 w-4 mr-2" />}
+            {t('workflows:designer.checks.button')}
+          </Button>
           <Button onClick={() => handleSave()} disabled={isSaving} size="sm" className={isDirty ? 'ring-2 ring-amber-500/50' : ''}>
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
             {t('common:actions.save')}{isDirty ? ' *' : ''}
@@ -1709,10 +1968,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         {/* Flow canvas - shown only when workflow type is selected */}
         {workflowType !== null && (
         <div className="flex-1">
+          <CompliancePolicyIdsContext.Provider value={compliancePolicyIds}>
           <ReactFlow
-            nodes={nodes}
+            nodes={flowNodes}
             edges={edgesWithDelete}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
+            onNodeDragStop={onNodeDragStop}
             onNodesDelete={deleted => removeSteps(deleted.map(n => n.id))}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -1725,7 +1986,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             edgesUpdatable
             edgesFocusable
             fitView
-            fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
             minZoom={0.3}
             maxZoom={2}
             defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -1734,6 +1995,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Background />
             <Controls />
             <MiniMap />
+            <FitAfterRearrange version={rearrangeVersion} />
             
             {/* Step type toolbar */}
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">
@@ -1753,7 +2015,30 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                 </Button>
               </div>
             </Panel>
+
+            {/* Errors and warnings of the last Check, and the stored trigger warnings */}
+            <Panel position="top-center">
+              <WorkflowWarningsPanel
+                items={issueItems}
+                clean={!!activeCheck && issueItems.length === 0}
+                onSelectNode={setSelectedNodeId}
+              />
+            </Panel>
+
+            {/* Layout tools */}
+            <Panel position="top-right" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-1 dark:bg-slate-800/95">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRearrangeDialog(true)}
+                disabled={steps.length === 0}
+                title={t('workflows:designer.layout.rearrangeHint')}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" /> {t('workflows:designer.layout.rearrange')}
+              </Button>
+            </Panel>
           </ReactFlow>
+          </CompliancePolicyIdsContext.Provider>
         </div>
         )}
 
@@ -1772,6 +2057,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             previewMode
           />
         )}
+
+        {/* Rearrange confirmation dialog */}
+        <AlertDialog open={showRearrangeDialog} onOpenChange={setShowRearrangeDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('workflows:designer.layout.confirmTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('workflows:designer.layout.confirmDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={rearrangeNodes}>{t('workflows:designer.layout.confirmAction')}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Discard changes confirmation dialog */}
         <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
@@ -1850,6 +2149,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         // supported set instead of carrying over a stale
                         // (and possibly unsupported) selection.
                         setEntityTypes([]);
+                        // Stored unknown types are kept only under their own trigger type
+                        // (the backend refuses them under another one)
+                        setUnknownEntityTypes(
+                          v === workflow?.trigger.type ? storedUnknownTypes : [],
+                        );
                       }}
                       workflowType={workflowType === 'approval' ? 'approval' : 'process'}
                       options={triggerTypeOptions.length > 0 ? triggerTypeOptions : undefined}
@@ -1860,16 +2164,17 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       triggerType={triggerType}
                       value={entityTypes as string[]}
                       onChange={(next) => setEntityTypes(next as EntityType[])}
-                      supportedEntityTypes={
-                        triggerTypeOptions.find((o) => o.value === triggerType)?.entity_types
-                        // Fallback to the static FE map when the catalog
-                        // is still loading or unavailable. Keeps the
-                        // multiselect non-empty so saved configs are
-                        // visible during the first render.
-                        ?? ALL_ENTITY_TYPES.filter((et) => isTriggerEntitySupported(triggerType, et))
-                      }
+                      supportedEntityTypes={supportedEntityTypes}
+                      // No auto-fill over a stored trigger that matched no event, while its
+                      // trigger type is kept: the user picks
+                      autoFill={!storedMatchesNoEvent || triggerType !== workflow?.trigger.type}
                     />
                   </div>
+                  <UnknownEntityTypesNotice
+                    values={unknownEntityTypes}
+                    needsKnownType={needsKnownType}
+                    onRemove={value => setUnknownEntityTypes(prev => prev.filter(v => v !== value))}
+                  />
                   {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (() => {
                     // Offer real lifecycle statuses for the selected entity
                     // type(s) instead of free text. No known vocabulary (mixed
@@ -1911,6 +2216,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       </div>
                     );
                   })()}
+
+                  {triggerType === 'scheduled' && (
+                    <TriggerScheduleFields
+                      schedule={triggerSchedule}
+                      timezone={triggerTimezone}
+                      onScheduleChange={(v) => { setTriggerSchedule(v); setScheduleIssue(null); }}
+                      onTimezoneChange={(v) => { setTriggerTimezone(v); setScheduleIssue(null); }}
+                      issue={scheduleIssue}
+                    />
+                  )}
 
                   {triggerType === 'before_status_change' && (
                     <div className="flex items-start justify-between gap-3">
@@ -2370,6 +2685,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectItem value="product_approved">{t('workflows:designer.notification.templates.productApproved')}</SelectItem>
                             <SelectItem value="product_rejected">{t('workflows:designer.notification.templates.productRejected')}</SelectItem>
                             <SelectItem value="pii_detected">{t('workflows:designer.notification.templates.piiDetected')}</SelectItem>
+                            <SelectItem value="entity_deprecated">
+                              {t('workflows:designer.notification.templates.entityDeprecated')}
+                            </SelectItem>
+                            <SelectItem value="entity_retired">
+                              {t('workflows:designer.notification.templates.entityRetired')}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -2415,36 +2736,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   )}
                   
                   {selectedStep.step_type === 'assign_tag' && (
-                    <>
-                      <div>
-                        <Label>{t('workflows:designer.assignTag.tagKey')}</Label>
-                        <Input
-                          value={(selectedStep.config as { key?: string })?.key || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, key: e.target.value }
-                          })}
-                          placeholder={t('workflows:designer.assignTag.tagKeyPlaceholder')}
-                        />
-                      </div>
-                      <div>
-                        <Label>{t('workflows:designer.assignTag.valueSource')}</Label>
-                        <Select
-                          value={(selectedStep.config as { value_source?: string })?.value_source || ''}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, value_source: v }
-                          })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('workflows:designer.assignTag.selectSource')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="current_user">{t('workflows:designer.assignTag.sourceCurrentUser')}</SelectItem>
-                            <SelectItem value="project_name">{t('workflows:designer.assignTag.sourceProjectName')}</SelectItem>
-                            <SelectItem value="timestamp">{t('workflows:designer.assignTag.sourceTimestamp')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
+                    <AssignTagStepForm
+                      key={selectedStep.step_id}
+                      config={(selectedStep.config || {}) as Partial<AssignTagStepConfig>}
+                      onChange={(config) => updateStep(selectedStep.step_id, { config })}
+                    />
                   )}
                   
                   {selectedStep.step_type === 'approval' && (
@@ -2520,15 +2816,56 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           </>
                         );
                       })()}
-                      <div>
-                        <Label>{t('workflows:designer.approval.timeoutDays')}</Label>
-                        <Input
-                          type="number"
-                          value={(selectedStep.config as { timeout_days?: number })?.timeout_days || 7}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
-                            config: { ...selectedStep.config, timeout_days: parseInt(e.target.value) }
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          id="approval-require-all"
+                          className="mt-0.5"
+                          checked={Boolean(
+                            (selectedStep.config as { require_all?: boolean })?.require_all,
+                          )}
+                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, require_all: checked === true },
                           })}
                         />
+                        <div className="flex flex-col">
+                          <Label htmlFor="approval-require-all" className="text-sm">
+                            {t('workflows:designer.approval.requireAll')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('workflows:designer.approval.requireAllHelp')}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="approval-timeout-days">
+                          {t('workflows:designer.approval.timeoutDays')}
+                        </Label>
+                        <Input
+                          id="approval-timeout-days"
+                          type="number"
+                          min={0}
+                          // 0 means no timeout; empty (unset) means the default, 7 days
+                          placeholder="7"
+                          value={
+                            (selectedStep.config as { timeout_days?: number })?.timeout_days ?? ''
+                          }
+                          onChange={(e) => {
+                            const days = parseInt(e.target.value, 10);
+                            const { timeout_days: _unset, ...rest } =
+                              selectedStep.config as { timeout_days?: number };
+                            updateStep(selectedStep.step_id, {
+                              config: Number.isNaN(days)
+                                ? rest
+                                : { ...rest, timeout_days: Math.max(days, 0) },
+                            });
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutDaysHelp')}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutNotEnforced')}
+                        </p>
                       </div>
                     </>
                   )}

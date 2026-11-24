@@ -30,14 +30,6 @@ _WS_GETTERS = ('get_workspace_client', 'get_obo_workspace_client')
 # the suite can run in CI. Fix and remove entries one at a time, as with the
 # unit tests' collect_ignore list.
 # Candidate app bugs: the test asserts the intended behaviour and fails on it.
-_NO_GROUPS = (
-    'app: get_user_groups() returns [] outside LOCAL/mock mode, so an admin '
-    'gets 403 creating a global comment'
-)
-_AUDIT_UUID = (
-    'app: the create route puts the new id (a UUID) in the audit details, '
-    'which are not JSON serialisable, so no audit entry is written'
-)
 _ODCS_DOMAIN = (
     'app (candidate): an imported `domain` that matches no native domain is kept only as '
     'the ontosOriginalDomain custom property; the export omits the root `domain`'
@@ -51,8 +43,6 @@ _DOMAIN_CYCLE = (
 )
 
 QUARANTINE = {
-    'test_comments_routes.py::TestCommentsRoutes::test_create_comment': _NO_GROUPS,
-    'test_costs_routes.py::TestCostsRoutes::test_create_cost_item_is_audited': _AUDIT_UUID,
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
     'test_create_domain_with_nonexistent_parent_fails': _DOMAIN_NO_PARENT,
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
@@ -124,6 +114,7 @@ def entitlements_file_copy(monkeypatch, tmp_path):
 
 def _build_search_index():
     """Set up the SearchManager as the app's startup does after the managers."""
+    from src.common.app_state import set_app_state_manager
     from src.common.search_interfaces import SearchableAsset
     from src.controller.search_manager import SearchManager
 
@@ -132,6 +123,7 @@ def _build_search_index():
         if isinstance(manager, SearchableAsset) and hasattr(manager, 'get_search_index_items')
     ]
     app.state.search_manager = SearchManager(searchable_managers=searchable)
+    set_app_state_manager('search_manager', app.state.search_manager)
     app.state.search_manager.build_index()
     for manager in searchable:
         manager.set_search_manager(app.state.search_manager)
@@ -141,6 +133,7 @@ def _build_search_index():
 def client(db_session, test_settings, mock_workspace_client, mock_test_user, monkeypatch):
     """A TestClient whose app has its managers, on the test database."""
     from src.controller.jobs_manager import JobsManager
+    from src.controller.workflow_scheduler import WorkflowScheduler
     from src.utils import startup_tasks
 
     test_sessions = sessionmaker(bind=db_session.get_bind(), autoflush=False)
@@ -149,8 +142,12 @@ def client(db_session, test_settings, mock_workspace_client, mock_test_user, mon
 
     monkeypatch.setattr(startup_tasks, 'get_settings', lambda: test_settings)
     monkeypatch.setattr(JobsManager, 'start_background_polling', lambda self, **kwargs: None)
+    # No scheduler thread on the shared test connection (tests run it with run_once).
+    monkeypatch.setattr(WorkflowScheduler, 'start', lambda self: None)
 
     saved_state = dict(app.state._state)
+    from src.common.app_state import get_app_state_manager, set_app_state_manager
+    saved_search_manager = get_app_state_manager('search_manager')
     app.state.health = {'db_ok': True, 'ws_ok': True, 'seed_ok': True, 'warnings': []}
     startup_tasks.initialize_managers(app)
     _build_search_index()
@@ -166,4 +163,5 @@ def client(db_session, test_settings, mock_workspace_client, mock_test_user, mon
         app.dependency_overrides.pop(get_user_details_from_sdk, None)
         app.state._state.clear()
         app.state._state.update(saved_state)
+        set_app_state_manager('search_manager', saved_search_manager)
         database.set_session_factory(previous_factory)

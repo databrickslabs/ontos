@@ -13,6 +13,8 @@ _ENTITY_KINDS = {
     'data_contract': 'data_contract', 'datacontract': 'data_contract',
     # Assets' Business Owners are stored as object_type='asset'.
     'dataset': 'asset', 'asset': 'asset',
+    # A metric view's workflows run on its asset (#1124)
+    'metric_view': 'asset', 'metricview': 'asset',
 }
 # ODPS / ODCS team roles that mean "owner" (compared lowercased).
 _OWNER_TEAM_ROLES = (

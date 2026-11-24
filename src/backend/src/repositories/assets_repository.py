@@ -32,7 +32,7 @@ class AssetTypeRepository(CRUDBase[AssetTypeDb, AssetTypeCreate, AssetTypeUpdate
             raise
 
     def get_multi_filtered(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         category: Optional[str] = None, status: Optional[str] = None
     ) -> List[AssetTypeDb]:
         """Gets multiple asset types with optional filters."""
@@ -143,7 +143,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
                     selectinload(self.model.target_relationships)
                     .selectinload(AssetRelationshipDb.source_asset),
                 )
-                .order_by(self.model.name)
+                .order_by(self.model.name, self.model.id)
             )
             query = self._apply_filters(
                 query, db=db, asset_type_id=asset_type_id, asset_type_names=asset_type_names,

@@ -1,4 +1,5 @@
 from typing import List
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.common.repository import CRUDBase
@@ -42,6 +43,32 @@ class EntitySemanticLinksRepository(CRUDBase[EntitySemanticLinkDb, EntitySemanti
         return db.query(self.model).filter(
             self.model.entity_type == entity_type,
             self.model.entity_id.like(f"{escaped}%", escape="\\"),
+        ).all()
+
+    def list_for_entity_ignoring_case(
+        self, db: Session, entity_id: str, entity_type: str
+    ) -> List[EntitySemanticLinkDb]:
+        """Links of an entity whose ``entity_id`` equals ``entity_id`` ignoring case.
+
+        Unity Catalog names are case-insensitive, and links to UC objects are
+        written as given (the generic API, the assistant's tools, the UC browser).
+        """
+        return db.query(self.model).filter(
+            self.model.entity_type == entity_type,
+            func.lower(self.model.entity_id) == entity_id.lower(),
+        ).all()
+
+    def list_for_entity_prefix_ignoring_case(
+        self, db: Session, entity_id_prefix: str, entity_type: str
+    ) -> List[EntitySemanticLinkDb]:
+        """``list_for_entity_prefix``, ignoring case (for UC names)."""
+        escaped = (
+            entity_id_prefix.lower()
+            .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        return db.query(self.model).filter(
+            self.model.entity_type == entity_type,
+            func.lower(self.model.entity_id).like(f"{escaped}%", escape="\\"),
         ).all()
 
     def get_by_entity_and_iri(self, db: Session, entity_id: str, entity_type: str, iri: str) -> EntitySemanticLinkDb | None:

@@ -6,9 +6,11 @@
     "loading": "読み込み中...",
     "cancel": "キャンセル",
     "close": "閉じる",
+    "openMenu": "メニューを開く",
     "delete": "削除",
     "deleteSelected": "選択を削除 ({{count}})",
     "edit": "編集",
+    "rename": "名前を変更",
     "add": "追加",
     "create": "作成",
     "update": "更新",
@@ -41,6 +43,7 @@
     "discard": "破棄",
     "apply": "適用",
     "select": "選択",
+    "done": "完了",
     "remove": "削除",
     "link": "リンク",
     "unlink": "リンク解除",
@@ -338,7 +341,8 @@
       "for_request_access": "アクセス依頼（ウィザード）",
       "for_request_publish": "公開依頼（ウィザード）",
       "for_request_certify": "認定依頼（ウィザード）",
-      "for_request_status_change": "ステータス変更依頼（ウィザード）"
+      "for_request_status_change": "ステータス変更依頼（ウィザード）",
+      "on_request_definition_change": "定義変更リクエスト"
     },
     "entityTypes": {
       "catalog": "カタログ",
@@ -355,7 +359,11 @@
       "data_asset_review": "アセットレビュー",
       "job": "ジョブ",
       "subscription": "購読",
-      "user": "ユーザー"
+      "user": "ユーザー",
+      "metric_view": "メトリックビュー",
+      "ontology_concept": "コンセプト",
+      "ontology_collection": "コレクション",
+      "concept_changeset": "コンセプト変更セット"
     },
     "stepTypes": {
       "validation": "検証",
@@ -472,7 +480,13 @@
     "selectRelTypePrompt": "関係の種類を選択してターゲットエンティティを検索してください",
     "createRelationship": "関係を作成",
     "relationshipCreated": "関係を作成しました",
-    "assetFallback": "アセット"
+    "assetFallback": "アセット",
+    "conceptRelationshipHint": "「{{relationship}}」は、この項目をリレーションとしてコンセプトに関連付けます。リレーションとリネージに表示されます。この項目の詳細とコンセプトページの「{{conceptSection}}」にコンセプトを表示するには、代わりに {{section}} を使用してください。",
+    "targetNotPickable": "{{type}} はここでは選択できません。専用のページで管理されます。",
+    "noAccessToTarget": "{{type}} へのアクセス権がありません。リンクするには管理者に読み取りアクセスを依頼してください。"
+  },
+  "assetFormStoredProperties": {
+    "loadError": "アセットの保存済みプロパティを読み込めなかったため、ここでは保存できません。ダイアログを閉じて、もう一度お試しください。"
   },
   "assetForm": {
     "groups": {
@@ -559,16 +573,25 @@
     "removeConfirm": "この関係を削除してもよろしいですか？この操作は元に戻せません。"
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "{{kind}} を選択…",
     "latestSuffix": "{{name}}（最新）",
     "pinVersionTitle": "特定のバージョンに固定",
     "pinVersion": "バージョンを固定",
     "followLatestTitle": "常にファミリーの最新の表示可能なバージョンに従う",
     "followLatest": "最新に従う",
-    "searchPlaceholder": "{{kind}} を検索…",
     "loading": "読み込み中…",
-    "noMatching": "一致する {{kind}} がありません。",
     "unnamed": "（名前なし）"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "契約を選択…",
+      "search": "契約を検索…",
+      "noMatching": "一致する契約がありません。"
+    },
+    "product": {
+      "select": "データ製品を選択…",
+      "search": "データ製品を検索…",
+      "noMatching": "一致するデータ製品がありません。"
+    }
   },
   "entityTree": {
     "title": "関連エンティティ",
@@ -632,6 +655,8 @@
   "edit": "編集",
   "error": "エラー",
   "home": "ホーム",
+  "loading": "読み込み中…",
+  "optional": "（任意）",
   "refresh": "更新",
   "retry": "再試行",
   "save": "保存",
@@ -762,5 +787,39 @@
     "createdSkipped": "作成: {{created}} 件、スキップ: {{skipped}} 件。",
     "createdFailed": "作成: {{created}} 件、失敗: {{failed}} 件。",
     "createdSkippedFailed": "作成: {{created}} 件、スキップ: {{skipped}} 件、失敗: {{failed}} 件。"
+  },
+  "deprecation": {
+    "reason": "非推奨の理由",
+    "reasonPlaceholder": "非推奨にする理由。利用者に表示されます。",
+    "sunsetDate": "提供終了日",
+    "replacement": "後継",
+    "noReplacement": "後継なし",
+    "reasonRequired": "非推奨にするには理由が必要です。",
+    "requestHint": "申請理由が非推奨の理由になります。",
+    "errors": {
+      "deprecation_reason_required": "非推奨にするには理由が必要です。",
+      "sunset_date_in_past": "提供終了日 {{sunsetDate}} は過去の日付です。",
+      "replacement_is_self": "エンティティを自身の後継にすることはできません。",
+      "replacement_not_found": "後継 {{replacementId}} が見つかりません。",
+      "replacement_retired": "後継 {{replacementId}} は廃止済みです。",
+      "replacement_deprecated": "後継 {{replacementId}} は非推奨です。",
+      "replacement_deprecated_replaced": "後継 {{replacementId}} は非推奨です。その後継は {{replacedBy}} です。",
+      "replacement_leads_back": "後継 {{replacementId}} をたどるとこのエンティティに戻ります: {{chain}}"
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} の値 \"{{value}}\" が無効です。ISO 形式の日付が必要です。",
+      "replacement_is_self": "後継 (ontosReplacedBy) にエンティティ自身は指定できません。",
+      "replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻ります: {{chain}}。",
+      "imported_replacement_dropped": "後継 {{replacementId}} がここに存在しないため、リンクされませんでした。",
+      "imported_replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻るため ({{chain}})、リンクされませんでした。",
+      "imported_status_mapped": "「{{status}}」はライフサイクルのステータスではないため、「{{mappedTo}}」としてインポートしました。",
+      "imported_legacy_status": "「{{status}}」は古いステータス名のため、「{{mappedTo}}」としてインポートしました。",
+      "imported_certified_as_active": "「{{status}}」はもうステータスではないため、「{{mappedTo}}」としてインポートしました。認証はインポートされません。Ontos でエンティティを認証してください。"
+    },
+    "notice": {
+      "deprecated": "非推奨",
+      "retired": "廃止",
+      "noReason": "理由は記録されていません"
+    }
   }
 }

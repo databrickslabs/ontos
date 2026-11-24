@@ -155,7 +155,7 @@ class AssignedTagCreate(BaseModel):
     # Allow assigning by FQN or by direct ID
     tag_fqn: Optional[str] = Field(None, description=f"Fully qualified name of the tag (e.g., namespace{TAG_NAMESPACE_SEPARATOR}tag_name). Used if tag_id is not provided.")
     tag_id: Optional[UUID] = Field(None, description="Direct ID of the tag. Overrides tag_fqn if both provided.")
-    assigned_value: Optional[str] = Field(None, description="Specific value assigned to the tag for this entity, if tag has predefined possible_values.")
+    assigned_value: Optional[str] = Field(None, description="Value assigned to the tag for this entity. Omitted or null keeps the value already stored for a tag the entity has; an empty string clears it.")
 
     @model_validator(mode='before')
     def check_tag_identifier(cls, values: Any) -> Dict[str, Any]:

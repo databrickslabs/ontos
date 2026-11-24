@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import or_
 
+from src.common.ontology_type_names import canonical_type_name
 from src.common.repository import CRUDBase
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.models.entity_relationships import EntityRelationshipCreate
@@ -82,6 +83,45 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             logger.exception("Failed to resolve DP-linked asset IDs")
             return set()
 
+    def get_product_tree_asset_ids(self, db: Session, *, product_ids: Iterable[str]) -> Set[UUID]:
+        """Asset UUIDs of the products' hierarchy, as ``get_product_hierarchy`` walks it.
+
+        product -> ``hasDataset`` -> Dataset -> ``hasTable`` / ``hasView`` -> table or
+        view -> ``hasColumn`` -> column. Nothing else is followed (a schema an
+        output port links, lineage, ``replacedBy``...). Three queries. Fails
+        closed (empty set) on a database error.
+        """
+        pid_list = [str(p) for p in product_ids]
+        if not pid_list:
+            return set()
+        m = self.model
+        try:
+            dataset_ids = [r[0] for r in db.query(m.target_id).filter(
+                m.source_type == "DataProduct", m.source_id.in_(pid_list),
+                m.relationship_type == "hasDataset",
+            ).all()]
+            if not dataset_ids:
+                return set()
+            children = db.query(m.target_id, m.target_type).filter(
+                m.source_type == "Dataset", m.source_id.in_(dataset_ids),
+                m.relationship_type.in_(("hasTable", "hasView")),
+            ).all()
+            child_ids = [r[0] for r in children]
+            columns = db.query(m.target_id).filter(
+                m.source_id.in_(child_ids),
+                m.source_type.in_({r[1] for r in children}),
+                m.relationship_type == "hasColumn",
+            ).all() if child_ids else []
+            found: Set[UUID] = set()
+            for raw in [*dataset_ids, *child_ids, *(r[0] for r in columns)]:
+                uid = self._to_uuid(raw)
+                if uid is not None:
+                    found.add(uid)
+            return found
+        except SQLAlchemyError:
+            logger.exception("Failed to resolve product tree asset IDs")
+            return set()
+
     def get_by_source(
         self, db: Session, *, source_type: str, source_id: str
     ) -> List[EntityRelationshipDb]:
@@ -89,7 +129,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.source_type == source_type,
+                    self.model.source_type == canonical_type_name(source_type),
                     self.model.source_id == source_id,
                 )
                 .order_by(self.model.relationship_type, self.model.created_at)
@@ -107,7 +147,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.target_type == target_type,
+                    self.model.target_type == canonical_type_name(target_type),
                     self.model.target_id == target_id,
                 )
                 .order_by(self.model.relationship_type, self.model.created_at)
@@ -125,7 +165,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.source_type == source_type,
+                    self.model.source_type == canonical_type_name(source_type),
                     self.model.source_id == source_id,
                     self.model.relationship_type == relationship_type,
                 )
@@ -144,7 +184,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.target_type == target_type,
+                    self.model.target_type == canonical_type_name(target_type),
                     self.model.target_id == target_id,
                     self.model.relationship_type == relationship_type,
                 )
@@ -165,8 +205,8 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
                 db.query(self.model)
                 .filter(
                     or_(
-                        (self.model.source_type == entity_type) & (self.model.source_id == entity_id),
-                        (self.model.target_type == entity_type) & (self.model.target_id == entity_id),
+                        (self.model.source_type == canonical_type_name(entity_type)) & (self.model.source_id == entity_id),
+                        (self.model.target_type == canonical_type_name(entity_type)) & (self.model.target_id == entity_id),
                     )
                 )
                 .order_by(self.model.relationship_type, self.model.created_at)
@@ -187,9 +227,9 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.source_type == source_type,
+                    self.model.source_type == canonical_type_name(source_type),
                     self.model.source_id == source_id,
-                    self.model.target_type == target_type,
+                    self.model.target_type == canonical_type_name(target_type),
                     self.model.target_id == target_id,
                     self.model.relationship_type == relationship_type,
                 )
@@ -210,11 +250,11 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
         try:
             q = db.query(self.model)
             if source_type:
-                q = q.filter(self.model.source_type == source_type)
+                q = q.filter(self.model.source_type == canonical_type_name(source_type))
             if source_id:
                 q = q.filter(self.model.source_id == source_id)
             if target_type:
-                q = q.filter(self.model.target_type == target_type)
+                q = q.filter(self.model.target_type == canonical_type_name(target_type))
             if target_id:
                 q = q.filter(self.model.target_id == target_id)
             if relationship_type:

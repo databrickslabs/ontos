@@ -1,4 +1,8 @@
 {
+  "metricViewDrift": {
+    "title": "Metric view definition changed",
+    "description": "The definition of the metric view {{fqn}} in Unity Catalog no longer matches its baseline in Ontos."
+  },
   "statusChangeNotApplied": {
     "title": "Status change not applied",
     "statusChanged": "The request to change the status from '{{fromStatus}}' to '{{toStatus}}' was approved, but the status is now '{{currentStatus}}', so the change was not applied. Request it again if it is still needed.",
@@ -79,6 +83,14 @@
       "pii_detected": {
         "title": "PII Detected",
         "message": "Potential PII detected in {{entity_type}} '{{entity_name}}'. Please review."
+      },
+      "entity_deprecated": {
+        "title": "Deprecation Notice",
+        "message": "{{entity_type}} '{{entity_name}}' has been deprecated."
+      },
+      "entity_retired": {
+        "title": "Retirement Notice",
+        "message": "{{entity_type}} '{{entity_name}}' has been retired."
       },
       "default": {
         "title": "Workflow Notification",
@@ -174,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "Your concept '{{entity_name}}' has been approved.",
         "notify-rejected": "Your concept '{{entity_name}}' was sent back for changes. Please review the reviewer comment and resubmit."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "Your change to the metric view '{{entity_name}}' has been submitted for approval.",
+        "notify-approved": "Your change to the metric view '{{entity_name}}' has been approved and is being delivered.",
+        "notify-rejected": "Your change to the metric view '{{entity_name}}' has been rejected."
       }
     },
     "approval": {
@@ -201,7 +218,8 @@
         "entity": "Entity",
         "ontology_concept": "Concept",
         "ontology_collection": "Concept Scheme",
-        "concept_changeset": "Concept Changeset"
+        "concept_changeset": "Concept Changeset",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -229,6 +247,32 @@
     "activation": {
       "title": "Product activated",
       "description": "The data product '{{productName}}' has been activated and is now available for use."
+    },
+    "ownerNotice": {
+      "reason": "Reason: {{reason}}",
+      "sunsetDate": "Sunset date: {{sunsetDate}}",
+      "replacement": "Replacement: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (version {{version}}) has been deprecated.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (version {{version}}) has been retired.",
+      "replacementVersion": "Replacement: {{replacementName}} (version {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "Compliance: {{policyName}}",
+    "summary": "Policy {{policyName}}: {{failedCount}} failed, {{passedCount}} passed.",
+    "failedEntities": "Failed: {{names}}",
+    "passedEntities": "Passed: {{names}}",
+    "namesWithMore": "{{names}} and {{count}} more"
+  },
+  "metricViewChangeManual": {
+    "title": "Apply the metric view change",
+    "description": "The change request for the metric view {{fqn}} was approved. Run this statement to apply it:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Metric view change not delivered",
+    "description": "The approved change request for the metric view {{fqn}} could not be delivered."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} you can't see"
   }
 }

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
+import { DescriptionSyncNotice } from '@/components/assets/description-sync-notice';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -30,10 +31,10 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
-import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
+import AssetMetricViewCard, { mayBeMetricView } from '@/components/assets/asset-metric-view-card';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
@@ -311,6 +312,7 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
+        <DescriptionSyncNotice sync={asset.description_sync} />
       </div>
 
       {/* Tabs */}
@@ -515,6 +517,11 @@ export default function AssetDetailView() {
             </Card>
           )}
 
+          {/* A Unity Catalog metric view: its fields and their concept links */}
+          {mayBeMetricView(asset) && (
+            <AssetMetricViewCard assetId={asset.id} assetTypeName={asset.asset_type_name} />
+          )}
+
           {/* Properties (non-type-specific fields) */}
           {!isBusinessTerm && <PropertiesCard properties={asset.properties} />}
 
@@ -599,9 +606,6 @@ export default function AssetDetailView() {
         showDistribution
         allowSubmit
       />
-
-      {/* Costs Panel */}
-      <EntityCostsPanel entityId={assetId!} entityType="asset" />
 
       {/* Quality Panel */}
       <EntityQualityPanel entityId={assetId!} entityType="asset" />

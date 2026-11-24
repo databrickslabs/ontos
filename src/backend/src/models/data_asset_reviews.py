@@ -155,6 +155,13 @@ class AssetAnalysisResponse(BaseModel):
     # Security metadata for two-phased verification
     phase1_passed: bool = Field(True, description="Whether the security check (phase 1) passed.")
     render_as_markdown: bool = Field(True, description="Whether the content is safe to render as markdown (phase 1 passed).")
+    notice_code: Optional[str] = Field(
+        None,
+        description=(
+            "Code of a notice the UI shows in the user's language, e.g. "
+            "llm_analysis_refused when the model refused to analyze the content."
+        ),
+    )
     
     class Config:
         populate_by_name = True

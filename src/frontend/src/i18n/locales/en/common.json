@@ -6,6 +6,7 @@
     "loading": "Loading...",
     "cancel": "Cancel",
     "close": "Close",
+    "openMenu": "Open menu",
     "delete": "Delete",
     "deleteSelected": "Delete Selected ({{count}})",
     "edit": "Edit",
@@ -42,6 +43,7 @@
     "discard": "Discard",
     "apply": "Apply",
     "select": "Select",
+    "done": "Done",
     "remove": "Remove",
     "link": "Link",
     "unlink": "Unlink",
@@ -339,7 +341,8 @@
       "for_request_access": "Request Access (Wizard)",
       "for_request_publish": "Request Publish (Wizard)",
       "for_request_certify": "Request Certification (Wizard)",
-      "for_request_status_change": "Request Status Change (Wizard)"
+      "for_request_status_change": "Request Status Change (Wizard)",
+      "on_request_definition_change": "Definition Change Request"
     },
     "entityTypes": {
       "catalog": "Catalog",
@@ -359,7 +362,8 @@
       "user": "User",
       "ontology_concept": "Concept",
       "ontology_collection": "Collection",
-      "concept_changeset": "Concept Changeset"
+      "concept_changeset": "Concept Changeset",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validation",
@@ -476,7 +480,13 @@
     "selectRelTypePrompt": "Select a relationship type to find target entities",
     "createRelationship": "Create Relationship",
     "relationshipCreated": "Relationship created",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "\"{{relationship}}\" links this item to a concept as a relationship: it shows under Relationships and in lineage. To show the concept in this item's details and under {{conceptSection}} on the concept's page, use {{section}} instead.",
+    "targetNotPickable": "{{type}} can't be picked here. It is managed on its own page.",
+    "noAccessToTarget": "You don't have access to {{type}}. Ask an administrator for read access to link to it."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "The asset's stored properties could not be loaded, so it can't be saved here. Close the dialog and try again."
   },
   "assetForm": {
     "groups": {
@@ -563,16 +573,25 @@
     "removeConfirm": "Are you sure you want to remove this relationship? This action cannot be undone."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Select {{kind}}…",
     "latestSuffix": "{{name}} (latest)",
     "pinVersionTitle": "Pin a specific version",
     "pinVersion": "Pin version",
     "followLatestTitle": "Always follow the family's latest visible version",
     "followLatest": "Follow latest",
-    "searchPlaceholder": "Search {{kind}}s…",
     "loading": "Loading…",
-    "noMatching": "No matching {{kind}}s.",
     "unnamed": "(unnamed)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Select a contract…",
+      "search": "Search contracts…",
+      "noMatching": "No matching contracts."
+    },
+    "product": {
+      "select": "Select a product…",
+      "search": "Search products…",
+      "noMatching": "No matching products."
+    }
   },
   "entityTree": {
     "title": "Related Entities",
@@ -636,6 +655,8 @@
   "edit": "Edit",
   "error": "Error",
   "home": "Home",
+  "loading": "Loading…",
+  "optional": "(optional)",
   "refresh": "Refresh",
   "retry": "Retry",
   "save": "Save",
@@ -766,5 +787,39 @@
     "createdSkipped": "Created: {{created}}, skipped: {{skipped}}.",
     "createdFailed": "Created: {{created}}, failed: {{failed}}.",
     "createdSkippedFailed": "Created: {{created}}, skipped: {{skipped}}, failed: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Deprecation reason",
+    "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",
+    "sunsetDate": "Sunset date",
+    "replacement": "Replacement",
+    "noReplacement": "No replacement",
+    "reasonRequired": "A deprecation reason is required to deprecate.",
+    "requestHint": "The justification becomes the deprecation reason.",
+    "errors": {
+      "deprecation_reason_required": "A deprecation reason is required to deprecate.",
+      "sunset_date_in_past": "The sunset date {{sunsetDate}} is in the past.",
+      "replacement_is_self": "An entity can't be its own replacement.",
+      "replacement_not_found": "The replacement {{replacementId}} was not found.",
+      "replacement_retired": "The replacement {{replacementId}} is retired.",
+      "replacement_deprecated": "The replacement {{replacementId}} is deprecated.",
+      "replacement_deprecated_replaced": "The replacement {{replacementId}} is deprecated; it is replaced by {{replacedBy}}.",
+      "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Invalid {{property}} \"{{value}}\": expected an ISO date.",
+      "replacement_is_self": "The replacement (ontosReplacedBy) can't be the entity itself.",
+      "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}.",
+      "imported_replacement_dropped": "The replacement {{replacementId}} isn't here, so it was not linked.",
+      "imported_replacement_leads_back": "The replacement {{replacementId}} leads back to this entity ({{chain}}), so it was not linked.",
+      "imported_status_mapped": "'{{status}}' isn't a lifecycle status, so it was imported as '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' is an older status name, so it was imported as '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' is no longer a status, so it was imported as '{{mappedTo}}'. Certification isn't imported: certify the entity in Ontos."
+    },
+    "notice": {
+      "deprecated": "Deprecated",
+      "retired": "Retired",
+      "noReason": "No reason recorded"
+    }
   }
 }

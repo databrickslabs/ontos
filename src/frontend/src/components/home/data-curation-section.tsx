@@ -62,7 +62,7 @@ export default function DataCurationSection() {
             <CardDescription>{t('dataCurationSection.createDataset.description')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="default" onClick={() => handleCreateClick('table')} className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Self-Service</Button>
+            <Button variant="default" disabled={!teamsLoaded} onClick={() => handleCreateClick('table')} className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Self-Service</Button>
           </CardContent>
         </Card>
         <Card className="h-full">
@@ -71,7 +71,7 @@ export default function DataCurationSection() {
             <CardDescription>{t('dataCurationSection.createSchema.description')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="default" onClick={() => handleCreateClick('schema')} className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Self-Service</Button>
+            <Button variant="default" disabled={!teamsLoaded} onClick={() => handleCreateClick('schema')} className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Self-Service</Button>
           </CardContent>
         </Card>
         <Card className="h-full">
@@ -80,7 +80,7 @@ export default function DataCurationSection() {
             <CardDescription>{t('dataCurationSection.createCatalog.description')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="default" onClick={() => handleCreateClick('catalog')} className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Self-Service</Button>
+            <Button variant="default" disabled={!teamsLoaded} onClick={() => handleCreateClick('catalog')} className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Self-Service</Button>
           </CardContent>
         </Card>
       </div>

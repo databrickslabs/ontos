@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom';
 import { usePermissions } from '@/stores/permissions-store';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { features, type FeatureGroup } from '@/config/features';
+import { features, isHiddenInNav, type FeatureGroup } from '@/config/features';
+import { useNavHiddenFeatures } from '@/hooks/use-nav-hidden-features';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface QuickAction {
@@ -19,6 +20,7 @@ export default function QuickActions() {
   const { t } = useTranslation(['home', 'features']);
   const { isLoading: permissionsLoading, hasPermission } = usePermissions();
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  const hiddenFeatures = useNavHiddenFeatures();
 
   const actions: QuickAction[] = useMemo(() => {
     if (permissionsLoading) return [];
@@ -59,6 +61,8 @@ export default function QuickActions() {
       if (
         feature &&
         allowedMaturities.includes(feature.maturity) &&
+        // Features the user's roles hide from the menus get no quick action either.
+        !isHiddenInNav(feature, hiddenFeatures) &&
         hasPermission(feature.permissionId || feature.id, requiredLevel)
       ) {
         // Skip if we already added an action for this feature (prefer write actions)
@@ -76,7 +80,7 @@ export default function QuickActions() {
     });
 
     return list;
-  }, [permissionsLoading, hasPermission, allowedMaturities]);
+  }, [permissionsLoading, hasPermission, allowedMaturities, hiddenFeatures]);
 
   // Group actions by feature group
   const groupedActions = useMemo(() => {

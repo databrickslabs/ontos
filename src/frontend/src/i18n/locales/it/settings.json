@@ -137,7 +137,18 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "«{{value}}» non indica un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o il nome di un volume; un nome semplice richiede un catalogo e uno schema senza punti, barre o spazi."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Descrizioni degli asset",
+      "adminOnly": "Solo un amministratore può attivarlo.",
+      "label": "Scrivi le descrizioni degli asset in Unity Catalog",
+      "help": "Il salvataggio della descrizione di una tabella, vista o colonna Databricks imposta anche il suo commento in Unity Catalog, come l'utente che la salva. Senza i permessi SELECT e MODIFY la descrizione viene salvata solo in Ontos e l'asset indica che non è sincronizzato.",
+      "importLimit": {
+        "label": "Massimo di righe tentate in Unity Catalog per importazione massiva",
+        "help": "Un'importazione CSV/XLSX tenta al massimo questo numero di descrizioni in Unity Catalog (1–10000), che le scriva, mantenga un altro commento o salti una vista di metriche; le righe oltre il limite vengono salvate in Ontos con un avviso."
       }
     },
     "instanceIdentity": {
@@ -190,6 +201,10 @@
     "messages": {
       "saveSuccess": "Impostazioni salvate con successo",
       "saveError": "Impossibile salvare le impostazioni"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Non è stato possibile aggiornare il job Compliance Checks con le impostazioni LLM (l'app potrebbe non avere i permessi sul job). Le regole LLM_CHECK pianificate usano le impostazioni precedenti finché il job non viene reinstallato.",
+      "compliance_job_shape_unexpected": "Il job Compliance Checks è stato modificato in Databricks, quindi sono stati aggiornati solo i suoi parametri. Se le regole LLM_CHECK pianificate non riescono con \"funzioni LLM disattivate\", reinstalla il job."
     }
   },
   "databricks": {
@@ -406,7 +421,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sezioni home",
-        "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo."
+        "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo.",
+        "labels": {
+          "JOURNEY": "Home per percorso"
+        },
+        "descriptions": {
+          "JOURNEY": "Sostituisce la home completa con Trova, Comprendi, Fidati, Pubblica e Mantieni. Non può essere combinata con altre sezioni."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegi di approvazione",
@@ -431,6 +452,15 @@
       "featurePermissions": {
         "title": "Permessi delle funzionalità",
         "description": "Configurare i livelli di accesso per ogni funzionalità nell'applicazione."
+      },
+      "navigation": {
+        "help": "Le funzionalità non selezionate restano fuori dai menu di questo ruolo (barra laterale, azioni rapide della home, Informazioni). Nascondere cambia solo ciò che mostrano i menu, non i permessi: le pagine restano raggiungibili tramite link con lo stesso livello di accesso.",
+        "accessColumn": "Livello di accesso",
+        "column": "Mostra nella navigazione",
+        "showFeature": "Mostra {{feature}} nella navigazione",
+        "noAccessHint": "Nessun accesso: la funzionalità non compare nei menu",
+        "adminHint": "Il ruolo di amministratore mostra sempre tutte le funzionalità",
+        "unknownFeatures": "Le funzionalità sconosciute non possono essere nascoste dalla navigazione: {{features}}"
       },
       "groups": {
         "discover": "Scopri",
@@ -642,11 +672,14 @@
       "urlLabel": "URL del logo",
       "urlPlaceholder": "https://esempio.com/logo.svg",
       "help": "Inserisci l'URL del tuo logo personalizzato. Formati supportati: SVG, PNG, JPG.",
-      "invalidUrl": "Inserisci un URL HTTP o HTTPS valido",
       "preview": "Anteprima:",
       "loadError": "Impossibile caricare l'immagine",
       "openInNewTab": "Apri in nuova scheda",
-      "previewAlt": "Anteprima del logo"
+      "previewAlt": "Anteprima del logo",
+      "darkUrlLabel": "URL del logo per la modalità scura (facoltativo)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Usato in modalità scura. Lascia vuoto per usare il logo qui sopra in entrambe le modalità.",
+      "invalidUrlOrPath": "Inserisci un URL HTTP o HTTPS, oppure un percorso dell’app che inizia con /"
     },
     "about": {
       "title": "Contenuto personalizzato pagina Informazioni",
@@ -665,6 +698,13 @@
       "help": "Inserisci CSS personalizzato per sovrascrivere il tema predefinito."
     },
     "saveButton": "Salva impostazioni UI",
+    "errorCodes": {
+      "brandingPathTraversal": "Il percorso non può contenere segmenti \"..\""
+    },
+    "loadFailed": {
+      "title": "Impossibile caricare le impostazioni attuali",
+      "description": "Il branding salvato non è stato caricato, quindi il salvataggio è disattivato per non sovrascriverlo con i valori predefiniti. Ricarica la pagina per riprovare."
+    },
     "messages": {
       "saveSuccess": "Impostazioni di personalizzazione salvate",
       "saveError": "Impossibile salvare le impostazioni",
@@ -677,18 +717,38 @@
       "shortNameHelp": "Usato negli spazi ridotti (es. \"Chiedi a {{shortName}}\"). Se vuoto, viene usato il nome visualizzato. Massimo {{max}} caratteri.",
       "displayNameLabel": "Nome visualizzato",
       "shortNameLabel": "Nome breve (facoltativo)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Slogan (facoltativo)",
+      "taglineHelp": "Breve sottotitolo mostrato sotto il nome nella barra laterale e nella home page. Massimo {{max}} caratteri.",
+      "poweredByLabel": "Mostra \"Powered by {{name}}\" nella barra laterale",
+      "poweredByHelp": "Compare nel piè della barra laterale solo quando è impostato un nome visualizzato o un logo personalizzato."
     },
     "favicon": {
       "previewAlt": "Anteprima della favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Applicata in fase di esecuzione alla scheda del browser. Il tag statico <link rel=\"icon\"> nell'index.html distribuito e il manifest PWA non vengono aggiornati da questa impostazione.",
-      "invalidUrl": "Inserisci un URL HTTP o HTTPS valido",
       "loadError": "Impossibile caricare l'immagine",
       "openInNewTab": "Apri in una nuova scheda",
       "preview": "Anteprima:",
       "title": "Favicon del browser",
       "urlLabel": "URL della favicon"
+    },
+    "theme": {
+      "title": "Colori del tema",
+      "help": "Scegli il colore principale (pulsanti, link, anello di focus) e il colore di accento (sfondi al passaggio del mouse e degli elementi selezionati). I colori del testo vengono scelti automaticamente per il contrasto e un colore della modalità scura lasciato vuoto viene ricavato da quello chiaro.",
+      "primaryLight": "Colore principale",
+      "primaryDark": "Colore principale (modalità scura)",
+      "accentLight": "Colore di accento",
+      "accentDark": "Colore di accento (modalità scura)",
+      "pickerLabel": "{{field}}: selettore colore",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Inserisci un colore esadecimale come #2563eb",
+      "auto": "Automatico: {{color}} (ricavato dal colore chiaro)",
+      "contrast": "Testo {{text}}, contrasto {{ratio}}:1",
+      "textLight": "chiaro",
+      "textDark": "scuro",
+      "meetsAA": "AA",
+      "belowAA": "Sotto AA"
     }
   },
   "connectors": {
@@ -1236,6 +1296,9 @@
       "created": "Livello di maturità \"{{name}}\" creato.",
       "deleted": "Livello di maturità \"{{name}}\" eliminato.",
       "cannotDeleteTitle": "Impossibile eliminare"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Questa policy usa LLM_CHECK, che viene valutato solo nelle esecuzioni di conformità, quindi un gate di maturità farebbe fallire ogni entità. Seleziona una policy senza LLM_CHECK."
     }
   },
   "directory": {

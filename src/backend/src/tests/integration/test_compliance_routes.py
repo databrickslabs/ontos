@@ -20,7 +20,7 @@ class TestComplianceRoutes:
         return {
             "name": "Test Policy",
             "description": "A test compliance policy",
-            "rule": "asset.tags['pii'] == 'true'",
+            "rule": "MATCH (obj:Object) ASSERT HAS_TAG('pii')",
             "category": "data_governance",
             "severity": "high",
             "is_active": True,

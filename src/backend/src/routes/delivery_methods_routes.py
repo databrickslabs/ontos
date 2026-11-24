@@ -79,7 +79,7 @@ def get_all_delivery_methods(
     db: DBSessionDep,
     manager=Depends(get_delivery_methods_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     category: Optional[str] = Query(None),
     method_status: Optional[str] = Query(None, alias="status"),
 ):

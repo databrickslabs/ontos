@@ -18,7 +18,7 @@
   "noResults": "結果が見つかりません",
   "noResultsHint": "検索語句やフィルターを調整してみてください",
   "results": "{{count}}件の結果",
-  "results_plural": "{{count}}件の結果",
+  "results_other": "{{count}}件の結果",
   "filters": {
     "all": "すべて",
     "dataProducts": "データ製品",
@@ -66,6 +66,7 @@
     "resourceDetail": "リソースの詳細",
     "prefixPlaceholder": "例: example.org/banking",
     "resourceLoading": "読み込み中…",
+    "resourceLoadFailed": "リソースの詳細を読み込めませんでした。",
     "noTriples": "このリソースにはトリプルがありません。",
     "blankNodeExpanded": "（空白ノード、下に展開）",
     "hover": {
@@ -236,6 +237,7 @@
     "chat_validation_failed": "このリクエストのデータを処理できませんでした。質問を言い換えてください。詳細はサーバーログにあります（エラー ID {{errorId}}）。",
     "chat_timeout": "リクエストがタイムアウトしました。より簡単な質問にするか、後でもう一度お試しください（エラー ID {{errorId}}）。",
     "chat_connection_failed": "必要なサービスに接続できませんでした。しばらくしてからもう一度お試しください（エラー ID {{errorId}}）。",
-    "chat_failed": "リクエストの処理中にエラーが発生しました。質問を言い換えるか、もう一度お試しください。詳細はサーバーログにあります（エラー ID {{errorId}}）。"
+    "chat_failed": "リクエストの処理中にエラーが発生しました。質問を言い換えるか、もう一度お試しください。詳細はサーバーログにあります（エラー ID {{errorId}}）。",
+    "chat_empty_answer": "モデルからこのリクエストへの回答が返されませんでした。もう一度お試しいただくか、質問を言い換えてください（エラー ID {{errorId}}）。"
   }
 }

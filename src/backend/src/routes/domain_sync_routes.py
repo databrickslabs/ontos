@@ -35,7 +35,7 @@ FEATURE_ID = "data-domains"
 
 
 def _get_manager() -> DomainSyncManager:
-    """Build a DomainSyncManager backed by the app service principal.
+    """Build a manager backed by the app service principal.
 
     Domain sync is an Ontos administrative integration. Ontos RBAC controls who
     may invoke it; the stable app identity prevents results from depending on

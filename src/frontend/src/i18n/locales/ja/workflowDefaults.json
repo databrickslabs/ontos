@@ -95,6 +95,9 @@
     },
     "conceptReviewRequest": {
       "rejected": "概念のレビューは承認されませんでした"
+    },
+    "metricViewChangeRequest": {
+      "rejected": "メトリックビューの変更リクエストが却下されました"
     }
   },
   "workflowNames": {
@@ -123,11 +126,14 @@
     "request-publish": "公開を依頼",
     "request-status-change": "ステータス変更を依頼",
     "before-status-change-default": "ステータス変更ゲート(デフォルト)",
+    "owner-deprecation-notice": "オーナーへの非推奨のお知らせ",
+    "owner-retirement-notice": "オーナーへの廃止のお知らせ",
     "on-publish-notification": "公開の通知",
     "on-unpublish-notification": "公開取り消しの通知",
     "certification-request-review": "認定依頼のレビュー",
     "publication-request-review": "公開依頼のレビュー",
     "first-access-welcome": "ようこそ: 利用規約",
-    "on-request-access-grant-permissions-reference": "リファレンス: 依頼者に UC の SELECT を付与 (on_request_access)"
+    "on-request-access-grant-permissions-reference": "リファレンス: 依頼者に UC の SELECT を付与 (on_request_access)",
+    "metric-view-change-request": "メトリックビュー変更リクエスト"
   }
 }

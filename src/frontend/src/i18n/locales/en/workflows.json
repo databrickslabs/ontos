@@ -35,7 +35,8 @@
       "contractApprovers": "Contract approvers",
       "appRoles": "App Roles",
       "businessRoles": "Business Roles",
-      "noGroups": "No groups"
+      "noGroups": "No groups",
+      "assetOwners": "Asset owners"
     },
     "messages": {
       "loadWorkflowFailed": "Failed to load workflow",
@@ -92,6 +93,13 @@
       "persist_agreement": "Persist Agreement",
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver"
+    },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
     },
     "discard": {
       "description": "You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
@@ -188,7 +196,9 @@
         "validationPassed": "Validation Passed",
         "productApproved": "Product Approved",
         "productRejected": "Product Rejected",
-        "piiDetected": "PII Detected"
+        "piiDetected": "PII Detected",
+        "entityDeprecated": "Deprecation Notice",
+        "entityRetired": "Retirement Notice"
       },
       "customMessage": "Custom Message",
       "customMessagePlaceholder": "Override template message. Supports ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -209,13 +219,28 @@
       "selectSource": "Select source",
       "sourceCurrentUser": "Current User",
       "sourceProjectName": "Project Name",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Value",
+      "modeFixed": "Fixed value",
+      "modeSource": "Value from the run",
+      "modeNone": "No value",
+      "fixedValue": "Tag value",
+      "fixedValuePlaceholder": "e.g., confidential",
+      "selectValue": "Select a value",
+      "noValueHelp": "The tag is assigned without a value. A value the entity already has for this tag is kept.",
+      "sourceEntityName": "Entity Name",
+      "tagNotFound": "No tag has this name. The step then only sets it for the following steps of the run.",
+      "fixedValueRequired": "Enter a value, or choose \"No value\" to assign the tag without one."
     },
     "approval": {
       "approversRole": "Approvers (Role)",
       "selectRole": "Select role",
       "additionalApproversAria": "Additional approvers",
-      "timeoutDays": "Timeout (days)"
+      "timeoutDays": "Timeout (days)",
+      "timeoutDaysHelp": "0 means no timeout; leave it empty for the default (7 days).",
+      "requireAll": "Require every approver",
+      "requireAllHelp": "Each approver decides: a user for themselves, any one member for a group or role. Any rejection fails the step.",
+      "timeoutNotEnforced": "Not enforced yet: a pending approval doesn't expire."
     },
     "assetReview": {
       "reviewerRole": "Reviewer Role",
@@ -310,10 +335,39 @@
       "duplicateStepIds": "Two steps have the same ID.",
       "stepUnknownReference": "Step \"{{step}}\" points its {{branch}} branch at \"{{target}}\", which is not in the workflow.",
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
+      "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
+      "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
       "branch": {
         "on_pass": "pass",
         "on_fail": "fail"
       }
+    },
+    "edgeLabels": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "true": "True",
+      "false": "False"
+    },
+    "checks": {
+      "button": "Check",
+      "buttonHint": "Check the workflow for problems. Warnings don't block saving.",
+      "clean": "No problems found.",
+      "errorsCount_one": "{{count}} error",
+      "errorsCount_other": "{{count}} errors",
+      "warningsCount_one": "{{count}} warning",
+      "warningsCount_other": "{{count}} warnings"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "Step \"{{step}}\" ends the workflow, so its link to \"{{target}}\" is ignored and removed on save.",
+      "conditionalBranchMissing": "Conditional \"{{step}}\" has no step on its {{branch}} branch. When the condition is {{branch}}, the workflow ends as succeeded.",
+      "unreachableSteps": "These steps can't be reached from the first step: {{steps}}.",
+      "assignTagKeyUnknown": "Step \"{{step}}\" assigns the tag \"{{key}}\", which is not in the tag catalog. The step fails until the tag is created.",
+      "storedEntityTypeUnknown": "The trigger lists \"{{entityType}}\", an entity type that no longer exists. It never fires for it.",
+      "storedEntityTypeUnsupported": "The {{trigger}} trigger never fires for {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Step \"{{step}}\" checks a policy that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Select a policy without LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Step \"{{step}}\" has a rule that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Remove LLM_CHECK from the rule."
     }
   },
   "approvalResponse": {
@@ -343,10 +397,17 @@
       "processFailed": "Failed to process approval.",
       "processFailedRetry": "Failed to process approval. Please try again.",
       "entityApproved": "{{name}} has been approved.",
-      "entityRejected": "{{name}} has been rejected."
+      "entityRejected": "{{name}} has been rejected.",
+      "decisionRecorded": "Decision recorded",
+      "waitingForApprovers_one": "Waiting for {{count}} more approver.",
+      "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
-      "own_owner_approval": "This approval is for the owners; you can't approve your own request."
+      "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
+      "own_change_request_approval": "You can't approve your own change request.",
+      "approval_already_decided": "You have already decided this approval.",
+      "approval_not_an_approver": "Only the approvers of this step can decide it.",
+      "approval_no_longer_pending": "This approval has already been decided."
     },
     "entityTypes": {
       "entity": "Entity",
@@ -485,9 +546,14 @@
     "removedSteps": "Removed steps",
     "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
     "stepErrors": {
+      "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
+      "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
       "approval_rejected": "Request denied",
+      "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
+      "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated",
+      "cancelled_by_admin": "Cancelled by an admin ({{by}})"
     },
     "states": {
       "pending": "Pending",
@@ -496,6 +562,10 @@
       "failed": "Failed",
       "skipped": "Skipped",
       "waiting": "Waiting"
+    },
+    "conditionalBranch": {
+      "true": "Condition was true: took the true branch",
+      "false": "Condition was false: took the false branch"
     },
     "executionStates": {
       "pending": "Pending",
@@ -527,6 +597,8 @@
     "policyLabel": "Policy: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "No policy selected",
+    "policyHint": "Suggested: {{name}}",
+    "policyUnknown": "Unknown or inactive policy: {{id}}",
     "reviewerLabel": "Reviewer:",
     "notSet": "Not set",
     "connectionLabel": "Connection: {{name}}",
@@ -606,6 +678,16 @@
     "matches_other": "{{count}} matches",
     "noMatch": "No variables match"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Unknown entity type: {{type}}",
+    "removeUnknown": "Remove {{type}}",
+    "unknownNotice_one": "This trigger lists an entity type that no longer exists. It matches nothing: remove it to change the trigger.",
+    "unknownNotice_other": "This trigger lists {{count}} entity types that no longer exist. They match nothing: remove them to change the trigger.",
+    "unknownOnSave": "The trigger lists the unknown entity type \"{{type}}\": remove it in the trigger settings to change the trigger.",
+    "unsupportedOnSave": "\"{{trigger}}\" never fires for {{type}}: pick an entity type this trigger supports.",
+    "pickKnownType": "Pick at least one entity type. With none, this workflow would fire for every entity.",
+    "requiredOnSave": "Pick at least one entity type for the trigger: none of its types fires (they no longer exist, or this trigger never fires for them), and an empty list would make it fire for every entity."
+  },
   "triggerPicker": {
     "label": "Fires on",
     "helper": "What action makes this workflow run",
@@ -622,6 +704,33 @@
       "label": "Required permission:",
       "prefix": "users need",
       "suffix": "or higher to see and run this workflow. Set this in Settings → Roles."
+    }
+  },
+  "triggerSchedule": {
+    "cronLabel": "Schedule (Quartz cron)",
+    "cronHint": "6 or 7 fields: second minute hour day-of-month month day-of-week [year]. Example: {{example}} runs every day at 06:00. Seconds must be 0, and runs must be at least 5 minutes apart.",
+    "timezoneLabel": "Timezone",
+    "timezoneHint": "An IANA name such as Europe/Berlin or America/Sao_Paulo. Empty means UTC.",
+    "fields": {
+      "second": "second",
+      "minute": "minute",
+      "hour": "hour",
+      "day_of_month": "day-of-month",
+      "month": "month",
+      "day_of_week": "day-of-week",
+      "year": "year"
+    },
+    "errors": {
+      "schedule_required": "A scheduled trigger needs a cron expression.",
+      "cron_field_count": "A Quartz cron expression has 6 or 7 fields; this one has {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" is not valid in the {{field}} field.",
+      "cron_day_fields_conflict": "Put \"?\" in exactly one of day-of-month and day-of-week.",
+      "cron_seconds_not_zero": "The seconds field must be 0: runs start on the minute.",
+      "cron_unsupported_character": "\"{{character}}\" in the {{field}} field is not supported in workflow schedules.",
+      "cron_invalid": "This is not a valid Quartz cron expression.",
+      "cron_no_upcoming_runs": "This cron expression has no upcoming run.",
+      "cron_interval_too_short": "Scheduled runs must be at least {{minutes}} minutes apart.",
+      "timezone_invalid": "Unknown timezone \"{{timezone}}\": use an IANA name such as Europe/Berlin."
     }
   },
   "view": {
@@ -642,12 +751,20 @@
     "loadDefaults": {
       "menuLabel": "Default Workflows",
       "newOnly": "Load New Only",
-      "reloadAll": "Reload All Defaults"
+      "reloadAll": "Reload All Defaults",
+      "confirmTitle": "Reload all default workflows?",
+      "confirmDescription": "Each default workflow is reset to its shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that you or another admin edited are kept unless you also reset them below.",
+      "includeEdited": "Also reset default workflows that were edited (their changes are lost)",
+      "confirmAction": "Reload",
+      "keptEdited": "Kept edited: {{names}}.",
+      "result": "Created {{created}}, updated {{updated}}, skipped {{skipped}}."
     },
     "badges": {
       "default": "Default",
       "approval": "Approval",
-      "process": "Process"
+      "process": "Process",
+      "triggerWarnings": "Trigger warning",
+      "triggerWarningsHint": "The trigger lists entity types that match no event. Open the workflow to see them."
     },
     "columns": {
       "steps": "Steps",
@@ -757,6 +874,7 @@
       "loadDefaultsFailed": "Failed to load default workflows",
       "cancelSuccess": "Execution cancelled successfully",
       "cancelFailed": "Failed to cancel execution",
+      "approvalCancelled": "Approval cancelled. The workflow followed its rejection path; status: {{status}}.",
       "retryStarted": "Execution retry started",
       "retryFailed": "Failed to retry execution",
       "executionDeleteSuccess": "Execution deleted successfully",
@@ -767,6 +885,7 @@
       "approveFailed": "Failed to approve workflow",
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
+      "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

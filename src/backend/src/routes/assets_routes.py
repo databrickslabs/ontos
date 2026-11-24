@@ -5,12 +5,30 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
-    AssetCreate, AssetUpdate, AssetRead, AssetSummary,
+    AssetCreate, AssetUpdate, AssetRead, AssetSummary, AssetUpdateResult,
+    without_internal_properties,
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
-from src.controller.assets_manager import assets_manager
+from src.common import manager_dependencies
+from src.controller.assets_manager import AssetsManager, assets_manager
+from src.controller.metric_views_manager import (
+    MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
+)
+from src.common.workspace_client import get_obo_workspace_client
+from src.controller.semantic_links_manager import SemanticLinksManager
+from src.controller.uc_description_sync_manager import (
+    SyncOutcome, UcDescriptionSyncManager, write_failed_warning,
+)
+from src.db_models.assets import AssetDb
+from src.models.metric_views import MetricViewRead
+from src.controller.metric_view_change_requests_manager import (
+    ChangeRequestError, MetricViewChangeRequestsManager,
+)
+from src.models.metric_view_change_requests import (
+    MetricViewChangeRequestCreate, MetricViewChangeRequestDetail, MetricViewChangeRequestRead,
+)
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
@@ -18,8 +36,13 @@ from src.common.dependencies import (
     CurrentUserDep,
     AuditManagerDep,
     AuditCurrentUserDep,
+    SettingsDep,
 )
+from src.common.api_errors import CodedValueError
 from src.common.errors import NotFoundError, ConflictError, ValidationError
+from src.common.asset_access import (
+    ensure_asset_readable, get_data_products_manager, user_has_assets_feature,
+)
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,49 +52,24 @@ assets_router = APIRouter(prefix="/api/assets", tags=["Assets"])
 FEATURE_ID = "assets"
 
 
-def get_assets_manager():
-    return assets_manager
+def get_assets_manager(request: Request = None) -> AssetsManager:
+    """The AssetsManager wired at startup (``app.state.assets_manager``).
 
-
-def _get_data_products_manager(request: Request):
-    """Pull the DataProductsManager singleton from app.state.
-
-    Returns None when not configured (e.g. early in tests); callers must
-    handle that defensively rather than raising — scoping should fail closed
-    (i.e. return empty for non-admins) rather than 500.
+    That instance has the search manager and the ontology; the module-level
+    singleton has neither, so using it would silently skip the search index
+    update. With a request and no wired manager this raises 503 (same as every
+    other manager dependency). The singleton is returned only without a request.
     """
-    return getattr(request.app.state, "data_products_manager", None)
+    if request is None:
+        return assets_manager
+    return manager_dependencies.get_assets_manager(request)
 
 
-def _user_has_assets_feature(request: Request, current_user, level: FeatureAccessLevel) -> bool:
-    """Check whether the current user has the ``assets`` feature at ``level``.
-
-    Used for branching: when a Data Consumer lacks the feature, we still
-    allow DP-scoped reads of linked assets (issue #347), but block writes.
-    """
-    try:
-        auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
-        if not auth_manager or not current_user:
-            return False
-        applied_role_id = None
-        if settings_manager:
-            try:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    current_user.email
-                )
-            except Exception:
-                applied_role_id = None
-        if applied_role_id and settings_manager:
-            effective = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-        else:
-            effective = auth_manager.get_user_effective_permissions(
-                current_user.groups or [], None
-            )
-        return auth_manager.has_permission(effective, FEATURE_ID, level)
-    except Exception:
-        logger.exception("Failed to check assets feature for user")
-        return False
+# The read rule (issue #347) lives in a shared module, so the metadata and
+# costs routes apply it too; the old names stay for the callers of this module.
+_get_data_products_manager = get_data_products_manager
+_user_has_assets_feature = user_has_assets_feature
+_ensure_asset_readable = ensure_asset_readable
 
 
 # ===================== Asset Types =====================
@@ -125,7 +123,7 @@ def get_all_asset_types(
     db: DBSessionDep,
     manager=Depends(get_assets_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     category: Optional[str] = Query(None),
     type_status: Optional[str] = Query(None, alias="status"),
 ):
@@ -248,26 +246,44 @@ def delete_asset_type(
 
 @assets_router.post(
     "",
-    response_model=AssetRead,
+    response_model=AssetUpdateResult,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def create_asset(
     request: Request,
     asset_in: AssetCreate,
+    settings: SettingsDep,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager=Depends(get_assets_manager),
 ):
-    """Creates a new asset."""
+    """Creates a new asset.
+
+    With the Unity Catalog description setting on, a table, view or column
+    description is written there too, as for an update (a new asset has no
+    previous description, so an existing different comment is kept).
+    """
     success = False
     details = {"params": {"name": asset_in.name, "type_id": str(asset_in.asset_type_id)}}
     created_id = None
+    # Clients never set the internal keys (e.g. the Unity Catalog sync mark)
+    asset_in = asset_in.model_copy(
+        update={"properties": without_internal_properties(asset_in.properties)})
     try:
         result = manager.create_asset(db=db, asset_in=asset_in, current_user_id=current_user.email)
+        db.commit()
+        outcome = _write_back_description(
+            db, settings, request, result.id,
+            description_sent=True, previous_description=None, label=result.location,
+        )
         success = True
         created_id = str(result.id)
+        result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
+        result.description_sync = outcome.state
+        if outcome.audit:
+            details["uc_comment"] = outcome.audit
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -278,6 +294,11 @@ def create_asset(
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except CodedValueError as e:
+        # The lifecycle's refusal (a stage the group doesn't have, a move it
+        # doesn't allow): its code reaches the UI
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to create asset '%s'", asset_in.name)
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
@@ -310,8 +331,13 @@ def get_all_assets(
     domain_ids: Optional[str] = Query(None, description="Filter by multiple domain IDs, comma-separated (any-of)"),
     asset_status: Optional[str] = Query(None, alias="status"),
     name: Optional[str] = Query(None),
+    owned_by_me: bool = Query(
+        False, description="Only assets the current user owns (active business owner)",
+    ),
 ):
     """Lists all assets with optional filters. Returns paginated results.
+
+    ``owned_by_me`` narrows any of the branches below to the caller's owned assets.
 
     Authorization (issue #347):
     - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): see
@@ -352,6 +378,7 @@ def get_all_assets(
         asset_type_id=asset_type_id, asset_type_names=type_names_list,
         platform=platform, domain_id=domain_id, domain_ids=domain_ids_list, status=asset_status, name=name,
         restrict_to_ids=restrict_ids,
+        owner_email=(current_user.email or "") if owned_by_me else None,
     )
 
 
@@ -362,6 +389,7 @@ def get_all_assets(
 def get_asset(
     asset_id: UUID,
     request: Request,
+    settings: SettingsDep,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager=Depends(get_assets_manager),
@@ -376,39 +404,27 @@ def get_asset(
       the user can access. This enables Linked Assets navigation from a
       DP detail view even without the broader ``assets`` feature granted.
     """
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Authentication required.",
-        )
-
-    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
-
-    if not is_unscoped:
-        dpm = _get_data_products_manager(request)
-        if dpm is None or not manager.is_asset_accessible(
-            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Asset is not linked to a Data Product accessible to this user.",
-            )
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
 
     result = manager.get_asset(db=db, asset_id=asset_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    if not UcDescriptionSyncManager(settings).enabled:
+        # Writing to Unity Catalog is off, so an older "not in sync" mark means nothing
+        result.description_sync = None
     return result
 
 
 @assets_router.put(
     "/{asset_id}",
-    response_model=AssetRead,
+    response_model=AssetUpdateResult,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def update_asset(
     asset_id: UUID,
     request: Request,
     asset_in: AssetUpdate,
+    settings: SettingsDep,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
@@ -417,8 +433,39 @@ def update_asset(
     """Updates an existing asset."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
+    if asset_in.properties is not None:
+        # model_copy would mark an unsent field as set, so only a sent one is replaced
+        asset_in = asset_in.model_copy(
+            update={"properties": without_internal_properties(asset_in.properties)})
     try:
+        # Read under the row lock this save holds until its commit, so a concurrent save of
+        # the asset can't change the description in between (that would look like a
+        # comment someone else wrote in Unity Catalog)
+        existing = (
+            db.query(AssetDb).filter(AssetDb.id == asset_id)
+            .with_for_update().populate_existing().one_or_none()
+        )
+        previous_description = existing.description if existing is not None else None
+        if existing is not None and 'description' in asset_in.model_fields_set:
+            UcDescriptionSyncManager(settings).keep_baseline(db, existing)
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
+        # The save is committed before Unity Catalog is written, so Unity Catalog never
+        # gets ahead of a save that failed to commit. With the setting on, a changed
+        # table, view or column description is then written as the user. A failed
+        # write doesn't fail the save: the response carries a coded warning and the
+        # asset's description_sync state.
+        db.commit()
+        outcome = _write_back_description(
+            db, settings, request, asset_id,
+            description_sent='description' in asset_in.model_fields_set,
+            previous_description=previous_description, label=result.location,
+        )
+        result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
+        result.description_sync = outcome.state
+        if outcome.warning:
+            details["uc_description_warning"] = outcome.warning.code
+        if outcome.audit:
+            details["uc_comment"] = outcome.audit
         success = True
         return result
     except NotFoundError as e:
@@ -430,6 +477,11 @@ def update_asset(
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except CodedValueError as e:
+        # The lifecycle's refusal (a stage the group doesn't have, a move it
+        # doesn't allow): its code reaches the UI
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to update asset %s", asset_id)
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
@@ -452,10 +504,15 @@ def infer_schema_from_asset(
     asset_id: UUID,
     db: DBSessionDep,
     manager=Depends(get_assets_manager),
+    api_version: Optional[str] = Query(
+        None,
+        description="ODCS apiVersion of the target contract; below v3.1.0, timestamp "
+        "columns are inferred as date and time columns as string. Default: v3.1.0.",
+    ),
 ):
     """Extract ODCS-compatible schema objects from an asset and its children."""
     try:
-        return manager.infer_schema_from_asset(db=db, asset_id=asset_id)
+        return manager.infer_schema_from_asset(db=db, asset_id=asset_id, api_version=api_version)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
@@ -553,6 +610,281 @@ def delete_asset(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="DELETE_ASSET", success=success, details=details,
         )
+
+
+def _warnings_of(outcome: SyncOutcome) -> list:
+    return [outcome.warning] if outcome.warning else []
+
+
+def _write_back_description(
+    db, settings, request: Request, asset_id, *, description_sent: bool,
+    previous_description, label: str,
+) -> SyncOutcome:
+    """Write a committed save's description to Unity Catalog and commit the outcome.
+
+    The column snapshot of a Column asset follows only a write that reached Unity
+    Catalog. Never raises: the save is already committed, so an unexpected failure
+    is a write-failed warning.
+    """
+    try:
+        outcome = UcDescriptionSyncManager(settings).sync_after_update(
+            db, asset_id,
+            description_sent=description_sent,
+            previous_description=previous_description,
+            user_client=lambda: _user_workspace_client(request),
+        )
+        if outcome.in_sync:
+            asset = db.get(AssetDb, asset_id)
+            if asset is not None:
+                AssetsManager.update_table_column_snapshot(db, asset)
+        db.commit()
+        return outcome
+    except Exception as e:
+        db.rollback()
+        # The error's type only: its text and traceback can carry the SQL parameters,
+        # i.e. the description
+        logger.warning("Writing the description of asset %s to Unity Catalog failed: %s",
+                       asset_id, type(e).__name__)
+        return SyncOutcome(warning=write_failed_warning(label or str(asset_id)))
+
+
+def _user_workspace_client(request: Request):
+    """The workspace client of the requesting user, built from their OBO token.
+
+    Fails closed: ``get_obo_workspace_client`` falls back to the app's service
+    principal when the request has no ``x-forwarded-access-token``, so the token
+    is required here first, and a client that can't be built is an error rather
+    than a fallback.
+    """
+    if not request.headers.get('x-forwarded-access-token'):
+        raise UserTokenRequiredError(
+            "Reading Unity Catalog needs the user's Databricks token, and the request has none."
+        )
+    try:
+        return get_obo_workspace_client(request)
+    except Exception:
+        logger.warning("Could not build the user's workspace client", exc_info=True)
+        raise UserClientUnavailableError(
+            "The user's Databricks workspace client could not be created."
+        )
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view",
+    response_model=MetricViewRead,
+)
+def get_asset_metric_view(
+    asset_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """The Unity Catalog metric view behind an asset: its YAML, its dimensions and
+    measures, the concept links of the view and of each field, and its baseline
+    and drift state (an unparseable definition is drift ``unknown``, not an error).
+
+    Unity Catalog is read as the user (on-behalf-of token), never as the app,
+    so the definition is only returned to users Unity Catalog lets read it.
+    403 ``user_token_required`` without the user's token (401 when Unity Catalog
+    refuses it), 503 ``user_client_unavailable`` when the user's client can't be
+    built, 404
+    ``metric_view_not_found`` when the asset isn't a metric view the user can
+    read. The asset itself must be readable by the user.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    try:
+        ws_client = _user_workspace_client(request)
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except UserClientUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    links_manager = SemanticLinksManager(
+        db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+    )
+    try:
+        return MetricViewsManager(db, links_manager).get_for_asset(
+            asset_id, ws_client, user_email=getattr(current_user, 'email', None),
+        )
+    except MetricViewNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        # Unity Catalog refused the user's token (expired or revoked)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+    except Exception:
+        logger.exception("Failed to read the metric view of asset %s", asset_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to read the metric view",
+        )
+
+
+# ===================== Metric View Change Requests (#1124) =====================
+
+def _change_requests(request: Request, db) -> MetricViewChangeRequestsManager:
+    links_manager = SemanticLinksManager(
+        db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+    )
+    return MetricViewChangeRequestsManager(db, links_manager)
+
+
+def _change_request_call(action: str, asset_id: UUID, call):
+    """Run a change request action, answering its coded errors with their status.
+
+    Unity Catalog is read as the user: 403 ``user_token_required`` without the
+    user's token (401 when Unity Catalog refuses it), 503
+    ``user_client_unavailable``, 404 ``metric_view_not_found`` when the user
+    can't read the metric view.
+    """
+    try:
+        return call()
+    except ChangeRequestError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    except MetricViewNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to %s a change request of the metric view of asset %s",
+                         action, asset_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The change request action failed",
+        )
+
+
+def _user_client_or_raise(request: Request):
+    try:
+        return _user_workspace_client(request)
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except UserClientUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view/change-requests",
+    response_model=List[MetricViewChangeRequestRead],
+)
+def list_metric_view_change_requests(
+    asset_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """The definition change requests of the metric view behind an asset, newest first.
+
+    Only for users who can read the asset and, in Unity Catalog, the metric view
+    (read as the user, as ``GET /{asset_id}/metric-view``).
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    requests = _change_requests(request, db)
+
+    def call():
+        requests.read_metric_view(asset_id, ws_client)
+        return requests.list_for_asset(asset_id)
+    return _change_request_call('list', asset_id, call)
+
+
+@assets_router.post(
+    "/{asset_id}/metric-view/change-requests",
+    response_model=MetricViewChangeRequestDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def create_metric_view_change_request(
+    asset_id: UUID,
+    body: MetricViewChangeRequestCreate,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """A draft change of the metric view's definition, against the one Unity Catalog has now.
+
+    422 with a coded error when the proposed YAML doesn't parse
+    (``metric_view_definition_invalid_yaml`` with ``line`` and ``column``), has
+    no source, contains ``$$``, repeats a field name or equals the current
+    definition; 409 ``metric_view_base_unreadable`` when the current one can't
+    be parsed.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    return _change_request_call('create', asset_id, lambda: _change_requests(request, db)
+                                .create_draft(asset_id, ws_client, body, current_user.email))
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view/change-requests/{request_id}",
+    response_model=MetricViewChangeRequestDetail,
+)
+def get_metric_view_change_request(
+    asset_id: UUID,
+    request_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """One change request with its base and proposed definitions, parsed, for the review."""
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    requests = _change_requests(request, db)
+
+    def call():
+        requests.read_metric_view(asset_id, ws_client)
+        return requests.get(asset_id, request_id)
+    return _change_request_call('read', asset_id, call)
+
+
+@assets_router.post(
+    "/{asset_id}/metric-view/change-requests/{request_id}/submit",
+    response_model=MetricViewChangeRequestRead,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def submit_metric_view_change_request(
+    asset_id: UUID,
+    request_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """Run the pre-checks as the requester and start the review workflow.
+
+    409 ``metric_view_base_stale`` when the view changed in Unity Catalog since
+    the draft, 409 or 422 for a materialization constraint, 409
+    ``metric_view_change_no_approval`` when no workflow asks for an approval.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    return _change_request_call('submit', asset_id, lambda: _change_requests(request, db)
+                                .submit(asset_id, request_id, ws_client, current_user.email))
+
+
+@assets_router.post(
+    "/{asset_id}/metric-view/change-requests/{request_id}/cancel",
+    response_model=MetricViewChangeRequestRead,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def cancel_metric_view_change_request(
+    asset_id: UUID,
+    request_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """Cancel a draft or a request in review (the requester, or an assets admin)."""
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    is_admin = _user_has_assets_feature(request, current_user, FeatureAccessLevel.ADMIN)
+    return _change_request_call('cancel', asset_id, lambda: _change_requests(request, db)
+                                .cancel(asset_id, request_id, current_user.email,
+                                        is_admin=is_admin))
 
 
 # ===================== Asset Relationships =====================

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { loadDemoData, clearDemoData } from './helpers/demo-data'
 
 test.beforeAll(async ({ request }) => {
@@ -22,6 +22,9 @@ test.describe('CUJ-0.0 — Data Domains CRUD', () => {
 
   test.describe.serial('create, view, edit, delete domain', () => {
     const domainName = `PW Domain ${Date.now()}`
+    const domainRow = (page: Page) => page.locator('table >> tbody >> tr', { hasText: domainName })
+    // The domains table paginates, so a new domain may not be on page 1: filter by name first.
+    const filterToDomain = (page: Page) => page.getByPlaceholder(/filter names/i).fill(domainName)
 
     test('creates a new domain', async ({ page }) => {
       await page.goto('/settings/data-domains')
@@ -36,22 +39,26 @@ test.describe('CUJ-0.0 — Data Domains CRUD', () => {
       await dialog.getByRole('button', { name: /create domain/i }).click()
       await expect(dialog).toHaveCount(0)
 
-      await expect(page.getByText(domainName)).toBeVisible()
+      // Assert on the table row: the success toast repeats the name.
+      await filterToDomain(page)
+      await expect(domainRow(page)).toBeVisible()
     })
 
     test('views domain details', async ({ page }) => {
       await page.goto('/settings/data-domains')
-      const row = page.locator('table >> tbody >> tr', { hasText: domainName })
+      await filterToDomain(page)
+      const row = domainRow(page)
       await row.getByRole('button', { name: 'Open menu' }).click()
       await page.getByRole('menuitem', { name: /view details/i }).click()
 
-      await expect(page.getByText(domainName)).toBeVisible()
+      await expect(page.getByText(domainName).first()).toBeVisible()
       await expect(page.getByText('Created by Playwright CUJ test')).toBeVisible()
     })
 
     test('edits domain description', async ({ page }) => {
       await page.goto('/settings/data-domains')
-      const row = page.locator('table >> tbody >> tr', { hasText: domainName })
+      await filterToDomain(page)
+      const row = domainRow(page)
       await row.getByRole('button', { name: 'Open menu' }).click()
       await page.getByRole('menuitem', { name: /view details/i }).click()
 
@@ -69,7 +76,8 @@ test.describe('CUJ-0.0 — Data Domains CRUD', () => {
 
     test('deletes the created domain', async ({ page }) => {
       await page.goto('/settings/data-domains')
-      const row = page.locator('table >> tbody >> tr', { hasText: domainName })
+      await filterToDomain(page)
+      const row = domainRow(page)
       await row.getByRole('button', { name: 'Open menu' }).click()
       await page.getByRole('menuitem', { name: /delete domain/i }).click()
 
@@ -107,7 +115,8 @@ test.describe('CUJ-0.1 — Teams CRUD', () => {
       await dialog.getByRole('button', { name: /create team/i }).click()
       await expect(dialog).toHaveCount(0)
 
-      await expect(page.getByText(teamName)).toBeVisible()
+      // Assert on the table row: the success toast repeats the name.
+      await expect(page.locator('table >> tbody >> tr', { hasText: teamName })).toBeVisible()
     })
 
     test('deletes the created team', async ({ page }) => {
@@ -150,7 +159,8 @@ test.describe('CUJ-0.2 — Projects CRUD', () => {
       await dialog.getByRole('button', { name: /create project/i }).click()
       await expect(dialog).toHaveCount(0)
 
-      await expect(page.getByText(projectName)).toBeVisible()
+      // Assert on the table row: the success toast repeats the name.
+      await expect(page.locator('table >> tbody >> tr', { hasText: projectName })).toBeVisible()
     })
 
     test('deletes the created project', async ({ page }) => {

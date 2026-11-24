@@ -8,6 +8,34 @@ describe('workflowValidationIssueText', () => {
     await i18n.changeLanguage('en');
   });
 
+  it('translates a policy check on a policy that uses LLM_CHECK', async () => {
+    const issue = {
+      code: 'policy_check_policy_uses_llm_check',
+      message: "Step 'grain': the policy 'p1' uses LLM_CHECK",
+      params: { step: 'grain', policyId: 'p1' },
+    };
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "grain" verifica uma política que usa LLM_CHECK. LLM_CHECK só é avaliado em '
+      + 'execuções de conformidade, então a etapa reprovaria todas as entidades. Selecione '
+      + 'uma política sem LLM_CHECK.',
+    );
+  });
+
+  it('translates a validation step whose rule uses LLM_CHECK', async () => {
+    const issue = {
+      code: 'validation_rule_uses_llm_check',
+      message: "Step 'grain': the rule uses LLM_CHECK",
+      params: { step: 'grain' },
+    };
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "grain" tem uma regra que usa LLM_CHECK. LLM_CHECK só é avaliado nas '
+      + 'execuções de conformidade, então a etapa reprovaria todas as entidades. Remova '
+      + 'LLM_CHECK da regra.',
+    );
+  });
+
   it('translates a step pointing at a step that is not in the workflow', async () => {
     const issue = {
       code: 'step_unknown_reference',
@@ -33,6 +61,38 @@ describe('workflowValidationIssueText', () => {
       { code: 'condition_required', message: "Step 'check': Enter a condition.", params: { step: 'check' } },
       i18n.t,
     )).toBe('Etapa "check": Informe uma condição.');
+  });
+
+  it('translates an assign tag step with an unknown value source', async () => {
+    const issue = {
+      code: 'assign_tag_value_source_unknown',
+      message: "Step 'tag': unknown value source 'curent_user'",
+      params: { step: 'tag', source: 'curent_user' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "tag" uses the unknown value source "curent_user".',
+    );
+    await i18n.changeLanguage('de');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Schritt „tag“ verwendet die unbekannte Wertquelle „curent_user“.',
+    );
+  });
+
+  it('translates a policy check step without an existing policy', async () => {
+    const issue = {
+      code: 'policy_check_policy_missing',
+      message: "Step 'naming-check': the policy to check is not selected",
+      params: { step: 'naming-check', policyId: '' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "naming-check" needs an existing compliance policy. '
+      + 'Select one in the step\'s settings.',
+    );
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "naming-check" precisa de uma política de conformidade existente. '
+      + 'Selecione uma nas configurações da etapa.',
+    );
   });
 
   it('shows the English text of an error it has no text for', () => {

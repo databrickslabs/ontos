@@ -138,7 +138,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- patients table
 ('00600001-0001-4000-8000-000000000001', '00500001-0001-4000-8000-000000000001', 'patient_id', 'string', true, true, true, false, 1, -1, true, 'De-identified patient identifier (hash of MRN)'),
 ('00600002-0001-4000-8000-000000000002', '00500001-0001-4000-8000-000000000001', 'date_of_birth', 'date', true, false, false, false, -1, -1, true, 'Patient date of birth (shifted per Safe Harbor)'),
@@ -741,15 +741,15 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 ('02a00101-0001-4000-8000-000000000001', 'IRB Approval Gate',
- 'Block publishing of clinical research data products until IRB approval is on file.',
+ 'Block publishing of clinical research data products until IRB approval is on file. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product"]}',
  '{"type": "domain", "ids": ["00000002-0001-4000-8000-000000000002"]}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 ('02a00102-0001-4000-8000-000000000002', 'HIPAA PHI Pre-Publish Check',
- 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers.',
+ 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product", "data_contract"]}',
  '{"type": "all"}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
@@ -771,11 +771,40 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  'approve', 'block', 2, '{"x": 300, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- The pre-publish gates ship inactive (#996): their before_publish trigger does not
+-- exist yet, so they never run. In installs that still hold a shipped gate (its shipped
+-- name, trigger and description, still active), deactivate it, then add the note to the
+-- description of a shipped gate that is inactive. A gate an admin renamed, re-triggered,
+-- re-described, or re-activated after this change is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00101-0001-4000-8000-000000000001'
+  AND name = 'IRB Approval Gate'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product"]}'
+  AND description = 'Block publishing of clinical research data products until IRB approval is on file.'
+  AND is_active = true;
+
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00102-0001-4000-8000-000000000002'
+  AND name = 'HIPAA PHI Pre-Publish Check'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product", "data_contract"]}'
+  AND description IN ('Validates that PHI is de-identified or covered by a signed BAA before any HLS data product is exposed to consumers.', 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers.')
+  AND is_active = true;
+
+UPDATE process_workflows SET description = 'Block publishing of clinical research data products until IRB approval is on file. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00101-0001-4000-8000-000000000001'
+  AND description = 'Block publishing of clinical research data products until IRB approval is on file.'
+  AND is_active = false;
+
+UPDATE process_workflows SET description = 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00102-0001-4000-8000-000000000002'
+  AND description = 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers.'
+  AND is_active = false;
+
 -- Installs that loaded an earlier version of this preset keep their workflow rows
 -- (ON CONFLICT DO NOTHING above). Rename those in place, but only the texts that
 -- still have their shipped value, so a step an admin renamed is left alone.
 UPDATE process_workflows SET description = CASE
-  WHEN id = '02a00102-0001-4000-8000-000000000002' AND description = 'Validates that PHI is de-identified or covered by a signed BAA before any HLS data product is exposed to consumers.' THEN 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers.'
+  WHEN id = '02a00102-0001-4000-8000-000000000002' AND description = 'Validates that PHI is de-identified or covered by a signed BAA before any HLS data product is exposed to consumers.' THEN 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
   ELSE description END
 WHERE id IN ('02a00102-0001-4000-8000-000000000002');
 
@@ -817,9 +846,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
-('01400101-0001-4000-8000-000000000001', 'data_product', '00700001-0001-4000-8000-000000000001', 'Compute (DBU)',          'Monthly Databricks compute for Patient 360 pipelines.',     'infrastructure', NULL, 1820000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400102-0001-4000-8000-000000000002', 'data_product', '00700002-0001-4000-8000-000000000002', 'CDISC Validator Tooling','Annual license for CDISC SDTM/ADaM validation tooling.',    'tools',          NULL,  650000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400103-0001-4000-8000-000000000003', 'data_product', '00700003-0001-4000-8000-000000000003', 'Pharmacovigilance FTE',  'Two FTE pharmacovigilance analysts allocated to signal review.', 'hr',          NULL, 4500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+('01400101-0001-4000-8000-000000000001', 'data_product', '00700001-0001-4000-8000-000000000001', 'Compute (DBU)',          'Monthly Databricks compute for Patient 360 pipelines.',     'INFRASTRUCTURE', NULL, 1820000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0001-4000-8000-000000000002', 'data_product', '00700002-0001-4000-8000-000000000002', 'CDISC Validator Tooling','Annual license for CDISC SDTM/ADaM validation tooling.',    'OTHER',          'Tools',  650000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0001-4000-8000-000000000003', 'data_product', '00700003-0001-4000-8000-000000000003', 'Pharmacovigilance FTE',  'Two FTE pharmacovigilance analysts allocated to signal review.', 'HR',          NULL, 4500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

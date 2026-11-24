@@ -65,7 +65,26 @@ class UsersManager:
             return groups
         except Exception as e:  # noqa: BLE001 — preserve fallback path for any SDK/permission error
             logger.warning(
-                "Failed to re-fetch SCIM groups via users.get(id) for %s: %s. Falling back to implicit-group behaviour.",
+                "Failed to re-fetch SCIM groups via users.get(id) for %s: %s. Trying it as a "
+                "service principal.",
+                user_label,
+                e,
+            )
+        # ``me()`` of a service principal (an M2M caller such as Genie One) has the
+        # principal's SCIM id, which users.get doesn't know.
+        try:
+            principal = client.service_principals.get(user_id)
+            groups = UsersManager._extract_group_displays(principal)
+            if groups:
+                logger.info(
+                    "Resolved %d SCIM group(s) for %s via service_principals.get(id).",
+                    len(groups), user_label,
+                )
+            return groups
+        except Exception as e:  # noqa: BLE001 — preserve fallback path for any SDK/permission error
+            logger.warning(
+                "Failed to fetch SCIM groups via service_principals.get(id) for %s: %s. "
+                "Falling back to implicit-group behaviour.",
                 user_label,
                 e,
             )

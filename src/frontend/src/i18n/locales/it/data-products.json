@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Non proprietario",
+    "notOwnerMessage": "Puoi visualizzare questo prodotto ma non modificarlo. Solo il team proprietario, i membri del suo progetto, il proprietario della bozza o un amministratore dei prodotti dati possono modificarlo."
+  },
   "title": "Prodotti Dati",
   "subtitle": "Gestisci i tuoi prodotti dati",
   "newProduct": "Nuovo Prodotto Dati",
@@ -679,7 +683,8 @@
     },
     "errors": {
       "cannotRequest": "\"{{requestType}}\" non è disponibile per un prodotto con stato {{productStatus}}.",
-      "failedToSubmit": "Impossibile inviare la richiesta"
+      "failedToSubmit": "Impossibile inviare la richiesta",
+      "notProductOwner": "Solo i proprietari del prodotto o un amministratore possono richiederne la revisione."
     },
     "toast": {
       "statusChanged": "Stato modificato",
@@ -794,7 +799,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Come questo deliverable fornisce i dati ai consumatori (ad es. accesso a tabella, endpoint di serving)",
-      "onlyActiveContracts": "Vengono mostrati solo i contratti attivi/approvati/certificati",
+      "onlyActiveContracts": "Vengono mostrati solo i contratti attivi/approvati",
       "containsPiiHint": "Questo deliverable contiene informazioni di identificazione personale?",
       "autoApproveHint": "Approvare automaticamente le richieste di accesso per questo deliverable?",
       "afterCreation": "Dopo aver creato questo deliverable, potrai collegarvi asset (tabelle, viste, dataset, ecc.) dalla pagina dei dettagli."
@@ -1126,8 +1131,8 @@
     "exportSuccessfulDesc": "Scaricato {{filename}}",
     "exportFailed": "Esportazione non riuscita",
     "exportFailedDesc": "Impossibile esportare il prodotto dati",
-    "exportDescription": "Cliccando su \"Esporta\" questo prodotto verrà scaricato come file JSON conforme a ODPS v1.0.0. I campi di audit (created_at, updated_at) verranno esclusi per la portabilità.",
-    "exportAsJson": "Esporta come JSON",
+    "exportDescription": "Cliccando su \"Esporta\" questo prodotto verrà scaricato come file YAML ODPS v1.0.0, generato dal prodotto salvato in modo che una reimportazione lo ripristini.",
+    "exportAsJson": "Esporta come YAML",
     "currentProduct": "Prodotto attuale",
     "unnamed": "Senza nome",
     "noProductDesc": "Nessun prodotto selezionato. Apri questa finestra da una pagina di dettagli del prodotto per esportare."

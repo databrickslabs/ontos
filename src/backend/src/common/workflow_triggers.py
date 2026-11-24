@@ -5,8 +5,9 @@ Provides a centralized system for registering trigger points throughout the app
 and executing matching workflows when events occur.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from src.models.process_workflows import (
@@ -128,16 +129,17 @@ class TriggerRegistry:
         
         for workflow in matching_workflows:
             try:
-                execution = executor.execute_workflow(
-                    workflow=workflow,
-                    entity=event.entity_data or {},
-                    entity_type=event.entity_type.value,
-                    entity_id=event.entity_id,
-                    entity_name=event.entity_name,
-                    user_email=event.user_email,
-                    trigger_context=trigger_context,
-                    blocking=blocking,
-                )
+                with _workflow_savepoint(self._db):
+                    execution = executor.execute_workflow(
+                        workflow=workflow,
+                        entity=event.entity_data or {},
+                        entity_type=event.entity_type.value,
+                        entity_id=event.entity_id,
+                        entity_name=event.entity_name,
+                        user_email=event.user_email,
+                        trigger_context=trigger_context,
+                        blocking=blocking,
+                    )
                 executions.append(execution)
                 
                 logger.info(
@@ -147,9 +149,6 @@ class TriggerRegistry:
                 logger.exception(f"Failed to execute workflow '{workflow.name}': {e}")
                 if errors is not None:
                     errors.append((workflow, e))
-                    # A database error aborts the transaction: recover so the
-                    # next gates and the caller's status write can still run
-                    _recover_session_after_gate_error(self._db)
         
         return executions
 
@@ -802,6 +801,49 @@ class TriggerRegistry:
         )
         return self.fire_trigger(event, blocking=blocking)
 
+    def on_request_definition_change(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        entity_name: Optional[str] = None,
+        entity_data: Optional[Dict[str, Any]] = None,
+        user_email: Optional[str] = None,
+        scope_type: Optional[str] = None,
+        scope_id: Optional[str] = None,
+        *,
+        blocking: bool = True,
+    ) -> List[WorkflowExecution]:
+        """Fire when a change to a metric view's definition is submitted for review (#1124).
+
+        Args:
+            entity_type: Type of entity (metric_view: the metric view's asset)
+            entity_id: ID of the asset
+            entity_name: The metric view's ``catalog.schema.view``
+            entity_data: The request (request_id, digests, proposed YAML, justification)
+            user_email: User requesting the change
+            scope_type: Scope type
+            scope_id: Scope ID
+            blocking: Execute synchronously
+
+        Returns:
+            List of workflow executions
+        """
+        event = TriggerEvent(
+            trigger_type=TriggerType.ON_REQUEST_DEFINITION_CHANGE,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=entity_data,
+            user_email=user_email,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        logger.info(
+            "on_request_definition_change fired for %s '%s' by %s",
+            entity_type.value, entity_id, user_email,
+        )
+        return self.fire_trigger(event, blocking=blocking)
+
     # =========================================================================
     # Job Lifecycle Triggers
     # =========================================================================
@@ -1230,6 +1272,29 @@ def gate_exemption(
     return None
 
 
+def unknown_gate_exemptions(db: Session, exemptions: GateExemptions) -> List[Tuple[str, str]]:
+    """The ``(kind, id)`` of every entity ``exemptions`` names that doesn't exist.
+
+    ``kind`` is ``domain``, ``data_product`` or ``data_contract``, as in
+    ``gate_exemption``. A switch naming a deleted entity is refused on save.
+    """
+    from src.db_models.data_contracts import DataContractDb
+    from src.db_models.data_domains import DataDomain as DataDomainDb
+    from src.db_models.data_products import DataProductDb
+
+    unknown: List[Tuple[str, str]] = []
+    for kind, model, ids in (
+        ('domain', DataDomainDb, exemptions.domains),
+        ('data_product', DataProductDb, exemptions.data_products),
+        ('data_contract', DataContractDb, exemptions.data_contracts),
+    ):
+        if not ids:
+            continue
+        found = {row[0] for row in db.query(model.id).filter(model.id.in_(ids)).all()}
+        unknown.extend((kind, missing) for missing in ids if missing not in found)
+    return unknown
+
+
 def report_gate_skipped(event: TriggerEvent, workflow: ProcessWorkflow, reason: Tuple[str, str]) -> None:
     """Log at info level and audit a gate that was skipped because it is switched off for the entity."""
     kind, ref = reason
@@ -1297,6 +1362,59 @@ def _recover_session_after_gate_error(db: Session) -> None:
         db.rollback()
 
 
+@contextmanager
+def _workflow_savepoint(db: Session) -> Iterator[None]:
+    """Run workflows in a savepoint, so an error undoes only their own writes.
+
+    The caller's change is often not committed yet when its triggers fire (a
+    batch import commits once at the end): a full rollback after a workflow's
+    database error would drop it while the caller reports it as made. A
+    workflow that commits along the way (the executor commits its runs) ends
+    the savepoint; after an error the session is then recovered as after a
+    gate error, which only drops what was written since that commit. When
+    the savepoint can't be taken (the caller's own pending change fails to
+    flush), the session is left as it is: the caller's commit then fails.
+    """
+    savepoint = db.begin_nested()
+    try:
+        yield
+    except Exception:
+        if _is_open(db, savepoint):
+            savepoint.rollback()
+        else:
+            _recover_session_after_gate_error(db)
+        raise
+    if _is_open(db, savepoint):
+        if savepoint.is_active and _transaction_usable(db):
+            savepoint.commit()
+        else:
+            # A database error the workflow caught itself: a failed flush ends
+            # the savepoint, a failed query on Postgres aborts the transaction
+            # (releasing the savepoint would then fail too)
+            savepoint.rollback()
+
+
+def _transaction_usable(db: Session) -> bool:
+    """Whether ``db``'s transaction still runs statements (Postgres aborts it on a failure)."""
+    from sqlalchemy import text
+
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        return False
+    return True
+
+
+def _is_open(db: Session, savepoint: Any) -> bool:
+    """Whether ``savepoint`` is still in the session's chain of nested transactions."""
+    current = db.get_nested_transaction()
+    while current is not None:
+        if current is savepoint:
+            return True
+        current = current.parent
+    return False
+
+
 def _fail_closed_gate_names(db: Session, event: TriggerEvent) -> List[str]:
     """Active ``fail_closed`` gates that would match ``event``, read directly from the table.
 
@@ -1348,6 +1466,7 @@ def run_status_gates(
     entity_name: Optional[str] = None,
     entity_data: Optional[Dict[str, Any]] = None,
     user_email: Optional[str] = None,
+    before_gates: Optional[Callable[[], None]] = None,
 ) -> None:
     """Run the ``before_status_change`` gates of a transition; raise when it must not proceed.
 
@@ -1360,6 +1479,17 @@ def run_status_gates(
       unknown and the transition proceeds (the error is still reported).
     - A database error that aborted the session's transaction is rolled back
       first, so the lookup and the status write can still run.
+
+    Before the gates, the certified deprecation guard (enforced in code, not a
+    workflow) refuses a direct deprecation of a certified product or contract
+    (``CertifiedDeprecationRequiresApprovalError``), so a refused change
+    starts no gate approval. ``before_gates`` (the caller's own checks of the
+    transition, e.g. the deprecation fields) runs after the guard and before
+    the gates: a certified entity is told to request the change before it is
+    asked for details, and an invalid change starts no gate approval either.
+    When the transition may proceed, the entity's
+    open status change requests are closed (``close_open_requests``), so none
+    can be approved after the entity left the status it was made from.
     """
     event = TriggerEvent(
         trigger_type=TriggerType.BEFORE_STATUS_CHANGE,
@@ -1371,6 +1501,17 @@ def run_status_gates(
         from_status=from_status,
         to_status=to_status,
     )
+    from src.controller.certified_deprecation_guard import (
+        check_certified_deprecation, close_open_requests,
+    )
+    check_certified_deprecation(db, event)
+    if before_gates is not None:
+        before_gates()
+
+    def proceed() -> None:
+        if entity_type in (EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT):
+            close_open_requests(db, entity_type.value, str(entity_id), to_status, user_email)
+
     try:
         gate_passed, gate_executions = get_trigger_registry(db).before_status_change(
             entity_type=entity_type,
@@ -1394,9 +1535,11 @@ def run_status_gates(
                 f"so the transition proceeds: {lookup_err}",
                 exc_info=True,
             )
+            proceed()
             return
         if closed:
             raise GateEvaluationError(from_status, to_status, closed) from e
+        proceed()
         return
     if not gate_passed:
         try:
@@ -1406,6 +1549,7 @@ def run_status_gates(
             logger.error(f"Could not describe the blocking gates: {e}", exc_info=True)
             blocked = StatusChangeBlockedError.without_reasons(from_status, to_status)
         raise blocked
+    proceed()
 
 
 def get_trigger_registry(db: Session) -> TriggerRegistry:
@@ -1464,7 +1608,10 @@ def fire_trigger_safe(
             kwargs["to_status"] = to_status
         if method not in ("before_create", "before_update", "before_status_change"):
             kwargs["blocking"] = blocking
-        getattr(registry, method)(**kwargs)
+        # A database error undoes only the trigger's writes: the caller's change
+        # stays, and an ODPS import goes on to the next product
+        with _workflow_savepoint(db):
+            getattr(registry, method)(**kwargs)
     except Exception as e:
         logger.warning(f"{method} trigger failed for {entity_type.value} {entity_id}: {e}")
 

@@ -102,7 +102,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
 
       setLoading(true);
       try {
-        const response = await get<Tag[]>('/api/tags?limit=1000');
+        const response = await get<Tag[]>('/api/tags');
         if (response.data) {
           setAvailableTags(response.data);
         }

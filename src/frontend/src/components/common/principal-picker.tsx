@@ -63,6 +63,12 @@ type PrincipalKind = 'user' | 'group';
 interface CommonProps {
   /** Which principal types to accept. Defaults to both. */
   accepts?: PrincipalKind[];
+  /**
+   * When the directory can't be searched (not configured, or the caller may
+   * not use it), suggest the users of the Ontos teams the caller can read
+   * while they type (#1618). Users only; typing any value still works.
+   */
+  suggestKnownUsers?: boolean;
   /** Disables the entire control. */
   disabled?: boolean;
   /** Placeholder shown in the input when no selection exists. */
@@ -118,6 +124,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 export function PrincipalPicker(props: PrincipalPickerProps) {
   const {
     accepts = DEFAULT_ACCEPTS,
+    suggestKnownUsers,
     disabled,
     placeholder,
     className,
@@ -199,6 +206,14 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
 
   const configured = !!status?.configured && !degraded;
 
+  const knownUsers = useDirectoryStore((s) => s.knownUsers);
+  const fetchKnownUsers = useDirectoryStore((s) => s.fetchKnownUsers);
+  const wantsKnownUsers =
+    !!suggestKnownUsers && loaded && !configured && accepts.includes('user');
+  useEffect(() => {
+    if (wantsKnownUsers && !knownUsers) void fetchKnownUsers();
+  }, [wantsKnownUsers, knownUsers, fetchKnownUsers]);
+
   // The dialog is only available in configured mode; we hoist its open
   // state up here so the trigger button can sit beside the input.
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -230,6 +245,9 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
             disabled={disabled}
             onAdd={addManual}
             ariaLabel={props['aria-label']}
+            suggestions={wantsKnownUsers ? knownUsers ?? [] : []}
+            selectedIds={selectedIds}
+            onPick={addPrincipal}
           />
         )}
         {configured && (
@@ -436,11 +454,45 @@ interface ManualInputProps {
   disabled?: boolean;
   onAdd: (raw: string) => void;
   ariaLabel?: string;
+  /** Known principals to suggest while typing (#1618); none by default. */
+  suggestions?: Principal[];
+  selectedIds?: string[];
+  onPick?: (p: Principal) => void;
 }
 
-function ManualInput({ id, placeholder, disabled, onAdd, ariaLabel }: ManualInputProps) {
+const MAX_SUGGESTIONS = 8;
+
+/** The suggestions matching `query` (id or name, case-insensitive), not yet selected. */
+export function matchSuggestions(
+  suggestions: Principal[],
+  query: string,
+  selectedIds: string[],
+): Principal[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const selected = new Set(selectedIds.map((x) => x.toLowerCase()));
+  return suggestions
+    .filter((p) => !selected.has(p.id.toLowerCase()))
+    .filter((p) => p.id.toLowerCase().includes(q) || p.display_name.toLowerCase().includes(q))
+    .slice(0, MAX_SUGGESTIONS);
+}
+
+function ManualInput({
+  id,
+  placeholder,
+  disabled,
+  onAdd,
+  ariaLabel,
+  suggestions = [],
+  selectedIds = [],
+  onPick,
+}: ManualInputProps) {
   const { t } = useTranslation('common');
   const [value, setValue] = useState('');
+  const matches = useMemo(
+    () => (onPick ? matchSuggestions(suggestions, value, selectedIds) : []),
+    [onPick, suggestions, value, selectedIds],
+  );
 
   const commit = () => {
     if (value.trim().length === 0) return;
@@ -456,7 +508,7 @@ function ManualInput({ id, placeholder, disabled, onAdd, ariaLabel }: ManualInpu
     }
   };
 
-  return (
+  const input = (
     <Input
       id={id}
       type="text"
@@ -470,6 +522,29 @@ function ManualInput({ id, placeholder, disabled, onAdd, ariaLabel }: ManualInpu
       onBlur={commit}
       data-testid="principal-picker-input"
     />
+  );
+  // One stable tree: switching it while typing would remount the input.
+  return (
+    <div className="relative flex-1">
+      {input}
+      {matches.length > 0 && !disabled && (
+        <ul
+          className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 shadow-md"
+          data-testid="principal-picker-suggestions"
+        >
+          {matches.map((p) => (
+            <PrincipalRow
+              key={`${p.type}:${p.id}`}
+              principal={p}
+              onPick={() => {
+                onPick?.(p);
+                setValue('');
+              }}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -485,6 +560,8 @@ function PrincipalRow({ principal, onPick }: PrincipalRowProps) {
     <li>
       <button
         type="button"
+        // Keep the focus in the input: its blur would add the typed text.
+        onMouseDown={(e) => e.preventDefault()}
         onClick={onPick}
         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-left hover:bg-accent focus:bg-accent focus:outline-none"
         data-testid="principal-row"

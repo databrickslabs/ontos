@@ -31,6 +31,10 @@ class ImportItemResult(BaseModel):
     message: Optional[str] = Field(None, description="Skip reason, error detail or note")
     code: Optional[str] = Field(None, description="Code of the message, for the UI to translate")
     params: Optional[Dict[str, Any]] = Field(None, description="Parameters of the coded message")
+    notes: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Further coded notes ({code, params, message}) when an item has more than one",
+    )
 
 
 class BatchImportResult(BaseModel):

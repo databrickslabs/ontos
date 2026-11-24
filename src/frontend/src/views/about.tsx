@@ -10,10 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
+import { useNavHiddenFeatures } from '@/hooks/use-nav-hidden-features';
 
 export default function About() {
   const { t } = useTranslation(['about', 'features']);
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  const hiddenFeatures = useNavHiddenFeatures();
   const customAboutContent = useUICustomizationStore((state) => state.aboutContent);
   const appName = useUICustomizationStore((state) => state.getAppName());
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function About() {
     fetchServerInfo();
   }, []);
 
-  const features = getLandingPageFeatures(allowedMaturities);
+  const features = getLandingPageFeatures(allowedMaturities, hiddenFeatures);
 
   // If custom about content is set, render it instead of the default
   if (customAboutContent) {

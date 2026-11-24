@@ -28,6 +28,12 @@ class DataProductDb(Base):
     api_version = Column(String, nullable=False, default="v1.0.0")
     kind = Column(String, nullable=False, default="DataProduct")
     status = Column(String, nullable=False, index=True)  # proposed, draft, active, deprecated, retired
+    # Lifecycle Stage Group (#1213); ``status`` holds a stage key of it. NULL = the
+    # entity type's default group.
+    lifecycle_stage_group_id = Column(
+        String, ForeignKey('lifecycle_stage_groups.id', ondelete='RESTRICT'),
+        nullable=True, index=True,
+    )
 
     # ==================== ODPS v1.0.0 Optional Fields ====================
     name = Column(String, nullable=True, index=True)
@@ -86,6 +92,12 @@ class DataProductDb(Base):
     certified_by = Column(String, nullable=True)
     certification_expires_at = Column(DateTime(timezone=True), nullable=True)
     certification_notes = Column(Text, nullable=True)
+
+    # ==================== Deprecation lifecycle ====================
+    deprecation_reason = Column(Text, nullable=True)
+    sunset_date = Column(Date, nullable=True)
+    replacement_product_id = Column(String, nullable=True)
+    deprecated_at = Column(DateTime(timezone=True), nullable=True)
 
     # ==================== Maturity ====================
     maturity_level_order = Column(Integer, nullable=True)

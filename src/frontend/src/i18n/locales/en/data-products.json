@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Not an owner",
+    "notOwnerMessage": "You can view this product but not edit it. Only its owning team, members of its project, its draft owner or a data products admin can edit it."
+  },
   "title": "Data Products",
   "subtitle": "Manage your data products",
   "newProduct": "New Data Product",
@@ -679,7 +683,8 @@
     },
     "errors": {
       "cannotRequest": "\"{{requestType}}\" isn't available for a product with status {{productStatus}}.",
-      "failedToSubmit": "Failed to submit request"
+      "failedToSubmit": "Failed to submit request",
+      "notProductOwner": "Only the product's owners or an admin can request its review."
     },
     "toast": {
       "statusChanged": "Status Changed",
@@ -794,7 +799,7 @@
     },
     "hints": {
       "deliveryMethodHint": "How this deliverable serves data to consumers (e.g., Table Access, Serving Endpoint)",
-      "onlyActiveContracts": "Only showing active/approved/certified contracts",
+      "onlyActiveContracts": "Only showing active/approved contracts",
       "containsPiiHint": "Does this deliverable contain personally identifiable information?",
       "autoApproveHint": "Automatically approve access requests for this deliverable?",
       "afterCreation": "After creating this deliverable, you can link assets (tables, views, datasets, etc.) to it from the detail page."
@@ -1126,8 +1131,8 @@
     "exportSuccessfulDesc": "Downloaded {{filename}}",
     "exportFailed": "Export Failed",
     "exportFailedDesc": "Failed to export data product",
-    "exportDescription": "Clicking \"Export\" will download this product as an ODPS v1.0.0 compliant JSON file. Audit fields (created_at, updated_at) will be excluded for portability.",
-    "exportAsJson": "Export as JSON",
+    "exportDescription": "Clicking \"Export\" will download this product as an ODPS v1.0.0 YAML file, built from the stored product so a re-import restores it.",
+    "exportAsJson": "Export as YAML",
     "currentProduct": "Current Product",
     "unnamed": "Unnamed",
     "noProductDesc": "No product selected. Open this dialog from a product details page to export."

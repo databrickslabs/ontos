@@ -1,6 +1,62 @@
 {
   "title": "{{appName}}へようこそ",
   "tagline": "コンセプト、データ契約、データ製品、ペルソナなどを管理",
+  "essentials": {
+    "tagline": "データを見つけ、理解し、信頼してから、自分のデータを公開・維持しましょう。",
+    "consumer": {
+      "title": "データを使う",
+      "description": "チームが Unity Catalog にすでに持っているテーブルから始めましょう。"
+    },
+    "producer": {
+      "title": "データを共有する",
+      "description": "所有するアセットを文書化し、レビューを受けましょう。"
+    },
+    "find": {
+      "title": "見つける",
+      "description": "アセットや概念を検索するか、カタログを参照します。",
+      "placeholder": "テーブル、アセット、用語集の用語を検索...",
+      "browseCatalog": "Data Catalog を参照"
+    },
+    "understand": {
+      "title": "理解する",
+      "description": "アセットが何か、その用語が何を意味するかを確認します。",
+      "assets": "アセット",
+      "assetsDescription": "メタデータ付きのテーブル、ビュー、その他のアセット。"
+    },
+    "trust": {
+      "title": "信頼する",
+      "description": "アセットのレビュー状況と、データが現在どこにあるか。",
+      "empty": "まだレビューされたアセットはありません。",
+      "openReviews": "アセットレビューを開く"
+    },
+    "publish": {
+      "title": "公開する",
+      "description": "ドキュメントやレビューがまだないあなたのアセット。",
+      "noAssets": "まだ所有しているアセットはありません。",
+      "allDone": "すべてのアセットが文書化され、レビュー依頼があります。",
+      "noGapsLoaded": "これまでに読み込んだアセットに不足はありません。",
+      "noDescription": "説明なし",
+      "noReview": "レビュー依頼なし",
+      "more": "{{total}} 件中 {{shown}} 件のアセットを表示しています。",
+      "loadMore": "さらに読み込む",
+      "pageSize": "1 ページの件数",
+      "requestReview": "レビューを依頼"
+    },
+    "maintain": {
+      "title": "維持する",
+      "description": "未完了のリクエストとレビュー。",
+      "myRequests": "保留中のリクエスト ({{count}})",
+      "noRequests": "保留中のリクエストはありません。",
+      "openMyRequests": "マイリクエストを開く",
+      "myReviews": "未完了のアセットレビュー ({{count}})",
+      "noReviews": "未完了のアセットレビューはありません。"
+    },
+    "notices": {
+      "reviewsTruncated": "最近作成された{{count}}件のレビュー依頼のみを読み込むため、これらの件数や不足は不完全な場合があります。",
+      "loadError": "このデータを読み込めませんでした。",
+      "retry": "再試行"
+    }
+  },
   "search": {
     "placeholder": "データ製品、用語集の用語、契約を検索..."
   },
@@ -123,6 +179,10 @@
     "unknownProduct": "不明な製品",
     "viewAllSubscribed": "購読済みをすべて表示"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "このロールではドメイン階層を表示できません。",
+    "error": "ドメイン階層を読み込めませんでした"
+  },
   "dataCurationSection": {
     "title": "データキュレーション",
     "createDataProduct": {
@@ -202,9 +262,9 @@
     },
     "products": {
       "available": "{{count}}個の製品が利用可能",
-      "available_plural": "{{count}}個の製品が利用可能",
+      "available_other": "{{count}}個の製品が利用可能",
       "subscribed": "{{count}}個の購読済み製品",
-      "subscribed_plural": "{{count}}個の購読済み製品",
+      "subscribed_other": "{{count}}個の購読済み製品",
       "noProducts": "データ製品が見つかりません。",
       "adjustFilters": "検索またはフィルターを調整してみてください。",
       "noSubscriptions": "まだデータ製品を購読していません。",
@@ -217,9 +277,9 @@
     },
     "datasets": {
       "available": "{{count}}個のデータセットが利用可能",
-      "available_plural": "{{count}}個のデータセットが利用可能",
+      "available_other": "{{count}}個のデータセットが利用可能",
       "subscribed": "{{count}}個の購読済みデータセット",
-      "subscribed_plural": "{{count}}個の購読済みデータセット",
+      "subscribed_other": "{{count}}個の購読済みデータセット",
       "noDatasets": "データセットが見つかりません。",
       "adjustFilters": "検索を調整してみてください。",
       "noSubscriptions": "まだデータセットを購読していません。",
@@ -240,7 +300,7 @@
     "domainInfo": {
       "parentDomain": "親",
       "childDomains": "{{count}}個の子ドメイン",
-      "childDomains_plural": "{{count}}個の子ドメイン"
+      "childDomains_other": "{{count}}個の子ドメイン"
     },
     "tilesPerRow": {
       "placeholder": "タイル",

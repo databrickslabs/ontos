@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
+from src.common.entity_metadata_access import EntityMetadataPermission, cost_item_permission
 from src.common.logging import get_logger
 from src.controller.costs_manager import CostsManager
-from src.common.manager_dependencies import get_metadata_manager  # reuse style; provide a getter here
+from src.common.manager_dependencies import get_costs_manager, get_metadata_manager
 from src.models.costs import CostItem, CostItemCreate, CostItemUpdate, CostSummary
 
 logger = get_logger(__name__)
@@ -17,10 +18,6 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["Costs"])
 
 FEATURE_ID = "data-domains"  # align with metadata until dedicated feature is added
-
-
-def get_costs_manager() -> CostsManager:
-    return CostsManager()
 
 
 @router.post("/entities/{entity_type}/{entity_id}/cost-items", response_model=CostItem, status_code=status.HTTP_201_CREATED)
@@ -34,7 +31,7 @@ async def create_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {
@@ -52,7 +49,7 @@ async def create_cost_item(
             raise HTTPException(status_code=400, detail="Entity path does not match body")
         result = manager.create(db, data=payload, user_email=current_user.email)
         success = True
-        details["cost_item_id"] = result.id
+        details["cost_item_id"] = str(result.id)
         return result
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
@@ -80,7 +77,7 @@ async def list_cost_items(
     month: Optional[str] = Query(None, description="YYYY-MM to filter active recurring items"),
     db: DBSessionDep = None,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     month_date = None
     if month:
@@ -98,7 +95,7 @@ async def summarize_cost_items(
     month: str = Query(..., description="YYYY-MM month to summarize"),
     db: DBSessionDep = None,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     try:
         month_date = datetime.strptime(month + "-01", "%Y-%m-%d").date()
@@ -117,7 +114,7 @@ async def update_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(cost_item_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {
@@ -162,7 +159,7 @@ async def delete_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(cost_item_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {"params": {"cost_item_id": id}}

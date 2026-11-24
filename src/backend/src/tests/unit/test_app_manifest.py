@@ -3,7 +3,6 @@ from pathlib import Path
 
 import yaml
 
-
 MANIFEST_PATH = Path(__file__).resolve().parents[4] / 'manifest.yaml'
 
 

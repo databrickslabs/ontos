@@ -125,7 +125,7 @@ export function ProjectChooser() {
               </div>
             ) : (
               <span className="text-muted-foreground">
-                {isLoading ? 'Loading...' : 'All Projects'}
+                {isLoading ? t('actions.loading') : t('projectMenu.allProjects')}
               </span>
             )}
           </div>

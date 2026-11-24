@@ -164,7 +164,7 @@ class BusinessOwnersManager:
         return [self._to_read(o) for o in db_owners]
 
     def get_all_owners(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         object_type: Optional[str] = None, role_id: Optional[UUID] = None,
         active_only: bool = True
     ) -> List[BusinessOwnerRead]:

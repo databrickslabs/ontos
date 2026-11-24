@@ -260,7 +260,9 @@ def test_a_false_condition_follows_the_fail_branch(db_session):
     results = {names.get(s.step_id, s.step_id): s for s in execution.step_executions}
     assert execution.status.value == 'failed'
     assert set(results) == {'check', 'rejected'}
-    assert results['check'].passed is False
+    # The condition was evaluated: the step succeeded and took its false branch (#1418)
+    assert results['check'].passed is True
+    assert results['check'].result_data['branch'] == 'false'
 
 
 def test_a_sql_script_saved_from_the_designer_runs_on_the_configured_warehouse(db_session, monkeypatch):

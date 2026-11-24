@@ -6,9 +6,11 @@
     "loading": "Chargement...",
     "cancel": "Annuler",
     "close": "Fermer",
+    "openMenu": "Ouvrir le menu",
     "delete": "Supprimer",
     "deleteSelected": "Supprimer sélectionnés ({{count}})",
     "edit": "Modifier",
+    "rename": "Renommer",
     "add": "Ajouter",
     "create": "Créer",
     "update": "Mettre à jour",
@@ -41,6 +43,7 @@
     "discard": "Abandonner",
     "apply": "Appliquer",
     "select": "Sélectionner",
+    "done": "Terminé",
     "remove": "Supprimer",
     "link": "Lier",
     "unlink": "Délier",
@@ -338,7 +341,8 @@
       "for_request_access": "Demande d'accès (Assistant)",
       "for_request_publish": "Demande de publication (Assistant)",
       "for_request_certify": "Demande de certification (Assistant)",
-      "for_request_status_change": "Demande de changement de statut (Assistant)"
+      "for_request_status_change": "Demande de changement de statut (Assistant)",
+      "on_request_definition_change": "Demande de modification de définition"
     },
     "entityTypes": {
       "catalog": "Catalogue",
@@ -355,7 +359,11 @@
       "data_asset_review": "Révision d'actif",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Utilisateur"
+      "user": "Utilisateur",
+      "metric_view": "Metric View",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collection",
+      "concept_changeset": "Ensemble de modifications de concepts"
     },
     "stepTypes": {
       "validation": "Validation",
@@ -472,7 +480,13 @@
     "selectRelTypePrompt": "Sélectionnez un type de relation pour trouver les entités cibles",
     "createRelationship": "Créer la relation",
     "relationshipCreated": "Relation créée",
-    "assetFallback": "Actif"
+    "assetFallback": "Actif",
+    "conceptRelationshipHint": "« {{relationship}} » relie cet élément à un concept sous forme de relation : elle apparaît dans Relations et dans le lignage. Pour afficher le concept dans les détails de cet élément et dans {{conceptSection}} sur la page du concept, utilisez plutôt {{section}}.",
+    "targetNotPickable": "{{type}} ne peut pas être choisi ici. Il est géré sur sa propre page.",
+    "noAccessToTarget": "Vous n'avez pas accès à {{type}}. Demandez un accès en lecture à un administrateur pour créer ce lien."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "Les propriétés enregistrées de l'actif n'ont pas pu être chargées : il ne peut pas être enregistré ici. Fermez la boîte de dialogue et réessayez."
   },
   "assetForm": {
     "groups": {
@@ -559,16 +573,25 @@
     "removeConfirm": "Êtes-vous sûr de vouloir supprimer cette relation ? Cette action ne peut pas être annulée."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Sélectionner {{kind}}…",
     "latestSuffix": "{{name}} (dernière)",
     "pinVersionTitle": "Épingler une version spécifique",
     "pinVersion": "Épingler la version",
     "followLatestTitle": "Toujours suivre la dernière version visible de la famille",
     "followLatest": "Suivre la dernière",
-    "searchPlaceholder": "Rechercher {{kind}}…",
     "loading": "Chargement…",
-    "noMatching": "Aucun(e) {{kind}} correspondant(e).",
     "unnamed": "(sans nom)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Sélectionner un contrat…",
+      "search": "Rechercher des contrats…",
+      "noMatching": "Aucun contrat correspondant."
+    },
+    "product": {
+      "select": "Sélectionner un produit…",
+      "search": "Rechercher des produits…",
+      "noMatching": "Aucun produit correspondant."
+    }
   },
   "entityTree": {
     "title": "Entités liées",
@@ -632,6 +655,8 @@
   "edit": "Modifier",
   "error": "Erreur",
   "home": "Accueil",
+  "loading": "Chargement…",
+  "optional": "(facultatif)",
   "refresh": "Actualiser",
   "retry": "Réessayer",
   "save": "Enregistrer",
@@ -762,5 +787,39 @@
     "createdSkipped": "Créés : {{created}}, ignorés : {{skipped}}.",
     "createdFailed": "Créés : {{created}}, en échec : {{failed}}.",
     "createdSkippedFailed": "Créés : {{created}}, ignorés : {{skipped}}, en échec : {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Motif de dépréciation",
+    "reasonPlaceholder": "Pourquoi est-il déprécié ? Les consommateurs verront ce texte.",
+    "sunsetDate": "Date de fin",
+    "replacement": "Remplacement",
+    "noReplacement": "Aucun remplacement",
+    "reasonRequired": "Un motif est requis pour déprécier.",
+    "requestHint": "La justification devient le motif de dépréciation.",
+    "errors": {
+      "deprecation_reason_required": "Un motif est requis pour déprécier.",
+      "sunset_date_in_past": "La date de fin {{sunsetDate}} est passée.",
+      "replacement_is_self": "Une entité ne peut pas être son propre remplacement.",
+      "replacement_not_found": "Le remplacement {{replacementId}} est introuvable.",
+      "replacement_retired": "Le remplacement {{replacementId}} est retiré.",
+      "replacement_deprecated": "Le remplacement {{replacementId}} est obsolète.",
+      "replacement_deprecated_replaced": "Le remplacement {{replacementId}} est obsolète ; il est remplacé par {{replacedBy}}.",
+      "replacement_leads_back": "Le remplacement {{replacementId}} ramène à cette entité : {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} non valide « {{value}} » : une date ISO est attendue.",
+      "replacement_is_self": "Le remplaçant (ontosReplacedBy) ne peut pas être l'entité elle-même.",
+      "replacement_leads_back": "Le remplaçant {{replacementId}} ramène à cette entité : {{chain}}.",
+      "imported_replacement_dropped": "Le remplaçant {{replacementId}} n'est pas ici, il n'a donc pas été lié.",
+      "imported_replacement_leads_back": "Le remplaçant {{replacementId}} ramène à cette entité ({{chain}}), il n'a donc pas été lié.",
+      "imported_status_mapped": "'{{status}}' n'est pas un statut du cycle de vie, il a donc été importé comme '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' est un ancien nom de statut, il a donc été importé comme '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' n'est plus un statut, il a donc été importé comme '{{mappedTo}}'. La certification n'est pas importée : certifiez l'entité dans Ontos."
+    },
+    "notice": {
+      "deprecated": "Obsolète",
+      "retired": "Retiré",
+      "noReason": "Aucune raison enregistrée"
+    }
   }
 }

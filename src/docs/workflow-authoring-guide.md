@@ -44,7 +44,8 @@ The steps of one kind don't run in the other: a wizard step type put in a proces
 These rules explain most surprises:
 
 - **The first step is the entry step.** The executor starts at the first step of the workflow's step order. In the designer this is the step connected to the trigger. Through the API it is the first step of the `steps` list, unless you set `order` yourself.
-- **Steps don't run in list order.** After a step, the executor goes to its `on_pass` step if it passed, or to its `on_fail` step if it failed. A step with no next step for its outcome ends the execution, even if more steps follow it in the list.
+- **Steps don't run in list order.** After a step, the executor goes to its `on_pass` step if it passed, or to its `on_fail` step if it failed. A conditional step goes to `on_pass` when its condition is true and to `on_fail` when it is false (see below). A step with no next step for its outcome ends the execution, even if more steps follow it in the list.
+- **Pass and Fail steps end the execution.** They have no next step. A link out of one (older designers saved one that the canvas didn't show) is ignored when the workflow runs, reported by validation as `terminal_step_has_next`, and removed when the workflow is saved.
 - **The outcome is the last step's result.** When the execution ends on a step that passed, the execution is `succeeded`; when it ends on a step that failed, it is `failed`. A failure that is routed to a notification step, which passes, therefore ends as `succeeded`. End every failure branch with a **Fail** step if the execution should show as failed (and, for gates, if the change should be blocked).
 - **Execution is synchronous.** A workflow runs inside the request that fired it, until it ends or pauses. A slow webhook or script makes that request slow.
 - **Every matching workflow runs.** When several active workflows match the same trigger and entity type, all of them run, one after the other, in no fixed order. A request that reports "the" workflow (for example `execution_id` in the response of a status change request) reports the first one that ran. Two active workflows with an approval step on the same trigger send two approval requests.
@@ -55,9 +56,9 @@ An execution has one of these statuses:
 |--|--|
 | `running` | Steps are being executed (you rarely see it, since execution is synchronous) |
 | `paused` | Waiting at an approval step |
-| `succeeded` | Ended on a step that passed |
+| `succeeded` | Ended on a step that passed (a conditional step always passes when its condition could be evaluated) |
 | `failed` | Ended on a step that failed |
-| `cancelled` | Cancelled by an admin while running or paused |
+| `cancelled` | Cancelled by an admin while running (a cancelled approval follows the step's `on_fail` instead, see Cancel below) |
 
 ## Triggers
 
@@ -74,12 +75,12 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 | `before_status_change` | Before a product or contract changes status | `data_product`, `data_contract` | Yes |
 | `on_status_change` | After a product, contract or asset review changes status | `data_product`, `data_contract`, `data_asset_review` | No |
 | `on_request_review` | A review is requested | `data_product`, `data_contract`, `data_asset_review` | No |
-| `on_request_status_change` | A status change is requested | `data_product` | No |
+| `on_request_status_change` | A status change is requested | `data_product`, `data_contract` | No |
 | `on_request_publish`, `on_request_certify` | Publication or certification is requested | `data_product`, `data_contract` | No |
 | `on_request_deploy` | A contract deployment is requested | `data_contract` | No |
 | `on_request_access` | Access is requested | `access_grant`, `project`, `role` | No |
 | `on_publish`, `on_unpublish` | A product or contract is published or unpublished | `data_product`, `data_contract` | No |
-| `on_certify`, `on_decertify` | A contract is certified or decertified from the contract page | `data_contract` | No |
+| `on_certify`, `on_decertify` | A product or contract is certified or decertified | `data_product`, `data_contract` | No |
 | `on_subscribe` / `on_unsubscribe` | A user subscribes to / unsubscribes from a product | `data_product` / `subscription` | No |
 | `on_expiring`, `on_revoke` | An access grant is about to expire, or is revoked | `access_grant` | No |
 | `on_job_success`, `on_job_failure` | A background job ends | `job` | No |
@@ -90,8 +91,9 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 
 Notes:
 
+- **Data products fire them whatever the entry point.** A product created, changed, deleted, certified or (un)published through the REST API, Ask Ontos, an MCP client or an ODPS import (one `on_create` per imported product) fires the same triggers, with the same gates, for the user who made the change.
 - **"After" triggers never undo the action.** The product is already created, updated or moved when an `on_*` workflow runs; if the workflow fails, the action stays done. Errors while firing them are logged and don't fail the action.
-- **`scheduled` is not run.** It can be selected and saved, but nothing in the current version starts scheduled workflows.
+- **`scheduled` runs on a Quartz cron.** `trigger.schedule` is a Quartz expression as in Databricks Jobs (`sec min hour day-of-month month day-of-week [year]`, e.g. `0 30 2 * * ?` = daily 02:30) and `trigger.timezone` an IANA name (default `UTC`). Ontos runs these itself, so it takes a subset of Quartz: seconds must be `0`, `?` goes in exactly one of day-of-month and day-of-week, `W`, `L` and `#` are not supported (Databricks job schedules accept them), and runs must be at least 5 minutes apart. Runs follow the local wall clock: a time the DST fall-back repeats (01:30 in New York on the first Sunday of November) runs once, at its first occurrence, and a time the spring-forward skips runs at the first valid time after it. Each slot runs at most once across app instances, with `triggered_by = system:scheduler` and the payload `{type: schedule, id: <workflow id>, scheduled_for}`, so `requester` resolves to nobody. After downtime only the latest missed slot runs, if it is at most 24 hours old. The runs go to a pool of `WORKFLOW_SCHEDULER_MAX_WORKERS` threads per instance (default 4), so a long run doesn't delay other scheduled workflows; a workflow whose previous run is still going waits for it before its next slot runs, and a run that waits for a free thread until the workflow's next slot (or 24 hours) is not started (its claim's outcome is `skipped`, `reason: late`). The scheduler and each run's own session use their own `WORKFLOW_SCHEDULER_MAX_WORKERS` + 1 database connections, apart from the request pool (`DB_POOL_SIZE` + `DB_MAX_OVERFLOW`), so count them in the database's connection limit: per replica, `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` + `WORKFLOW_SCHEDULER_MAX_WORKERS` + 1, which is 20 with the defaults (5 + 10 + 4 + 1), times the number of replicas. What a run triggers (audit entries, search index updates, tag sync requests) takes a request-pool connection for a moment, so it counts inside `DB_POOL_SIZE` + `DB_MAX_OVERFLOW`, not on top. When the scheduler restarts inside a running app (the startup retry), a run still going after the drain keeps its old connection until it ends, so the count can briefly be higher. Claims older than 30 days are deleted (the latest one per workflow is kept). A slot is claimed before its run starts, so if the instance stops after the claim (a crash, a redeploy) that slot isn't run again; on shutdown the scheduler waits up to `WORKFLOW_SCHEDULER_DRAIN_SECONDS` (default 30) for the runs in progress, records the queued ones as `not_started` and starts no new one; a run still going after that is cut off by the exit. Nothing polls the database on a timer: the scheduler sleeps until the next slot, so Lakebase can idle. The instance that saves a workflow reschedules at once; another app instance picks the change up when one of its requests uses the database (at most once per `WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS`, default 60) or at its next due slot. `WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS` > 0 adds a timed check as a fallback (default 0, off). In the designer, a `scheduled` trigger has a Quartz cron field and a timezone field; the API takes the same fields (`POST /api/workflows`, `PUT /api/workflows/{id}`), and a save that leaves both out keeps the stored ones.
 - **`manual` runs see only what you pass.** A manual run passes `{id, name, type}` from the query as the trigger payload; without `entity_name`, `${entity_name}` is empty. Rule steps still see the stored entity (see below); notification texts and scripts only have those three fields.
 
 ### Filters
@@ -104,21 +106,21 @@ Notes:
 
 - At startup, Ontos creates the default workflows that don't exist yet. Only the request workflows (`on_request_*`) are created active; the other defaults (automation, gates, UI wizards) are created inactive, so an upgrade doesn't turn on new automatic behavior. Workflows that already exist are left as they are.
 - **Load New Only** (`POST /api/workflows/load-defaults`) does the same, keeping each workflow's `is_active` from the shipped definition.
-- **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) rewrites every default workflow from the shipped definition, including `is_active`: defaults you had left inactive, such as "Naming Convention Validation", become active again. It also re-creates their steps, which removes the step history of their past executions (see [Debugging Recent Executions](#debugging-recent-executions)). Duplicates of defaults are not touched.
+- **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) asks first. It then resets every default workflow nobody edited to the shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that a user saved since they were loaded are kept and listed; tick **Also reset default workflows that were edited** (`include_edited=true`) to reset them too, which discards those edits. Duplicates of defaults are not touched.
 - A duplicate (`POST /api/workflows/{id}/duplicate?new_name=...`) starts inactive and is not a default.
 
 ## Step Types and What Makes Them Pass
 
-Each step ends with a pass or a fail, which picks the next step. A step that raises an error fails, with the error text as its error.
+Each step ends with a pass or a fail, which picks the next step. A step that raises an error fails, with the error text as its error. A conditional step is the exception: its result only picks the branch.
 
 | Step | Passes when | Fails when |
 |--|--|--|
-| `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated |
-| `conditional` | The `condition` expression is true | It is false, or can't be evaluated |
+| `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated. A failed assertion is a step failure even when `on_fail` leads to another step |
+| `conditional` | The `condition` expression could be evaluated, true or false. True follows `on_pass`, false follows `on_fail`; the step shows the branch it took and a false condition doesn't count as a failure. A branch with no step ends the run as succeeded, so end the false branch of a gate with a Fail step | It can't be evaluated; the run then ends there as failed |
 | `policy_check` | The referenced compliance policy's rule holds, or the policy is inactive | The rule fails, or the policy doesn't exist |
 | `approval` | The approver approves (the step pauses first) | The approver rejects, or no approver could be resolved |
 | `notification` | At least one notification was created | None could be created |
-| `assign_tag`, `remove_tag` | The tag was written or removed | The value couldn't be resolved or written |
+| `assign_tag`, `remove_tag` | The tag was written or removed | The value couldn't be resolved or written, or the tag isn't in the catalog (`assign_tag` only, as `tag_not_found`) |
 | `script` | The script's `result` says so (see below) | `result` says not passed, the script raises, or times out |
 | `webhook` | The response code is a success code (default 200-299) | Other codes, or the call fails after `retry_count` retries |
 | `create_asset_review` | The review was created | It couldn't be created |
@@ -166,7 +168,8 @@ Both `${name}` and `{{name}}` work. A variable that can't be resolved is left as
 | `${user_email}` | The user who fired the trigger; after an approval, the approver |
 | `${workflow_name}`, `${workflow_id}`, `${execution_id}` | The running workflow and execution |
 | `${entity.<field>}` | A field of the **trigger payload** (not of the stored entity). Nested paths work: `${entity.a.b}` |
-| `${step_results.<step_id>.passed}` | Whether an earlier step passed (rendered as `True` / `False`) |
+| `${step_results.<step_id>.passed}` | Whether an earlier step passed (rendered as `True` / `False`). A conditional step passes whenever its condition could be evaluated; use `branch` for its result |
+| `${step_results.<conditional_step_id>.branch}` | After a conditional step: `true` or `false` |
 | `${step_results.<step_id>.message}` | An earlier step's message |
 | `${step_results.<step_id>.data.<field>}` | A field of an earlier step's result data, for example a script's `data` |
 | `${step_results.<approval_step_id>.decision}` | After an approval: `approved` or `rejected` |
@@ -184,6 +187,7 @@ After an approval, the fields of the latest completed request wizard for the sam
 | Trigger | Payload fields |
 |--|--|
 | `on_request_status_change` (product) | `product_id`, `product_name`, `from_status`, `target_status`, `justification`, `request_id` |
+| `on_request_status_change` (contract) | `contract_id`, `contract_name`, `from_status`, `target_status`, `justification`, `request_id` |
 | `on_request_review` (product) | `product_id`, `product_name`, `from_status`, `to_status`, `message`, `reviewer_email`, `request_id` |
 | `manual` | `id`, `name`, `type` |
 
@@ -213,21 +217,40 @@ Notification `recipients` and approval `approvers` take one of these values, or 
 
 1. It resolves its `approvers` and creates an **Approval Required** notification for each of them. Its `message` (with variables substituted) is shown in the notification and the approval dialog.
 2. The execution pauses at that step (`paused`, **Waiting At** in Recent Executions).
-3. When an approver decides, the execution resumes: an approval follows the step's `on_pass`, a rejection its `on_fail`. The approver's message becomes the step's error on a rejection, and is available as `${step_results.<step_id>.reason}`.
+3. When an approver decides (with `require_all`, once every approver has approved or one has rejected, see below), the execution resumes: an approval follows the step's `on_pass`, a rejection its `on_fail`. The approver's message becomes the step's error on a rejection, and is available as `${step_results.<step_id>.reason}`.
 
 The approval step appears twice in the execution's step history: once when it asked for the approval, once with the decision.
 
-`require_all` and `timeout_days` are stored with the step but not enforced in the current version: the first decision resumes the execution, and a paused execution waits until someone decides or an admin cancels it.
+### Every approver: `require_all`
+
+Without `require_all` (the default), the first decision resumes the execution.
+
+With `require_all: true`, every notification target the step resolved when it paused must decide:
+
+- a user target needs that user's decision; a group or role target needs one decision from any member. A role's members are the members of its assigned groups and the users assigned to it individually; a role nobody is assigned to falls back to the admins. The owners of a business role are one target (one decision for the role). To require N named people, list them as users;
+- one person fills at most one target per step: their own user target if it is still pending, else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member;
+- the execution stays paused until every target has approved, then follows `on_pass`;
+- any rejection follows `on_fail` at once: the outcome follows every stored decision, so a rejection stored earlier fails the step even if a later decision approves;
+- a second decision by someone who has filled a target of the step is refused with `409`, code `approval_already_decided`; the first one stands. Someone whose targets have all been filled by others (e.g. another member of a group that has decided) gets `409`, code `approval_no_longer_pending`;
+- only the targets decide: anyone else, an admin included, is refused with `403`, code `approval_not_an_approver`, and nothing is recorded (this also applies to the admins' Force Approve / Force Reject and to `POST /api/workflows/executions/{id}/resume`). An admin who is one of the targets (or a member of an approver group or role) decides like any other. An admin who isn't can **cancel** the execution (see Cancel below), for example when an approver has left: until `timeout_days` is enforced, the step would otherwise wait forever. Without `require_all`, admins may still act on any approval, except one addressed to a business role (see Who can decide).
+
+The decisions are stored with the step, one per target, in the `decisions` list of its step result: `target` (the user, group or role name; for a business role, the owner who decided), `role_id` (for a role target), `decided_by`, `decision` (`approved` / `rejected`), `at`, `reason`. The targets and `require_all` are read from when the step paused (`resolved_targets` in the pause record), so editing the workflow doesn't change approvals already pending. Only targets whose approval notification was created are stored: a target nobody could tell about the approval isn't waited for. Each target's notification is marked handled when it is filled; the others stay open. The open group and role notifications the decider is a member of record that they decided (`decided_by_users` in the notification's payload; other approvers' own notifications don't). One person decides once per step, so such a notification leaves My actions and the bell for a member who decided through another target, for example their own user target, also in the bell history once it is handled, while the other members still see it until the target is filled or the step ends. Such a member also stops counting as a pending reviewer of the entity through that notification. Nothing is backfilled: on a step already paused when this was deployed, a member who had decided before keeps seeing the shared notification (and gets `409 approval_already_decided` on it) until its target is filled or the step ends. When the step is decided, its pause record gets `status: decided`, so a workflow that comes back to the same step starts a new round with no decisions.
+
+Decisions arriving at the same time are taken one after the other: each locks the execution and reads it afresh, and the decision that ends the step moves the execution out of `paused` in its first commit, so a decision waiting for the lock finds the step decided (`409`, code `approval_no_longer_pending`, for an approver).
+
+`timeout_days` is stored with the step but not enforced yet: a paused execution waits until it is decided or an admin cancels it. `0` means no timeout; without the key the default is 7 days. Expiry is the second part of #1119; the designer marks the field "not enforced yet".
 
 ### Who can decide
 
 The approval dialog (from the notification) calls `POST /api/workflows/handle-approval`:
 
 ```json
-{ "execution_id": "<execution id>", "approved": true, "message": "Looks good" }
+{ "execution_id": "<execution id>", "approved": true, "message": "Looks good", "step_id": "approve" }
 ```
 
-The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role), or an admin. Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step is decided, a second decision gets `404 Execution not found or not in paused state`. The approval notifications of the decided step are marked as handled.
+`step_id` (optional) is the approval step the notification is for; the dialog sends it from the notification.
+
+The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role: its groups or its individually assigned users), or an admin (with `require_all`, admins only when they are one of the approvers, see above; any admin may cancel the execution instead). A `business:<role id>` approval is decided only by the owners its notifications name, with or without `require_all`: an admin who isn't one of them can't decide it and cancels the execution instead. The same holds for a notification addressed to an app role that has since been deleted: it reaches nobody, not even a role created later with the same name. Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step has ended (every approver approved, someone rejected, or the execution was cancelled; or, when the request names the step in `step_id`, the execution has moved on to another step), a decision by one of its approvers gets `409`, code `approval_no_longer_pending`, with or without `require_all`; anyone else still gets `403`. The approval notifications of the decided step are marked as handled. With `require_all`, a decision that leaves other approvers pending answers `200` with `status: paused` and `pending_approvers`; a decision that moves the execution on to another approval step also answers `status: paused`, without `pending_approvers`.
 
 ### Resuming from another system
 
@@ -238,7 +261,7 @@ POST /api/workflows/executions/{execution_id}/resume
 { "approved": true, "message": "...", "reason": "..." }
 ```
 
-This endpoint requires read/write access to workflow settings and doesn't check approval notifications, so use it with an identity meant for automation. Send `${execution_id}` in the webhook body so the system knows which execution to resume.
+This endpoint requires read/write access to workflow settings and doesn't check approval notifications, so use it with an identity meant for automation. It doesn't decide a `require_all` step (`403`, code `approval_not_an_approver`): only that step's approvers do, through `handle-approval`. Send `${execution_id}` in the webhook body so the system knows which execution to resume.
 
 ### What Ontos does after a request is decided
 
@@ -246,7 +269,7 @@ When a request workflow resumes after an approval and ends, Ontos applies the de
 
 | Workflow trigger | Entity | After approval | After rejection |
 |--|--|--|--|
-| `on_request_status_change` | data product | Applies the requested status, through the same checks and gates as a direct change | Nothing |
+| `on_request_status_change` | data product, data contract | Applies the requested status, through the same checks and gates as a direct change | Nothing |
 | `on_request_review` | data contract | Contract approved | Contract back to draft |
 | `on_request_review` | data product | Product active | Product back to draft |
 | `on_request_deploy` | data contract | Records `deploy_approve` in the change log (no status change) | Records `deploy_deny` |
@@ -282,7 +305,7 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 | What happens | Result |
 |--|--|
-| A step raises an error (SQL error, connection refused, ...) | The step fails with the error text; the executor follows its `on_fail` |
+| A step raises an error (SQL error, connection refused, ...) | The step fails with the error text; the executor follows its `on_fail` (a conditional step has no failure branch: the run ends as failed) |
 | `on_pass` / `on_fail` names a step that doesn't exist | Saving the workflow is refused (HTTP 400, `Step '<id>' references unknown step '<name>'`) |
 | An `on_*` workflow fails | The action that fired it is already done and stays done |
 | A gate fails or pauses | The action is refused |
@@ -291,7 +314,10 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 **Retry** (admins, failed executions only, `POST /api/workflows/executions/{id}/retry` or the Retry action in Recent Executions) runs the same execution again from the first step, with the trigger payload it was started with. Its previous step results are replaced, and every step runs again: notifications are sent again and webhooks called again.
 
-**Cancel** (admins, running or paused executions) sets the execution to `cancelled`. The approval notifications of a cancelled execution stay in the approvers' list; deciding one gets `404`.
+**Cancel** (admins, running or paused executions, `POST /api/workflows/executions/{id}/cancel` or the Cancel action in Recent Executions):
+
+- an execution **paused at an approval step**, with or without `require_all`, isn't just stopped: the step ends as failed with `reason: cancelled_by_admin` and the execution follows the step's `on_fail`, as after a rejection, so whatever the workflow does then (for example notify the requester, or set the entity back to draft) runs once. The execution ends with the status that path leads to, not `cancelled`. The admin decides for no approver: the step's result keeps the approvers' decisions so far (`decisions`, with `require_all`) and adds `decision: cancelled`, `cancelled_by` and `error_code: cancelled_by_admin`. The step's open approval notifications are marked handled with decision `cancelled`, and the cancel is audited as an override (`CANCEL_EXECUTION` with `override: true`, `reason: cancelled_by_admin` and the step id). An approver deciding afterwards gets `409`, code `approval_no_longer_pending`;
+- a **running** execution (or one paused anywhere else) is set to `cancelled`.
 
 ## Debugging Recent Executions
 
@@ -317,7 +343,7 @@ The same data is in the API: `GET /api/workflows/executions?workflow_id=&status=
 ### When a workflow didn't run
 
 1. Is the workflow active?
-2. Does Ontos fire its trigger for that entity type (see [Where each trigger fires](#where-each-trigger-fires))? `scheduled` never runs.
+2. Does Ontos fire its trigger for that entity type (see [Where each trigger fires](#where-each-trigger-fires))? A `scheduled` workflow runs only on its slots (the log has `Ran scheduled workflow`).
 3. For status triggers, do `from_status` / `to_status` match the transition?
 4. For a request, the response carries `execution_id` and `workflow_status` when a workflow ran.
 5. The backend log has `Trigger fired: <trigger> for <entity type> '<id>'` for every trigger and `Found N matching workflow(s)` when some workflow matched.
@@ -445,14 +471,13 @@ Run on "Trading Analytics Dashboard v1" (with `entity_name` in the query), the n
 
 As of this version:
 
-- **After an approval, `requester` and `trigger_user` resolve to the approver**, as does `${user_email}`: a notification to the requester after an approval reaches the approver instead. Until this is fixed (PR #1017), address the requester after an approval by email, or notify them before the approval step.
-- `scheduled` triggers are not run (see #941).
+- **After an approval, `requester` and `trigger_user` resolve to the approver**, as does `${user_email}`: a notification to the requester after an approval reaches the approver instead. Until this is fixed (PR #1017), address the requester after an approval by email, or notify them before the approval step. In a `scheduled` run no user is the requester, so there they resolve to nobody, also after an approval (and a `create_asset_review` step fails, as it does for any run whose trigger has no user).
 - Workflow scopes are saved but not applied.
 - A gate whose evaluation errors lets the change through, and a `PUT` that changes `status` skips gates (STATUS_PR adds `on_error` and refuses that `PUT`).
-- An approval step's `require_all` and `timeout_days` are not enforced.
+- An approval step's `timeout_days` is not enforced (#1119).
 - Saving a workflow's steps removes the step results of its past executions (fixed by WORKFLOWS_PR).
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
-- Reload All Defaults also resets the defaults' active flag to the shipped value.
+- Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by #1456: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
 - The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
 

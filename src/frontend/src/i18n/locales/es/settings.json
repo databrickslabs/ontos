@@ -137,7 +137,18 @@
       },
       "volume": {
         "label": "Volumen",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "«{{value}}» no indica un volumen de Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o el nombre de un volumen; un nombre simple necesita un catálogo y un esquema sin puntos, barras ni espacios."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Descripciones de activos",
+      "adminOnly": "Solo un administrador puede activar esto.",
+      "label": "Escribir las descripciones de activos en Unity Catalog",
+      "help": "Al guardar la descripción de una tabla, vista o columna de Databricks también se establece su comentario en Unity Catalog, como el usuario que la guarda. Sin los permisos SELECT y MODIFY, la descripción se guarda solo en Ontos y el activo indica que no está sincronizado.",
+      "importLimit": {
+        "label": "Máximo de filas intentadas en Unity Catalog por importación masiva",
+        "help": "Una importación CSV/XLSX intenta como máximo este número de descripciones en Unity Catalog (1–10000), ya sea que las escriba, conserve otro comentario u omita una vista de métricas; las filas por encima del límite se guardan en Ontos con una advertencia."
       }
     },
     "instanceIdentity": {
@@ -190,6 +201,10 @@
     "messages": {
       "saveSuccess": "Configuración guardada con éxito",
       "saveError": "Error al guardar la configuración"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "No se pudo actualizar el job Compliance Checks con la configuración de LLM (puede que la app no tenga permiso sobre el job). Las reglas LLM_CHECK programadas usan la configuración anterior hasta que se reinstale el job.",
+      "compliance_job_shape_unexpected": "El job Compliance Checks se modificó en Databricks, así que solo se actualizaron sus parámetros. Si las reglas LLM_CHECK programadas fallan con \"funciones de LLM desactivadas\", reinstala el job."
     }
   },
   "databricks": {
@@ -406,7 +421,13 @@
     "privileges": {
       "homeSections": {
         "title": "Secciones de inicio",
-        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol."
+        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
+        "labels": {
+          "JOURNEY": "Inicio por recorrido"
+        },
+        "descriptions": {
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegios de aprobación",
@@ -431,6 +452,15 @@
       "featurePermissions": {
         "title": "Permisos de funciones",
         "description": "Configurar niveles de acceso para cada función en la aplicación."
+      },
+      "navigation": {
+        "help": "Las funciones sin marcar quedan fuera de los menús de este rol (barra lateral, acciones rápidas del inicio, Acerca de). Ocultar solo cambia lo que muestran los menús, no los permisos: las páginas siguen accesibles por enlace con el mismo nivel de acceso.",
+        "accessColumn": "Nivel de acceso",
+        "column": "Mostrar en la navegación",
+        "showFeature": "Mostrar {{feature}} en la navegación",
+        "noAccessHint": "Sin acceso: la función no aparece en los menús",
+        "adminHint": "El rol de administrador siempre muestra todas las funciones",
+        "unknownFeatures": "Las funciones desconocidas no se pueden ocultar de la navegación: {{features}}"
       },
       "groups": {
         "discover": "Descubrir",
@@ -642,11 +672,14 @@
       "urlLabel": "URL del logo",
       "urlPlaceholder": "https://ejemplo.com/logo.svg",
       "help": "Ingrese la URL de su logo personalizado. Formatos soportados: SVG, PNG, JPG.",
-      "invalidUrl": "Por favor ingrese una URL HTTP o HTTPS válida",
       "preview": "Vista previa:",
       "loadError": "Error al cargar la imagen",
       "openInNewTab": "Abrir en nueva pestaña",
-      "previewAlt": "Vista previa del logotipo"
+      "previewAlt": "Vista previa del logotipo",
+      "darkUrlLabel": "URL del logotipo para el modo oscuro (opcional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Se usa en el modo oscuro. Déjelo vacío para usar el logotipo anterior en ambos modos.",
+      "invalidUrlOrPath": "Introduzca una URL HTTP o HTTPS, o una ruta de la aplicación que empiece por /"
     },
     "about": {
       "title": "Contenido personalizado de la página Acerca de",
@@ -665,6 +698,13 @@
       "help": "Ingrese CSS personalizado para sobrescribir el tema predeterminado."
     },
     "saveButton": "Guardar configuración UI",
+    "errorCodes": {
+      "brandingPathTraversal": "La ruta no puede contener segmentos \"..\""
+    },
+    "loadFailed": {
+      "title": "No se pudo cargar la configuración actual",
+      "description": "No se cargó la marca guardada, por lo que se desactivó el guardado para no sobrescribirla con valores predeterminados. Recargue la página para intentarlo de nuevo."
+    },
     "messages": {
       "saveSuccess": "Configuración de personalización guardada",
       "saveError": "Error al guardar la configuración",
@@ -677,18 +717,38 @@
       "shortNameHelp": "Se usa en espacios reducidos (p. ej., \"Pregunta a {{shortName}}\"). Se recurre al nombre para mostrar cuando está vacío. Máximo {{max}} caracteres.",
       "displayNameLabel": "Nombre para mostrar",
       "shortNameLabel": "Nombre corto (opcional)",
-      "title": "Marca"
+      "title": "Marca",
+      "taglineLabel": "Eslogan (opcional)",
+      "taglineHelp": "Subtítulo breve que se muestra bajo el nombre en la barra lateral y en la página de inicio. Máximo {{max}} caracteres.",
+      "poweredByLabel": "Mostrar \"Powered by {{name}}\" en la barra lateral",
+      "poweredByHelp": "Se muestra en el pie de la barra lateral solo mientras haya un nombre visible o un logotipo personalizado."
     },
     "favicon": {
       "previewAlt": "Vista previa del favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Se aplica en tiempo de ejecución a la pestaña del navegador. El <link rel=\"icon\"> estático del index.html incluido y el manifiesto de la PWA no se actualizan con esta configuración.",
-      "invalidUrl": "Introduce una URL HTTP o HTTPS válida",
       "loadError": "No se pudo cargar la imagen",
       "openInNewTab": "Abrir en una pestaña nueva",
       "preview": "Vista previa:",
       "title": "Favicon del navegador",
       "urlLabel": "URL del favicon"
+    },
+    "theme": {
+      "title": "Colores del tema",
+      "help": "Elija el color principal (botones, enlaces, anillo de foco) y el color de acento (fondos al pasar el cursor y de elementos seleccionados). Los colores del texto se eligen automáticamente para garantizar el contraste, y un color del modo oscuro vacío se deriva del claro.",
+      "primaryLight": "Color principal",
+      "primaryDark": "Color principal (modo oscuro)",
+      "accentLight": "Color de acento",
+      "accentDark": "Color de acento (modo oscuro)",
+      "pickerLabel": "{{field}}: selector de color",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Introduzca un color hexadecimal como #2563eb",
+      "auto": "Automático: {{color}} (derivado del color claro)",
+      "contrast": "Texto {{text}}, contraste {{ratio}}:1",
+      "textLight": "claro",
+      "textDark": "oscuro",
+      "meetsAA": "AA",
+      "belowAA": "Por debajo de AA"
     }
   },
   "connectors": {
@@ -1236,6 +1296,9 @@
       "created": "Nivel de madurez \"{{name}}\" creado.",
       "deleted": "Nivel de madurez \"{{name}}\" eliminado.",
       "cannotDeleteTitle": "No se puede eliminar"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Esta política usa LLM_CHECK, que solo se evalúa en ejecuciones de cumplimiento, así que una puerta de madurez haría fallar todas las entidades. Selecciona una política sin LLM_CHECK."
     }
   },
   "directory": {

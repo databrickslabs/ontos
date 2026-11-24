@@ -69,7 +69,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             raise
 
     def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None
     ) -> List[ModelType]:
         logger.debug(f"Fetching multiple {self.model.__name__} with skip: {skip}, limit: {limit}")
         try:

@@ -33,7 +33,7 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             raise
 
     def get_multi_with_teams(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None
     ) -> List[ProjectDb]:
         """Gets multiple projects, eager loading teams and owner teams."""
         logger.debug(f"Fetching multiple {self.model.__name__} with teams, skip={skip}, limit={limit}")
@@ -212,6 +212,10 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             public_filters = [self.model.owner_team_id.is_(None)]
             if teams_with_domain:
                 public_filters.append(self.model.owner_team_id.notin_(teams_with_domain))
+            else:
+                # No team has a domain, so every owner team is standalone (and
+                # ``NOT IN ()`` is avoided).
+                public_filters.append(self.model.owner_team_id.isnot(None))
 
             if not user_team_ids:
                 # User not in any team → only public projects.

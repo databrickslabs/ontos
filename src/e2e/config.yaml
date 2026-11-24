@@ -14,7 +14,16 @@ databricks:
 
 # Persona-specific auth for CUJ tests (ONT-CUJ-*, ONT-RBAC-*, etc.).
 # Each persona maps to a Databricks workspace user assigned to the corresponding
-# Ontos role group (data-admins, data-producers, data-stewards, data-consumers).
+# Ontos role: admin = a group from the app's APP_ADMIN_DEFAULT_GROUPS (`admins` by
+# default) or a user in the Admin role's assigned users; producer, steward and
+# consumer = the groups data-producers, data-stewards, data-consumers.
+#
+# The demo-data CUJ tests (test_CUJ_003_load_retail_demo_data,
+# test_NEG_016_demo_data_idempotent) need the admin persona (or the default identity
+# when it is not configured) to have the settings-general ADMIN permission, i.e. the
+# Admin role; otherwise the load route answers 403 (CUJ_003 fails, NEG_016 loads
+# nothing and checks nothing). The e2e sessions do not send
+# the X-Demo-Setup-Token header, so the app's DEMO_SETUP_TOKEN does not help them.
 #
 # Priority order: token > profile > fall back to default 'databricks' settings above.
 # In config.local.yaml set token or profile for each persona you have provisioned.

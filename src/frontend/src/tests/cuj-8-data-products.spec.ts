@@ -52,14 +52,17 @@ test.describe('CUJ-8 — Data Products', () => {
 
     test('views data product detail page', async ({ page }) => {
       await page.goto('/data-products')
+      // The products table paginates; filter so the new product is on page 1.
+      await page.getByPlaceholder(/filter/i).fill(productName)
       const row = page.locator('table >> tbody >> tr', { hasText: productName })
       await row.first().click()
 
-      // Detail page should show key sections
-      await expect(page.getByText(productName)).toBeVisible()
+      // Detail page should show key sections (name appears in breadcrumb + header)
+      await expect(page.getByText(productName).first()).toBeVisible()
+      // Port sections are labelled "Deliverables (n)" / "Consumables (n)".
       await expect(
-        page.getByRole('heading', { name: /ports/i })
-          .or(page.getByRole('heading', { name: /metadata/i }))
+        page.getByText(/^deliverables \(\d+\)$/i)
+          .or(page.getByText(/^consumables \(\d+\)$/i))
           .first()
       ).toBeVisible()
     })
@@ -82,6 +85,7 @@ test.describe('CUJ-8 — Data Products', () => {
 
     test('deletes the created data product', async ({ page }) => {
       await page.goto('/data-products')
+      await page.getByPlaceholder(/filter/i).fill(productName)
 
       const row = page.locator('table >> tbody >> tr', { hasText: productName })
       const deleteBtn = row.getByTitle(/delete/i)
@@ -91,7 +95,7 @@ test.describe('CUJ-8 — Data Products', () => {
       page.on('dialog', (d) => d.accept())
       await deleteBtn.first().click()
 
-      await expect(page.getByText(productName)).toHaveCount(0, { timeout: 5_000 })
+      await expect(row).toHaveCount(0, { timeout: 5_000 })
     })
   })
 })

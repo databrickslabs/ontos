@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { usePermissions } from '@/stores/permissions-store';
+import { isOntosAdmin } from '@/hooks/use-is-ontos-admin';
 import useTestPersonaStore from '@/stores/test-persona-store';
 import { FeatureAccessLevel, AppRole } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
@@ -199,17 +200,12 @@ export default function UserInfo() {
       );
   }, [userInfo?.groups, availableRoles]);
 
-  // Ontos admin = user belongs to any AppRole flagged is_admin (canonical check,
-  // mirrors AuthorizationManager.is_user_ontos_admin on the backend).
-  const isAdminActual = useMemo<boolean>(() => {
-      const groups = userInfo?.groups;
-      if (!groups || groups.length === 0) return false;
-      const groupSet = new Set(groups.map(g => (g || '').toLowerCase()));
-      return availableRoles.some(role =>
-          role.is_admin === true &&
-          (role.assigned_groups || []).some(g => groupSet.has((g || '').toLowerCase()))
-      );
-  }, [userInfo?.groups, availableRoles]);
+  // Ontos admin = user belongs to any AppRole flagged is_admin. Same check as the
+  // menus (useIsOntosAdmin), on the groups this component loads itself.
+  const isAdminActual = useMemo<boolean>(
+      () => isOntosAdmin(userInfo?.groups, availableRoles),
+      [userInfo?.groups, availableRoles],
+  );
 
   // Admins/localdev keep the impersonation power (all roles); non-admins with 2+ membership-matched
   // roles get a membership-scoped switcher. Single-role users still don't see the switcher.

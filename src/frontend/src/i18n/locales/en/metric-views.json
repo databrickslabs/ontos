@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "Duplicate",
+    "link_conflict": "Linked to another concept",
+    "unrecognized_duplicate": "Unrecognized duplicate",
+    "variant": "Variant",
+    "conflict": "Conflict",
+    "near_duplicate": "Near duplicate"
+  },
+  "level": {
+    "expression": "expression",
+    "scope": "scope",
+    "full": "window and parameters"
+  },
+  "component": {
+    "expression": "Expression",
+    "source": "Source",
+    "filter": "Filter",
+    "window": "Window",
+    "joins": "Joins",
+    "parameters": "Parameters",
+    "aggregation": "Aggregation",
+    "columns": "Columns"
+  },
+  "differences": "Differences",
+  "similarity": "Similarity {{score}}%",
+  "hidden": "You can't read this metric view in Unity Catalog, so its definition isn't shown.",
+  "concept": {
+    "title": "Metric view measures",
+    "group": "Definition {{n}}",
+    "differsAt": "Differs from definition 1 in its {{level}}",
+    "onlyIn": "Only in {{name}}",
+    "otherConcepts": "The same definition is also linked to: {{concepts}}",
+    "unresolved": "Linked fields without a stored definition: {{fields}}",
+    "verdict": {
+      "consistent": "Consistent",
+      "conflict": "Conflicting definitions"
+    },
+    "hint": {
+      "consistent": "Every measure linked to this concept computes the same thing.",
+      "conflict": "The measures linked to this concept compute {{count}} different things. The differences are highlighted."
+    }
+  },
+  "asset": {
+    "title": "Same or similar definitions",
+    "hint": "Other measures over the same data with the same or a similar definition, and conflicting concept links. Nothing is changed.",
+    "linkedTo": "linked to {{concepts}}",
+    "onlyIn": "Only in {{name}}",
+    "error": {
+      "reference_cycle": "This measure's references form a cycle, so it can't be compared.",
+      "reference_depth": "This measure's references are nested too deeply to be compared.",
+      "no_expression": "This measure has no expression to compare."
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} was linked. Check its definition",
+    "dismiss": "Dismiss",
+    "hint": "The link was created. Review the definitions on the concept page.",
+    "concept_has_other_definitions": "Measures already linked to this concept compute something else ({{count}}): {{measures}}",
+    "definition_linked_to_other_concepts": "Measures with the same definition are linked to other concepts ({{count}}): {{concepts}}"
+  }
+}

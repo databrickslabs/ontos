@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Dict, Any, Type
+from typing import List, Optional, Union, Dict, Any, Tuple, Type
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -8,6 +8,7 @@ from src.db_models.metadata import (
     RichTextMetadataDb, 
     LinkMetadataDb, 
     DocumentMetadataDb,
+    ImportedMarkdownFileDb,
     MetadataAttachmentDb,
 )
 from src.models.metadata import (
@@ -17,8 +18,25 @@ from src.models.metadata import (
     MetadataAttachmentCreate,
 )
 
+# entity_id of a shared library row (the shared routes store it; nothing else does).
+SHARED_ENTITY_ID = "__shared__"
+
+
+def _remove_all_for_entity(db: Session, model, *, entity_type: str, entity_id: str) -> int:
+    """Delete every row of ``model`` stored for an entity (used when the entity is deleted)."""
+    return (
+        db.query(model)
+        .filter(model.entity_type == entity_type, model.entity_id == entity_id)
+        .delete(synchronize_session=False)
+    )
+
 
 class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUpdate]):
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        return _remove_all_for_entity(
+            db, RichTextMetadataDb, entity_type=entity_type, entity_id=entity_id,
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[RichTextMetadataDb]:
         """List rich texts directly attached to an entity (not shared assets attached via junction)."""
         return (
@@ -34,7 +52,12 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
     
     def list_shared(self, db: Session, *, entity_type: Optional[str] = None) -> List[RichTextMetadataDb]:
         """List all shared rich text assets, optionally filtered by entity type."""
-        query = db.query(RichTextMetadataDb).filter(RichTextMetadataDb.is_shared == True)
+        # A row stored with is_shared on an entity (before the per-entity routes ignored
+        # it) is that entity's, not the library's (#1342).
+        query = db.query(RichTextMetadataDb).filter(
+            RichTextMetadataDb.is_shared == True,
+            RichTextMetadataDb.entity_id == SHARED_ENTITY_ID,
+        )
         if entity_type:
             query = query.filter(RichTextMetadataDb.entity_type == entity_type)
         return query.order_by(RichTextMetadataDb.level.asc(), RichTextMetadataDb.title.asc()).all()
@@ -43,6 +66,8 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
         """Get multiple rich texts by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(RichTextMetadataDb).filter(RichTextMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -63,6 +88,11 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
 
 
 class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        return _remove_all_for_entity(
+            db, LinkMetadataDb, entity_type=entity_type, entity_id=entity_id,
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[LinkMetadataDb]:
         """List links directly attached to an entity."""
         return (
@@ -78,7 +108,12 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
     
     def list_shared(self, db: Session, *, entity_type: Optional[str] = None) -> List[LinkMetadataDb]:
         """List all shared link assets."""
-        query = db.query(LinkMetadataDb).filter(LinkMetadataDb.is_shared == True)
+        # A row stored with is_shared on an entity (before the per-entity routes ignored
+        # it) is that entity's, not the library's (#1342).
+        query = db.query(LinkMetadataDb).filter(
+            LinkMetadataDb.is_shared == True,
+            LinkMetadataDb.entity_id == SHARED_ENTITY_ID,
+        )
         if entity_type:
             query = query.filter(LinkMetadataDb.entity_type == entity_type)
         return query.order_by(LinkMetadataDb.level.asc(), LinkMetadataDb.title.asc()).all()
@@ -87,6 +122,8 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
         """Get multiple links by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(LinkMetadataDb).filter(LinkMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -107,6 +144,113 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
 
 
 class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCreate]):
+    def remove_all_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> List[str]:
+        """Delete the entity's documents; returns the volume paths of their uploaded files.
+
+        Imported Markdown documents point to their source file, which isn't the
+        app's to delete: their paths are left out.
+        """
+        paths = [
+            path for (path,) in db.query(DocumentMetadataDb.storage_path).filter(
+                DocumentMetadataDb.entity_type == entity_type,
+                DocumentMetadataDb.entity_id == entity_id,
+                DocumentMetadataDb.source_path.is_(None),
+            )
+        ]
+        _remove_all_for_entity(
+            db, DocumentMetadataDb, entity_type=entity_type, entity_id=entity_id,
+        )
+        return paths
+
+    def imported_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> List[tuple]:
+        """(id, source path) of the entity's imported Markdown documents."""
+        return [
+            (str(doc_id), path) for (doc_id, path) in db.query(
+                DocumentMetadataDb.id, DocumentMetadataDb.source_path,
+            ).filter(
+                DocumentMetadataDb.entity_type == entity_type,
+                DocumentMetadataDb.entity_id == entity_id,
+                DocumentMetadataDb.source_path.isnot(None),
+            )
+        ]
+
+    def list_by_source_path(self, db: Session, *, source_path: str) -> List[DocumentMetadataDb]:
+        """Documents imported from one source file (one per linked entity)."""
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path == source_path)
+            .all()
+        )
+
+    def list_imported_under(self, db: Session, *, folder: str) -> List[DocumentMetadataDb]:
+        """Documents imported from files under a volume folder (subfolders included)."""
+        prefix = folder.rstrip('/') + '/'
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path.startswith(prefix, autoescape=True))
+            .all()
+        )
+
+    # --- The text of imported files (once per file) ---
+    def save_imported_file(
+        self, db: Session, *, source_path: str, content_hash: str, content_text: str,
+        size_bytes: Optional[int], user_email: Optional[str],
+    ) -> None:
+        """Store this version of a file's text, unless it is stored already.
+
+        Other versions stay while a document still points to them (one the
+        importer couldn't edit); ``remove_unreferenced_imported_files`` drops
+        the rest.
+        """
+        if db.get(ImportedMarkdownFileDb, (source_path, content_hash)) is None:
+            db.add(ImportedMarkdownFileDb(
+                source_path=source_path, content_hash=content_hash, content_text=content_text,
+                size_bytes=size_bytes, updated_by=user_email,
+            ))
+
+    def imported_texts(
+        self, db: Session, *, source_paths: List[str],
+    ) -> Dict[Tuple[str, str], str]:
+        """(source path, content hash) -> stored text, for every version of these files."""
+        if not source_paths:
+            return {}
+        rows = db.query(
+            ImportedMarkdownFileDb.source_path, ImportedMarkdownFileDb.content_hash,
+            ImportedMarkdownFileDb.content_text,
+        ).filter(ImportedMarkdownFileDb.source_path.in_(set(source_paths)))
+        return {(path, digest): text for path, digest, text in rows}
+
+    def remove_unreferenced_imported_files(self, db: Session, *, source_paths: List[str]) -> int:
+        """Delete the stored versions of these files that no document points to any more."""
+        paths = {path for path in source_paths if path}
+        if not paths:
+            return 0
+        db.flush()
+        referenced = set(
+            db.query(DocumentMetadataDb.source_path, DocumentMetadataDb.content_hash)
+            .filter(DocumentMetadataDb.source_path.in_(paths)).distinct()
+        )
+        stored = db.query(ImportedMarkdownFileDb).filter(
+            ImportedMarkdownFileDb.source_path.in_(paths)).all()
+        removed = 0
+        for row in stored:
+            if (row.source_path, row.content_hash) not in referenced:
+                db.delete(row)
+                removed += 1
+        return removed
+
+    def list_imported(self, db: Session) -> List[DocumentMetadataDb]:
+        """Every document imported from a Markdown file."""
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path.isnot(None))
+            .all()
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[DocumentMetadataDb]:
         """List documents directly attached to an entity."""
         return (
@@ -122,7 +266,12 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
     
     def list_shared(self, db: Session, *, entity_type: Optional[str] = None) -> List[DocumentMetadataDb]:
         """List all shared document assets."""
-        query = db.query(DocumentMetadataDb).filter(DocumentMetadataDb.is_shared == True)
+        # A row stored with is_shared on an entity (before the per-entity routes ignored
+        # it) is that entity's, not the library's (#1342).
+        query = db.query(DocumentMetadataDb).filter(
+            DocumentMetadataDb.is_shared == True,
+            DocumentMetadataDb.entity_id == SHARED_ENTITY_ID,
+        )
         if entity_type:
             query = query.filter(DocumentMetadataDb.entity_type == entity_type)
         return query.order_by(DocumentMetadataDb.level.asc(), DocumentMetadataDb.title.asc()).all()
@@ -131,6 +280,8 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
         """Get multiple documents by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(DocumentMetadataDb).filter(DocumentMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -153,6 +304,11 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
 class MetadataAttachmentRepository(CRUDBase[MetadataAttachmentDb, MetadataAttachmentCreate, MetadataAttachmentCreate]):
     """Repository for managing metadata attachments (shared asset links)."""
     
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        return _remove_all_for_entity(
+            db, MetadataAttachmentDb, entity_type=entity_type, entity_id=entity_id,
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[MetadataAttachmentDb]:
         """List all attachments for an entity."""
         return (

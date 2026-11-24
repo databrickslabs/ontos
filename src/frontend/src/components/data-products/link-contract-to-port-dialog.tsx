@@ -9,6 +9,7 @@ import { Loader2, Plus } from 'lucide-react';
 import type { OutputPort, DataProduct } from '@/types/data-product';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
 import EntityVersionPicker, { type ScopeValue } from '@/components/common/entity-version-picker';
+import { omitTags } from '@/lib/tag-payload';
 
 type LinkContractToPortDialogProps = {
   isOpen: boolean;
@@ -89,18 +90,12 @@ export default function LinkContractToPortDialog({
         };
       }
 
-      // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = productData.tags?.map((tag: any) => 
-        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
-      );
-
       // Update product
       const updateResponse = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...productData,
-          tags: normalizedTags,
+          ...omitTags(productData),
           outputPorts: updatedPorts
         })
       });
@@ -194,7 +189,7 @@ export default function LinkContractToPortDialog({
               onClick={() => setIsCreateContractOpen(true)}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Create New Contract
+              {t('data-products:linkContract.actions.createNewContract')}
             </Button>
           </div>
 
@@ -204,7 +199,7 @@ export default function LinkContractToPortDialog({
               onClick={() => onOpenChange(false)} 
               disabled={isSubmitting}
             >
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button 
               onClick={handleSubmit} 
@@ -213,10 +208,10 @@ export default function LinkContractToPortDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Linking...
+                  {t('data-products:linkContract.actions.linking')}
                 </>
               ) : (
-                'Link Contract'
+                t('data-products:linkContract.actions.linkContract')
               )}
             </Button>
           </DialogFooter>
@@ -228,8 +223,10 @@ export default function LinkContractToPortDialog({
         onOpenChange={setIsCreateContractOpen}
         onSuccess={handleContractCreated}
         prefillData={{
-          domain: product?.domain,
-          domainId: product?.domain,
+          // Domain ids (product.domain is the primary domain's name, which the contract
+          // create would refuse as an unknown id)
+          domainIds: product?.domain_ids,
+          primaryDomainId: product?.primary_domain_id,
           tenant: product?.tenant,
           owner_team_id: product?.owner_team_id
         }}

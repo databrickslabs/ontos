@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, 
@@ -27,6 +28,7 @@ import {
   Play,
   Pause,
   AlertCircle,
+  AlertTriangle,
   ChevronDown,
   XCircle,
   RotateCcw,
@@ -63,12 +65,25 @@ import type {
   TriggerType,
 } from '@/types/process-workflow';
 import { getTriggerDisplay, getTriggerTypeLabel, getEntityTypeLabel, getStepTypeLabel } from '@/lib/workflow-labels';
+import {
+  workflowValidationIssueText,
+  type WorkflowValidationIssue,
+} from '@/components/workflows/step-config-checks';
 import { WorkflowExecutionDialog } from '@/components/workflows/workflow-execution-dialog';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 import { workflowExecutionErrorText } from '@/lib/workflow-execution-error';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { RelativeDate } from '@/components/common/relative-date';
 import { WorkflowRunDialog } from '@/components/workflows/workflow-run-dialog';
+
+interface CancelExecutionResponse {
+  execution_id: string;
+  status: string;
+  /** `cancelled_by_admin`: a paused approval was cancelled and followed its failure path. */
+  code?: string;
+  params?: { status?: string };
+  message?: string;
+}
 
 interface WorkflowExecutionsResponse {
   executions: WorkflowExecution[];
@@ -163,6 +178,8 @@ export default function Workflows() {
   
   // Execution action states
   const [deleteExecutionDialogOpen, setDeleteExecutionDialogOpen] = useState(false);
+  const [reloadDefaultsDialogOpen, setReloadDefaultsDialogOpen] = useState(false);
+  const [reloadIncludeEdited, setReloadIncludeEdited] = useState(false);
   const [executionToDelete, setExecutionToDelete] = useState<WorkflowExecution | null>(null);
   const [isActionInProgress, setIsActionInProgress] = useState(false);
   // Preview wizard (issue #405): launched from the row-action menu on any
@@ -229,6 +246,8 @@ export default function Workflows() {
   const toggleWorkflowActive = async (workflow: ProcessWorkflow, confirmOverlap = false): Promise<{
     updated: ProcessWorkflow | null;
     conflicts: WorkflowActivationConflict[];
+    /** Translated reason of a refused activation (`workflow_invalid`, e.g. a missing policy). */
+    refusal: string | null;
   }> => {
     const activating = !workflow.is_active;
     const url = `/api/workflows/${workflow.id}/toggle-active?is_active=${activating}`
@@ -237,12 +256,33 @@ export default function Workflows() {
     if (response.status === 409) {
       const body = await response.json();
       if (body?.detail?.code === 'workflow_activation_overlap') {
-        return { updated: null, conflicts: body.detail.params?.conflicts || body.detail.conflicts || [] };
+        return {
+          updated: null,
+          conflicts: body.detail.params?.conflicts || body.detail.conflicts || [],
+          refusal: null,
+        };
+      }
+    }
+    if (response.status === 400) {
+      // The backend refuses a workflow that can't run before it looks for overlaps
+      const body = await response.json().catch(() => null);
+      const issues = body?.detail?.code === 'workflow_invalid'
+        && Array.isArray(body.detail.params?.issues)
+        ? (body.detail.params.issues as WorkflowValidationIssue[])
+        : null;
+      if (issues && issues.length > 0) {
+        const refusal = issues.map(issue => workflowValidationIssueText(issue, t)).join(' ');
+        return { updated: null, conflicts: [], refusal };
       }
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return { updated: await response.json() as ProcessWorkflow, conflicts: [] };
+    return { updated: await response.json() as ProcessWorkflow, conflicts: [], refusal: null };
   };
+
+  // "N workflows failed to update." followed by the reason of each refusal
+  const failedUpdateText = (failures: number, refusals: string[]) =>
+    [t('workflows:view.messages.workflowsFailedUpdate', { count: failures }), ...refusals]
+      .join(' ');
 
   const handleToggleWorkflowActive = async (workflow: ProcessWorkflow) => {
     if (!canEdit) {
@@ -255,7 +295,11 @@ export default function Workflows() {
     }
     
     try {
-      const { updated, conflicts } = await toggleWorkflowActive(workflow);
+      const { updated, conflicts, refusal } = await toggleWorkflowActive(workflow);
+      if (refusal) {
+        toast({ title: t('common:toast.error'), description: refusal, variant: 'destructive' });
+        return;
+      }
       if (conflicts.length > 0) {
         setPendingOverlapActivations([{ workflow, conflicts }]);
         return;
@@ -285,13 +329,17 @@ export default function Workflows() {
     setIsConfirmingOverlap(true);
     let successes = 0;
     let failures = 0;
+    const refusals: string[] = [];
     try {
       for (const pending of pendingOverlapActivations) {
         try {
-          const { updated } = await toggleWorkflowActive(pending.workflow, true);
+          const { updated, refusal } = await toggleWorkflowActive(pending.workflow, true);
           if (updated) {
             successes += 1;
             setWorkflows(prev => prev.map(w => w.id === updated.id ? updated : w));
+          } else {
+            failures += 1;
+            if (refusal) refusals.push(`${pending.workflow.name}: ${refusal}`);
           }
         } catch {
           failures += 1;
@@ -307,7 +355,7 @@ export default function Workflows() {
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: t('workflows:view.messages.workflowsFailedUpdate', { count: failures }),
+          description: failedUpdateText(failures, refusals),
           variant: 'destructive',
         });
       }
@@ -385,7 +433,7 @@ export default function Workflows() {
     navigate(`${pathname}/${workflow.id}`);
   };
 
-  const handleLoadDefaultWorkflows = async (updateExisting: boolean = false) => {
+  const handleLoadDefaultWorkflows = async (updateExisting: boolean = false, includeEdited: boolean = false) => {
     if (!canEdit) {
       toast({
         title: t('workflows:view.permission.denied'),
@@ -396,17 +444,31 @@ export default function Workflows() {
     }
     
     try {
-      const response = await apiPost<{ message: string; created: number; updated: number; skipped: number }>(
-        `/api/workflows/load-defaults?update_existing=${updateExisting}`,
+      const response = await apiPost<{
+        message: string; created: number; updated: number; skipped: number;
+        kept_edited?: number; kept_edited_names?: string[];
+      }>(
+        `/api/workflows/load-defaults?update_existing=${updateExisting}&include_edited=${includeEdited}`,
         {}
       );
-      if (response.data) {
+      if (response.error || !response.data) {
         toast({
-          title: t('common:toast.success'),
-          description: response.data.message,
+          title: t('common:toast.error'),
+          description: t('workflows:view.messages.loadDefaultsFailed'),
+          variant: 'destructive',
         });
-        loadWorkflows();
+        return;
       }
+      const { created, updated, skipped } = response.data;
+      const kept = response.data.kept_edited_names ?? [];
+      const summary = t('workflows:view.loadDefaults.result', { created, updated, skipped });
+      toast({
+        title: t('common:toast.success'),
+        description: kept.length > 0
+          ? `${summary} ${t('workflows:view.loadDefaults.keptEdited', { names: kept.join(', ') })}`
+          : summary,
+      });
+      loadWorkflows();
     } catch (error) {
       toast({
         title: t('common:toast.error'),
@@ -429,11 +491,19 @@ export default function Workflows() {
     
     setIsActionInProgress(true);
     try {
-      const response = await apiPost<{ message: string }>(`/api/workflows/executions/${execution.id}/cancel`, {});
-      if (response.data) {
+      const response = await apiPost<CancelExecutionResponse>(
+        `/api/workflows/executions/${execution.id}/cancel`, {}
+      );
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: t('workflows:view.messages.cancelFailed'),
+          variant: 'destructive',
+        });
+      } else {
         toast({
           title: t('common:toast.success'),
-          description: t('workflows:view.messages.cancelSuccess'),
+          description: cancelSuccessText(response.data),
         });
         loadExecutions();
       }
@@ -447,6 +517,22 @@ export default function Workflows() {
       setIsActionInProgress(false);
     }
   };
+
+  // An approval step cancelled by an admin follows its failure path (#1119):
+  // the status it ended with, translated
+  const cancelSuccessText = (data: CancelExecutionResponse | undefined): string => {
+    if (data?.code !== 'cancelled_by_admin') return t('workflows:view.messages.cancelSuccess');
+    const status = String(data.params?.status ?? data.status ?? '');
+    return t('workflows:view.messages.approvalCancelled', {
+      status: t(`workflows:execution.executionStates.${status}`, { defaultValue: status }),
+    });
+  };
+
+  // A refused force approve / reject: with require_all only the approvers decide
+  const forceDecisionErrorText = (errorCode: string | null | undefined, fallbackKey: string) =>
+    errorCode === 'approval_not_an_approver'
+      ? t('workflows:view.messages.forceDecisionRequireAll')
+      : t(fallbackKey);
 
   const handleRetryExecution = async (execution: WorkflowExecution) => {
     if (!canEdit) {
@@ -525,7 +611,15 @@ export default function Workflows() {
         `/api/workflows/executions/${execution.id}/resume`,
         { approved: true, message: t('workflows:view.messages.forceApprovedByAdmin') }
       );
-      if (response.data) {
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: forceDecisionErrorText(
+            response.errorCode, 'workflows:view.messages.approveFailed'
+          ),
+          variant: 'destructive',
+        });
+      } else {
         toast({
           title: t('common:toast.success'),
           description: t('workflows:view.messages.approveResumeSuccess'),
@@ -559,7 +653,15 @@ export default function Workflows() {
         `/api/workflows/executions/${execution.id}/resume`,
         { approved: false, message: t('workflows:view.messages.forceRejectedByAdmin') }
       );
-      if (response.data) {
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: forceDecisionErrorText(
+            response.errorCode, 'workflows:view.messages.rejectFailed'
+          ),
+          variant: 'destructive',
+        });
+      } else {
         toast({
           title: t('common:toast.success'),
           description: t('workflows:view.messages.rejectResumeSuccess'),
@@ -603,14 +705,19 @@ export default function Workflows() {
       let successes = 0;
       let failures = 0;
       const overlaps: PendingOverlapActivation[] = [];
+      const refusals: string[] = [];
       // Run activation sequentially: an overlap requires an explicit decision
       // and must not be hidden inside Promise.allSettled as a "successful" call.
+      // A refusal (e.g. a policy_check step without an existing policy) is a failure.
       for (const workflow of toUpdate) {
         try {
-          const { updated, conflicts } = await toggleWorkflowActive(workflow);
+          const { updated, conflicts, refusal } = await toggleWorkflowActive(workflow);
           if (updated) successes += 1;
           else if (conflicts.length > 0) overlaps.push({ workflow, conflicts });
-          else failures += 1;
+          else {
+            failures += 1;
+            if (refusal) refusals.push(`${workflow.name}: ${refusal}`);
+          }
         } catch {
           failures += 1;
         }
@@ -630,7 +737,7 @@ export default function Workflows() {
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: t('workflows:view.messages.workflowsFailedUpdate', { count: failures }),
+          description: failedUpdateText(failures, refusals),
           variant: 'destructive',
         });
       }
@@ -723,8 +830,9 @@ export default function Workflows() {
       const results = await Promise.allSettled(
         cancellable.map(e => apiPost<{ message: string }>(`/api/workflows/executions/${e.id}/cancel`, {}))
       );
-      const successes = results.filter(r => r.status === 'fulfilled').length;
-      const failures = results.filter(r => r.status === 'rejected').length;
+      // An error response is a failure too (the API hook doesn't throw)
+      const successes = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
+      const failures = results.length - successes;
 
       if (successes > 0) {
         toast({
@@ -874,6 +982,16 @@ export default function Workflows() {
           </button>
           {row.original.is_default && (
             <Badge variant="secondary" className="text-xs">{t('workflows:view.badges.default')}</Badge>
+          )}
+          {(row.original.trigger_warnings?.length ?? 0) > 0 && (
+            <Badge
+              variant="outline"
+              className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-400"
+              title={t('workflows:view.badges.triggerWarningsHint')}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {t('workflows:view.badges.triggerWarnings')}
+            </Badge>
           )}
           {row.original.workflow_type === 'approval' ? (
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{t('workflows:view.badges.approval')}</Badge>
@@ -1329,7 +1447,7 @@ export default function Workflows() {
                     <Plus className="h-4 w-4 mr-2" />
                     {t('workflows:view.loadDefaults.newOnly')}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleLoadDefaultWorkflows(true)}>
+                  <DropdownMenuItem onClick={() => { setReloadIncludeEdited(false); setReloadDefaultsDialogOpen(true); }}>
                     <RotateCcw className="h-4 w-4 mr-2" />
                     {t('workflows:view.loadDefaults.reloadAll')}
                   </DropdownMenuItem>
@@ -1690,6 +1808,42 @@ export default function Workflows() {
           previewMode
         />
       )}
+
+      {/* Reload Defaults Confirmation Dialog */}
+      <Dialog open={reloadDefaultsDialogOpen} onOpenChange={setReloadDefaultsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('workflows:view.loadDefaults.confirmTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('workflows:view.loadDefaults.confirmDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-2 py-2">
+            <Checkbox
+              id="reload-include-edited"
+              checked={reloadIncludeEdited}
+              onCheckedChange={(checked) => setReloadIncludeEdited(checked === true)}
+            />
+            <label htmlFor="reload-include-edited" className="text-sm leading-snug">
+              {t('workflows:view.loadDefaults.includeEdited')}
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReloadDefaultsDialogOpen(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button
+              variant={reloadIncludeEdited ? 'destructive' : 'default'}
+              onClick={() => {
+                setReloadDefaultsDialogOpen(false);
+                handleLoadDefaultWorkflows(true, reloadIncludeEdited);
+              }}
+            >
+              {t('workflows:view.loadDefaults.confirmAction')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Execution Confirmation Dialog */}
       <Dialog open={deleteExecutionDialogOpen} onOpenChange={setDeleteExecutionDialogOpen}>

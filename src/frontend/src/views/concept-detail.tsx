@@ -45,11 +45,12 @@ import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
-import { resolveLabel, resolveComment } from '@/lib/ontology-utils';
+import { resolveLabel, resolveLabelFromMaps, resolveComment } from '@/lib/ontology-utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
 import { createSchemeLookup } from '@/lib/scheme-lookup';
 import ConceptRelationsPanel from '@/components/semantic/concept-relations-panel';
 import LinkedObjectsPanel from '@/components/semantic/linked-objects-panel';
+import ConceptMeasureGroups from '@/components/metric-views/concept-measure-groups';
 import ConceptNeighborhoodGraph from '@/components/semantic/concept-neighborhood-graph';
 import { ConceptEditorDialog } from '@/components/knowledge/concept-editor-dialog';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
@@ -798,6 +799,8 @@ export default function ConceptDetailView() {
   }
 
   const conceptTitle = resolveLabel(concept, selectedLanguage);
+  const linkedLabel = (iri: string) =>
+    resolveLabelFromMaps(concept.linked_label_maps?.[iri], iri, selectedLanguage);
   const conceptDefinition = resolveComment(concept, selectedLanguage);
   const isProperty = concept.concept_type === 'property';
   const hasDomainRange = isProperty && (concept.domain || concept.range);
@@ -1020,7 +1023,7 @@ export default function ConceptDetailView() {
               </dd>
             </div>
             <div className="adv-only flex justify-between gap-3 py-1.5">
-              <dt className="text-muted-foreground">IRI</dt>
+              <dt className="text-muted-foreground">{t('semantic-models:fields.iri')}</dt>
               <dd className="font-mono text-xs text-right truncate" title={concept.iri}>
                 {concept.iri}
               </dd>
@@ -1055,7 +1058,7 @@ export default function ConceptDetailView() {
                         className="cursor-pointer"
                         onClick={() => handleNavigateToConcept(iri)}
                       >
-                        {iri.split(/[/#]/).pop() || iri}
+                        {linkedLabel(iri)}
                       </Badge>
                     ))}
                   </div>
@@ -1074,7 +1077,7 @@ export default function ConceptDetailView() {
                         className="cursor-pointer"
                         onClick={() => handleNavigateToConcept(iri)}
                       >
-                        {iri.split(/[/#]/).pop() || iri}
+                        {linkedLabel(iri)}
                       </Badge>
                     ))}
                   </div>
@@ -1093,6 +1096,7 @@ export default function ConceptDetailView() {
             onChanged={fetchConcept}
             maxVisibleRows={MAX_VISIBLE_ROWS}
           />
+          <ConceptMeasureGroups conceptIri={concept.iri} />
         </div>
 
         {/* Version history: live, drives versioning
@@ -1341,6 +1345,7 @@ export default function ConceptDetailView() {
               <PrincipalPicker
                 id="reviewer-email"
                 accepts={['user', 'group']}
+                suggestKnownUsers
                 value={reviewerEmail}
                 onChange={(next) => setReviewerEmail(next ?? null)}
                 placeholder={t('semantic-models:submitReview.reviewerPlaceholder', 'Select a reviewer...')}

@@ -137,7 +137,18 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "« {{value}} » ne désigne pas un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou un nom de volume ; un nom simple nécessite un catalogue et un schéma sans point, barre oblique ni espace."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Descriptions des actifs",
+      "adminOnly": "Seul un administrateur peut activer cette option.",
+      "label": "Écrire les descriptions des actifs dans Unity Catalog",
+      "help": "L'enregistrement de la description d'une table, d'une vue ou d'une colonne Databricks définit aussi son commentaire Unity Catalog, en tant qu'utilisateur qui l'enregistre. Sans les permissions SELECT et MODIFY, la description est enregistrée uniquement dans Ontos et l'actif indique qu'il n'est pas synchronisé.",
+      "importLimit": {
+        "label": "Nombre max. de lignes tentées dans Unity Catalog par import en masse",
+        "help": "Un import CSV/XLSX tente au plus ce nombre de descriptions dans Unity Catalog (1–10000), qu'il les écrive, conserve un autre commentaire ou ignore une vue de métriques ; les lignes au-delà de la limite sont enregistrées dans Ontos avec un avertissement."
       }
     },
     "instanceIdentity": {
@@ -190,6 +201,10 @@
     "messages": {
       "saveSuccess": "Paramètres enregistrés avec succès",
       "saveError": "Échec de l'enregistrement des paramètres"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Le job Compliance Checks n'a pas pu être mis à jour avec les paramètres LLM (l'app n'a peut-être pas les droits sur le job). Les règles LLM_CHECK planifiées utilisent les anciens paramètres jusqu'à la réinstallation du job.",
+      "compliance_job_shape_unexpected": "Le job Compliance Checks a été modifié dans Databricks, donc seuls ses paramètres ont été mis à jour. Si les règles LLM_CHECK planifiées échouent avec « fonctions LLM désactivées », réinstallez le job."
     }
   },
   "databricks": {
@@ -406,7 +421,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sections d'accueil",
-        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle."
+        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle.",
+        "labels": {
+          "JOURNEY": "Accueil par parcours"
+        },
+        "descriptions": {
+          "JOURNEY": "Remplace la page d'accueil complète par Trouver, Comprendre, Faire confiance, Publier et Maintenir. Elle ne peut pas être combinée avec d'autres sections."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilèges d'approbation",
@@ -431,6 +452,15 @@
       "featurePermissions": {
         "title": "Autorisations de fonctionnalités",
         "description": "Configurer les niveaux d'accès pour chaque fonctionnalité de l'application."
+      },
+      "navigation": {
+        "help": "Les fonctionnalités non cochées n'apparaissent pas dans les menus de ce rôle (barre latérale, actions rapides de l'accueil, À propos). Masquer ne change que ce que les menus affichent, pas les autorisations : les pages restent accessibles par lien avec le même niveau d'accès.",
+        "accessColumn": "Niveau d'accès",
+        "column": "Afficher dans la navigation",
+        "showFeature": "Afficher {{feature}} dans la navigation",
+        "noAccessHint": "Aucun accès : la fonctionnalité n'apparaît pas dans les menus",
+        "adminHint": "Le rôle administrateur affiche toujours toutes les fonctionnalités",
+        "unknownFeatures": "Des fonctionnalités inconnues ne peuvent pas être masquées de la navigation : {{features}}"
       },
       "groups": {
         "discover": "Découvrir",
@@ -642,11 +672,14 @@
       "urlLabel": "URL du logo",
       "urlPlaceholder": "https://exemple.com/logo.svg",
       "help": "Entrez l'URL de votre logo personnalisé. Formats supportés: SVG, PNG, JPG. Taille recommandée: 40x40 pixels.",
-      "invalidUrl": "Veuillez entrer une URL HTTP ou HTTPS valide",
       "preview": "Aperçu:",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
-      "previewAlt": "Aperçu du logo"
+      "previewAlt": "Aperçu du logo",
+      "darkUrlLabel": "URL du logo en mode sombre (facultatif)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Utilisé en mode sombre. Laissez vide pour utiliser le logo ci-dessus dans les deux modes.",
+      "invalidUrlOrPath": "Saisissez une URL HTTP ou HTTPS, ou un chemin de l’application commençant par /"
     },
     "about": {
       "title": "Contenu personnalisé de la page À propos",
@@ -665,6 +698,13 @@
       "help": "Entrez du CSS personnalisé pour remplacer le thème par défaut."
     },
     "saveButton": "Enregistrer les paramètres UI",
+    "errorCodes": {
+      "brandingPathTraversal": "Le chemin ne doit pas contenir de segments \"..\""
+    },
+    "loadFailed": {
+      "title": "Impossible de charger les paramètres actuels",
+      "description": "L'image de marque enregistrée n'a pas été chargée ; l'enregistrement est désactivé pour éviter de l'écraser par les valeurs par défaut. Rechargez la page pour réessayer."
+    },
     "messages": {
       "saveSuccess": "Paramètres de personnalisation enregistrés",
       "saveError": "Échec de l'enregistrement des paramètres",
@@ -677,18 +717,38 @@
       "shortNameHelp": "Utilisé dans les espaces restreints (par ex. « Demander à {{shortName}} »). Utilise le nom d'affichage par défaut lorsqu'il est vide. Maximum {{max}} caractères.",
       "displayNameLabel": "Nom d'affichage",
       "shortNameLabel": "Nom court (optionnel)",
-      "title": "Image de marque"
+      "title": "Image de marque",
+      "taglineLabel": "Slogan (facultatif)",
+      "taglineHelp": "Court sous-titre affiché sous le nom dans la barre latérale et sur la page d’accueil. {{max}} caractères maximum.",
+      "poweredByLabel": "Afficher « Powered by {{name}} » dans la barre latérale",
+      "poweredByHelp": "Affiché en bas de la barre latérale uniquement lorsqu’un nom d’affichage ou un logo personnalisé est défini."
     },
     "favicon": {
       "previewAlt": "Aperçu du favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Appliqué à l'exécution à l'onglet du navigateur. La balise statique <link rel=\"icon\"> de l'index.html livré et le manifeste PWA ne sont pas mis à jour par ce paramètre.",
-      "invalidUrl": "Veuillez saisir une URL HTTP ou HTTPS valide",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
       "preview": "Aperçu :",
       "title": "Favicon du navigateur",
       "urlLabel": "URL du favicon"
+    },
+    "theme": {
+      "title": "Couleurs du thème",
+      "help": "Choisissez la couleur principale (boutons, liens, anneau de focus) et la couleur d’accent (arrière-plans au survol et des éléments sélectionnés). Les couleurs du texte sont choisies automatiquement pour le contraste, et une couleur du mode sombre laissée vide est dérivée de la couleur claire.",
+      "primaryLight": "Couleur principale",
+      "primaryDark": "Couleur principale (mode sombre)",
+      "accentLight": "Couleur d’accent",
+      "accentDark": "Couleur d’accent (mode sombre)",
+      "pickerLabel": "{{field}} : sélecteur de couleur",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Saisissez une couleur hexadécimale comme #2563eb",
+      "auto": "Automatique : {{color}} (dérivée de la couleur claire)",
+      "contrast": "Texte {{text}}, contraste {{ratio}}:1",
+      "textLight": "clair",
+      "textDark": "foncé",
+      "meetsAA": "AA",
+      "belowAA": "Inférieur à AA"
     }
   },
   "connectors": {
@@ -1236,6 +1296,9 @@
       "created": "Niveau de maturité « {{name}} » créé.",
       "deleted": "Niveau de maturité « {{name}} » supprimé.",
       "cannotDeleteTitle": "Suppression impossible"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Cette politique utilise LLM_CHECK, qui n’est évalué que dans les exécutions de conformité ; un seuil de maturité ferait donc échouer chaque entité. Sélectionnez une politique sans LLM_CHECK."
     }
   },
   "directory": {

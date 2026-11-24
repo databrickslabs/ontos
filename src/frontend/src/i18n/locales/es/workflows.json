@@ -35,7 +35,8 @@
       "contractApprovers": "Aprobadores del contrato",
       "appRoles": "Roles de la aplicación",
       "businessRoles": "Roles de negocio",
-      "noGroups": "Sin grupos"
+      "noGroups": "Sin grupos",
+      "assetOwners": "Propietarios del activo"
     },
     "messages": {
       "loadWorkflowFailed": "No se pudo cargar el flujo de trabajo",
@@ -92,6 +93,13 @@
       "persist_agreement": "Conservar acuerdo",
       "generate_pdf": "Generar PDF",
       "deliver": "Entregar"
+    },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todos los pasos automáticamente",
+      "confirmTitle": "¿Reorganizar todos los pasos?",
+      "confirmDescription": "Los pasos se organizan automáticamente. Su diseño actual se reemplaza al guardar.",
+      "confirmAction": "Reorganizar"
     },
     "discard": {
       "description": "Tienes cambios sin guardar en este flujo de trabajo. Si sales ahora, se perderán tus cambios.",
@@ -188,7 +196,9 @@
         "validationPassed": "Validación superada",
         "productApproved": "Producto aprobado",
         "productRejected": "Producto rechazado",
-        "piiDetected": "PII detectada"
+        "piiDetected": "PII detectada",
+        "entityDeprecated": "Aviso de obsolescencia",
+        "entityRetired": "Aviso de retirada"
       },
       "customMessage": "Mensaje personalizado",
       "customMessagePlaceholder": "Anula el mensaje de la plantilla. Admite ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -209,13 +219,28 @@
       "selectSource": "Selecciona el origen",
       "sourceCurrentUser": "Usuario actual",
       "sourceProjectName": "Nombre del proyecto",
-      "sourceTimestamp": "Marca de tiempo"
+      "sourceTimestamp": "Marca de tiempo",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fijo",
+      "modeSource": "Valor de la ejecución",
+      "modeNone": "Sin valor",
+      "fixedValue": "Valor de la etiqueta",
+      "fixedValuePlaceholder": "p. ej., confidencial",
+      "selectValue": "Seleccione un valor",
+      "noValueHelp": "La etiqueta se asigna sin valor. Se conserva el valor que la entidad ya tenga para esta etiqueta.",
+      "sourceEntityName": "Nombre de la entidad",
+      "tagNotFound": "Ninguna etiqueta tiene este nombre. El paso solo la establece para los pasos siguientes de la ejecución.",
+      "fixedValueRequired": "Introduzca un valor o elija «Sin valor» para asignar la etiqueta sin valor."
     },
     "approval": {
       "approversRole": "Aprobadores (rol)",
       "selectRole": "Selecciona el rol",
       "additionalApproversAria": "Aprobadores adicionales",
-      "timeoutDays": "Tiempo de espera (días)"
+      "timeoutDays": "Tiempo de espera (días)",
+      "timeoutDaysHelp": "0 significa sin tiempo de espera; déjalo vacío para el valor predeterminado (7 días).",
+      "requireAll": "Requerir a todos los aprobadores",
+      "requireAllHelp": "Cada aprobador decide: un usuario por sí mismo, cualquier miembro por un grupo o rol. Cualquier rechazo hace fallar el paso.",
+      "timeoutNotEnforced": "Aún no se aplica: una aprobación pendiente no caduca."
     },
     "assetReview": {
       "reviewerRole": "Rol de revisor",
@@ -310,10 +335,39 @@
       "duplicateStepIds": "Dos pasos tienen el mismo ID.",
       "stepUnknownReference": "El paso \"{{step}}\" dirige su rama de {{branch}} a \"{{target}}\", que no está en el workflow.",
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
+      "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
+      "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"
       }
+    },
+    "edgeLabels": {
+      "pass": "Aprobado",
+      "fail": "Fallido",
+      "true": "Verdadero",
+      "false": "Falso"
+    },
+    "checks": {
+      "button": "Revisar",
+      "buttonHint": "Revisa el flujo de trabajo en busca de problemas. Las advertencias no impiden guardar.",
+      "clean": "No se encontraron problemas.",
+      "errorsCount_one": "{{count}} error",
+      "errorsCount_other": "{{count}} errores",
+      "warningsCount_one": "{{count}} advertencia",
+      "warningsCount_other": "{{count}} advertencias"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "El paso \"{{step}}\" finaliza el flujo, así que su enlace a \"{{target}}\" se ignora y se elimina al guardar.",
+      "conditionalBranchMissing": "La condición \"{{step}}\" no tiene ningún paso en su rama {{branch}}. Si la condición es {{branch}}, el flujo termina como correcto.",
+      "unreachableSteps": "Estos pasos no se pueden alcanzar desde el primer paso: {{steps}}.",
+      "assignTagKeyUnknown": "El paso \"{{step}}\" asigna la etiqueta \"{{key}}\", que no está en el catálogo de etiquetas. El paso falla hasta que se cree la etiqueta.",
+      "storedEntityTypeUnknown": "El disparador incluye \"{{entityType}}\", un tipo de entidad que ya no existe. Nunca se activa para él.",
+      "storedEntityTypeUnsupported": "El disparador {{trigger}} nunca se activa para {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "El paso \"{{step}}\" comprueba una política que usa LLM_CHECK. LLM_CHECK solo se evalúa en ejecuciones de cumplimiento, así que el paso haría fallar todas las entidades. Selecciona una política sin LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "El paso \"{{step}}\" tiene una regla que usa LLM_CHECK. LLM_CHECK solo se evalúa en las ejecuciones de cumplimiento, así que el paso fallaría en todas las entidades. Quita LLM_CHECK de la regla."
     }
   },
   "approvalResponse": {
@@ -343,10 +397,17 @@
       "processFailed": "No se pudo procesar la aprobación.",
       "processFailedRetry": "No se pudo procesar la aprobación. Inténtalo de nuevo.",
       "entityApproved": "{{name}} se ha aprobado.",
-      "entityRejected": "{{name}} se ha rechazado."
+      "entityRejected": "{{name}} se ha rechazado.",
+      "decisionRecorded": "Decisión registrada",
+      "waitingForApprovers_one": "Falta {{count}} aprobador más.",
+      "waitingForApprovers_other": "Faltan {{count}} aprobadores más."
     },
     "errors": {
-      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud."
+      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
+      "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
+      "approval_already_decided": "Ya has decidido esta aprobación.",
+      "approval_not_an_approver": "Solo los aprobadores de este paso pueden decidirlo.",
+      "approval_no_longer_pending": "Esta aprobación ya se ha decidido."
     },
     "entityTypes": {
       "entity": "Entidad",
@@ -485,9 +546,14 @@
     "removedSteps": "Pasos eliminados",
     "removedStepsHint": "Estos pasos se ejecutaron en esta ejecución y luego se eliminaron del workflow.",
     "stepErrors": {
+      "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
+      "tag_not_found": "No se encontró la etiqueta '{{tag}}' en el catálogo, así que no se asignó",
       "approval_rejected": "Solicitud denegada",
+      "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
+      "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",
       "rule_entity_load_failed": "No se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
-      "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla"
+      "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla",
+      "cancelled_by_admin": "Cancelado por un administrador ({{by}})"
     },
     "states": {
       "pending": "Pendiente",
@@ -496,6 +562,10 @@
       "failed": "Fallido",
       "skipped": "Omitido",
       "waiting": "En espera"
+    },
+    "conditionalBranch": {
+      "true": "La condición fue verdadera: se siguió la rama verdadera",
+      "false": "La condición fue falsa: se siguió la rama falsa"
     },
     "executionStates": {
       "pending": "Pendiente",
@@ -527,6 +597,8 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Ninguna política seleccionada",
+    "policyHint": "Sugerida: {{name}}",
+    "policyUnknown": "Política desconocida o inactiva: {{id}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Sin establecer",
     "connectionLabel": "Conexión: {{name}}",
@@ -606,6 +678,16 @@
     "matches_other": "{{count}} coincidencias",
     "noMatch": "Ninguna variable coincide"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Tipo de entidad desconocido: {{type}}",
+    "removeUnknown": "Quitar {{type}}",
+    "unknownNotice_one": "Este desencadenador incluye un tipo de entidad que ya no existe. No coincide con nada: quítelo para cambiar el desencadenador.",
+    "unknownNotice_other": "Este desencadenador incluye {{count}} tipos de entidad que ya no existen. No coinciden con nada: quítelos para cambiar el desencadenador.",
+    "unknownOnSave": "El desencadenador incluye el tipo de entidad desconocido \"{{type}}\": quítelo en la configuración del desencadenador para cambiarlo.",
+    "unsupportedOnSave": "\"{{trigger}}\" nunca se activa para {{type}}: elija un tipo de entidad que este desencadenador admita.",
+    "pickKnownType": "Elija al menos un tipo de entidad. Sin ninguno, este workflow se activaría para todas las entidades.",
+    "requiredOnSave": "Elija al menos un tipo de entidad para el desencadenador: ninguno de sus tipos lo activa (ya no existen o este desencadenador nunca se activa para ellos), y una lista vacía haría que se activara para todas las entidades."
+  },
   "triggerPicker": {
     "label": "Se activa con",
     "helper": "Qué acción hace que se ejecute este flujo de trabajo",
@@ -622,6 +704,33 @@
       "label": "Permiso requerido:",
       "prefix": "los usuarios necesitan",
       "suffix": "o superior para ver y ejecutar este flujo de trabajo. Configúralo en Configuración → Roles."
+    }
+  },
+  "triggerSchedule": {
+    "cronLabel": "Programación (cron de Quartz)",
+    "cronHint": "6 o 7 campos: segundo minuto hora día-del-mes mes día-de-la-semana [año]. Ejemplo: {{example}} se ejecuta todos los días a las 06:00. Los segundos deben ser 0 y las ejecuciones deben estar separadas al menos 5 minutos.",
+    "timezoneLabel": "Zona horaria",
+    "timezoneHint": "Un nombre IANA como Europe/Berlin o America/Sao_Paulo. Vacío significa UTC.",
+    "fields": {
+      "second": "segundo",
+      "minute": "minuto",
+      "hour": "hora",
+      "day_of_month": "día-del-mes",
+      "month": "mes",
+      "day_of_week": "día-de-la-semana",
+      "year": "año"
+    },
+    "errors": {
+      "schedule_required": "Un disparador programado necesita una expresión cron.",
+      "cron_field_count": "Una expresión cron de Quartz tiene 6 o 7 campos; esta tiene {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" no es válido en el campo {{field}}.",
+      "cron_day_fields_conflict": "Ponga \"?\" en exactamente uno de los campos día-del-mes y día-de-la-semana.",
+      "cron_seconds_not_zero": "El campo de segundos debe ser 0: las ejecuciones empiezan en el minuto exacto.",
+      "cron_unsupported_character": "\"{{character}}\" en el campo {{field}} no se admite en las programaciones de workflows.",
+      "cron_invalid": "Esta no es una expresión cron de Quartz válida.",
+      "cron_no_upcoming_runs": "Esta expresión cron no tiene ninguna ejecución próxima.",
+      "cron_interval_too_short": "Las ejecuciones programadas deben estar separadas al menos {{minutes}} minutos.",
+      "timezone_invalid": "Zona horaria desconocida \"{{timezone}}\": use un nombre IANA como Europe/Berlin."
     }
   },
   "view": {
@@ -642,12 +751,20 @@
     "loadDefaults": {
       "menuLabel": "Flujos de trabajo predeterminados",
       "newOnly": "Cargar solo los nuevos",
-      "reloadAll": "Recargar todos los predeterminados"
+      "reloadAll": "Recargar todos los predeterminados",
+      "confirmTitle": "¿Recargar todos los flujos de trabajo predeterminados?",
+      "confirmDescription": "Cada flujo de trabajo predeterminado se restablece a su definición original: descripción, disparador, ámbito, pasos y su disposición. El estado activo no cambia. Los predeterminados que usted u otro administrador editaron se conservan, salvo que también los restablezca abajo.",
+      "includeEdited": "Restablecer también los flujos predeterminados editados (se pierden sus cambios)",
+      "confirmAction": "Recargar",
+      "keptEdited": "Editados conservados: {{names}}.",
+      "result": "Creados: {{created}}, actualizados: {{updated}}, omitidos: {{skipped}}."
     },
     "badges": {
       "default": "Predeterminado",
       "approval": "Aprobación",
-      "process": "Proceso"
+      "process": "Proceso",
+      "triggerWarnings": "Aviso de disparador",
+      "triggerWarningsHint": "El disparador incluye tipos de entidad que no coinciden con ningún evento. Abra el flujo de trabajo para verlos."
     },
     "columns": {
       "steps": "Pasos",
@@ -757,6 +874,7 @@
       "loadDefaultsFailed": "No se pudieron cargar los flujos de trabajo predeterminados",
       "cancelSuccess": "Ejecución cancelada correctamente",
       "cancelFailed": "No se pudo cancelar la ejecución",
+      "approvalCancelled": "Aprobación cancelada. El flujo de trabajo siguió su camino de rechazo; estado: {{status}}.",
       "retryStarted": "Reintento de ejecución iniciado",
       "retryFailed": "No se pudo reintentar la ejecución",
       "executionDeleteSuccess": "Ejecución eliminada correctamente",
@@ -767,6 +885,7 @@
       "approveFailed": "No se pudo aprobar el flujo de trabajo",
       "rejectResumeSuccess": "Flujo de trabajo rechazado y reanudado",
       "rejectFailed": "No se pudo rechazar el flujo de trabajo",
+      "forceDecisionRequireAll": "Solo los aprobadores pueden decidir este paso (todos deben decidir). En su lugar, puedes cancelar la ejecución.",
       "noChanges": "Sin cambios",
       "allAlreadyEnabled": "Todos los flujos de trabajo seleccionados ya están habilitados.",
       "allAlreadyDisabled": "Todos los flujos de trabajo seleccionados ya están deshabilitados.",

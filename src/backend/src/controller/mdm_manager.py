@@ -11,9 +11,9 @@ Business logic for MDM operations including:
 
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
-from datetime import datetime
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.mdm import (
     MdmConfigDb,
@@ -74,7 +74,7 @@ class MdmManager:
         project_id: Optional[str] = None,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[MdmConfigApi]:
         """List all MDM configurations"""
         configs = mdm_config_repo.list(
@@ -261,7 +261,7 @@ class MdmManager:
             config_id=config_id,
             source_link_id=source_link_id,
             status=MdmMatchRunStatus.PENDING.value,
-            started_at=datetime.utcnow(),
+            started_at=utc_now(),
             triggered_by=triggered_by,
         )
         created_run = mdm_match_run_repo.create(db=self._db, run=run)
@@ -307,7 +307,7 @@ class MdmManager:
         run_id: str,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[MdmMatchCandidateApi]:
         """List match candidates for a run"""
         candidates = mdm_match_candidate_repo.get_by_run(
@@ -534,7 +534,7 @@ class MdmManager:
 
                 if not dry_run:
                     candidate.status = MdmMatchCandidateStatus.MERGED.value
-                    candidate.merged_at = datetime.utcnow()
+                    candidate.merged_at = utc_now()
                     # TODO: Actually write to master table via Spark
 
                 merged_count += 1

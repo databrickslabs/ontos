@@ -110,6 +110,9 @@ def test_a_local_directory_and_no_volume_stay_local(tmp_path):
     ('main.gov', 'main'),
     ('exports', None),
     ('my volume', 'main'),
+    ('/volumes/main/gov/exports', 'main'),
+    ('/VOLUMES/main/gov/exports', 'main'),
+    ('/Volumes', 'main'),
 ])
 def test_a_volume_setting_that_names_no_volume_is_rejected_with_a_code(tmp_path, volume, catalog):
     with pytest.raises(GitVolumeInvalidError) as raised:

@@ -5,10 +5,12 @@ Provides CRUD operations for workflow definitions, steps, and executions.
 """
 
 import json
+from datetime import timedelta
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 
+from src.common.timestamps import utc_now
 from src.db_models.process_workflows import (
     ProcessWorkflowDb,
     WorkflowStepDb,
@@ -23,6 +25,7 @@ from src.models.process_workflows import (
     TriggerType,
     EntityType,
     WorkflowType,
+    ends_process_run,
 )
 from src.common.logging import get_logger
 
@@ -169,7 +172,7 @@ class ProcessWorkflowRepository:
         db_workflow = ProcessWorkflowDb(
             name=workflow.name,
             description=workflow.description,
-            trigger_config=workflow.trigger.model_dump_json(),
+            trigger_config=workflow.trigger.stored_config_json(),
             scope_config=workflow.scope.model_dump_json() if workflow.scope else None,
             workflow_type=(getattr(workflow, 'workflow_type', WorkflowType.PROCESS) or WorkflowType.PROCESS).value,
             is_active=workflow.is_active,
@@ -182,14 +185,16 @@ class ProcessWorkflowRepository:
         
         # Create steps
         for i, step in enumerate(workflow.steps):
+            # A Pass or Fail step ends a process run, so a link out of it is dropped
+            terminal = ends_process_run(db_workflow.workflow_type, step.step_type)
             db_step = WorkflowStepDb(
                 workflow_id=db_workflow.id,
                 step_id=step.step_id,
                 name=step.name,
                 step_type=step.step_type.value,
                 config=json.dumps(step.config) if step.config else None,
-                on_pass=step.on_pass,
-                on_fail=step.on_fail,
+                on_pass=None if terminal else step.on_pass,
+                on_fail=None if terminal else step.on_fail,
                 order=step.order if step.order else i,
                 position=step.position.model_dump_json() if step.position else None,
             )
@@ -206,8 +211,13 @@ class ProcessWorkflowRepository:
         workflow: ProcessWorkflowUpdate,
         *,
         updated_by: Optional[str] = None,
+        customized: Optional[bool] = None,
     ) -> Optional[ProcessWorkflowDb]:
-        """Update an existing workflow."""
+        """Update an existing workflow.
+
+        ``customized`` sets ``is_customized`` (True for a user's update, False for the
+        default loader's reset); None leaves it as it is.
+        """
         db_workflow = self.get(db, workflow_id)
         if not db_workflow:
             return None
@@ -218,7 +228,7 @@ class ProcessWorkflowRepository:
         if workflow.description is not None:
             db_workflow.description = workflow.description
         if workflow.trigger is not None:
-            db_workflow.trigger_config = workflow.trigger.model_dump_json()
+            db_workflow.trigger_config = workflow.trigger.stored_config_json()
         if workflow.scope is not None:
             db_workflow.scope_config = workflow.scope.model_dump_json()
         if workflow.workflow_type is not None:
@@ -228,6 +238,8 @@ class ProcessWorkflowRepository:
         
         db_workflow.updated_by = updated_by
         db_workflow.version += 1
+        if customized is not None:
+            db_workflow.is_customized = customized
         
         # Update steps if provided
         if workflow.steps is not None:
@@ -266,8 +278,10 @@ class ProcessWorkflowRepository:
             db_step.name = step.name
             db_step.step_type = step.step_type.value
             db_step.config = json.dumps(step.config) if step.config else None
-            db_step.on_pass = step.on_pass
-            db_step.on_fail = step.on_fail
+            # A Pass or Fail step ends a process run, so a link out of it is dropped
+            terminal = ends_process_run(db_workflow.workflow_type, step.step_type)
+            db_step.on_pass = None if terminal else step.on_pass
+            db_step.on_fail = None if terminal else step.on_fail
             db_step.order = step.order if step.order else i
             db_step.position = step.position.model_dump_json() if step.position else None
 
@@ -369,6 +383,22 @@ class WorkflowExecutionRepository:
             .first()
         )
 
+    def lock(self, db: Session, execution_id: str) -> Optional[WorkflowExecutionDb]:
+        """Lock an execution's row until the transaction ends and read it afresh.
+
+        ``populate_existing`` replaces what the session already holds for the
+        row, so a status that another transaction changed while this one
+        waited for the lock is seen. No joined loads: Postgres can't lock the
+        nullable side of an outer join.
+        """
+        return (
+            db.query(WorkflowExecutionDb)
+            .filter(WorkflowExecutionDb.id == execution_id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+
     def create(
         self,
         db: Session,
@@ -432,6 +462,7 @@ class WorkflowExecutionRepository:
         duration_ms: Optional[float] = None,
         step_key: Optional[str] = None,
         step_name: Optional[str] = None,
+        message: Optional[str] = None,
     ) -> WorkflowStepExecutionDb:
         """Add a step execution result.
 
@@ -445,6 +476,20 @@ class WorkflowExecutionRepository:
             if db_step is not None:
                 step_key = step_key if step_key is not None else db_step.step_id
                 step_name = step_name if step_name is not None else db_step.name
+        started_at = utc_now()
+        # Rows are read back in started_at order and the ids are random, so two
+        # rows of one execution must never share a timestamp (coarse clocks, or
+        # two steps within one clock tick): the later row is bumped by 1 µs
+        latest = (
+            db.query(func.max(WorkflowStepExecutionDb.started_at))
+            .filter(WorkflowStepExecutionDb.execution_id == execution_id)
+            .scalar()
+        )
+        if latest is not None:
+            if latest.tzinfo is None:  # SQLite returns naive values
+                latest = latest.replace(tzinfo=started_at.tzinfo)
+            if started_at <= latest:
+                started_at = latest + timedelta(microseconds=1)
         db_step_exec = WorkflowStepExecutionDb(
             execution_id=execution_id,
             step_id=step_id,
@@ -454,7 +499,11 @@ class WorkflowExecutionRepository:
             passed=passed,
             result_data=json.dumps(result_data) if result_data else None,
             error_message=error_message,
+            message=message,
             duration_ms=duration_ms,
+            # Set here, not left to func.now(): SQLite keeps whole seconds, so
+            # runs of one step in the same second would not sort by when they ran
+            started_at=started_at,
         )
         db.add(db_step_exec)
         db.commit()
@@ -469,7 +518,6 @@ class WorkflowExecutionRepository:
         cancelled_by: Optional[str] = None,
     ) -> Optional[WorkflowExecutionDb]:
         """Cancel a running or paused execution."""
-        from datetime import datetime
         
         db_execution = db.get(WorkflowExecutionDb, execution_id)
         if not db_execution:
@@ -482,7 +530,7 @@ class WorkflowExecutionRepository:
         
         db_execution.status = 'cancelled'
         db_execution.error_message = f"Cancelled by {cancelled_by or 'admin'}"
-        db_execution.finished_at = datetime.utcnow()
+        db_execution.finished_at = utc_now()
         
         db.commit()
         db.refresh(db_execution)
@@ -512,12 +560,12 @@ class WorkflowExecutionRepository:
         workflow_id: Optional[str] = None,
     ) -> int:
         """Delete multiple executions matching criteria. Returns count deleted."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         
         query = db.query(WorkflowExecutionDb)
         
         if older_than_days is not None:
-            cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+            cutoff = utc_now() - timedelta(days=older_than_days)
             query = query.filter(WorkflowExecutionDb.started_at < cutoff)
         
         if status:

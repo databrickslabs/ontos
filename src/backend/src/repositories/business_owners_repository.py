@@ -94,7 +94,7 @@ class BusinessOwnerRepository(CRUDBase[BusinessOwnerDb, BusinessOwnerCreate, Bus
             raise
 
     def get_multi_filtered(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         object_type: Optional[str] = None, role_id: Optional[UUID] = None,
         active_only: bool = True
     ) -> List[BusinessOwnerDb]:

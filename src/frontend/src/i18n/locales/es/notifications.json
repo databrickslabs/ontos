@@ -1,4 +1,8 @@
 {
+  "metricViewDrift": {
+    "title": "Definición de la metric view modificada",
+    "description": "La definición de la metric view {{fqn}} en Unity Catalog ya no coincide con su línea base en Ontos."
+  },
   "statusChangeNotApplied": {
     "title": "Cambio de estado no aplicado",
     "statusChanged": "La solicitud de cambiar el estado de «{{fromStatus}}» a «{{toStatus}}» se aprobó, pero el estado ahora es «{{currentStatus}}», por lo que el cambio no se aplicó. Vuelva a solicitarlo si todavía es necesario.",
@@ -79,6 +83,14 @@
       "pii_detected": {
         "title": "PII detectada",
         "message": "Posible PII detectada en {{entity_type}} '{{entity_name}}'. Se requiere revisión."
+      },
+      "entity_deprecated": {
+        "title": "Aviso de obsolescencia",
+        "message": "{{entity_type}} '{{entity_name}}' se marcó como obsoleto."
+      },
+      "entity_retired": {
+        "title": "Aviso de retirada",
+        "message": "{{entity_type}} '{{entity_name}}' se ha retirado."
       },
       "default": {
         "title": "Notificación de flujo de trabajo",
@@ -174,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "Tu concepto '{{entity_name}}' ha sido aprobado.",
         "notify-rejected": "Tu concepto '{{entity_name}}' fue devuelto para cambios. Revisa el comentario del revisor y vuelve a enviarlo."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "Tu cambio en la metric view '{{entity_name}}' se envió para aprobación.",
+        "notify-approved": "Tu cambio en la metric view '{{entity_name}}' se aprobó y se está entregando.",
+        "notify-rejected": "Tu cambio en la metric view '{{entity_name}}' fue rechazado."
       }
     },
     "approval": {
@@ -201,7 +218,8 @@
         "entity": "Entidad",
         "ontology_concept": "Concepto",
         "ontology_collection": "Esquema de conceptos",
-        "concept_changeset": "Conjunto de cambios de conceptos"
+        "concept_changeset": "Conjunto de cambios de conceptos",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -229,6 +247,32 @@
     "activation": {
       "title": "Producto activado",
       "description": "El producto de datos '{{productName}}' se activó y ya está disponible para su uso."
+    },
+    "ownerNotice": {
+      "reason": "Motivo: {{reason}}",
+      "sunsetDate": "Fecha de retirada: {{sunsetDate}}",
+      "replacement": "Reemplazo: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (versión {{version}}) se marcó como obsoleto.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (versión {{version}}) se ha retirado.",
+      "replacementVersion": "Reemplazo: {{replacementName}} (versión {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "Cumplimiento: {{policyName}}",
+    "summary": "Política {{policyName}}: {{failedCount}} fallidas, {{passedCount}} aprobadas.",
+    "failedEntities": "Fallidas: {{names}}",
+    "passedEntities": "Aprobadas: {{names}}",
+    "namesWithMore": "{{names}} y {{count}} más"
+  },
+  "metricViewChangeManual": {
+    "title": "Aplica el cambio de la metric view",
+    "description": "Se aprobó la solicitud de cambio de la metric view {{fqn}}. Ejecuta esta sentencia para aplicarla:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Cambio de la metric view no entregado",
+    "description": "No se pudo entregar la solicitud de cambio aprobada de la metric view {{fqn}}."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} que no puede ver"
   }
 }

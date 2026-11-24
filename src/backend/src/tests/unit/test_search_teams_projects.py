@@ -42,6 +42,23 @@ def test_team_indexed_and_searchable(db_session: Session):
     assert tid in _ids(res["results"])
 
 
+def test_team_display_title_indexed_and_searchable(db_session: Session):
+    # The display title must be searchable on its own, not only via words it shares
+    # with the slug-ish name (name/title deliberately disjoint here).
+    tid = str(uuid.uuid4())
+    db_session.add(TeamDb(id=tid, name="dx-guild", title="Developer Experience Collective",
+                          created_by="t@e.com", updated_by="t@e.com"))
+    db_session.commit()
+
+    item = TeamsManager()._build_search_index_item(db_session.get(TeamDb, tid))
+    assert item.title == "Developer Experience Collective"  # title preferred over name
+
+    sm = SearchManager([])
+    sm.index = [item]
+    assert tid in _ids(sm.query_index("collective", type_filter="team")["results"])
+    assert tid in _ids(sm.query_index("dx-guild", type_filter="team")["results"])
+
+
 def test_project_indexed_and_searchable(db_session: Session):
     pid = str(uuid.uuid4())
     db_session.add(ProjectDb(id=pid, name="atlas-migration", title="Atlas Migration",

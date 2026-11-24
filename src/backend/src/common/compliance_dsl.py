@@ -13,6 +13,11 @@ Syntax Overview:
 Supported Operators:
     =, !=, >, <, >=, <=, MATCHES (regex), IN, CONTAINS, HAS_TAG, TAG
 
+Functions:
+    HAS_TAG, TAG, LENGTH, UPPER, LOWER,
+    LLM_CHECK(<text>, '<criterion>') (the serving endpoint's verdict on the text;
+    see compliance_llm_check)
+
 Actions:
     PASS
     FAIL <message>
@@ -32,6 +37,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 import re
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -71,6 +77,7 @@ class TokenType(Enum):
     LENGTH = "LENGTH"
     UPPER = "UPPER"
     LOWER = "LOWER"
+    LLM_CHECK = "LLM_CHECK"
 
     # Actions
     PASS = "PASS"
@@ -116,7 +123,7 @@ class Lexer:
         'MATCH', 'WHERE', 'ASSERT', 'ON_PASS', 'ON_FAIL',
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'MATCHES', 'IN', 'CONTAINS', 'AND', 'OR', 'NOT',
-        'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER',
+        'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER', 'LLM_CHECK',
         'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY',
         'TRUE', 'FALSE'
     }
@@ -424,7 +431,7 @@ class Parser:
 
         # Function call
         if token.type in (TokenType.HAS_TAG, TokenType.TAG, TokenType.LENGTH,
-                          TokenType.UPPER, TokenType.LOWER):
+                          TokenType.UPPER, TokenType.LOWER, TokenType.LLM_CHECK):
             return self.parse_function_call()
 
         # Property access or identifier
@@ -551,11 +558,35 @@ class Parser:
         return self.parse_or_expression()
 
 
-class Evaluator:
-    """Evaluate AST against an object."""
+def llm_check_criterion(node: 'FunctionCall') -> Optional[str]:
+    """The criterion of an LLM_CHECK call: its 2nd argument if a non-empty string literal."""
+    if len(node.args) != 2:
+        return None
+    arg = node.args[1]
+    if isinstance(arg, Literal) and isinstance(arg.value, str) and arg.value.strip():
+        return arg.value.strip()
+    return None
 
-    def __init__(self, obj: Dict[str, Any]):
+
+class LlmCheckCriterionError(CodedValueError):
+    """An LLM_CHECK whose criterion isn't a string literal (rejected on save)."""
+
+    code = 'llm_check_criterion_not_literal'
+
+
+class Evaluator:
+    """Evaluate AST against an object.
+
+    ``llm_checker`` (a ``compliance_llm_check.LlmChecker``) evaluates
+    ``LLM_CHECK``; without one, LLM_CHECK fails the rule with
+    ``llm_check_not_available``. The outcome of every LLM_CHECK evaluated is
+    kept in ``llm_checks``, in order.
+    """
+
+    def __init__(self, obj: Dict[str, Any], llm_checker: Optional[Any] = None):
         self.obj = obj
+        self.llm_checker = llm_checker
+        self.llm_checks: List[Any] = []
 
     def error(self, msg: str) -> Exception:
         return ValueError(f"Evaluation error: {msg}")
@@ -619,7 +650,38 @@ class Evaluator:
             value = self.evaluate(node.args[0])
             return str(value).lower() if value else ''
 
+        if node.name == 'LLM_CHECK':
+            return self.evaluate_llm_check(node)
+
         raise self.error(f"Unknown function: {node.name}")
+
+    def evaluate_llm_check(self, node: FunctionCall) -> bool:
+        """LLM_CHECK(<text>, '<criterion>'): the model's verdict on the text.
+
+        A check without a verdict raises ``LlmCheckError``, so the rule fails
+        whatever the expression around it is (``NOT LLM_CHECK(...)`` too).
+        """
+        from src.common.compliance_llm_check import (
+            NOT_AVAILABLE, LlmCheckError, LlmCheckResult,
+        )
+
+        if len(node.args) != 2:
+            raise self.error("LLM_CHECK expects 2 arguments: a text and a criterion")
+        criterion = llm_check_criterion(node)
+        if criterion is None:
+            # Only the rule author writes the criterion: it goes in the system
+            # prompt, so it can't come from entity data (an expression)
+            raise self.error("LLM_CHECK expects the criterion as a non-empty string literal")
+        text = self.evaluate(node.args[0])
+        try:
+            if self.llm_checker is None:
+                raise LlmCheckError(LlmCheckResult(criterion, False, code=NOT_AVAILABLE))
+            result = self.llm_checker.check(text, criterion)
+        except LlmCheckError as e:
+            self.llm_checks.append(e.result)
+            raise
+        self.llm_checks.append(result)
+        return result.passed
 
     def evaluate_unary_op(self, node: UnaryOp) -> Any:
         """Evaluate unary operation."""
@@ -752,10 +814,21 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
         return False, f"DSL evaluation error: {str(e)}"
 
 
-def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
+class RuleTrailingInputError(CodedValueError):
+    """A rule has input after its last recognised clause (strict parsing)."""
+
+    code = 'rule_trailing_input'
+
+
+def parse_rule(
+    rule: str, *, source: Optional[str] = None, strict: bool = False,
+) -> Dict[str, Any]:
     """Parse a full DSL rule into components.
 
-    ``source`` identifies the rule (e.g. the policy) in diagnostics.
+    ``source`` identifies the rule (e.g. the policy) in diagnostics. With
+    ``strict`` a rule with trailing input raises ``RuleTrailingInputError``
+    (code and position as parameters) instead of ignoring the tail; policies
+    are checked that way when they are saved.
 
     Returns dict with keys:
         - match_type: Entity type to match
@@ -763,6 +836,8 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
         - assert_clause: ASSERT condition AST
         - on_pass_actions: List of actions on success
         - on_fail_actions: List of actions on failure
+        - trailing_input: ``None``, or ``{line, column, text}`` of the first
+          token left over after the last clause (ignored unless ``strict``)
     """
     try:
         lexer = Lexer(rule)
@@ -775,6 +850,7 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
             'assert_clause': None,
             'on_pass_actions': [],
             'on_fail_actions': [],
+            'trailing_input': None,
         }
 
         # Parse MATCH clause
@@ -805,11 +881,21 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
             key = 'on_pass_actions' if clause == TokenType.ON_PASS else 'on_fail_actions'
             result[key].extend(parse_actions(parser))
 
-        # Leftover tokens are ignored, as before, but no longer silently: they usually
-        # mean unsupported syntax (e.g. `IS NOT NULL`) truncated the rule.
+        # Leftover tokens usually mean unsupported syntax (e.g. `IS NOT NULL`)
+        # truncated the rule. Strict parsing refuses them; otherwise they are
+        # ignored, as before, but logged and reported in ``trailing_input``.
         if parser.current().type != TokenType.EOF:
             token = parser.current()
             text = token.value if token.value is not None else token.type.value
+            result['trailing_input'] = {
+                'line': token.line, 'column': token.column, 'text': str(text),
+            }
+            if strict:
+                raise RuleTrailingInputError(
+                    f"Rule has unparsed trailing input starting at line {token.line}, "
+                    f"column {token.column} ({str(text)!r}); remove it or fix the syntax",
+                    **result['trailing_input'],
+                )
             logger.warning(
                 "Compliance rule%s has unparsed trailing input starting at line %s, "
                 "column %s (%r); it is ignored",
@@ -819,8 +905,19 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
 
         return result
 
+    except RuleTrailingInputError:
+        raise
     except Exception as e:
         raise ValueError(f"Failed to parse rule: {str(e)}")
+
+
+def _tag_key(parser: Parser) -> str:
+    """A tag action's key: an identifier or a quoted fully qualified name."""
+    if parser.current().type == TokenType.STRING:
+        if not parser.current().value.strip():
+            raise parser.error("Tag key must not be empty")
+        return parser.advance().value.strip()
+    return parser.expect(TokenType.IDENTIFIER).value
 
 
 def parse_actions(parser: Parser) -> List[Dict[str, Any]]:
@@ -843,15 +940,19 @@ def parse_actions(parser: Parser) -> List[Dict[str, Any]]:
             actions.append({'type': 'FAIL', 'message': message})
 
         elif action_type == TokenType.ASSIGN_TAG:
-            # ASSIGN_TAG key: value
-            key = parser.expect(TokenType.IDENTIFIER).value
-            parser.expect(TokenType.COLON)
-            value = parser.expect(TokenType.STRING).value
+            # ASSIGN_TAG key[: 'value']. The key is an identifier (a tag in the default
+            # namespace) or a quoted fully qualified name ('namespace/name'). Without a
+            # value only the key is assigned (an existing value is kept); '' clears it.
+            key = _tag_key(parser)
+            value = None
+            if parser.current().type == TokenType.COLON:
+                parser.advance()
+                value = parser.expect(TokenType.STRING).value
             actions.append({'type': 'ASSIGN_TAG', 'key': key, 'value': value})
 
         elif action_type == TokenType.REMOVE_TAG:
-            # REMOVE_TAG key
-            key = parser.expect(TokenType.IDENTIFIER).value
+            # REMOVE_TAG key (identifier or quoted 'namespace/name')
+            key = _tag_key(parser)
             actions.append({'type': 'REMOVE_TAG', 'key': key})
 
         elif action_type == TokenType.NOTIFY:

@@ -73,7 +73,7 @@ class DataAssetReviewRepository(CRUDBase[DataAssetReviewRequestDb, DataAssetRevi
             raise
 
     def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None
     ) -> List[DataAssetReviewRequestDb]:
         logger.debug(f"Fetching multiple DataAssetReviews (DB) with skip: {skip}, limit: {limit}")
         try:

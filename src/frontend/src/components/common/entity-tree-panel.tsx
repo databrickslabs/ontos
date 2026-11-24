@@ -82,6 +82,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
 const TYPE_ICON_FALLBACK: Record<string, React.ElementType> = {
   Table: Table2,
   View: Eye,
+  'Metric View': Eye,
   Column: Columns2,
   Dataset: Database,
   Dashboard: LayoutDashboard,

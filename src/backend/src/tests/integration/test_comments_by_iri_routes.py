@@ -5,6 +5,7 @@ as a path segment, so the comment sidebar uses
 ``/entities/{entity_type}/by-iri/...?entity_id=<IRI>``.
 """
 from urllib.parse import quote
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -39,7 +40,9 @@ def _noop_audit_manager():
 @pytest.fixture(autouse=True)
 def _as_admin(monkeypatch):
     """Global (project-less) comments are admin-only in CommentsManager; act as admin."""
-    monkeypatch.setattr("src.routes.comments_routes.is_user_admin", lambda *a, **k: True)
+    monkeypatch.setattr(
+        "src.routes.comments_routes.is_user_feature_admin", AsyncMock(return_value=True)
+    )
 
 
 def _q(iri: str) -> str:

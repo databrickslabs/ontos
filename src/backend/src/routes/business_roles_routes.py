@@ -74,7 +74,7 @@ def get_all_roles(
     db: DBSessionDep,
     manager=Depends(get_business_roles_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     category: Optional[str] = Query(None),
     role_status: Optional[str] = Query(None, alias="status"),
 ):

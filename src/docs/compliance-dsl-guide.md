@@ -54,9 +54,9 @@ has a tag of that name on the entity (see the
 |--------|--------|-------------|
 | `PASS` | `PASS` | Mark as successful (default) |
 | `FAIL` | `FAIL 'message'` | Mark as failed with custom message |
-| `ASSIGN_TAG` | `ASSIGN_TAG key: 'value'` | Add or update a tag on the entity |
-| `REMOVE_TAG` | `REMOVE_TAG key` | Remove a tag from the entity |
-| `NOTIFY` | `NOTIFY 'email@example.com'` | Send notification to recipients |
+| `ASSIGN_TAG` | `ASSIGN_TAG key: 'value'`, `ASSIGN_TAG 'namespace/name': 'value'`, `ASSIGN_TAG 'namespace/name'` | Add or update a tag on the entity. Quote the key for a tag outside the default namespace. Without a value only the tag is assigned and an existing value is kept; `''` clears the value |
+| `REMOVE_TAG` | `REMOVE_TAG key`, `REMOVE_TAG 'namespace/name'` | Remove a tag from the entity |
+| `NOTIFY` | `NOTIFY 'email@example.com'` | Send an in-app notification. Each recipient gets one notification per run that summarizes the entities |
 
 ## Practical Examples
 
@@ -198,6 +198,53 @@ ON_PASS ASSIGN_TAG documentation_status: 'complete'
 
 ---
 
+### Example 7: Column Documentation on Tables
+
+**Scenario**: At least 80% of the columns of every production table have a comment, and all
+partition columns do.
+
+```
+MATCH (t:table)
+WHERE t.catalog = 'production'
+ASSERT
+  t.column_comment_ratio >= 0.8 AND
+  t.partition_columns_without_comment_count = 0
+ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
+```
+
+**What it checks**:
+- `column_comment_ratio` is the share of columns with a comment (blank comments count as
+  missing); it is null for a table with no columns, so such a table fails
+- `partition_columns_without_comment_count` counts partition columns without a comment
+- See the DSL reference for every column field
+
+---
+
+### Example 8: Classified Tables With Known Sources
+
+**Scenario**: Every production table carries a classification tag and has at least one
+upstream table in lineage.
+
+```
+MATCH (t:table)
+WHERE t.catalog = 'production'
+ASSERT
+  HAS_TAG('data_classification') AND
+  t.upstream_count > 0
+ON_FAIL FAIL 'Tag the table with data_classification and make sure its sources are in lineage'
+```
+
+**What it checks**:
+- `HAS_TAG` reads the table's governed tags from `system.information_schema.table_tags`
+- `upstream_count` counts the distinct tables the table was written from in the last 90 days
+  (`system.access.table_lineage`). A table last written longer ago reads `0` and fails this
+  check: leave tables loaded less than quarterly out in the `WHERE`
+- Both are read through the app's SQL warehouse, in a few statements per catalog and only
+  for the schemas the `WHERE` selects. Without a warehouse or access to these system tables, the tables are
+  reported as *not evaluated* and the run shows a warning, instead of failing them as untagged
+
+---
+
 ## Entity Types
 
 You can write rules for these entity types:
@@ -206,7 +253,7 @@ You can write rules for these entity types:
 - `catalog` - Unity Catalog catalogs
 - `schema` - Database schemas
 - `table` - Data tables
-- `view` - Database views
+- `view` - Views, including materialized views and metric views
 - `function` - SQL/Python functions
 - `volume` - Volumes for file storage
 
@@ -219,6 +266,11 @@ You can write rules for these entity types:
 
 ### Generic
 - `Object` - Matches all entity types
+
+Type names ignore case and underscores, so `MATCH (p:DataProduct)` is the same
+as `MATCH (p:data_product)`, in compliance runs and in workflow policy checks.
+When a rule matches no entity, its run succeeds with a "no entities matched"
+warning and no results.
 
 ## Common Properties
 

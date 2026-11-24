@@ -35,6 +35,7 @@ def test_forwarded_token_selects_obo(monkeypatch):
     monkeypatch.setattr(mcp_routes, "get_obo_workspace_client", lambda req, settings: OBO_SENTINEL)
     h = _handler({"x-forwarded-access-token": "dapi-user-token"})
     ctx = h._create_tool_context()
+    assert h._identity_mode is None  # built on first read
     assert ctx.workspace_client is OBO_SENTINEL
     assert h._identity_mode == "obo"
 
@@ -58,9 +59,10 @@ def test_obo_failure_raises_mcp_error_no_fallback(monkeypatch):
     monkeypatch.setattr(mcp_routes, "get_obo_workspace_client", _boom)
     h = _handler({"x-forwarded-access-token": "bad-token"})
     with pytest.raises(MCPError) as exc_info:
-        h._create_tool_context()
+        h._create_tool_context().workspace_client
     assert exc_info.value.code == MCP_AUTH_FAILED
-    assert "forwarded" in exc_info.value.message.lower()
+    # One constant client message; the reason is in the audit entry.
+    assert exc_info.value.message == mcp_routes.IDENTITY_REJECTED_MESSAGE
     # Identity never flips to service_principal; the raise aborts the request.
     assert h._identity_mode != "service_principal"
 
@@ -76,7 +78,7 @@ def test_obo_failure_audits_identity_rejection(monkeypatch):
     audit_manager = MagicMock()
     h = _handler({"x-forwarded-access-token": "bad-token"}, audit_manager=audit_manager)
     with pytest.raises(MCPError):
-        h._create_tool_context()
+        h._create_tool_context().workspace_client
 
     assert audit_manager.log_action.called, "identity rejection must be audited"
     call = audit_manager.log_action.call_args

@@ -1,6 +1,62 @@
 {
   "title": "Bem-vindo ao {{appName}}",
   "tagline": "Gerencie glossário de negócios, contratos de dados, produtos de dados, personas e muito mais",
+  "essentials": {
+    "tagline": "Encontre, entenda e confie nos seus dados, e depois publique e mantenha o que é seu.",
+    "consumer": {
+      "title": "Usar dados",
+      "description": "Comece pelas tabelas que seu time já tem no Unity Catalog."
+    },
+    "producer": {
+      "title": "Compartilhar dados",
+      "description": "Documente os ativos que você possui e peça a revisão deles."
+    },
+    "find": {
+      "title": "Encontrar",
+      "description": "Pesquise ativos e conceitos ou navegue pelo catálogo.",
+      "placeholder": "Pesquise tabelas, ativos e termos do glossário...",
+      "browseCatalog": "Navegar no Data Catalog"
+    },
+    "understand": {
+      "title": "Entender",
+      "description": "Veja o que é um ativo e o que seus termos significam.",
+      "assets": "Ativos",
+      "assetsDescription": "Tabelas, views e outros ativos com seus metadados."
+    },
+    "trust": {
+      "title": "Confiar",
+      "description": "Status de revisão dos ativos e onde os dados estão hoje.",
+      "empty": "Nenhum ativo foi revisado ainda.",
+      "openReviews": "Abrir Revisões de Ativos"
+    },
+    "publish": {
+      "title": "Publicar",
+      "description": "Seus ativos que ainda não têm documentação ou revisão.",
+      "noAssets": "Você ainda não possui nenhum ativo.",
+      "allDone": "Todos os seus ativos estão documentados e têm um pedido de revisão.",
+      "noGapsLoaded": "Nenhuma lacuna nos ativos carregados até agora.",
+      "noDescription": "Sem descrição",
+      "noReview": "Sem pedido de revisão",
+      "more": "Mostrando {{shown}} de seus {{total}} ativos.",
+      "loadMore": "Carregar mais",
+      "pageSize": "Por página",
+      "requestReview": "Solicitar revisão"
+    },
+    "maintain": {
+      "title": "Manter",
+      "description": "Suas solicitações e revisões em aberto.",
+      "myRequests": "Minhas solicitações pendentes ({{count}})",
+      "noRequests": "Nenhuma solicitação pendente.",
+      "openMyRequests": "Abrir Minhas Solicitações",
+      "myReviews": "Minhas revisões de ativos em aberto ({{count}})",
+      "noReviews": "Nenhuma revisão de ativo em aberto."
+    },
+    "notices": {
+      "reviewsTruncated": "Apenas os {{count}} pedidos de revisão criados mais recentemente são lidos, então estas contagens e lacunas podem estar incompletas.",
+      "loadError": "Não foi possível carregar estes dados.",
+      "retry": "Tentar novamente"
+    }
+  },
   "search": {
     "placeholder": "Pesquise produtos de dados, termos do glossário, contratos..."
   },
@@ -123,6 +179,10 @@
     "unknownProduct": "Produto desconhecido",
     "viewAllSubscribed": "Ver todos os assinados"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "A hierarquia de domínios não está disponível para o seu perfil.",
+    "error": "Falha ao carregar a hierarquia de domínios"
+  },
   "dataCurationSection": {
     "title": "Curadoria de dados",
     "createDataProduct": {
@@ -202,9 +262,9 @@
     },
     "products": {
       "available": "{{count}} produto disponível",
-      "available_plural": "{{count}} produtos disponíveis",
+      "available_other": "{{count}} produtos disponíveis",
       "subscribed": "{{count}} produto assinado",
-      "subscribed_plural": "{{count}} produtos assinados",
+      "subscribed_other": "{{count}} produtos assinados",
       "noProducts": "Nenhum produto de dados encontrado.",
       "adjustFilters": "Tente ajustar sua pesquisa ou filtro.",
       "noSubscriptions": "Você ainda não assinou nenhum produto de dados.",
@@ -217,9 +277,9 @@
     },
     "datasets": {
       "available": "{{count}} conjunto de dados disponível",
-      "available_plural": "{{count}} conjuntos de dados disponíveis",
+      "available_other": "{{count}} conjuntos de dados disponíveis",
       "subscribed": "{{count}} conjunto de dados assinado",
-      "subscribed_plural": "{{count}} conjuntos de dados assinados",
+      "subscribed_other": "{{count}} conjuntos de dados assinados",
       "noDatasets": "Nenhum conjunto de dados encontrado.",
       "adjustFilters": "Tente ajustar sua pesquisa.",
       "noSubscriptions": "Você ainda não assinou nenhum conjunto de dados.",
@@ -240,7 +300,7 @@
     "domainInfo": {
       "parentDomain": "Pai",
       "childDomains": "{{count}} domínio filho",
-      "childDomains_plural": "{{count}} domínios filhos"
+      "childDomains_other": "{{count}} domínios filhos"
     },
     "tilesPerRow": {
       "placeholder": "Cartões",

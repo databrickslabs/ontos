@@ -7,10 +7,11 @@ Handles mapping between API models (Pydantic) and DB models (SQLAlchemy).
 
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, distinct, or_, and_
-from typing import Iterable, List, Optional, Any, Dict, Set, Union
+from typing import Iterable, List, Optional, Any, Dict, Set, Tuple, Union
 import json
 
 from src.common.repository import CRUDBase, coerce_uuid
+from src.common.version_visibility import not_others_personal_draft
 from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_products import (
@@ -45,6 +46,7 @@ from src.db_models.data_products import (
     DataProductSubscriptionDb
 )
 from src.common.logging import get_logger
+from src.utils.odcs_values import typed_text
 
 logger = get_logger(__name__)
 
@@ -53,16 +55,47 @@ def _serialize_custom_property_value(value: Any) -> Optional[str]:
     """Serialize an ODPS custom-property value for the TEXT column.
 
     A null value is persisted as SQL NULL rather than the literal string
-    ``"null"`` — ``json.dumps(None)`` would otherwise yield ``"null"``, which
-    read back as a bogus string (e.g. UNRESOLVED placeholders imported with
-    ``value: null``). Strings are stored verbatim; every other type is
-    JSON-encoded to survive the round-trip.
+    ``"null"`` (e.g. UNRESOLVED placeholders imported with ``value: null``).
+    Plain text is stored as is; every other value, and text that would read
+    back as another type (``"42"``, ``"true"``), as JSON (``typed_text``, as
+    for contracts), so the value keeps its JSON type through the round-trip.
     """
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    return json.dumps(value)
+    return typed_text(value)
+
+
+def _port_type_of(port: Dict[str, Any], default: Optional[str]) -> Optional[str]:
+    """Port type from an update payload.
+
+    ``model_dump(by_alias=True)`` names the key ``port_type``; plain dict payloads
+    may use ``type``.
+    """
+    value = port.get('port_type', port.get('type'))
+    return default if value is None else value
+
+
+def _nth_name(seen: Dict[str, int], name: str) -> Tuple[str, int]:
+    """(name, n) for the n-th port of that name in a list, counting from 0."""
+    n = seen.get(name, 0)
+    seen[name] = n + 1
+    return name, n
+
+
+def _ports_by_name(ports, keys: Iterable[str]) -> Dict[Tuple[str, int], Dict[str, Any]]:
+    """The stored ports' values of ``keys``, read before the ports are replaced."""
+    seen: Dict[str, int] = {}
+    return {
+        _nth_name(seen, port.name): {key: getattr(port, key) for key in keys}
+        for port in ports
+    }
+
+
+def _sent_or_stored(
+    port_dict: Dict[str, Any], key: str, stored: Optional[Dict[str, Any]],
+) -> Any:
+    """The sent value (null included), else the stored port's, else None."""
+    if key in port_dict:
+        return port_dict[key]
+    return (stored or {}).get(key)
 
 
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
@@ -94,6 +127,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 api_version=obj_in.apiVersion,
                 kind=obj_in.kind,
                 status=obj_in.status,
+                lifecycle_stage_group_id=getattr(obj_in, 'lifecycle_stage_group_id', None),
                 name=obj_in.name,
                 version=obj_in.version,
                 tenant=obj_in.tenant,
@@ -113,6 +147,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 draft_owner_id=getattr(obj_in, 'draft_owner_id', None),
                 consumer_principals=cp_json,
             )
+            # An imported ODPS document carries its own creation timestamp; without
+            # one the column's server default (now) applies.
+            created_ts = getattr(obj_in, 'productCreatedTs', None)
+            if created_ts is not None:
+                db_obj.product_created_ts = created_ts
 
             # 2. Create Structured Description (One-to-One)
             if obj_in.description:
@@ -347,16 +386,22 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     )
                     db_obj.custom_properties.append(prop_obj)
 
-            # 5. Update Input Ports (replace all)
+            # 5. Update Input Ports (replace all). A port left out of the list is
+            # removed; a field left out of a port keeps the value of the stored port
+            # of that name (the n-th of a repeated name), as for output ports.
             if 'input_ports' in update_data:
+                stored_ports = _ports_by_name(
+                    db_obj.input_ports, ('asset_type', 'asset_identifier'))
                 db_obj.input_ports.clear()
+                incoming_names: Dict[str, int] = {}
                 for port_dict in update_data['input_ports'] or []:
+                    stored = stored_ports.get(_nth_name(incoming_names, port_dict['name']))
                     port_obj = InputPortDb(
                         name=port_dict['name'],
                         version=port_dict['version'],
                         contract_id=port_dict['contract_id'],
-                        asset_type=port_dict.get('asset_type'),
-                        asset_identifier=port_dict.get('asset_identifier')
+                        asset_type=_sent_or_stored(port_dict, 'asset_type', stored),
+                        asset_identifier=_sent_or_stored(port_dict, 'asset_identifier', stored),
                     )
                     db_obj.input_ports.append(port_obj)
 
@@ -377,8 +422,14 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         port_obj = existing_by_id[port_id]
                         port_obj.name = port_dict['name']
                         port_obj.version = port_dict['version']
-                        port_obj.description = port_dict.get('description')
-                        port_obj.port_type = port_dict.get('type')
+                        # A field the caller leaves out keeps its stored value (the
+                        # port dialog sends only what it edits); null or [] clears it.
+                        # The contract is the exception: an omitted one is an unlink,
+                        # as the versioning check reads it.
+                        if 'description' in port_dict:
+                            port_obj.description = port_dict.get('description')
+                        if 'port_type' in port_dict or 'type' in port_dict:
+                            port_obj.port_type = _port_type_of(port_dict, None)
                         port_obj.contract_id = port_dict.get('contract_id')
                         # Preserve existing delivery_method_id on partial updates: only
                         # write if the caller explicitly included the key. Caller can still
@@ -389,22 +440,28 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         if 'delivery_method_id' in port_dict:
                             port_obj.delivery_method_id = coerce_uuid(
                                 port_dict.get('delivery_method_id'))
-                        port_obj.asset_type = port_dict.get('asset_type')
-                        port_obj.asset_identifier = port_dict.get('asset_identifier')
-                        port_obj.status = port_dict.get('status')
-                        port_obj.server = server_json
-                        port_obj.contains_pii = port_dict.get('contains_pii', False)
-                        port_obj.auto_approve = port_dict.get('auto_approve', False)
+                        if 'asset_type' in port_dict:
+                            port_obj.asset_type = port_dict.get('asset_type')
+                        if 'asset_identifier' in port_dict:
+                            port_obj.asset_identifier = port_dict.get('asset_identifier')
+                        if 'status' in port_dict:
+                            port_obj.status = port_dict.get('status')
+                        if 'server' in port_dict:
+                            port_obj.server = server_json
+                        if 'contains_pii' in port_dict:
+                            port_obj.contains_pii = bool(port_dict.get('contains_pii'))
+                        if 'auto_approve' in port_dict:
+                            port_obj.auto_approve = bool(port_dict.get('auto_approve'))
 
                         # Replace SBOM
-                        port_obj.sbom.clear()
-                        if port_dict.get('sbom'):
-                            for sbom_dict in port_dict['sbom']:
+                        if 'sbom' in port_dict:
+                            port_obj.sbom.clear()
+                            for sbom_dict in port_dict['sbom'] or []:
                                 port_obj.sbom.append(SBOMDb(type=sbom_dict.get('type', 'external'), url=sbom_dict['url']))
                         # Replace InputContracts
-                        port_obj.input_contracts.clear()
-                        if port_dict.get('input_contracts'):
-                            for contract_dict in port_dict['input_contracts']:
+                        if 'input_contracts' in port_dict:
+                            port_obj.input_contracts.clear()
+                            for contract_dict in port_dict['input_contracts'] or []:
                                 port_obj.input_contracts.append(InputContractDb(contract_id=contract_dict['id'], contract_version=contract_dict['version']))
 
                         incoming_ids.add(port_id)
@@ -414,7 +471,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                             name=port_dict['name'],
                             version=port_dict['version'],
                             description=port_dict.get('description'),
-                            port_type=port_dict.get('type'),
+                            port_type=_port_type_of(port_dict, None),
                             contract_id=port_dict.get('contract_id'),
                             delivery_method_id=coerce_uuid(port_dict.get('delivery_method_id')),
                             asset_type=port_dict.get('asset_type'),
@@ -440,17 +497,26 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         db_obj.output_ports.remove(old_port)
                         db.delete(old_port)
 
-            # 7. Update Management Ports (replace all)
+            # 7. Update Management Ports (replace all), as input ports: a port left
+            # out of the list is removed, a field left out of a port is kept.
             if 'management_ports' in update_data:
+                stored_ports = _ports_by_name(
+                    db_obj.management_ports, ('port_type', 'url', 'channel', 'description'))
                 db_obj.management_ports.clear()
+                incoming_names = {}
                 for mgmt_dict in update_data['management_ports'] or []:
+                    stored = stored_ports.get(_nth_name(incoming_names, mgmt_dict['name']))
+                    if 'port_type' in mgmt_dict or 'type' in mgmt_dict or not stored:
+                        port_type = _port_type_of(mgmt_dict, 'rest')
+                    else:
+                        port_type = stored['port_type']
                     mgmt_obj = ManagementPortDb(
                         name=mgmt_dict['name'],
                         content=mgmt_dict['content'],
-                        port_type=mgmt_dict.get('type', 'rest'),
-                        url=mgmt_dict.get('url'),
-                        channel=mgmt_dict.get('channel'),
-                        description=mgmt_dict.get('description')
+                        port_type=port_type,
+                        url=_sent_or_stored(mgmt_dict, 'url', stored),
+                        channel=_sent_or_stored(mgmt_dict, 'channel', stored),
+                        description=_sent_or_stored(mgmt_dict, 'description', stored),
                     )
                     db_obj.management_ports.append(mgmt_obj)
 
@@ -551,7 +617,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
         caller_email: Optional[str] = None,
@@ -576,7 +642,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         Args:
             db: Database session
             skip: Number of records to skip
-            limit: Maximum number of records to return
+            limit: Maximum number of records to return (``None`` = no limit)
             project_id: Optional query-param project filter (applied AFTER
                 scoping, as a narrowing filter). Ignored when ``is_admin``.
             is_admin: If True, return all products regardless of scope.
@@ -971,8 +1037,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         """Return every version in a family that's visible to the caller, newest first.
 
         Visibility rules:
-          - Personal drafts (draft_owner_id IS NOT NULL) are visible only to
-            their owner, regardless of role.
+          - Personal drafts (``draft`` status with a draft_owner_id) are
+            visible only to their owner, regardless of role.
+          - The owner stamp hides no row in any other status: an active or
+            deprecated version that still carries another user's
+            draft_owner_id is listed for everyone.
           - Admins see everything; other users see all non-personal-draft rows.
 
         Args:
@@ -987,12 +1056,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         try:
             query = db.query(self.model).filter(self.model.version_family_id == family_id)
             if not is_admin:
-                query = query.filter(
-                    or_(
-                        self.model.draft_owner_id.is_(None),
-                        self.model.draft_owner_id == user_email,
-                    )
-                )
+                # Hide other users' personal drafts.
+                query = query.filter(not_others_personal_draft(self.model, user_email, db))
             return query.order_by(self.model.created_at.desc()).all()
         except Exception as e:
             logger.error(f"Error fetching family versions for {family_id}: {e}", exc_info=True)
@@ -1159,7 +1224,7 @@ class DataProductSubscriptionRepository:
         *,
         product_id: str,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[DataProductSubscriptionDb]:
         """Get all subscribers for a product."""
         logger.debug(f"Fetching subscribers for product {product_id}")
@@ -1179,7 +1244,7 @@ class DataProductSubscriptionRepository:
         *,
         subscriber_email: str,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[DataProductSubscriptionDb]:
         """Get all subscriptions for a user."""
         logger.debug(f"Fetching subscriptions for user {subscriber_email}")

@@ -10,10 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { contractActionErrorText } from '@/lib/contract-action-error';
+import { needsStatusChangeRequest } from '@/lib/status-change-error';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
 import AccessRequestFields from '@/components/access/access-request-fields';
+import DeprecationFields, {
+  DeprecationValues,
+  EMPTY_DEPRECATION,
+  deprecationPayload,
+  requestedDeprecationPayload,
+} from '@/components/common/deprecation-fields';
 import {
   getAllowedTransitions,
   getStatusConfig,
@@ -48,7 +55,7 @@ export default function RequestContractActionDialog({
   contractName,
   contractStatus,
   onSuccess,
-  canDirectStatusChange = false
+  canDirectStatusChange: allowDirectStatusChange = false
 }: RequestContractActionDialogProps) {
   const { t } = useTranslation(['data-contracts', 'common']);
   const { post, get } = useApi();
@@ -64,6 +71,7 @@ export default function RequestContractActionDialog({
   const [catalog, setCatalog] = useState('');
   const [schema, setSchema] = useState('');
   const [targetStatus, setTargetStatus] = useState('');
+  const [deprecation, setDeprecation] = useState<DeprecationValues>(EMPTY_DEPRECATION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number>(30);
@@ -75,6 +83,11 @@ export default function RequestContractActionDialog({
   const [certificationLevel, setCertificationLevel] = useState<number | null>(null);
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevelOption[]>([]);
   const [publicationScope, setPublicationScope] = useState('organization');
+  // A direct change the API refused because the contract is certified: the
+  // user can send it as a status change request instead (certified guard)
+  const [canRequestInstead, setCanRequestInstead] = useState(false);
+  const [requestInstead, setRequestInstead] = useState(false);
+  const canDirectStatusChange = allowDirectStatusChange && !requestInstead;
 
   useEffect(() => {
     get<CertificationLevelOption[]>('/api/certification-levels').then(({ data }) => {
@@ -86,6 +99,8 @@ export default function RequestContractActionDialog({
     if (isOpen) {
       setCertificationLevel(null);
       setPublicationScope('organization');
+      setCanRequestInstead(false);
+      setRequestInstead(false);
     }
   }, [isOpen]);
 
@@ -178,6 +193,14 @@ export default function RequestContractActionDialog({
         setError(t('data-contracts:requests.validation.targetStatusRequired', 'Please select a target status'));
         return false;
       }
+      if (
+        canDirectStatusChange &&
+        targetStatus === 'deprecated' &&
+        !deprecation.deprecationReason.trim()
+      ) {
+        setError(t('common:deprecation.reasonRequired'));
+        return false;
+      }
       // Justification is only required for approval requests, not direct changes
       if (!canDirectStatusChange) {
         if (!justification.trim()) {
@@ -213,6 +236,7 @@ export default function RequestContractActionDialog({
     }
 
     setError(null);
+    setCanRequestInstead(false);
     setSubmitting(true);
 
     try {
@@ -257,6 +281,7 @@ export default function RequestContractActionDialog({
           // Direct status change - different payload format
           payload = {
             new_status: targetStatus,
+            ...(targetStatus === 'deprecated' ? deprecationPayload(deprecation) : {}),
           };
         } else {
           // Request for approval
@@ -264,6 +289,7 @@ export default function RequestContractActionDialog({
             target_status: targetStatus,
             justification: justification.trim(),
             current_status: contractStatus,
+            ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
           };
         }
       }
@@ -271,6 +297,9 @@ export default function RequestContractActionDialog({
       const response = await post(config.endpoint, payload);
 
       if (response.error) {
+        setCanRequestInstead(
+          requestType === 'status_change' && needsStatusChangeRequest(response),
+        );
         throw new Error(contractActionErrorText(response, t));
       }
 
@@ -322,6 +351,7 @@ export default function RequestContractActionDialog({
       setCatalog('');
       setSchema('');
       setTargetStatus('');
+      setDeprecation(EMPTY_DEPRECATION);
       setCertificationLevel(null);
       setPublicationScope('organization');
       onOpenChange(false);
@@ -344,6 +374,7 @@ export default function RequestContractActionDialog({
     setCatalog('');
     setSchema('');
     setTargetStatus('');
+    setDeprecation(EMPTY_DEPRECATION);
     setError(null);
     onOpenChange(false);
   };
@@ -388,7 +419,7 @@ export default function RequestContractActionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {t('data-contracts:requests.dialogTitle', 'Request Action')}
@@ -792,6 +823,17 @@ export default function RequestContractActionDialog({
                 </Alert>
               )}
 
+              {targetStatus === 'deprecated' && (
+                <DeprecationFields
+                  entityType="data_contract"
+                  entityId={contractId}
+                  value={deprecation}
+                  onChange={setDeprecation}
+                  disabled={submitting}
+                  hideReason={!canDirectStatusChange}
+                />
+              )}
+
               {/* Justification - required for approval requests, optional for direct changes */}
               {!canDirectStatusChange && (
                 <div className="space-y-2">
@@ -808,6 +850,7 @@ export default function RequestContractActionDialog({
                   />
                   <div className="text-xs text-muted-foreground">
                     {t('data-contracts:requests.statusChange.justificationHint', 'Minimum 20 characters required. This will be reviewed by an admin.')}
+                    {targetStatus === 'deprecated' && ` ${t('common:deprecation.requestHint')}`}
                   </div>
                 </div>
               )}
@@ -841,7 +884,28 @@ export default function RequestContractActionDialog({
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {canRequestInstead && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 block"
+                    onClick={() => {
+                      // The reason given for the direct change is the request's justification
+                      if (targetStatus === 'deprecated' && !justification.trim()) {
+                        setJustification(deprecation.deprecationReason.trim());
+                      }
+                      setRequestInstead(true);
+                      setCanRequestInstead(false);
+                      setError(null);
+                    }}
+                  >
+                    {t('workflow-gates:requestInstead')}
+                  </Button>
+                )}
+              </AlertDescription>
             </Alert>
           )}
         </div>

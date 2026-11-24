@@ -1,5 +1,4 @@
 """Domain Sync uses one privileged app identity, not the initiating user's token."""
-
 import inspect
 from unittest.mock import MagicMock
 

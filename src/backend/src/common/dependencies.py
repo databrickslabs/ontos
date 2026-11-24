@@ -34,7 +34,7 @@ from src.models.users import UserInfo # Corrected import to UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 
-# Import the PermissionChecker class directly for use in require_permission
+# Permission checks use PermissionChecker (routes) or user_has_feature_level (in-handler gates)
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk # Import checker and user getter
 # Import manager getters from the new file
 from src.common.manager_dependencies import (
@@ -138,60 +138,6 @@ DirectoryManagerDep = Annotated[DirectoryManager, Depends(get_directory_manager)
 
 # Permission Checker Dependency
 PermissionCheckerDep = AuthorizationManagerDep 
-
-# --- Permission Checking Function --- #
-# Can now safely use Annotated types defined above
-async def require_permission(
-    feature: str,
-    level: FeatureAccessLevel,
-    user: CurrentUserDep, 
-    auth_manager: AuthorizationManagerDep
-):
-    """
-    FastAPI Dependency function to check if the current user has the required permission level
-    for a given feature string ID using the AuthorizationManager.
-    """
-    # The PermissionChecker class itself is used directly in routes like Depends(PermissionChecker(...))
-    # This function provides a simpler way if complex instantiation isn't needed.
-    logger.debug(f"Checking permission via require_permission for feature '{feature}' (level: {level.value}) for user '{user.username}'")
-
-    if not user.groups:
-        logger.warning(f"User '{user.username}' has no groups. Denying access for '{feature}'.")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User has no assigned groups, cannot determine permissions."
-        )
-
-    try:
-        effective_permissions = auth_manager.get_user_effective_permissions(user.groups)
-        has_required_permission = auth_manager.has_permission(
-            effective_permissions,
-            feature,
-            level
-        )
-
-        if not has_required_permission:
-            user_level = effective_permissions.get(feature, FeatureAccessLevel.NONE)
-            logger.warning(
-                f"Permission denied via require_permission for user '{user.username}' "
-                f"on feature '{feature}'. Required: '{level.value}', Found: '{user_level.value}'"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions for feature '{feature}'. Required level: {level.value}."
-            )
-
-        logger.debug(f"Permission granted via require_permission for user '{user.username}' on feature '{feature}'")
-        return
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during permission check (require_permission) for feature '{feature}': {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error checking user permissions."
-        )
 
 # --- Helper to get current user for audit logging --- #
 # Defined *after* CurrentUserDep is defined

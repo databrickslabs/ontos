@@ -1,4 +1,8 @@
 {
+  "metricViewDrift": {
+    "title": "メトリックビューの定義が変更されました",
+    "description": "Unity Catalog のメトリックビュー {{fqn}} の定義が、Ontos のベースラインと一致しなくなりました。"
+  },
   "statusChangeNotApplied": {
     "title": "ステータスの変更は適用されませんでした",
     "statusChanged": "ステータスを「{{fromStatus}}」から「{{toStatus}}」に変更するリクエストは承認されましたが、現在のステータスが「{{currentStatus}}」のため、変更は適用されませんでした。まだ必要な場合は、もう一度リクエストしてください。",
@@ -79,6 +83,14 @@
       "pii_detected": {
         "title": "PII が検出されました",
         "message": "{{entity_type}}「{{entity_name}}」で PII の可能性があるデータが検出されました。確認してください。"
+      },
+      "entity_deprecated": {
+        "title": "非推奨のお知らせ",
+        "message": "{{entity_type}}「{{entity_name}}」は非推奨になりました。"
+      },
+      "entity_retired": {
+        "title": "廃止のお知らせ",
+        "message": "{{entity_type}}「{{entity_name}}」は廃止されました。"
       },
       "default": {
         "title": "ワークフロー通知",
@@ -174,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "コンセプト「{{entity_name}}」が承認されました。",
         "notify-rejected": "コンセプト「{{entity_name}}」は修正のため差し戻されました。レビュアーのコメントを確認して再提出してください。"
+      },
+      "metric-view-change-request": {
+        "notify-requester": "メトリックビュー '{{entity_name}}' への変更を承認のために提出しました。",
+        "notify-approved": "メトリックビュー '{{entity_name}}' への変更が承認され、配信中です。",
+        "notify-rejected": "メトリックビュー '{{entity_name}}' への変更は却下されました。"
       }
     },
     "approval": {
@@ -201,7 +218,8 @@
         "entity": "エンティティ",
         "ontology_concept": "コンセプト",
         "ontology_collection": "コンセプトスキーム",
-        "concept_changeset": "コンセプト変更セット"
+        "concept_changeset": "コンセプト変更セット",
+        "metric_view": "メトリックビュー"
       }
     },
     "approvalMessages": {
@@ -229,6 +247,32 @@
     "activation": {
       "title": "プロダクトが有効化されました",
       "description": "データプロダクト「{{productName}}」が有効化され、利用できるようになりました。"
+    },
+    "ownerNotice": {
+      "reason": "理由: {{reason}}",
+      "sunsetDate": "提供終了日: {{sunsetDate}}",
+      "replacement": "後継: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}}「{{entity_name}}」(バージョン {{version}}) は非推奨になりました。",
+      "retiredVersion": "{{entity_type}}「{{entity_name}}」(バージョン {{version}}) は廃止されました。",
+      "replacementVersion": "後継: {{replacementName}} (バージョン {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "コンプライアンス: {{policyName}}",
+    "summary": "ポリシー {{policyName}}: 失敗 {{failedCount}} 件、合格 {{passedCount}} 件。",
+    "failedEntities": "失敗: {{names}}",
+    "passedEntities": "合格: {{names}}",
+    "namesWithMore": "{{names}} ほか {{count}} 件"
+  },
+  "metricViewChangeManual": {
+    "title": "メトリックビューの変更を適用してください",
+    "description": "メトリックビュー {{fqn}} の変更リクエストが承認されました。適用するには次のステートメントを実行してください:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "メトリックビューの変更を配信できませんでした",
+    "description": "メトリックビュー {{fqn}} の承認済み変更リクエストを配信できませんでした。"
+  },
+  "complianceRunVisibility": {
+    "notShown": "閲覧できないもの {{count}} 件"
   }
 }

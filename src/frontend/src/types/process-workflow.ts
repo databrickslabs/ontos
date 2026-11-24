@@ -22,6 +22,7 @@ export type TriggerType =
   | 'on_request_publish'
   | 'on_request_deploy'
   | 'on_request_status_change'
+  | 'on_request_definition_change'
   | 'on_request_certify'
   | 'on_certify'
   | 'on_decertify'
@@ -71,7 +72,8 @@ export type EntityType =
   | 'user'
   | 'ontology_concept'
   | 'ontology_collection'
-  | 'concept_changeset';
+  | 'concept_changeset'
+  | 'metric_view';
 
 export type ScopeType = 'all' | 'project' | 'catalog' | 'domain';
 
@@ -132,9 +134,14 @@ export interface GateExemptions {
 export interface WorkflowTrigger {
   type: TriggerType;
   entity_types: EntityType[];
+  /** Stored types this version doesn't know (a removed type): they match no event */
+  unknown_entity_types?: string[];
   from_status?: string;
   to_status?: string;
-  schedule?: string;
+  /** scheduled only: Quartz cron (sec min hour day-of-month month day-of-week [year]) */
+  schedule?: string | null;
+  /** scheduled only: IANA timezone of the schedule; empty means UTC */
+  timezone?: string | null;
   /** before_status_change only; the backend defaults to fail_open */
   on_error?: GateErrorMode;
   disabled_for?: GateExemptions;
@@ -370,6 +377,12 @@ export interface ProcessWorkflow {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  /**
+   * Read only: stored trigger entity types that match no event, coded
+   * `stored_entity_type_unknown` / `stored_entity_type_unsupported`
+   * (params `triggerType`, `entityType`). The workflow is kept as stored.
+   */
+  trigger_warnings?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 export interface ProcessWorkflowCreate {
@@ -416,6 +429,8 @@ export interface WorkflowStepExecutionResult {
   passed?: boolean;
   result_data?: Record<string, unknown>;
   error_message?: string;
+  // The step's message; results recorded before it was stored have none
+  message?: string | null;
   duration_ms?: number;
   started_at?: string;
   finished_at?: string;
@@ -463,6 +478,8 @@ export interface WorkflowValidationResult {
   warnings: string[];
   /** The same errors with a code and params each (translated by the designer). */
   issues?: { code: string; message: string; params: Record<string, unknown> }[];
+  /** The same warnings with a code and params each. */
+  warning_issues?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 // API responses

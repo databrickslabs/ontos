@@ -75,16 +75,22 @@ DB_POOL_TIMEOUT=10
 
 **Note:** The `DB_POOL_RECYCLE=3600` default is especially important for Lakebase deployments, as it ensures connections are refreshed before OAuth tokens expire.
 
+**Connection budget per replica:** `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` + `WORKFLOW_SCHEDULER_MAX_WORKERS` + 1, which is 20 with the defaults (5 + 10 + 4 + 1). The last two terms are the workflow scheduler's own engine, apart from the request pool. Multiply by the number of replicas and keep the total under the database's maximum connections, leaving room for other clients. Compare the total with the connection limit of the Lakebase compute (the "Compute specifications" table in the Lakebase documentation, https://docs.databricks.com/aws/en/oltp/projects/manage-computes, or `SHOW max_connections`; for an autoscaling compute the limit follows the smaller of the maximum CU and 8x the minimum CU; some connections are reserved, so the documented figure and `SHOW max_connections` can differ).
+
+**Lakebase limits:** the `max_connections` of a Lakebase compute is roughly 105 at 0.5 CU, 218 at 1 CU, 443 at 2 CU and 894 at 4 CU (approximate figures; check the "Compute specifications" table or `SHOW max_connections` for your compute). With the 20 connections per replica above, a 1 CU compute holds about 10 replicas, before other clients.
+
 ### Application Settings
 
 | Variable | Description | Example | Required |
 |----------|-------------|---------|----------|
 | `ENV` | Deployment environment (`LOCAL`, `DEV`, `PROD`) | `LOCAL` | No |
+| `OBO_ALLOW_SP_FALLBACK` | Requests without the user's on-behalf-of token use the app's service principal instead of answering 403 (`user_token_required`). Only for deployments where on-behalf-of auth isn't enabled; `ENV=LOCAL` already does this | `False` | No |
 | `DEBUG` | Enable debug mode for FastAPI | `True` | No |
 | `LOG_LEVEL` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` | No |
 | `LOG_FILE` | Path to log file | `/path/to/app.log` | No |
 | `APP_AUDIT_LOG_DIR` | Directory within `DATABRICKS_VOLUME` for audit logs | `audit_logs` | Yes |
 | `APP_ADMIN_DEFAULT_GROUPS` | JSON array of Databricks groups for default Admin role | `["admins", "superusers"]` | No |
+| `DEMO_SETUP_TOKEN` | Secret that lets a caller load or clear demo data via the `X-Demo-Setup-Token` header instead of the Admin permission. At least 32 characters (a shorter value is ignored and logged as an error at startup). Leave unset to disable | `a-long-random-value` | No |
 | `APP_DEMO_MODE` | Enable demo mode (loads sample data on startup) | `False` | No |
 | `APP_DB_DROP_ON_START` | **DANGER:** Drop and recreate database on startup | `False` | No |
 | `APP_DB_ECHO` | Log SQLAlchemy SQL statements (debugging) | `False` | No |

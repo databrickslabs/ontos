@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "Duplicada",
+    "link_conflict": "Vinculada a outro conceito",
+    "unrecognized_duplicate": "Duplicada não reconhecida",
+    "variant": "Variante",
+    "conflict": "Conflito",
+    "near_duplicate": "Quase duplicada"
+  },
+  "level": {
+    "expression": "expressão",
+    "scope": "escopo",
+    "full": "janela e parâmetros"
+  },
+  "component": {
+    "expression": "Expressão",
+    "source": "Origem",
+    "filter": "Filtro",
+    "window": "Janela",
+    "joins": "Joins",
+    "parameters": "Parâmetros",
+    "aggregation": "Agregação",
+    "columns": "Colunas"
+  },
+  "differences": "Diferenças",
+  "similarity": "Similaridade {{score}}%",
+  "hidden": "Você não tem acesso a esta metric view no Unity Catalog, por isso a definição não é exibida.",
+  "concept": {
+    "title": "Medidas de metric views",
+    "group": "Definição {{n}}",
+    "differsAt": "Difere da definição 1 em: {{level}}",
+    "onlyIn": "Só em {{name}}",
+    "otherConcepts": "A mesma definição também está vinculada a: {{concepts}}",
+    "unresolved": "Campos vinculados sem definição armazenada: {{fields}}",
+    "verdict": {
+      "consistent": "Consistente",
+      "conflict": "Definições em conflito"
+    },
+    "hint": {
+      "consistent": "Todas as medidas vinculadas a este conceito calculam a mesma coisa.",
+      "conflict": "As medidas vinculadas a este conceito calculam {{count}} coisas diferentes. As diferenças estão destacadas."
+    }
+  },
+  "asset": {
+    "title": "Definições iguais ou parecidas",
+    "hint": "Outras medidas sobre os mesmos dados com definição igual ou parecida, e vínculos de conceito em conflito. Nada é alterado.",
+    "linkedTo": "vinculada a {{concepts}}",
+    "onlyIn": "Só em {{name}}",
+    "error": {
+      "reference_cycle": "As referências desta medida formam um ciclo, por isso ela não pode ser comparada.",
+      "reference_depth": "As referências desta medida estão aninhadas demais para serem comparadas.",
+      "no_expression": "Esta medida não tem expressão para comparar."
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} foi vinculada. Confira a definição",
+    "dismiss": "Dispensar",
+    "hint": "O vínculo foi criado. Revise as definições na página do conceito.",
+    "concept_has_other_definitions": "Medidas já vinculadas a este conceito calculam outra coisa ({{count}}): {{measures}}",
+    "definition_linked_to_other_concepts": "Medidas com a mesma definição estão vinculadas a outros conceitos ({{count}}): {{concepts}}"
+  }
+}

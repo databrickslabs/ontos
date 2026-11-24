@@ -6,9 +6,11 @@
     "loading": "Laden...",
     "cancel": "Abbrechen",
     "close": "Schließen",
+    "openMenu": "Menü öffnen",
     "delete": "Löschen",
     "deleteSelected": "Ausgewählte löschen ({{count}})",
     "edit": "Bearbeiten",
+    "rename": "Umbenennen",
     "add": "Hinzufügen",
     "create": "Erstellen",
     "update": "Aktualisieren",
@@ -41,6 +43,7 @@
     "discard": "Verwerfen",
     "apply": "Anwenden",
     "select": "Auswählen",
+    "done": "Fertig",
     "remove": "Entfernen",
     "link": "Verknüpfen",
     "unlink": "Verknüpfung lösen",
@@ -338,7 +341,8 @@
       "for_request_access": "Zugriff anfordern (Assistent)",
       "for_request_publish": "Veröffentlichung anfordern (Assistent)",
       "for_request_certify": "Zertifizierung anfordern (Assistent)",
-      "for_request_status_change": "Statusänderung anfordern (Assistent)"
+      "for_request_status_change": "Statusänderung anfordern (Assistent)",
+      "on_request_definition_change": "Definitionsänderungsanfrage"
     },
     "entityTypes": {
       "catalog": "Katalog",
@@ -355,7 +359,11 @@
       "data_asset_review": "Asset-Prüfung",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Benutzer"
+      "user": "Benutzer",
+      "metric_view": "Metric View",
+      "ontology_concept": "Konzept",
+      "ontology_collection": "Sammlung",
+      "concept_changeset": "Konzept-Änderungssatz"
     },
     "stepTypes": {
       "validation": "Validierung",
@@ -472,7 +480,13 @@
     "selectRelTypePrompt": "Wählen Sie einen Beziehungstyp aus, um Zielentitäten zu finden",
     "createRelationship": "Beziehung erstellen",
     "relationshipCreated": "Beziehung erstellt",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "„{{relationship}}“ verknüpft dieses Element als Beziehung mit einem Konzept: Sie erscheint unter Beziehungen und in der Lineage. Damit das Konzept in den Details dieses Elements und auf der Konzeptseite unter {{conceptSection}} erscheint, verwenden Sie stattdessen {{section}}.",
+    "targetNotPickable": "{{type}} kann hier nicht ausgewählt werden. Es wird auf einer eigenen Seite verwaltet.",
+    "noAccessToTarget": "Sie haben keinen Zugriff auf {{type}}. Bitten Sie einen Administrator um Lesezugriff, um darauf zu verknüpfen."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "Die gespeicherten Eigenschaften des Assets konnten nicht geladen werden, daher kann es hier nicht gespeichert werden. Schließen Sie den Dialog und versuchen Sie es erneut."
   },
   "assetForm": {
     "groups": {
@@ -559,16 +573,25 @@
     "removeConfirm": "Möchten Sie diese Beziehung wirklich entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "{{kind}} auswählen…",
     "latestSuffix": "{{name}} (neueste)",
     "pinVersionTitle": "Eine bestimmte Version anheften",
     "pinVersion": "Version anheften",
     "followLatestTitle": "Immer der neuesten sichtbaren Version der Familie folgen",
     "followLatest": "Neueste verfolgen",
-    "searchPlaceholder": "{{kind}} suchen…",
     "loading": "Wird geladen…",
-    "noMatching": "Keine passenden {{kind}}.",
     "unnamed": "(unbenannt)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Vertrag auswählen…",
+      "search": "Verträge suchen…",
+      "noMatching": "Keine passenden Verträge."
+    },
+    "product": {
+      "select": "Produkt auswählen…",
+      "search": "Produkte suchen…",
+      "noMatching": "Keine passenden Produkte."
+    }
   },
   "entityTree": {
     "title": "Verwandte Entitäten",
@@ -632,6 +655,8 @@
   "edit": "Bearbeiten",
   "error": "Fehler",
   "home": "Startseite",
+  "loading": "Wird geladen…",
+  "optional": "(optional)",
   "refresh": "Aktualisieren",
   "retry": "Erneut versuchen",
   "save": "Speichern",
@@ -762,5 +787,39 @@
     "createdSkipped": "Erstellt: {{created}}, übersprungen: {{skipped}}.",
     "createdFailed": "Erstellt: {{created}}, fehlgeschlagen: {{failed}}.",
     "createdSkippedFailed": "Erstellt: {{created}}, übersprungen: {{skipped}}, fehlgeschlagen: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Grund der Abkündigung",
+    "reasonPlaceholder": "Warum wird es abgekündigt? Konsumenten sehen diesen Text.",
+    "sunsetDate": "Auslaufdatum",
+    "replacement": "Ersatz",
+    "noReplacement": "Kein Ersatz",
+    "reasonRequired": "Für die Abkündigung ist ein Grund erforderlich.",
+    "requestHint": "Die Begründung wird zum Grund der Abkündigung.",
+    "errors": {
+      "deprecation_reason_required": "Für die Abkündigung ist ein Grund erforderlich.",
+      "sunset_date_in_past": "Das Auslaufdatum {{sunsetDate}} liegt in der Vergangenheit.",
+      "replacement_is_self": "Eine Entität kann nicht ihr eigener Ersatz sein.",
+      "replacement_not_found": "Der Ersatz {{replacementId}} wurde nicht gefunden.",
+      "replacement_retired": "Der Ersatz {{replacementId}} ist stillgelegt.",
+      "replacement_deprecated": "Der Ersatz {{replacementId}} ist veraltet.",
+      "replacement_deprecated_replaced": "Der Ersatz {{replacementId}} ist veraltet; er wird durch {{replacedBy}} ersetzt.",
+      "replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Ungültiges {{property}} \"{{value}}\": ISO-Datum erwartet.",
+      "replacement_is_self": "Der Ersatz (ontosReplacedBy) kann nicht die Entität selbst sein.",
+      "replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück: {{chain}}.",
+      "imported_replacement_dropped": "Der Ersatz {{replacementId}} ist hier nicht vorhanden und wurde daher nicht verknüpft.",
+      "imported_replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück ({{chain}}) und wurde daher nicht verknüpft.",
+      "imported_status_mapped": "'{{status}}' ist kein Lebenszyklus-Status und wurde daher als '{{mappedTo}}' importiert.",
+      "imported_legacy_status": "'{{status}}' ist ein älterer Statusname und wurde daher als '{{mappedTo}}' importiert.",
+      "imported_certified_as_active": "'{{status}}' ist kein Status mehr und wurde daher als '{{mappedTo}}' importiert. Die Zertifizierung wird nicht importiert: Zertifizieren Sie die Entität in Ontos."
+    },
+    "notice": {
+      "deprecated": "Veraltet",
+      "retired": "Stillgelegt",
+      "noReason": "Kein Grund angegeben"
+    }
   }
 }

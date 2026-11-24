@@ -1,0 +1,512 @@
+"""Write the description of a table, view or column asset to Unity Catalog (#1477).
+
+With the ``UC_DESCRIPTION_WRITEBACK_ENABLED`` setting on, saving the
+description of a Databricks Table, View or Column asset in Ontos also sets
+its Unity Catalog comment, as the user (on-behalf-of client only), so Unity
+Catalog permissions decide.
+
+A comment is replaced only when it is still the one Ontos already agreed to:
+empty, equal to the new description, or equal to the description before the
+save. Any other comment (e.g. one written by a customer in Unity Catalog) is
+kept, and the save gets a coded warning. A failed write never fails the save:
+the asset keeps the reason in an internal property (shown as "not in sync
+with Unity Catalog") until a later write succeeds.
+
+Unity Catalog has no compare-and-set for comments, so a comment written there
+between Ontos's read and its write is replaced. The comment is read back after
+the write, and the audit records what was read before and after.
+"""
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Optional, Tuple
+
+from sqlalchemy.orm import Session
+
+from src.common.api_errors import CodedValueError
+from src.common.config import Settings
+from src.common.logging import get_logger
+from src.common.uc_comments import (
+    CommentWriteError, DEFAULT_TIMEOUT_SECONDS, NOT_FOUND, PERMISSION_DENIED,
+    SINGLE_READ_TIMEOUT_SECONDS, TIMED_OUT, UNSUPPORTED_TEXT, normalize_comment, read_comment,
+    set_comment, split_column_location,
+)
+from src.db_models.assets import AssetDb
+from src.models.assets import (
+    DESCRIPTION_SYNC_PROPERTY, CodedWarning, DescriptionSyncState, description_sync_state,
+)
+
+logger = get_logger(__name__)
+
+# Ontos asset types whose description is a Unity Catalog table comment
+_TABLE_TYPES = frozenset({'table', 'view'})  # lower case: a CSV's asset_type may differ in case
+_COLUMN_TYPE = 'column'
+# Unity Catalog table type of a metric view: its comment is not written (#1263)
+METRIC_VIEW_TABLE_TYPE = 'METRIC_VIEW'
+
+# Warning codes (the UI translates them; params: ``object``)
+CODE_PERMISSION_DENIED = 'uc_description_permission_denied'
+CODE_NOT_FOUND = 'uc_description_object_not_found'
+CODE_USER_TOKEN_REQUIRED = 'uc_description_user_token_required'
+CODE_NO_WAREHOUSE = 'uc_description_no_warehouse'
+CODE_WRITE_FAILED = 'uc_description_write_failed'
+CODE_UNSUPPORTED_TEXT = 'uc_description_unsupported_text'
+# Unity Catalog already has another comment on the object, which the save keeps
+CODE_EXISTING_COMMENT = 'uc_description_existing_comment'
+# The write succeeded but the comment could not be read back to check it
+CODE_WRITE_UNVERIFIED = 'uc_description_write_unverified'
+# Bulk import: a row over the import's cap on rows tried in Unity Catalog (params:
+# object, limit), a row after the import's time budget for Unity Catalog calls
+# (params: object), and the writes of a whole import not run (no params)
+CODE_IMPORT_WRITE_LIMIT = 'uc_description_import_write_limit'
+CODE_IMPORT_TIME_BUDGET = 'uc_description_import_time_budget'
+CODE_IMPORT_WRITES_FAILED = 'uc_description_import_writes_failed'
+# Import preview only (params: object): the row's description is written to Unity
+# Catalog on import; it replaces the comment there (the description Ontos had before);
+# Unity Catalog has another comment, which the import keeps
+CODE_IMPORT_WRITES_UC = 'uc_description_import_writes_uc'
+CODE_IMPORT_REPLACES_UC = 'uc_description_import_replaces_uc'
+CODE_IMPORT_KEEPS_UC = 'uc_description_import_keeps_uc'
+
+_MESSAGES = {
+    CODE_PERMISSION_DENIED: (
+        # Measured: COMMENT ON needs SELECT as well as MODIFY ("does not have SELECT")
+        "Unity Catalog refused to change the description of {object} "
+        "(SELECT and MODIFY permissions, or ownership, needed)."
+    ),
+    CODE_NOT_FOUND: (
+        "{object} was not found in Unity Catalog, or you don't have access to it, "
+        "so its description was not written there."
+    ),
+    CODE_USER_TOKEN_REQUIRED: (
+        "The request had no Databricks user token, so the description of {object} "
+        "was not written to Unity Catalog."
+    ),
+    CODE_NO_WAREHOUSE: (
+        "No SQL warehouse is configured, so the description of {object} "
+        "was not written to Unity Catalog."
+    ),
+    CODE_WRITE_FAILED: "Writing the description of {object} to Unity Catalog failed.",
+    CODE_UNSUPPORTED_TEXT: (
+        "The description of {object} has a character Unity Catalog can't store, "
+        "so it was not written there."
+    ),
+    CODE_EXISTING_COMMENT: (
+        "Unity Catalog already has another comment on {object}, so the description was not "
+        "written there. Set the description to that comment, or change the comment in Unity "
+        "Catalog, and save again."
+    ),
+    CODE_WRITE_UNVERIFIED: (
+        "The description of {object} was written to Unity Catalog, but the comment could not "
+        "be read back to check it. Save again to check it."
+    ),
+    CODE_IMPORT_WRITE_LIMIT: (
+        "This import reached its limit of {limit} rows tried in Unity Catalog, "
+        "so the description of {object} was not written there."
+    ),
+    CODE_IMPORT_TIME_BUDGET: (
+        "This import ran out of time for Unity Catalog writes, so the description of {object} "
+        "was not written there."
+    ),
+    CODE_IMPORT_WRITES_FAILED: (
+        "The assets were imported, but their descriptions could not be written to "
+        "Unity Catalog."
+    ),
+    CODE_IMPORT_WRITES_UC: (
+        "The description of {object} will be written to Unity Catalog. If it already has a "
+        "different comment there, that comment is kept and the row gets a warning."
+    ),
+    CODE_IMPORT_REPLACES_UC: (
+        "The description of {object} will replace its Unity Catalog comment, which is the "
+        "description Ontos had before."
+    ),
+    CODE_IMPORT_KEEPS_UC: (
+        "Unity Catalog has another comment on {object}, so the import keeps it and does not "
+        "write the description there."
+    ),
+}
+
+# Codes of the ``CodedValueError`` a user client factory raises -> warning codes
+_CLIENT_ERROR_CODES = {
+    'user_token_required': CODE_USER_TOKEN_REQUIRED,
+    CODE_IMPORT_WRITE_LIMIT: CODE_IMPORT_WRITE_LIMIT,
+    CODE_IMPORT_TIME_BUDGET: CODE_IMPORT_TIME_BUDGET,
+}
+
+
+# A comment that could not be read back after a write
+_UNREAD = object()
+
+
+class ImportWriteLimitError(CodedValueError):
+    """A bulk import already wrote as many descriptions as its limit allows."""
+
+    code = CODE_IMPORT_WRITE_LIMIT
+
+
+class ImportTimeBudgetError(CodedValueError):
+    """A bulk import used up its time for Unity Catalog writes."""
+
+    code = CODE_IMPORT_TIME_BUDGET
+
+_REASON_CODES = {
+    PERMISSION_DENIED: CODE_PERMISSION_DENIED,
+    NOT_FOUND: CODE_NOT_FOUND,
+    UNSUPPORTED_TEXT: CODE_UNSUPPORTED_TEXT,
+}
+
+
+def _read_timeout(time_left: Optional[Callable[[], float]]) -> float:
+    """How long a read of a comment may wait: the import's time left, else a short cap."""
+    return time_left() if time_left is not None else SINGLE_READ_TIMEOUT_SECONDS
+
+
+def _reason_code(reason: str, budgeted: bool) -> str:
+    """The warning code of a ``CommentWriteError`` reason.
+
+    A call that ran out of a bulk import's time budget (``budgeted``) is a
+    time-budget warning; a single save's timeout is a failed write.
+    """
+    if reason == TIMED_OUT and budgeted:
+        return CODE_IMPORT_TIME_BUDGET
+    return _REASON_CODES.get(reason, CODE_WRITE_FAILED)
+
+
+def uc_comment_target_for(
+    platform: Optional[str], type_name: Optional[str], location: Optional[str],
+) -> Optional[Tuple[str, Optional[str]]]:
+    """``(table_fqn, column_name)`` of the Unity Catalog object for an asset's fields, or None.
+
+    Only Databricks assets: a Table or View located at ``catalog.schema.name``,
+    or a Column located at ``catalog.schema.table.column``.
+    """
+    if (platform or '').strip().lower() != 'databricks':
+        return None
+    location = (location or '').strip()
+    type_name = (type_name or '').strip().lower()
+    if type_name in _TABLE_TYPES:
+        parts = location.split('.')
+        if len(parts) == 3 and all(parts):
+            return location, None
+    elif type_name == _COLUMN_TYPE:
+        return split_column_location(location)
+    return None
+
+
+def uc_comment_target(asset: AssetDb) -> Optional[Tuple[str, Optional[str]]]:
+    """``uc_comment_target_for`` of a saved asset."""
+    return uc_comment_target_for(
+        asset.platform, getattr(asset.asset_type, 'name', None), asset.location)
+
+
+def _warning(code: str, target: str, **params: Any) -> CodedWarning:
+    params = {'object': target, **params}
+    return CodedWarning(code=code, message=_MESSAGES[code].format(**params), params=params)
+
+
+def write_failed_warning(target: str) -> CodedWarning:
+    return _warning(CODE_WRITE_FAILED, target)
+
+
+def import_writes_failed_warning() -> CodedWarning:
+    return CodedWarning(code=CODE_IMPORT_WRITES_FAILED,
+                        message=_MESSAGES[CODE_IMPORT_WRITES_FAILED])
+
+
+# What the guard does with the Unity Catalog comment (``guard_decision``)
+GUARD_UNCHANGED = 'unchanged'  # it already is the description
+GUARD_KEEP = 'keep'  # someone else's comment: kept, not written
+GUARD_WRITE = 'write'  # empty, or the comment Ontos agreed to: replaced
+
+
+def guard_decision(uc_comment: Optional[str], text: Optional[str],
+                   previous_description: Optional[str], agreed: Optional[str]) -> str:
+    """Whether a description ``text`` may replace the Unity Catalog comment ``uc_comment``.
+
+    It may when the comment is empty, the description before the save, or the
+    comment Ontos agreed to (``agreed``, stored on the asset).
+    """
+    # Compared as Unity Catalog may store them (line endings, trailing blanks)
+    uc_comment, text = normalize_comment(uc_comment), normalize_comment(text)
+    if uc_comment == text:
+        return GUARD_UNCHANGED
+    known = (normalize_comment(previous_description), normalize_comment(agreed))
+    if uc_comment is not None and uc_comment not in known:
+        return GUARD_KEEP
+    return GUARD_WRITE
+
+
+def _agreed(asset: Optional[AssetDb]) -> Optional[str]:
+    """The comment Ontos agreed to that is stored on the asset (an earlier save's), if any."""
+    stored = ((asset.properties if asset is not None else None) or {}).get(
+        DESCRIPTION_SYNC_PROPERTY)
+    return stored.get('agreed') if isinstance(stored, dict) else None
+
+
+def preview_import_warning(
+    target: Tuple[str, Optional[str]], text: Optional[str], existing: Optional[AssetDb],
+    read: Optional[Callable[[str, Optional[str]], Optional[Tuple[Optional[str], Optional[str]]]]],
+) -> Optional[CodedWarning]:
+    """What importing ``text`` will do to the Unity Catalog comment of ``target``, or None.
+
+    ``read(table_fqn, column_name)`` reads the comment as the user: ``(table_type,
+    comment)``, or None when the preview read enough already; it may raise. Without
+    a read, the row only says its description will be written. A metric view, or a
+    comment already equal to the description, gets no warning.
+    """
+    table_fqn, column_name = target
+    label = f'{table_fqn}.{column_name}' if column_name else table_fqn
+    previous = (existing.description if existing is not None else None) or None
+    if text == previous and description_sync_state(
+            existing.properties if existing is not None else None) is None:
+        return None
+    try:
+        read_result = read(table_fqn, column_name) if read is not None else None
+    except Exception as e:
+        reason = getattr(e, 'reason', type(e).__name__)
+        logger.info("The import preview could not read the comment of %s: %s", label, reason)
+        read_result = None
+    if read_result is None:
+        return _warning(CODE_IMPORT_WRITES_UC, label)
+    table_type, uc_comment = read_result
+    if table_type == METRIC_VIEW_TABLE_TYPE:
+        return None
+    decision = guard_decision(uc_comment, text, previous, _agreed(existing))
+    if decision == GUARD_UNCHANGED:
+        return None
+    if decision == GUARD_KEEP:
+        return _warning(CODE_IMPORT_KEEPS_UC, label)
+    return _warning(CODE_IMPORT_REPLACES_UC if uc_comment else CODE_IMPORT_WRITES_UC, label)
+
+
+@dataclass
+class SyncOutcome:
+    """What a save did about Unity Catalog.
+
+    ``warning``: why the description is not in Unity Catalog (None when it is, or none was tried).
+    ``state``: the mark stored on the asset afterwards.
+    ``in_sync``: Unity Catalog holds the saved description now (written, or already equal).
+    ``audit``: ``before`` / ``after`` Unity Catalog comments and the ``outcome``
+    (written, unchanged, refused, failed) when Unity Catalog was read; after a
+    write, ``after`` is the comment read back (``verified``), else the text written.
+    """
+    warning: Optional[CodedWarning] = None
+    state: Optional[DescriptionSyncState] = None
+    in_sync: bool = False
+    audit: Optional[Dict[str, Any]] = None
+
+
+class UcDescriptionSyncManager:
+    def __init__(self, settings: Settings):
+        self._settings = settings
+
+    @property
+    def enabled(self) -> bool:
+        return bool(getattr(self._settings, 'UC_DESCRIPTION_WRITEBACK_ENABLED', False))
+
+    def sync_after_update(
+        self,
+        db: Session,
+        asset_id: Any,
+        *,
+        description_sent: bool,
+        previous_description: Optional[str],
+        user_client: Callable[[], Any],
+        time_left: Optional[Callable[[], float]] = None,
+    ) -> SyncOutcome:
+        """Bring a saved description to Unity Catalog; returns the ``SyncOutcome``.
+
+        Runs on the committed save. The asset row is locked (``FOR UPDATE``) until
+        the caller commits, so two saves of one asset write Unity Catalog one
+        after the other, and the last write is the last committed description.
+        Does not commit: the caller commits (with the column snapshot, if any).
+
+        Writes when the setting is on, the asset is a Unity Catalog table, view
+        or column (not a metric view), and the description changed from
+        ``previous_description`` (or the asset is already out of sync, so saving
+        again retries). With the setting off, a save drops the mark.
+        ``user_client`` builds the user's workspace client; a ``CodedValueError``
+        from it (no user token, time budget) is a warning.
+        ``time_left`` (bulk import) returns the seconds left of the import's time
+        budget: Unity Catalog is not read once it is used up, and the read and the
+        write each wait at most what is left (else a time-budget warning).
+        """
+        asset = (
+            db.query(AssetDb).filter(AssetDb.id == asset_id)
+            .with_for_update().populate_existing().one_or_none()
+        )
+        if asset is None:
+            return SyncOutcome()
+        current_state = self._stored_state(asset)
+        if not self.enabled:
+            # Nothing is written to Unity Catalog, so an older mark is dropped on save
+            if current_state is not None:
+                self._store_state(db, asset, None)
+            return SyncOutcome()
+        if not description_sent:
+            return SyncOutcome(state=current_state)
+        target = uc_comment_target(asset)
+        if target is None:
+            return SyncOutcome(state=current_state)
+        text = asset.description or None
+        if text == (previous_description or None) and current_state is None:
+            return SyncOutcome()
+
+        table_fqn, column_name = target
+        label = f'{table_fqn}.{column_name}' if column_name else table_fqn
+        baseline = self._baseline(asset, previous_description)
+        if text and '\x00' in text:
+            warning = _warning(CODE_UNSUPPORTED_TEXT, label)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
+        warehouse_id = getattr(self._settings, 'DATABRICKS_WAREHOUSE_ID', None)
+        if not warehouse_id:
+            warning = _warning(CODE_NO_WAREHOUSE, label)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
+        try:
+            ws = user_client()
+        except CodedValueError as e:
+            logger.info("No user client to write the description of %s: %s", label, e.code)
+            code = _CLIENT_ERROR_CODES.get(e.code, CODE_WRITE_FAILED)
+            params = e.params if code == CODE_IMPORT_WRITE_LIMIT else {}
+            warning = _warning(code, label, **params)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
+
+        if time_left is not None and time_left() <= 0:
+            warning = _warning(CODE_IMPORT_TIME_BUDGET, label)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
+        try:
+            table_type, uc_comment = read_comment(
+                ws, table_fqn, column_name,
+                timeout_seconds=_read_timeout(time_left))
+        except CommentWriteError as e:
+            logger.warning("Reading the comment of %s to write asset %s failed: %s",
+                           label, asset.id, e.reason)
+            warning = _warning(_reason_code(e.reason, time_left is not None), label)
+            audit = {'before': None, 'after': text, 'outcome': 'failed'}
+            state = self._store_state(db, asset, warning, agreed=baseline)
+            return SyncOutcome(warning, state, audit=audit)
+        if table_type == METRIC_VIEW_TABLE_TYPE:
+            logger.info("Not writing the description of asset %s: %s is a metric view",
+                        asset.id, label)
+            return SyncOutcome(state=current_state)
+
+        audit = {'before': uc_comment, 'after': text, 'outcome': None}
+        decision = guard_decision(uc_comment, text, previous_description, _agreed(asset))
+        if decision == GUARD_UNCHANGED:
+            audit['outcome'] = 'unchanged'
+            return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
+        if decision == GUARD_KEEP:
+            # Not the comment Ontos agreed to before: a comment someone else wrote is kept
+            logger.info("Kept the Unity Catalog comment of %s: it differs from the Ontos one "
+                        "(asset %s)", label, asset.id)
+            warning = _warning(CODE_EXISTING_COMMENT, label)
+            audit.update(after=uc_comment, outcome='refused')
+            return SyncOutcome(warning, self._store_state(db, asset, warning), audit=audit)
+
+        try:
+            set_comment(
+                ws, warehouse_id, table_fqn, column_name, text,
+                timeout_seconds=time_left() if time_left is not None else DEFAULT_TIMEOUT_SECONDS)
+        except CommentWriteError as e:
+            logger.warning("Writing the description of asset %s to Unity Catalog failed: %s",
+                           asset.id, e.reason)
+            warning = _warning(_reason_code(e.reason, time_left is not None), label)
+            audit.update(after=uc_comment, outcome='failed')
+            # The comment still there was agreed to (it passed the guard), so a retry may replace it
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=uc_comment),
+                               audit=audit)
+        logger.info("Wrote the description of asset %s to Unity Catalog (%s)", asset.id, label)
+        audit['outcome'] = 'written'
+        after = self._read_back(ws, table_fqn, column_name, time_left)
+        audit['verified'] = after is not _UNREAD
+        if after is _UNREAD:
+            # Written, not checked: not reported as in sync. The text is what Unity Catalog most
+            # likely holds, so it is the agreed comment and a later save compares against it.
+            warning = _warning(CODE_WRITE_UNVERIFIED, label)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=text),
+                               audit=audit)
+        if normalize_comment(after) == normalize_comment(text):
+            return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
+        # Someone wrote another comment right after this write: theirs is kept
+        logger.info("The Unity Catalog comment of %s changed right after Ontos wrote it "
+                    "(asset %s)", label, asset.id)
+        audit['after'] = after
+        warning = _warning(CODE_EXISTING_COMMENT, label)
+        return SyncOutcome(warning, self._store_state(db, asset, warning), audit=audit)
+
+    @staticmethod
+    def _read_back(ws: Any, table_fqn: str, column_name: Optional[str],
+                   time_left: Optional[Callable[[], float]]) -> Any:
+        """The comment read back after a write, or ``_UNREAD`` when it can't be read."""
+        if time_left is not None and time_left() <= 0:
+            return _UNREAD
+        try:
+            _, comment = read_comment(
+                ws, table_fqn, column_name,
+                timeout_seconds=_read_timeout(time_left))
+        except CommentWriteError as e:
+            logger.info("Reading back the comment of %s failed: %s", table_fqn, e.reason)
+            return _UNREAD
+        return comment
+
+    def keep_baseline(self, db: Session, asset: AssetDb) -> None:
+        """Before a save changes the description: keep it as the comment Ontos agreed to.
+
+        Called under the save's row lock. The stored baseline lets the write of a
+        later save replace the comment while the write of this save has not run yet
+        (two saves in a row: the second one's write may run first, and Unity Catalog
+        then still has the description from before the first). Kept until a write
+        succeeds or a comment is refused; a baseline already stored is kept, as
+        Unity Catalog may still hold it. Stored without a code, so the asset doesn't
+        read as not in sync.
+        """
+        if not self.enabled or uc_comment_target(asset) is None or not asset.description:
+            return
+        stored = (asset.properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+        stored = dict(stored) if isinstance(stored, dict) else {}
+        if stored.get('agreed') is not None:
+            return
+        stored['agreed'] = asset.description
+        # A new dict, so the JSON column is seen as changed
+        asset.properties = {**(asset.properties or {}), DESCRIPTION_SYNC_PROPERTY: stored}
+        db.flush()
+
+    @staticmethod
+    def _baseline(asset: AssetDb, previous_description: Optional[str]) -> Optional[str]:
+        """The comment Ontos agreed to before a failed save: the stored one, else the previous text.
+
+        Used when the failure happens before Unity Catalog is read, so a retry can still
+        replace the comment that was there (the previous text is what was last in sync).
+        """
+        stored = (asset.properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+        if isinstance(stored, dict) and stored.get('agreed') is not None:
+            return stored['agreed']
+        return previous_description or None
+
+    @staticmethod
+    def _stored_state(asset: AssetDb) -> Optional[DescriptionSyncState]:
+        return description_sync_state(asset.properties)
+
+    @staticmethod
+    def _store_state(
+        db: Session, asset: AssetDb, warning: Optional[CodedWarning],
+        agreed: Optional[str] = None,
+    ) -> Optional[DescriptionSyncState]:
+        properties: Dict[str, Any] = dict(asset.properties or {})
+        state = None
+        if warning is None:
+            properties.pop(DESCRIPTION_SYNC_PROPERTY, None)
+        else:
+            state = DescriptionSyncState(
+                code=warning.code, message=warning.message, params=warning.params,
+                at=datetime.now(timezone.utc),
+            )
+            stored = state.model_dump(mode='json')
+            if agreed is not None:
+                # Internal: not part of the API state (description_sync_state ignores it)
+                stored['agreed'] = agreed
+            properties[DESCRIPTION_SYNC_PROPERTY] = stored
+        if properties != (asset.properties or {}):
+            # A new dict, so the JSON column is seen as changed
+            asset.properties = properties or None
+            db.flush()
+        return state

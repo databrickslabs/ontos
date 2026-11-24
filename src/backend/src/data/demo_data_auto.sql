@@ -136,7 +136,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- vehicle_signals table
 ('00600001-0004-4000-8000-000000000001', '00500001-0004-4000-8000-000000000001', 'vin', 'string', true, false, false, false, -1, -1, true, 'Vehicle Identification Number (ISO 3779)'),
 ('00600002-0004-4000-8000-000000000002', '00500001-0004-4000-8000-000000000001', 'trip_id', 'string', true, false, true, false, 1, -1, true, 'Unique trip session identifier'),
@@ -698,10 +698,10 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 ('02a00101-0004-4000-8000-000000000001', 'OTA / Connected Services Release Gate',
- 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval.',
+ 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product"]}',
  '{"type": "domain", "ids": ["00000002-0004-4000-8000-000000000002"]}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
@@ -718,6 +718,23 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  '{"approvers": "business:0f000001-0004-4000-8000-000000000001"}',
  'approve',       'reject', 3, '{"x": 500, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- The pre-publish gates ship inactive (#996): their before_publish trigger does not
+-- exist yet, so they never run. In installs that still hold a shipped gate (its shipped
+-- name, trigger and description, still active), deactivate it, then add the note to the
+-- description of a shipped gate that is inactive. A gate an admin renamed, re-triggered,
+-- re-described, or re-activated after this change is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00101-0004-4000-8000-000000000001'
+  AND name = 'OTA / Connected Services Release Gate'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product"]}'
+  AND description = 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval.'
+  AND is_active = true;
+
+UPDATE process_workflows SET description = 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00101-0004-4000-8000-000000000001'
+  AND description = 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval.'
+  AND is_active = false;
 
 
 -- ============================================================================
@@ -749,9 +766,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
-('01400101-0004-4000-8000-000000000001', 'data_product', '00700001-0004-4000-8000-000000000001', 'Telemetry Compute',     'Daily Databricks compute for CAN telemetry curation.',           'infrastructure', NULL, 7600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400102-0004-4000-8000-000000000002', 'data_product', '00700002-0004-4000-8000-000000000002', 'Sensor Storage',         'Petabyte-scale storage for ADAS sensor logs.',                  'infrastructure', NULL, 5300000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400103-0004-4000-8000-000000000003', 'data_product', '00700003-0004-4000-8000-000000000003', 'Supplier Portal License','Annual supplier collaboration portal license.',                  'tools',          NULL, 1100000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+('01400101-0004-4000-8000-000000000001', 'data_product', '00700001-0004-4000-8000-000000000001', 'Telemetry Compute',     'Daily Databricks compute for CAN telemetry curation.',           'INFRASTRUCTURE', NULL, 7600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0004-4000-8000-000000000002', 'data_product', '00700002-0004-4000-8000-000000000002', 'Sensor Storage',         'Petabyte-scale storage for ADAS sensor logs.',                  'INFRASTRUCTURE', NULL, 5300000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0004-4000-8000-000000000003', 'data_product', '00700003-0004-4000-8000-000000000003', 'Supplier Portal License','Annual supplier collaboration portal license.',                  'OTHER',          'Tools', 1100000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

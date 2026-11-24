@@ -58,7 +58,8 @@
     "failed": "Fallido",
     "showFailed": "Mostrar fallidos",
     "showAll": "Mostrar todo",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Acciones"
   },
   "policyDetails": {
     "backToList": "Volver a la lista",
@@ -94,6 +95,15 @@
       "filteredFailed": "Filtrado solo por fallidos — última ejecución {{date}}",
       "filteredAll": "Filtrado por todos — última ejecución {{date}}"
     }
+  },
+  "runStatus": {
+    "running": "En ejecución",
+    "succeeded": "Completada",
+    "failed": "Fallida"
+  },
+  "resultsPaging": {
+    "shownOfTotal": "Mostrando {{shown}} de {{total}} resultados.",
+    "loadMore": "Cargar más"
   },
   "runDetails": {
     "runTitle": "Ejecución {{id}}",
@@ -173,7 +183,111 @@
   "runErrors": {
     "entities_load_failed": "No se pudieron cargar las entidades {{entityType}}, por lo que no se pudo evaluar la regla.",
     "rule_parse_failed": "No se pudo interpretar la regla: {{detail}}",
+    "run_failed": "La ejecución falló. Los detalles están en el registro de la app.",
+    "user_token_required": "Esta regla comprueba objetos de Unity Catalog, que se leen con tu inicio de sesión en Databricks, y la solicitud no lo tenía, por lo que no se pudo ejecutar.",
     "workspace_client_unavailable": "El workspace de Databricks no está disponible y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar.",
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
+  },
+  "tableSources": {
+    "notEvaluatedStatus": "No evaluado",
+    "runWarning": "Objetos no evaluados: {{count}}. La regla lee campos de {{sources}}, que no se pudieron leer ({{reasons}}). No cuentan como aprobados ni como fallidos, ni en la puntuación.",
+    "notEvaluated": "No evaluado: no se pudo leer {{fields}} de {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "no hay un SQL warehouse configurado",
+      "no_access": "sin acceso a la tabla del sistema",
+      "query_failed": "la consulta falló",
+      "timed_out": "la consulta seguía en ejecución al alcanzar el límite de tiempo",
+      "budget_exceeded": "la ejecución alcanzó su límite de consultas en el SQL warehouse",
+      "transient": "el SQL warehouse no estuvo disponible temporalmente, ni siquiera tras los reintentos",
+      "not_found": "no se encontró la tabla del sistema (¿está habilitado el esquema del sistema?)",
+      "not_loaded": "todavía no se leen las etiquetas de este tipo de objeto"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Sin puntuación",
+    "coverage": "{{evaluated}} de {{total}} objetos evaluados; los demás no cuentan en la puntuación.",
+    "hiddenResults": "{{count}} resultados son de objetos de Unity Catalog que no puede leer, por lo que no se muestran."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis.",
+    "llm_check_criterion_not_literal": "LLM_CHECK recibe un texto y un criterio escrito como literal de cadena, por ejemplo LLM_CHECK(t.comment, 'states the grain of the table')."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
+    "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos.",
+    "llm_check_budget_exceeded": "{{count}} comprobaciones de LLM no se ejecutaron porque la ejecución alcanzó su presupuesto de {{budget}} llamadas al modelo, por lo que esas entidades fallaron. Vuelve a ejecutarla (los veredictos en caché no cuentan) o aumenta COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} comprobaciones LLM no se ejecutaron porque usaste tus {{limit}} llamadas al modelo de hoy, así que esas entidades fallaron. Ejecútala de nuevo mañana (los veredictos en caché no cuentan) o pide a un administrador que aumente COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.",
+    "no_entities_matched": "Ninguna entidad coincide con esta regla, así que no se comprobó nada. Si esperaba alguna, revise el tipo de MATCH y la condición WHERE."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Hecho",
+      "failed": "Falló"
+    },
+    "types": {
+      "ASSIGN_TAG": "Asignar etiqueta {{target}}",
+      "REMOVE_TAG": "Quitar etiqueta {{target}}",
+      "NOTIFY": "Notificar a {{target}}"
+    },
+    "errors": {
+      "tag_manager_unavailable": "No se pueden cambiar etiquetas en esta ejecución",
+      "tag_not_found": "Etiqueta {{tag}} no encontrada",
+      "tag_value_not_allowed": "El valor {{value}} no está permitido para {{tag}} (permitidos: {{allowed}})",
+      "tag_entity_type_unsupported": "No se pueden asignar etiquetas a entidades {{entityType}}",
+      "tag_entity_without_id": "La entidad no tiene id",
+      "notification_manager_unavailable": "Las notificaciones no están disponibles en esta ejecución",
+      "notify_no_recipients": "{{recipients}} no corresponde a ningún destinatario",
+      "notify_unknown_recipient": "{{recipient}} no es un destinatario conocido: use un correo electrónico, group:<nombre>, un rol de la aplicación o una palabra clave de destinatario",
+      "action_failed": "La acción falló"
+    }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(en caché)",
+    "failedReason": "LLM_CHECK '{{criterion}}': {{reason}}",
+    "test": {
+      "title": "Probar en una entidad de ejemplo",
+      "hint": "Ejecuta el ASSERT de la regla, incluidos los criterios de LLM_CHECK, en una entidad que coincide con la regla. La regla no se guarda.",
+      "entityPlaceholder": "Nombre o id de la entidad (vacío: la primera coincidencia)",
+      "run": "Probar",
+      "running": "Probando...",
+      "noRule": "Primero introduce una regla.",
+      "failed": "No se pudo probar la regla.",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "No se evaluó ningún LLM_CHECK para esta entidad."
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK solo se evalúa en ejecuciones de cumplimiento, en el ASSERT.",
+      "llm_check_disabled": "Las funciones de LLM están desactivadas, por lo que LLM_CHECK falla.",
+      "llm_check_no_endpoint": "No hay ningún endpoint de serving configurado, por lo que LLM_CHECK falla.",
+      "llm_check_budget_exceeded": "No comprobado: la ejecución alcanzó su presupuesto de llamadas al modelo.",
+      "llm_check_text_too_long": "No comprobado: el texto es demasiado largo.",
+      "llm_check_call_failed": "No se pudo llamar al endpoint de serving.",
+      "llm_check_refused": "El modelo se negó a evaluar el texto.",
+      "llm_check_empty_reply": "El modelo no devolvió ninguna respuesta.",
+      "llm_check_truncated": "La respuesta del modelo no terminó.",
+      "llm_check_invalid_reply": "La respuesta del modelo no fue un veredicto PASS o FAIL.",
+      "llm_check_empty_text": "El texto está vacío.",
+      "llm_check_text_too_short": "No verificado: el texto es demasiado corto para evaluarlo.",
+      "rule_evaluation_failed": "No se pudo evaluar la regla en esta entidad.",
+      "llm_check_text_rejected": "No comprobado: la revisión de seguridad marcó el texto (por ejemplo, instrucciones al modelo).",
+      "llm_check_daily_quota_exceeded": "No comprobado: usaste tus llamadas al modelo de hoy.",
+      "llm_check_external_endpoint": "No comprobado: LLM_BASE_URL apunta fuera de este workspace de Databricks, y LLM_CHECK solo envía texto de entidades a los serving endpoints del workspace."
+    },
+    "errors": {
+      "sample_entity_not_found": "No se encontró ninguna entidad que coincida con la regla. Revisa el nombre o déjalo vacío para usar la primera coincidencia.",
+      "llm_check_test_rate_limited": "Demasiadas pruebas en poco tiempo. Inténtalo de nuevo en {{retryAfter}} segundos.",
+      "llm_check_entity_read_required": "Esta regla usa LLM_CHECK en entidades {{entityType}}. Ejecutarla o probarla requiere acceso de lectura a ellas.",
+      "llm_check_admin_required": "Esta regla usa LLM_CHECK. Guardarla, ejecutarla o probarla requiere acceso de administrador a cumplimiento.",
+      "llm_check_tag_action": "Una regla con LLM_CHECK no puede usar ASSIGN_TAG ni REMOVE_TAG ({{actions}}): el veredicto del modelo cambiaría etiquetas. Use NOTIFY, o una regla aparte sin LLM_CHECK para las acciones de etiquetas.",
+      "llm_check_daily_quota_exceeded": "Usaste tus {{limit}} llamadas al modelo de LLM_CHECK de hoy. Inténtalo de nuevo en {{retryAfter}} segundos (el recuento se reinicia a medianoche UTC).",
+      "llm_check_policy_in_use": "Esta política la usan {{workflowSteps}} comprobaciones de política de flujos de trabajo y {{maturityGates}} puertas de madurez. No pueden evaluar LLM_CHECK, así que allí fallarían todas las entidades. Quita primero la política de ellas o usa LLM_CHECK en una política aparte.",
+      "llm_check_policy_in_self_service": "Esta política está en el mapeo de cumplimiento de autoservicio para {{objectTypes}}. El autoservicio no puede evaluar LLM_CHECK, así que rechazaría todos los objetos allí. Quita primero la política del mapeo o usa LLM_CHECK en una política aparte.",
+      "llm_check_in_where": "LLM_CHECK solo se evalúa en el ASSERT. En el WHERE falla, por lo que la regla omite todas las entidades. Muévelo al ASSERT."
+    },
+    "usage": "LLM_CHECK: {{calls}} llamadas al modelo, {{cached}} veredictos de la caché.",
+    "notEvaluated": "No evaluado",
+    "notEvaluatedCount": "No evaluados: {{count}} (un LLM_CHECK no se pudo ejecutar; no cuentan como fallidos ni en la puntuación)."
   }
 }

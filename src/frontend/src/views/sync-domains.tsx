@@ -111,7 +111,7 @@ export default function SyncDomainsView() {
 
   const fetchDomains = useCallback(async () => {
     try {
-      const resp = await apiGet<DataDomain[]>('/api/data-domains?limit=1000');
+      const resp = await apiGet<DataDomain[]>('/api/data-domains');
       if (resp.data) setDomains(resp.data);
     } catch (err) {
       console.error('Failed to fetch domains:', err);

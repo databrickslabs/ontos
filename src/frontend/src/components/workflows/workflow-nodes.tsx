@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { createContext, memo, useContext } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -752,11 +752,24 @@ export const EndNode = memo((props: NodeProps<StepNodeData>) => {
 });
 EndNode.displayName = 'EndNode';
 
+/**
+ * Ids of the compliance policies the designer loaded; `undefined` until (or unless)
+ * they load. A Policy Check node whose id isn't in the list is marked as not found.
+ */
+export const CompliancePolicyIdsContext = createContext<readonly string[] | undefined>(
+  undefined,
+);
+
 // Policy Check Node
 export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
   const { t } = useTranslation(['workflows', 'common']);
+  const knownPolicyIds = useContext(CompliancePolicyIdsContext);
   const policyName = (props.data.step.config as { policy_name?: string })?.policy_name;
-  const policyId = (props.data.step.config as { policy_id?: string })?.policy_id;
+  const rawPolicyId = (props.data.step.config as { policy_id?: unknown })?.policy_id;
+  // Read as the backend reads it (policy_id_of): trimmed, a non-string as its text
+  const policyId = rawPolicyId == null ? '' : String(rawPolicyId).trim();
+  // E.g. an old placeholder id ("naming-conventions") that no policy has
+  const policyNotFound = !!policyId && !!knownPolicyIds && !knownPolicyIds.includes(policyId);
   const styles = nodeColorStyles.policyCheck;
   
   return (
@@ -770,20 +783,29 @@ export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Badge variant="outline" className="text-xs dark:border-indigo-400/50 dark:text-indigo-200">policy_check</Badge>
-        {policyName && (
+        {policyName && policyId && !policyNotFound && (
           <div className={nodeTextStyles.description + " mt-1"}>
             {t('workflows:nodes.policyLabel', { name: policyName })}
           </div>
         )}
-        {!policyName && policyId && (
+        {!policyName && policyId && !policyNotFound && (
           <div className={`${nodeTextStyles.description} mt-1 truncate max-w-[140px]`}>
             {t('workflows:nodes.idLabel', { id: policyId.slice(0, 8) })}...
           </div>
         )}
-        {!policyName && !policyId && (
-          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-            {t('workflows:nodes.noPolicySelected')}
-          </div>
+        {(!policyId || policyNotFound) && (
+          <>
+            <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              {policyNotFound
+                ? t('workflows:nodes.policyUnknown', { id: policyId })
+                : t('workflows:nodes.noPolicySelected')}
+            </div>
+            {policyName && (
+              <div className={nodeTextStyles.description}>
+                {t('workflows:nodes.policyHint', { name: policyName })}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
       <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />

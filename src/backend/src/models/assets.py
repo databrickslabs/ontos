@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.models.domain_associations import AssignedDomain
 
@@ -542,6 +542,50 @@ class AssetTypeCategory(str, Enum):
     CUSTOM = "custom"
 
 
+# Name of the persisted asset type seeded from ontos:MetricView (a subclass of
+# ontos:View). Imported Unity Catalog metric views get this type.
+METRIC_VIEW_ASSET_TYPE = "Metric View"
+
+# Persisted asset types that are tables with columns: Table, View and its
+# Metric View subclass. Used where Ontos lists or matches physical tables.
+PHYSICAL_TABLE_ASSET_TYPES = ("Table", "View", METRIC_VIEW_ASSET_TYPE)
+
+# The property of a Metric View asset holding its parsed spec and the fingerprints
+# of its measures (#1263). It holds the view's definition, which only users who can
+# read the view in Unity Catalog may see, so asset reads and exports leave it out.
+METRIC_VIEW_PROPERTY = "metric_view"
+# Why the asset's description is not in Unity Catalog: set when writing it there
+# failed, removed when a later write succeeds (see uc_description_sync_manager).
+DESCRIPTION_SYNC_PROPERTY = "uc_description_sync"
+INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY, DESCRIPTION_SYNC_PROPERTY})
+
+
+def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """An asset's properties without the keys Ontos keeps for itself."""
+    if not properties or not any(k in properties for k in INTERNAL_PROPERTY_KEYS):
+        return properties
+    return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
+
+
+def without_internal_properties(
+    properties: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """``properties`` minus the internal keys: a client can't set them (they are set by Ontos)."""
+    if properties is None:
+        return None
+    return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
+
+
+def with_internal_properties(
+    new: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """``new`` properties, keeping the internal keys of ``current`` (never sent to clients)."""
+    kept = {k: v for k, v in (current or {}).items() if k in INTERNAL_PROPERTY_KEYS}
+    if new is None or not kept:
+        return new
+    return {**new, **kept}
+
+
 class AssetStatus(str, Enum):
     """Asset lifecycle status. Aligned with EntityStatus."""
     DRAFT = "draft"
@@ -634,7 +678,18 @@ class AssetBase(BaseModel):
     primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     properties: Optional[Dict[str, Any]] = Field(None, description="Type-specific metadata")
     tags: Optional[List[str]] = Field(None, description="Quick tags/classifications")
-    status: AssetStatus = Field(AssetStatus.ACTIVE, description="Lifecycle status")
+    # A stage key of the asset's lifecycle stage group (#1213); a new asset
+    # without one starts in the group's first active stage
+    # No enum: a custom asset group has its own stage keys
+    status: Optional[str] = Field(
+        None,
+        description="A stage key of the asset's lifecycle stage group; the default asset "
+                    "group's stages are draft, active, deprecated and retired",
+        examples=["draft", "active", "deprecated", "retired"],
+    )
+    lifecycle_stage_group_id: Optional[str] = Field(
+        None, description="Lifecycle Stage Group; None = the default asset group",
+    )
 
 
 class AssetCreate(AssetBase):
@@ -649,9 +704,31 @@ class AssetUpdate(BaseModel):
     location: Optional[str] = None
     domain_ids: Optional[List[str]] = None
     primary_domain_id: Optional[str] = None
-    properties: Optional[Dict[str, Any]] = None
+    properties: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Replaces the stored properties as a whole: send every property to keep "
+            "(the Edit dialog sends the stored ones with its changes). Omitted: kept. "
+            "null or {}: the public properties are cleared. The internal keys, which "
+            "clients never see, are always kept."
+        ),
+    )
     tags: Optional[List[str]] = None
-    status: Optional[AssetStatus] = None
+    # A stage change is checked against the asset's lifecycle stage group
+    status: Optional[str] = None
+
+
+class CodedWarning(BaseModel):
+    """A warning the UI translates by its code; ``message`` is the English fallback."""
+    code: str
+    message: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DescriptionSyncState(CodedWarning):
+    """The asset's description is not in Unity Catalog: why, and since when."""
+    status: str = "out_of_sync"
+    at: Optional[datetime] = None
 
 
 class AssetRead(AssetBase):
@@ -662,8 +739,31 @@ class AssetRead(AssetBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    description_sync: Optional[DescriptionSyncState] = Field(
+        None, description="Set when the description could not be written to Unity Catalog")
 
     model_config = {"from_attributes": True}
+
+    @field_validator("properties")
+    @classmethod
+    def _without_internal_properties(cls, value):
+        return public_properties(value)
+
+
+def description_sync_state(properties: Optional[Dict[str, Any]]) -> Optional[DescriptionSyncState]:
+    """The stored reason the description is not in Unity Catalog, if any."""
+    stored = (properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+    if not isinstance(stored, dict):
+        return None
+    try:
+        return DescriptionSyncState.model_validate(stored)
+    except ValueError:
+        return None
+
+
+class AssetUpdateResult(AssetRead):
+    """The updated asset, with warnings about what the save could not do (it still succeeded)."""
+    warnings: List[CodedWarning] = Field(default_factory=list)
 
 
 class AssetSummary(BaseModel):
@@ -676,7 +776,8 @@ class AssetSummary(BaseModel):
     platform: Optional[str] = None
     location: Optional[str] = None
     tags: Optional[List[str]] = None
-    status: AssetStatus
+    status: str
+    lifecycle_stage_group_id: Optional[str] = None
     # Multi-domain assignment (#520): carried on summaries so list rows can show domain
     # badges and edit dialogs (fed an AssetSummary) preserve domains on save.
     domain_ids: List[str] = Field(default_factory=list)

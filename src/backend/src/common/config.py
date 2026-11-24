@@ -12,12 +12,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .api_errors import CodedValueError
 from .instance_identity import resolve_instance_identity
+from .sanitization import coerce_branding_url, coerce_hex_color
 from .logging import get_logger
 
 logger = get_logger(__name__)
 
 # Define paths
 DOTENV_FILE = Path(__file__).parent.parent.parent / Path(".env")
+
+# Shortest DEMO_SETUP_TOKEN accepted; a shorter one is dropped at startup (token path disabled).
+MIN_DEMO_SETUP_TOKEN_LENGTH = 32
 
 # Security: Secure default for LLM injection detection prompt
 # This constant ensures DRY compliance between Field default and validator
@@ -143,6 +147,39 @@ class Settings(BaseSettings):
     # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
     SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
 
+    # Workflow scheduler (#941): runs active workflows with a `scheduled` trigger.
+    # No fixed polling: the thread sleeps until the next known slot and reads the
+    # database only when a slot is due or a workflow changed, so Lakebase can idle.
+    # The instance that saves a workflow picks the change up at once. Every other
+    # instance checks for changes (one small query) when one of its requests is
+    # using the database anyway, at most once per CHANGE_CHECK_SECONDS; without
+    # requests it notices at its next due slot.
+    WORKFLOW_SCHEDULER_ENABLED: bool = Field(True, env='WORKFLOW_SCHEDULER_ENABLED')
+    WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS: int = Field(
+        60, env='WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS',
+    )
+    # Opt-in fallback: also check for changes made through other instances every
+    # N seconds, with or without requests. Each check can wake an idle Lakebase.
+    # 0 (default) = never.
+    WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS: int = Field(
+        0, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
+    )
+    # Scheduled runs run on a pool of this many threads per instance, so one long
+    # run doesn't hold up the other scheduled workflows. The scheduler and its runs
+    # use an engine of their own with MAX_WORKERS + 1 connections (no overflow), on
+    # top of DB_POOL_SIZE + DB_MAX_OVERFLOW: count them in the database's limit.
+    # Connections per replica = DB_POOL_SIZE + DB_MAX_OVERFLOW + MAX_WORKERS + 1
+    # (5 + 10 + 4 + 1 = 20 by default); replicas x that must stay under the database's
+    # max connections. A run's own session is on the dedicated engine, but what it
+    # triggers (audit entries, search index updates, tag sync) takes a request-pool
+    # connection for a moment, within DB_POOL_SIZE + DB_MAX_OVERFLOW.
+    # After an in-process restart a run still going after the drain keeps a
+    # connection of the old engine until it ends, on top of these.
+    WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
+    # On shutdown, wait up to this many seconds for scheduled runs in progress. A
+    # run cut off by the exit is not run again (each slot runs at most once).
+    WORKFLOW_SCHEDULER_DRAIN_SECONDS: int = Field(30, env='WORKFLOW_SCHEDULER_DRAIN_SECONDS')
+
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
 
@@ -156,6 +193,13 @@ class Settings(BaseSettings):
     MOCK_USER_GROUPS: Optional[str] = Field(None, env='MOCK_USER_GROUPS')
     MOCK_USER_IP: Optional[str] = Field(None, env='MOCK_USER_IP')
 
+    # Requests without the user's on-behalf-of token (x-forwarded-access-token).
+    # False (default): routes that call Databricks as the user answer 403
+    # (user_token_required). True: they use the app's service principal client
+    # instead, for deployments where on-behalf-of auth isn't enabled. ENV=LOCAL*
+    # always uses the app's client (no Apps proxy forwards a token locally).
+    OBO_ALLOW_SP_FALLBACK: bool = Field(False, env='OBO_ALLOW_SP_FALLBACK')
+
     # Testing flag (replaces ad-hoc os.environ.get('TESTING') reads)
     TESTING: bool = Field(False, env='TESTING')
 
@@ -164,6 +208,13 @@ class Settings(BaseSettings):
     # may impersonate any user via X-Test-User-Email (+ optional X-Test-User-Groups).
     # SECURITY: Leave UNSET in production. The feature is fully disabled when None.
     TEST_USER_TOKEN: Optional[str] = Field(None, env='TEST_USER_TOKEN')
+
+    # Optional setup token for the demo-data load/clear routes. When set, a request
+    # carrying it in the X-Demo-Setup-Token header is accepted instead of the settings-general
+    # ADMIN check (this is what Swagger "Authorize" sends). Unset = token path disabled.
+    # SECURITY: treat as a secret; never logged. Shorter than MIN_DEMO_SETUP_TOKEN_LENGTH =
+    # not configured (see drop_short_demo_setup_token).
+    DEMO_SETUP_TOKEN: Optional[str] = Field(None, env='DEMO_SETUP_TOKEN')
 
     # LLM Configuration
     LLM_ENABLED: bool = Field(False, env='LLM_ENABLED')
@@ -183,6 +234,23 @@ class Settings(BaseSettings):
         LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT,
         env='LLM_INJECTION_CHECK_PROMPT'
     )
+    # Most LLM_CHECK calls one compliance run makes to the serving endpoint (cached
+    # verdicts don't count); the checks past it fail with llm_check_budget_exceeded.
+    COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN: int = Field(
+        100, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'
+    )
+    # Most LLM_CHECK model calls the compliance runs and rule tests one user starts
+    # may make a day (UTC); past it, their checks fail with
+    # llm_check_daily_quota_exceeded and new runs are answered 429. Scheduled runs
+    # have no user and only the per-run budget.
+    COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY: int = Field(
+        400, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY'
+    )
+    # Days a cached LLM_CHECK verdict is used; older ones are asked again and
+    # deleted when a compliance run starts.
+    COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS: int = Field(
+        30, ge=1, env='COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS'
+    )
 
     # Sandbox allowlist settings
     sandbox_default_schema: str = Field('sandbox', validation_alias=AliasChoices('SANDBOX_DEFAULT_SCHEMA', 'sandbox_default_schema'))
@@ -195,6 +263,13 @@ class Settings(BaseSettings):
     # When True, users who hit a feature backed by a disabled background job may
     # send an ACTION_REQUIRED notification to the Admin role asking for it to be enabled.
     ALLOW_JOB_ENABLEMENT_REQUESTS: bool = Field(False, env='ALLOW_JOB_ENABLEMENT_REQUESTS')
+
+    # Write table, view and column descriptions saved in Ontos to Unity Catalog as
+    # comments, as the user (on-behalf-of token), so Unity Catalog permissions decide.
+    UC_DESCRIPTION_WRITEBACK_ENABLED: bool = Field(False, env='UC_DESCRIPTION_WRITEBACK_ENABLED')
+    # At most this many rows of a bulk import are tried in Unity Catalog (a row counts
+    # whether its comment is written, kept or skipped), so it caps attempts, not writes
+    UC_DESCRIPTION_IMPORT_WRITE_LIMIT: int = Field(100, env='UC_DESCRIPTION_IMPORT_WRITE_LIMIT')
 
     # Delivery Mode settings
     # Controls how governance changes (GRANTs, tag assignments, etc.) are propagated
@@ -227,6 +302,16 @@ class Settings(BaseSettings):
     UI_APP_DISPLAY_NAME: Optional[str] = Field(None, env='UI_APP_DISPLAY_NAME')  # Global application display name (overrides default product name in UI copy)
     UI_APP_SHORT_NAME: Optional[str] = Field(None, env='UI_APP_SHORT_NAME')  # Optional short/abbreviated name for compact UI surfaces
     UI_FAVICON_URL: Optional[str] = Field(None, env='UI_FAVICON_URL')  # URL to custom favicon image (http/https)
+    # Branding, part 2: tagline, dark-mode logo and theme colors (#rrggbb).
+    # Unset = today's look. Image values: http(s) URL or a root-relative app asset path.
+    UI_APP_TAGLINE: Optional[str] = Field(None, env='UI_APP_TAGLINE')
+    UI_CUSTOM_LOGO_DARK_URL: Optional[str] = Field(None, env='UI_CUSTOM_LOGO_DARK_URL')
+    UI_THEME_PRIMARY: Optional[str] = Field(None, env='UI_THEME_PRIMARY')
+    UI_THEME_PRIMARY_DARK: Optional[str] = Field(None, env='UI_THEME_PRIMARY_DARK')
+    UI_THEME_ACCENT: Optional[str] = Field(None, env='UI_THEME_ACCENT')
+    UI_THEME_ACCENT_DARK: Optional[str] = Field(None, env='UI_THEME_ACCENT_DARK')
+    # "powered by Ontos" in the sidebar footer; only shown while a custom name or logo is set.
+    UI_SHOW_POWERED_BY: bool = Field(True, env='UI_SHOW_POWERED_BY')
 
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(
@@ -234,6 +319,26 @@ class Settings(BaseSettings):
         case_sensitive=True, 
         extra='ignore' # Explicitly ignore extra env vars
     )
+
+    @field_validator(
+        'UI_CUSTOM_LOGO_URL', 'UI_CUSTOM_LOGO_DARK_URL', 'UI_FAVICON_URL',
+        'UI_THEME_PRIMARY', 'UI_THEME_PRIMARY_DARK', 'UI_THEME_ACCENT', 'UI_THEME_ACCENT_DARK',
+        mode='after',
+    )
+    @classmethod
+    def drop_invalid_branding_value(cls, value: Optional[str], info) -> Optional[str]:
+        """Branding images and colors from the environment get the same checks as a
+        Settings save. An invalid one is dropped (with a warning) so it never reaches
+        ``<img src>`` or injected CSS, and the form never re-sends it.
+        """
+        if value is None:
+            return None
+        checked = (
+            coerce_hex_color(value) if 'THEME' in info.field_name else coerce_branding_url(value)
+        )
+        if checked is None and value.strip():
+            logger.warning("Ignoring invalid %s from the environment", info.field_name)
+        return checked
 
     @model_validator(mode='after')
     def compute_databricks_http_path(self) -> 'Settings':
@@ -293,6 +398,23 @@ class Settings(BaseSettings):
                 "via X-Test-Token headers is ENABLED. Unset TEST_USER_TOKEN unless this "
                 "is intentional."
             )
+        return self
+
+    @model_validator(mode='after')
+    def drop_short_demo_setup_token(self) -> 'Settings':
+        """Treat a DEMO_SETUP_TOKEN shorter than the minimum as not configured.
+
+        Logs the setting name and the minimum length, never the value.
+        """
+        if self.DEMO_SETUP_TOKEN and len(self.DEMO_SETUP_TOKEN) < MIN_DEMO_SETUP_TOKEN_LENGTH:
+            logger.error(
+                "DEMO_SETUP_TOKEN is shorter than %d characters and is ignored: the setup "
+                "token path of the demo-data routes is disabled. Set a token of at least "
+                "%d characters.",
+                MIN_DEMO_SETUP_TOKEN_LENGTH,
+                MIN_DEMO_SETUP_TOKEN_LENGTH,
+            )
+            self.DEMO_SETUP_TOKEN = None
         return self
 
     @model_validator(mode='after')
@@ -386,6 +508,41 @@ class VolumeInvalidError(CodedValueError):
     """The volume setting, or the catalog/schema it falls back to, can't name a volume."""
 
     code = 'volume_invalid'
+
+
+class VolumeNotConfiguredError(CodedValueError):
+    """A feature needs the volume setting, and it is empty."""
+
+    code = 'volume_not_configured'
+
+
+def canonical_volume_value(value: Optional[str]) -> Optional[str]:
+    """The volume setting as it is stored: trimmed, and for a path with repeated
+    slashes collapsed and no trailing slash. None when empty.
+
+    The Git export decides local directory or volume from the raw text
+    (``startswith('/Volumes/')``), while ``resolve_volume`` skips empty parts, so
+    ``//Volumes/c/s/v`` passed one and was treated as the other.
+    """
+    raw = (value or '').strip()
+    if raw.startswith('/'):
+        raw = '/' + '/'.join(part for part in raw.split('/') if part)
+    return raw or None
+
+
+def is_local_volume_path(value: Optional[str]) -> bool:
+    """True for a volume setting that is a local directory (development).
+
+    An absolute path outside ``/Volumes``. ``resolve_git_paths`` exports to it
+    directly, so it needs no Unity Catalog volume. A path under ``/Volumes`` in any
+    other casing (``/volumes/c/s/v``) is a malformed volume path, not a directory:
+    ``resolve_volume`` refuses it.
+    """
+    raw = (value or '').strip()
+    if not raw.startswith('/'):
+        return False
+    first = next((part for part in raw.split('/') if part), '')
+    return first.lower() != 'volumes'
 
 
 def resolve_volume(settings: Settings) -> Optional[Tuple[str, str, str]]:

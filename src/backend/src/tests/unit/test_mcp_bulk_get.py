@@ -8,7 +8,10 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.tools.base import ToolContext
+from src.tools.base import ToolCaller, ToolContext
+
+# Bulk mechanics only: a caller that reads everything.
+READS_ALL = ToolCaller(email=None, auth_path="test", full_access=True)
 from src.tools.data_products import GetDataProductsBulkTool
 from src.tools.data_contracts import GetDataContractsBulkTool
 
@@ -28,7 +31,8 @@ def _product(pid: str):
 def _products_ctx(known: dict) -> ToolContext:
     mgr = MagicMock()
     mgr.get_product.side_effect = lambda pid: known.get(pid)
-    return ToolContext(db=MagicMock(), settings=MagicMock(), data_products_manager=mgr)
+    return ToolContext(db=MagicMock(), settings=MagicMock(), caller=READS_ALL,
+                       data_products_manager=mgr)
 
 
 class TestBulkProducts:
@@ -79,7 +83,8 @@ class TestBulkContracts:
         # _build_contract_api_model maps the (ignored) db_obj back to the fake contract.
         self._order = iter(known.values())
         mgr._build_contract_api_model.side_effect = lambda db, obj: next(self._order)
-        return ToolContext(db=MagicMock(), settings=MagicMock(), data_contracts_manager=mgr)
+        return ToolContext(db=MagicMock(), settings=MagicMock(), caller=READS_ALL,
+                           data_contracts_manager=mgr)
 
     def test_returns_detail_and_reports_missing(self, monkeypatch):
         known = {

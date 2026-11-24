@@ -32,6 +32,14 @@ logger = get_logger(__name__)
 
 MAX_CONCURRENT_RUNS_PER_USER = 3
 
+USER_CLIENT_FAILED_MESSAGE = (
+    "Could not create a Databricks client with your credentials, so the import did not run."
+)
+
+
+class UserWorkspaceClientError(RuntimeError):
+    """The forwarded user token could not be turned into a workspace client."""
+
 
 class SchemaImportRunsManager:
     """Manages async (background-thread) Schema Importer runs."""
@@ -237,21 +245,26 @@ class SchemaImportRunsManager:
     def _build_workspace_client(self, user_token: Optional[str]):
         """Build a workspace client for the background thread.
 
-        Prefer the caller's forwarded OBO token (preserves their UC permissions,
-        matching the synchronous import path); fall back to the app service
-        principal when no token was forwarded (e.g. local dev).
+        With the caller's forwarded OBO token, the run reads Unity Catalog with the
+        user's permissions (matching the synchronous import path). If that client
+        can't be built the run fails: it never falls back to the app service
+        principal for a user's run. Without a token (e.g. local dev) the service
+        principal is used.
         """
-        from src.common.workspace_client import get_workspace_client
+        from src.common.workspace_client import (
+            build_user_token_workspace_client,
+            get_workspace_client,
+        )
         if user_token:
             try:
-                from databricks.sdk import WorkspaceClient
-                return WorkspaceClient(
-                    host=self._settings.DATABRICKS_HOST,
-                    token=user_token,
-                    product="ontos",
-                )
+                return build_user_token_workspace_client(self._settings.DATABRICKS_HOST, user_token)
             except Exception as exc:
-                logger.warning("OBO workspace client failed (%s); falling back to service principal", exc)
+                logger.warning(
+                    "OBO workspace client for a background schema import failed (%s)",
+                    type(exc).__name__,
+                )
+                # from None: keep the SDK's message out of the run record and the log.
+                raise UserWorkspaceClientError(USER_CLIENT_FAILED_MESSAGE) from None
         try:
             return get_workspace_client(self._settings)
         except Exception as exc:

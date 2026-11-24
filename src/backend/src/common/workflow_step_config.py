@@ -1,4 +1,4 @@
-"""Checks of Conditional and Script step configs.
+"""Checks of Conditional and Script step configs, and the policy id of a Policy Check step.
 
 Used when a workflow is saved and by the designer before it saves. Each issue
 has a ``code`` and ``params`` the UI translates, and an English ``message``.
@@ -12,6 +12,19 @@ SCRIPT_LANGUAGES = ('python', 'sql')
 # recursive, so a deeply nested condition could exhaust the stack before the
 # parser reports anything; the length cap keeps the check cheap and bounded.
 MAX_CONDITION_LENGTH = 10_000
+
+
+def policy_id_of(config: Optional[Dict[str, Any]]) -> str:
+    """The ``policy_id`` of a Policy Check step's config, as activation and the run read it.
+
+    Surrounding spaces are dropped; a missing or empty id is ``''``; a value that
+    isn't a string (an import or an API call) becomes its text, so it is reported
+    as a policy that doesn't exist instead of failing.
+    """
+    value = (config or {}).get('policy_id')
+    if value is None:
+        return ''
+    return (value if isinstance(value, str) else str(value)).strip()
 
 
 def _issue(code: str, message: str, **params: Any) -> Dict[str, Any]:

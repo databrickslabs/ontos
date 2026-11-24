@@ -45,6 +45,58 @@ def test_a_review_can_be_requested_with_only_a_message():
     assert kwargs['requester_email'] == 'rita@example.com'
 
 
+def _non_admin_request():
+    request = MagicMock()
+    request.json = AsyncMock(return_value={'reviewer_email': 'pal@example.com'})
+    request.app.state.authorization_manager.has_permission.return_value = False
+    request.app.state.settings_manager = None
+    return request
+
+
+def _draft(owner='owner@example.com'):
+    return SimpleNamespace(
+        id='p-1', status='draft', draft_owner_id=owner, owner_team_id=None, project_id=None,
+    )
+
+
+def test_a_non_owner_cannot_request_a_review():
+    """#1117: the named reviewer would read the draft, so only its owners or an
+    admin may request the review; nothing changes when refused."""
+    import pytest
+    from fastapi import HTTPException
+
+    manager = MagicMock()
+    manager.get_product.return_value = _draft()
+    user = UserInfo(email='mallory@example.com', username='mallory', user='Mallory',
+                    ip='127.0.0.1', groups=['data-producers'])
+
+    with patch('src.common.review_access.caller_is_pending_reviewer', return_value=False):
+        with pytest.raises(HTTPException) as refused:
+            asyncio.run(request_product_review(
+                product_id='p-1', request=_non_admin_request(), db=MagicMock(),
+                audit_manager=MagicMock(), current_user=user, manager=manager, _=True,
+            ))
+
+    assert refused.value.status_code == 404
+    manager.request_review.assert_not_called()
+
+
+def test_the_owner_can_request_a_review():
+    manager = MagicMock()
+    manager.get_product.return_value = _draft(owner='Owner@Example.com')
+    manager.request_review.return_value = {'status': 'success'}
+    user = UserInfo(email='owner@example.com', username='owner', user='Owner',
+                    ip='127.0.0.1', groups=['data-producers'])
+
+    result = asyncio.run(request_product_review(
+        product_id='p-1', request=_non_admin_request(), db=MagicMock(),
+        audit_manager=MagicMock(), current_user=user, manager=manager, _=True,
+    ))
+
+    assert result == {'status': 'success'}
+    assert manager.request_review.call_args.kwargs['reviewer_email'] == 'pal@example.com'
+
+
 def _context(entity_id, entity_data=None, requester='rita@example.com'):
     trigger = SimpleNamespace(
         entity_type='data_product', entity_id=entity_id, entity_name='AML',

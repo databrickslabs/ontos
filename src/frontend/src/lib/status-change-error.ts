@@ -13,7 +13,20 @@ const REASON_KEYS: Record<string, string> = {
   waiting_for_approval: 'workflow-gates:reasons.waitingForApproval',
   rule_entity_load_failed: 'workflow-gates:reasons.entityLoadFailed',
   rule_entity_not_found: 'workflow-gates:reasons.entityNotFound',
+  rule_where_evaluation_failed: 'workflow-gates:reasons.whereEvaluationFailed',
 };
+
+/** Codes of the deprecation checks (`common:deprecation.errors.<code>`). */
+const DEPRECATION_ERROR_CODES = new Set([
+  'deprecation_reason_required',
+  'sunset_date_in_past',
+  'replacement_is_self',
+  'replacement_not_found',
+  'replacement_retired',
+  'replacement_deprecated',
+  'replacement_deprecated_replaced',
+  'replacement_leads_back',
+]);
 
 function reasonText(reason: BlockedReason, t: TFunction): string {
   let text = reason.text;
@@ -39,6 +52,10 @@ function reasonText(reason: BlockedReason, t: TFunction): string {
  * are translated too, and so is a `fail_closed` gate that couldn't be evaluated
  * (`status_change_gate_error`). Any other error is the English `error` the API sent.
  *
+ * A deprecation the details don't allow (no reason, a past sunset date, an
+ * unusable replacement) is answered with one of `DEPRECATION_ERROR_CODES`
+ * and translated from `common:deprecation.errors`.
+ *
  * `statusNamespace` is the namespace whose `status.<status>` keys label the
  * entity's statuses (`data-products`, `data-contracts`).
  */
@@ -49,6 +66,12 @@ export function statusChangeErrorText(
 ): string {
   const error = response.error || '';
   const params = response.errorParams;
+  if (response.errorCode && DEPRECATION_ERROR_CODES.has(response.errorCode)) {
+    return t(`common:deprecation.errors.${response.errorCode}`, {
+      ...(params ?? {}),
+      defaultValue: error,
+    });
+  }
   const statusLabel = (status: unknown) =>
     t(`${statusNamespace}:status.${String(status ?? '')}`, { defaultValue: String(status ?? '') });
   // The lifecycle status checks of src.common.lifecycle_status
@@ -67,6 +90,20 @@ export function statusChangeErrorText(
     return t('workflow-gates:invalidStatus', {
       status: String(params.status ?? ''),
       allowed: allowed.map(statusLabel).join(', '),
+      defaultValue: error,
+    });
+  }
+  // A certified product or contract is deprecated through a status change request
+  if (response.errorCode === CERTIFIED_DEPRECATION_CODE) {
+    return t('workflow-gates:certifiedDeprecationRequiresApproval', {
+      name: String(params?.entityName ?? ''),
+      defaultValue: error,
+    });
+  }
+  // A decision on a certified deprecation that doesn't count as its approval
+  if (response.errorCode === CERTIFIED_APPROVAL_REFUSED_CODE) {
+    return t(`workflow-gates:certifiedApprovalRefused.${String(params?.reason ?? '')}`, {
+      name: String(params?.entityName ?? ''),
       defaultValue: error,
     });
   }
@@ -90,6 +127,25 @@ export function statusChangeErrorText(
       : t('workflow-gates:reasons.validationFailed'),
     defaultValue: error,
   });
+}
+
+/**
+ * The code of a direct deprecation refused because the entity is certified:
+ * it needs an approved status change request (the certified guard).
+ */
+export const CERTIFIED_DEPRECATION_CODE = 'certified_deprecation_requires_approval';
+
+/**
+ * The code of a decision on a certified deprecation that doesn't count as its
+ * approval; `params.reason` says why (no pending request, the requester's own...).
+ */
+export const CERTIFIED_APPROVAL_REFUSED_CODE = 'certified_deprecation_approval_refused';
+
+/** Whether a failed status change can go through as a status change request instead. Pure. */
+export function needsStatusChangeRequest(
+  response: Pick<ApiResponse<unknown>, 'errorCode'>,
+): boolean {
+  return response.errorCode === CERTIFIED_DEPRECATION_CODE;
 }
 
 /** The `error` / `errorCode` / `errorParams` of a failed response's JSON body, as useApi gives them. */

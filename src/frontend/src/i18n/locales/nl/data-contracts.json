@@ -529,6 +529,10 @@
     "personal": "Persoonlijk",
     "requestAccess": "Toegang aanvragen ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} is leeg: stuur een domein-id mee of laat het veld weg om de domeinen van het contract te behouden.",
+    "primaryDomainNotInDomains": "Domein {{primaryDomainId}} is geen van de domeinen van het contract en kan dus niet het primaire domein zijn."
+  },
   "createInline": {
     "title": "Nieuw contract aanmaken",
     "description": "Maak een minimaal datacontract aan. U kunt later schema's en kwaliteitsregels toevoegen.",

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
@@ -114,7 +114,7 @@ def get_all_data_domains(
     manager: DataDomainManager = Depends(get_data_domain_manager),
     # Then query parameters
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
 ):
     """Lists all data domains."""
     logger.debug(f"Fetching all data domains (skip={skip}, limit={limit})")

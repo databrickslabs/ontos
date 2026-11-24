@@ -70,7 +70,7 @@ class DataDomainRepository(CRUDBase[DataDomain, DataDomainCreate, DataDomainUpda
             raise
 
     def get_multi_with_details(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None
     ) -> List[DataDomain]:
         """Gets multiple domains, eager loading parent and children for count/details."""
         logger.debug(f"Fetching multiple {self.model.__name__} with details, skip={skip}, limit={limit}")

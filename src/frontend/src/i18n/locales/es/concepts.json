@@ -1,10 +1,125 @@
 {
   "title": "Conceptos",
+  "sections": {
+    "label": "Secciones de conceptos",
+    "define": "Definir",
+    "explore": "Explorar",
+    "enrich": "Enriquecer"
+  },
+  "explore": {
+    "viewLabel": "Vistas de exploración",
+    "viewList": "Lista",
+    "viewTree": "Árbol",
+    "viewGraph": "Grafo",
+    "createConcept": "Nuevo concepto",
+    "createScheme": "Nuevo esquema de conceptos",
+    "description": "Crea, explora y entrega tus esquemas de conceptos de negocio.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL y búsqueda en el grafo de conocimiento"
+  },
   "nav": {
     "collections": "Esquemas de conceptos",
     "browser": "Conceptos",
     "search": "Búsqueda",
+    "searchSparql": "Búsqueda / SPARQL",
     "graph": "Grafo",
-    "hierarchy": "Jerarquía"
+    "hierarchy": "Jerarquía",
+    "generator": "Generador",
+    "import": "Importar",
+    "mapping": "Mapeo"
+  },
+  "define": {
+    "description": "Crea, genera o importa tus esquemas de conceptos de negocio."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Escribe metadatos gobernados en los activos de {{platform}} vinculados.",
+      "tags": {
+        "name": "Etiquetas",
+        "desc": "Etiquetas de gobernanza clave/valor en tablas y columnas. Impulsan el descubrimiento y las políticas de acceso.",
+        "via": "mediante uc_tag_sync",
+        "notConfigured": "La entrega de etiquetas no está configurada. Para activarla, instala el job uc_tag_sync en Configuración > Jobs.",
+        "note": "La entrega de etiquetas se ejecuta a través del job compartido uc_tag_sync, que también cubre otros aspectos además de la asignación semántica. Configura su alcance y su programación en Configuración > Jobs."
+      },
+      "desc": {
+        "name": "Descripciones de columnas",
+        "desc": "Significado en lenguaje claro en las columnas. Es lo que Genie y la búsqueda leen para responder con precisión.",
+        "assist": "dbxmetagen puede redactar borradores"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "El glosario de negocio gobernado en la propia plataforma.",
+        "note": "Sincroniza los conceptos con el glosario de negocio nativo de Unity Catalog, la capa gobernada de la que lee Genie Ontology. Disponible con la GA de UC Glossary."
+      },
+      "title": "Entregar",
+      "tip": "Entregar escribe tus metadatos gobernados en la plataforma. Las herramientas posteriores (Genie, búsqueda, agentes) los leen desde allí. Etiquetas = políticas y descubrimiento. Descripciones = lo que lee Genie. Glosario = la capa de negocio gobernada.",
+      "pendingTitle": "Cambios de etiquetas pendientes",
+      "pendingSubtitle": "Vínculos entre conceptos y activos creados desde la última sincronización correcta de etiquetas. Una nueva ejecución de uc_tag_sync los entregaría.",
+      "pendingEmpty": "No hay nada pendiente.",
+      "pendingInScheme": "en",
+      "pendingAppliesTo": "se aplica a",
+      "coverageSynced": "{{synced}} de {{total}} sincronizados · ",
+      "pendingCount": "{{pending}} pendientes",
+      "lastRun": " · última ejecución {{run}}",
+      "notSynced": "Aún sin sincronizar",
+      "manageInSettings": "Gestionar en Configuración",
+      "configure": "Configurar",
+      "comingSoon": "Próximamente: todavía no es posible configurar ni ejecutar esta sincronización desde Ontos.",
+      "syncNow": "Sincronizar ahora",
+      "about": "Acerca de este destino de entrega"
+    },
+    "subtitle": "Mapea tus conceptos a activos y, después, entrega metadatos gobernados en la plataforma.",
+    "deliverTo": "Entregar en",
+    "platformTip": "Las plataformas de entrega proceden de las conexiones configuradas en Configuración. Unity Catalog es la predeterminada. Los destinos de entrega siguientes se adaptan a la plataforma que elijas.",
+    "manageConnections": "Gestionar conexiones ↗",
+    "map": {
+      "title": "Mapear",
+      "suggest": "Sugerir coincidencias",
+      "desc": "Vincula un concepto directamente a un activo de {{platform}} (la ruta predeterminada, sin necesidad de producto ni contrato) y, opcionalmente, añade vínculos a productos de datos y contratos de datos. Los tres son independientes.",
+      "col": {
+        "scheme": "Esquema de conceptos",
+        "lastRun": "Última ejecución",
+        "concepts": "Conceptos",
+        "coverage": "Cobertura",
+        "products": "Productos",
+        "contracts": "Contratos",
+        "assets": "Activos",
+        "suggested": "Sugeridos"
+      },
+      "assetNote": "Los vínculos a activos son lo que Entregar enriquece en el paso 2. La vinculación directa a activos funciona incluso antes de que exista un producto o un contrato, por lo que resuelve el problema del huevo y la gallina.",
+      "review": "Revisar",
+      "allSelected": "Todos seleccionados",
+      "unmappedNote": "{{unmapped}} conceptos aún no tienen vínculos.",
+      "coverageTip": "Cobertura = proporción de los conceptos de un esquema de conceptos con al menos un vínculo. Productos y Contratos son vínculos adicionales opcionales, por lo que los tres recuentos no suman el total. Solo los Activos se pueden enriquecer en el paso 2.",
+      "placeholderNote": "Las cifras de cobertura son datos de ejemplo: el servicio de cobertura en vivo no está disponible en este momento."
+    },
+    "review": {
+      "title": "Revisar coincidencias sugeridas",
+      "subtitle": "Acepta o rechaza cada coincidencia entre concepto y activo. No se sincroniza nada hasta que lo aceptes.",
+      "loading": "Cargando coincidencias sugeridas…",
+      "applied": "Se han aplicado {{count}} coincidencia(s). Se sincronizarán en la próxima entrega.",
+      "applyError": "No se pudieron aplicar las coincidencias: ",
+      "placeholderNote": "Se muestran coincidencias de ejemplo a modo ilustrativo.",
+      "reject": "Rechazar",
+      "accept": "Aceptar",
+      "drift": "Desviación de esquema por resolver",
+      "openFull": "Abrir el panel de revisión completo",
+      "applying": "Aplicando…",
+      "acceptApplyAll": "Aceptar y aplicar las {{count}}"
+    },
+    "modes": {
+      "direct": "Directo",
+      "directDesc": "Ontos aplica los cambios en este espacio de trabajo de inmediato mediante la entidad de servicio.",
+      "indirect": "Indirecto",
+      "indirectDesc": "Ontos escribe YAML en Git para que tu pipeline de CI/CD lo promueva (de desarrollo a staging y a producción).",
+      "manual": "Manual",
+      "manualDesc": "Ontos notifica a una persona para que aplique el cambio en otro lugar.",
+      "active": "activo",
+      "manageLink": "El modo de entrega se configura por sitio en Configuración, Entrega"
+    }
+  },
+  "mode": {
+    "description": "La vista avanzada muestra la capa de ontología: RDF/SKOS, IRI, dominio y rango de propiedades, y ajustes técnicos de entrega. La vista simple los oculta. Se recordará tu elección.",
+    "label": "Modo de vista"
   }
 }

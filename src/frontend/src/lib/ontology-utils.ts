@@ -1,15 +1,91 @@
 import type { OntologyConcept } from '@/types/ontology';
 
+/** IRI local name (after the last # or /, ignoring a trailing one); the IRI itself when none. */
+export function iriLocalName(iri: string): string {
+  if (!iri) return '';
+  const trimmed = iri.replace(/[/#]+$/, '');
+  const fragment = trimmed.split('#').pop();
+  if (fragment && fragment !== trimmed) return fragment;
+  const path = trimmed.split('/').pop();
+  return path || iri;
+}
+
+/** Language-keyed label maps of a resource, skos:prefLabel kept apart from rdfs:label. */
+export interface LabelMaps {
+  prefLabel?: Record<string, string> | null;
+  rdfsLabel?: Record<string, string> | null;
+}
+
+// Pick a label by language (case-insensitive tags), including regional variants
+// (en-US, pt-BR, ...). Blank values are ignored; ties resolve by sorted tag.
+function pickByLang(map: Record<string, string>, lang: string): string | undefined {
+  const want = lang.toLowerCase();
+  const entries = Object.entries(map)
+    .filter(([, v]) => typeof v === 'string' && v.trim() !== '')
+    .map(([k, v]) => [k.toLowerCase(), v] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const exact = entries.find(([k]) => k === want);
+  if (exact) return exact[1];
+  const regional = entries.find(([k]) => k.startsWith(want + '-'));
+  return regional?.[1];
+}
+
+// UI language, then English, then untagged, then any other language.
+function pickLabel(map: Record<string, string>, preferredLang: string): string | undefined {
+  const byLang = pickByLang(map, preferredLang) || pickByLang(map, 'en');
+  if (byLang) return byLang;
+  const rest = Object.entries(map)
+    .filter(([, v]) => typeof v === 'string' && v.trim() !== '')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return (rest.find(([k]) => k === '') || rest[0])?.[1];
+}
+
+/**
+ * Resolve the display label for a resource.
+ *
+ * Precedence:
+ * 1. skos:prefLabel: UI language, English, untagged, any other language
+ * 2. rdfs:label: UI language, English, untagged, any other language
+ * 3. Legacy single `label` (when it is not just the IRI)
+ * 4. IRI local name (after last # or /)
+ * 5. The IRI itself
+ *
+ * @param maps prefLabel / rdfsLabel language-keyed maps ({"en": "Dataset", "pt": "Conjunto"})
+ * @param iri The resource IRI
+ * @param preferredLang The preferred language code (e.g., 'en', 'pt')
+ * @param legacyLabel Optional single-valued label
+ */
+export function resolveLabelFromMaps(
+  maps: LabelMaps | null | undefined,
+  iri: string,
+  preferredLang: string = 'en',
+  legacyLabel?: string
+): string {
+  const found =
+    pickLabel(maps?.prefLabel || {}, preferredLang) ||
+    pickLabel(maps?.rdfsLabel || {}, preferredLang);
+  if (found) return found;
+  if (legacyLabel && legacyLabel.trim() && legacyLabel !== iri) return legacyLabel;
+  return iriLocalName(iri) || iri;
+}
+
+/**
+ * Single-map variant for data that already merged both label kinds per language
+ * (concept `labels`, prefLabel first). Same fallbacks as {@link resolveLabelFromMaps}.
+ */
+export function resolveLabelFromMap(
+  labels: Record<string, string> | null | undefined,
+  iri: string,
+  preferredLang: string = 'en',
+  legacyLabel?: string
+): string {
+  return resolveLabelFromMaps({ prefLabel: labels }, iri, preferredLang, legacyLabel);
+}
+
 /**
  * Resolve the best label for a concept based on language preference.
- * 
- * Priority chain:
- * 1. Preferred language (e.g., user's selected language)
- * 2. English ('en')
- * 3. No language tag ('')
- * 4. IRI local name (after last # or /) — matches Protégé behavior
- * 5. Any available label (last resort, may be in a different language)
- * 
+ * See {@link resolveLabelFromMap} for the precedence.
+ *
  * @param concept The ontology concept
  * @param preferredLang The preferred language code (e.g., 'en', 'ja', 'de')
  * @returns The best available label for display
@@ -18,43 +94,14 @@ export function resolveLabel(
   concept: OntologyConcept,
   preferredLang: string = 'en'
 ): string {
-  const labels = concept.labels || {};
-  
-  // Helper to find label by language, including regional variants (en-US, en-GB, etc.)
-  const findByLang = (lang: string): string | undefined => {
-    // Exact match first
-    if (labels[lang]) return labels[lang];
-    // Try regional variants (e.g., 'en' matches 'en-US', 'en-GB')
-    const prefix = lang + '-';
-    for (const [key, value] of Object.entries(labels)) {
-      if (key.startsWith(prefix)) return value;
-    }
-    return undefined;
-  };
-  
-  // Priority: preferred lang > English > no lang tag > IRI local name > any available label
-  const preferred = findByLang(preferredLang);
-  if (preferred) return preferred;
-  
-  const english = findByLang('en');
-  if (english) return english;
-  
-  if (labels['']) return labels[''];  // No language tag
-  
-  // Prefer IRI local name over a label in a non-matching language (matches Protégé behavior)
-  const localName = concept.iri.split(/[/#]/).pop();
-  if (localName && localName !== concept.iri) return localName;
-  
-  // Legacy fallback: use the label field if available
-  if (concept.label && concept.label !== concept.iri) {
-    return concept.label;
-  }
-  
-  // Last resort: any available label regardless of language
-  const anyLabel = Object.values(labels)[0];
-  if (anyLabel) return anyLabel;
-  
-  return concept.iri;
+  return resolveLabelFromMaps(
+    concept.label_maps && (concept.label_maps.prefLabel || concept.label_maps.rdfsLabel)
+      ? concept.label_maps
+      : { prefLabel: concept.labels },
+    concept.iri,
+    preferredLang,
+    concept.label
+  );
 }
 
 /**

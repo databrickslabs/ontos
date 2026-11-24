@@ -1,0 +1,818 @@
+"""Importing Markdown files from a volume as documents (#1478).
+
+``POST /api/metadata/markdown-import`` reads the ``.md`` files of a volume
+folder and adds each one as a document on the domain, assets and concepts its
+front matter names. A re-run updates only the files that changed; files that
+name no entity are reported as unlinked. The documents are the ones the
+documents panel lists, and search finds their text.
+"""
+import io
+import uuid
+from types import SimpleNamespace
+
+import pytest
+from databricks.sdk.errors import NotFound, PermissionDenied
+from databricks.sdk.service.files import DirectoryEntry
+from rdflib import Literal, URIRef
+from rdflib.namespace import OWL, RDF, RDFS
+
+from src.app import app
+from src.controller.metadata_manager import MetadataManager
+from src.db_models.assets import AssetDb, AssetTypeDb
+from src.db_models.change_log import ChangeLogDb
+from src.db_models.data_domains import DataDomain
+from src.db_models.metadata import DocumentMetadataDb, ImportedMarkdownFileDb
+
+ROOT = '/Volumes/main/docs/context'
+CUSTOMER_IRI = 'http://example.org/ontology#Customer'
+
+DOMAIN_FILE = """---
+title: Customer domain overview
+domain: Customer
+---
+# Overview
+
+A customer is a person with at least one zorbleflux order.
+"""
+
+TERMS_FILE = """---
+assets: [main.crm.customers]
+concepts: [Customer]
+---
+# Customer terms
+
+Churn means no order in 90 days.
+"""
+
+LOOSE_FILE = """# Loose notes
+
+No front matter here.
+"""
+
+
+@pytest.fixture
+def client(client):
+    """The caller has a Databricks user token (the import refuses a request without one)."""
+    client.headers['x-forwarded-access-token'] = 'user-token'
+    return client
+
+
+@pytest.fixture
+def domain(db_session):
+    row = DataDomain(name='Customer', description='Customer data', created_by='test@example.com')
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+@pytest.fixture
+def asset(db_session):
+    asset_type = AssetTypeDb(name=f'Table {uuid.uuid4().hex[:8]}', category='data')
+    db_session.add(asset_type)
+    db_session.flush()
+    row = AssetDb(name='customers', asset_type_id=asset_type.id, platform='databricks',
+                  location='main.crm.customers')
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+@pytest.fixture
+def concept(client):
+    graph = app.state.semantic_models_manager._graph
+    triples = [
+        (URIRef(CUSTOMER_IRI), RDF.type, OWL.Class),
+        (URIRef(CUSTOMER_IRI), RDFS.label, Literal('Customer')),
+    ]
+    for triple in triples:
+        graph.add(triple)
+    yield CUSTOMER_IRI
+    for triple in triples:
+        graph.remove(triple)
+
+
+@pytest.fixture
+def volume(mock_workspace_client):
+    """A fake volume: {path: text}. Folders are derived from the file paths."""
+    files = {
+        f'{ROOT}/domain.md': DOMAIN_FILE,
+        f'{ROOT}/glossary/terms.md': TERMS_FILE,
+        f'{ROOT}/glossary/loose.md': LOOSE_FILE,
+        f'{ROOT}/glossary/image.png': 'not markdown',
+    }
+
+    def list_directory_contents(folder):
+        if folder == '/Volumes/main/docs/missing':
+            raise NotFound('no such folder')
+        if folder == '/Volumes/main/secret/stuff':
+            raise PermissionDenied('no READ VOLUME')
+        children = {}
+        for path, text in files.items():
+            if not path.startswith(folder + '/'):
+                continue
+            first = path[len(folder) + 1:].split('/')[0]
+            child = f'{folder}/{first}'
+            children[child] = DirectoryEntry(
+                path=child, name=first, is_directory=child != path,
+                file_size=len(text.encode()) if child == path else None,
+            )
+        return list(children.values())
+
+    def download(path):
+        return SimpleNamespace(contents=io.BytesIO(files[path].encode('utf-8')))
+
+    mock_workspace_client.files.list_directory_contents.side_effect = list_directory_contents
+    mock_workspace_client.files.download.side_effect = download
+    mock_workspace_client.files.delete.reset_mock()
+    return files
+
+
+@pytest.fixture
+def asset_type(db_session):
+    row = AssetTypeDb(name=f'Type {uuid.uuid4().hex[:8]}', category='data')
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+def _import(client, path=ROOT):
+    return client.post('/api/metadata/markdown-import', json={'path': path})
+
+
+def _by_path(body):
+    return {entry['path']: entry for entry in body['files']}
+
+
+def test_import_links_each_file_to_the_entities_its_front_matter_names(
+        client, db_session, domain, asset, concept, volume):
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body['added'], body['updated'], body['unchanged'], body['unlinked'],
+            body['failed']) == (2, 0, 0, 1, 0)
+    files = _by_path(body)
+    assert set(files) == {f'{ROOT}/domain.md', f'{ROOT}/glossary/terms.md',
+                          f'{ROOT}/glossary/loose.md'}
+    assert files[f'{ROOT}/domain.md']['targets'] == [
+        {'entity_type': 'data_domain', 'entity_id': domain.id, 'name': 'Customer'}]
+    assert {(t['entity_type'], t['entity_id'])
+            for t in files[f'{ROOT}/glossary/terms.md']['targets']} == {
+        ('asset', str(asset.id)), ('concept', CUSTOMER_IRI)}
+    assert files[f'{ROOT}/glossary/loose.md']['status'] == 'unlinked'
+
+    # The documents panel lists them, with the source path.
+    listed = client.get('/api/entities/data_domain/documents', params={'entity_id': domain.id})
+    assert listed.status_code == 200, listed.text
+    [doc] = listed.json()
+    assert doc['title'] == 'Customer domain overview'
+    assert doc['source_path'] == f'{ROOT}/domain.md'
+    assert doc['original_filename'] == 'domain.md'
+    for entity_type, entity_id in (('asset', str(asset.id)), ('concept', CUSTOMER_IRI)):
+        listed = client.get(f'/api/entities/{entity_type}/documents',
+                            params={'entity_id': entity_id})
+        assert listed.status_code == 200, listed.text
+        assert [d['title'] for d in listed.json()] == ['Customer terms']
+
+    # The content is served from the stored Markdown, not the source volume.
+    content = client.get(f"/api/documents/{doc['id']}/content")
+    assert content.status_code == 200
+    assert content.text == DOMAIN_FILE
+    assert content.headers['content-type'].startswith('text/markdown')
+
+
+def test_a_rerun_updates_only_the_changed_file(client, db_session, domain, asset, concept, volume):
+    assert _import(client).status_code == 200
+    volume[f'{ROOT}/domain.md'] = DOMAIN_FILE.replace('at least one', 'two or more')
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body['added'], body['updated'], body['unchanged'], body['unlinked']) == (0, 1, 1, 1)
+    files = _by_path(body)
+    assert files[f'{ROOT}/domain.md']['status'] == 'updated'
+    assert files[f'{ROOT}/glossary/terms.md']['status'] == 'unchanged'
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == f'{ROOT}/domain.md').all()
+    assert len(docs) == 1
+    [stored] = db_session.query(ImportedMarkdownFileDb).filter_by(source_path=f'{ROOT}/domain.md')
+    assert 'two or more' in stored.content_text
+    updates = db_session.query(ChangeLogDb).filter(
+        ChangeLogDb.entity_type == 'data_domain:document', ChangeLogDb.action == 'UPDATE').count()
+    assert updates == 1
+
+
+def test_a_file_without_a_known_target_is_unlinked(client, db_session, volume):
+    # No domain, asset or concept exists: every file is unlinked, nothing is stored.
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body['added'], body['unlinked']) == (0, 3)
+    unresolved = _by_path(body)[f'{ROOT}/glossary/terms.md']['unresolved']
+    assert {(u['kind'], u['value'], u['reason']) for u in unresolved} == {
+        ('asset', 'main.crm.customers', 'not_found'), ('concept', 'Customer', 'not_found')}
+    assert db_session.query(DocumentMetadataDb).count() == 0
+
+
+def test_search_finds_the_imported_text(client, domain, asset, concept, volume):
+    assert _import(client).status_code == 200
+
+    response = client.get('/api/search', params={'search_term': 'zorbleflux'})
+
+    assert response.status_code == 200, response.text
+    [hit] = [item for item in response.json() if item['type'] == 'document']
+    assert hit['title'] == 'Customer domain overview'
+    assert hit['link'] == f'/settings/data-domains/{domain.id}'
+
+
+def test_deleting_the_asset_keeps_the_source_file(
+        client, db_session, asset, volume, mock_workspace_client):
+    assert _import(client).status_code == 200
+    # Linked only through the asset's FQN; the concept isn't loaded here.
+    assert db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == str(asset.id)).count() == 1
+
+    response = client.delete(f'/api/assets/{asset.id}')
+
+    assert response.status_code == 200, response.text
+    assert db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == str(asset.id)).count() == 0
+    mock_workspace_client.files.delete.assert_not_called()
+    # Its search hit and the file's stored text go with the last document of the file
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert [hit for hit in hits if hit['type'] == 'document'] == []
+    assert db_session.query(ImportedMarkdownFileDb).count() == 0
+
+
+@pytest.mark.parametrize('path, status, code', [
+    ('/tmp/docs', 400, 'markdown_import_path_invalid'),
+    ('/Volumes/main/docs', 400, 'markdown_import_path_invalid'),
+    (f'{ROOT}/../other', 400, 'markdown_import_path_invalid'),
+    ('/Volumes/main/docs/missing', 404, 'markdown_import_path_not_found'),
+    ('/Volumes/main/secret/stuff', 403, 'markdown_import_access_denied'),
+])
+def test_a_bad_path_answers_a_coded_error(client, volume, path, status, code):
+    response = _import(client, path)
+
+    assert response.status_code == status, response.text
+    detail = response.json()['detail']
+    assert detail['code'] == code
+    assert detail['params']['path']
+
+
+def test_needs_write_access_to_the_documents_feature(client, volume, mock_test_user):
+    mock_test_user.groups = []
+
+    response = _import(client)
+
+    assert response.status_code == 403
+
+
+def test_the_import_reads_the_volume_as_the_user(monkeypatch):
+    """The route's client is the on-behalf-of one, so users import only files they can read."""
+    from src.routes import metadata_routes
+
+    sentinel = object()
+    monkeypatch.setattr(metadata_routes, 'get_obo_workspace_client', lambda request: sentinel)
+    request = SimpleNamespace(headers={'x-forwarded-access-token': 'user-token'})
+    assert metadata_routes._user_workspace_client(request) is sentinel
+
+
+@pytest.mark.parametrize('route', ['markdown-import', 'markdown-import/preview'])
+def test_a_request_without_the_user_token_is_refused_even_where_the_app_client_may_stand_in(
+        client, volume, route):
+    """Tests run with ENV=LOCAL: the OBO client would be the app's own, which could read
+    (and copy into the database) files the user can't. The import refuses instead."""
+    del client.headers['x-forwarded-access-token']
+
+    response = client.post(f'/api/metadata/{route}', json={'path': ROOT})
+
+    assert response.status_code == 403
+    assert response.json()['detail']['code'] == 'user_token_required'
+
+
+def test_imported_documents_are_in_the_search_index_at_startup(client, db_session, domain):
+    db_session.add(DocumentMetadataDb(
+        entity_type='data_domain', entity_id=domain.id, title='Glossary',
+        original_filename='g.md', storage_path=f'{ROOT}/g.md', source_path=f'{ROOT}/g.md',
+        content_hash='x',
+    ))
+    db_session.add(ImportedMarkdownFileDb(
+        source_path=f'{ROOT}/g.md', content_hash='x',
+        content_text='---\ndomain: Customer\n---\nChurn is defined here.\n',
+    ))
+    db_session.add(DocumentMetadataDb(
+        entity_type='data_domain', entity_id=domain.id, title='Uploaded',
+        original_filename='u.pdf', storage_path='/Volumes/c/s/v/u.pdf',
+    ))
+    db_session.flush()
+
+    items = MetadataManager().get_search_index_items()
+
+    assert [(item.title, item.description) for item in items] == [
+        ('Glossary', 'Churn is defined here.\n')]
+
+
+def _single_file(volume, text):
+    """Make the volume hold one file, ROOT/only.md, with ``text``."""
+    volume.clear()
+    volume[f'{ROOT}/only.md'] = text
+
+
+def _targets(body):
+    [entry] = body['files']
+    return entry
+
+
+def test_targets_resolve_by_id_and_by_name(client, db_session, domain, asset, volume):
+    _single_file(volume, f"---\ndomain: {domain.id}\nassets: [{asset.id}, CUSTOMERS]\n---\nx\n")
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    entry = _targets(response.json())
+    # The asset is named twice (by id and by name): one document.
+    assert {(t['entity_type'], t['entity_id']) for t in entry['targets']} == {
+        ('data_domain', domain.id), ('asset', str(asset.id))}
+    assert entry['unresolved'] == []
+
+
+def test_a_name_of_several_assets_is_ambiguous(client, db_session, asset_type, volume):
+    for location in ('main.a.orders', 'main.b.orders'):
+        db_session.add(AssetDb(name='orders', asset_type_id=asset_type.id, location=location))
+    db_session.flush()
+    _single_file(volume, "---\nassets: orders\n---\nx\n")
+
+    entry = _targets(_import(client).json())
+
+    assert entry['status'] == 'unlinked'
+    assert entry['unresolved'] == [{'kind': 'asset', 'value': 'orders', 'reason': 'ambiguous'}]
+
+
+def test_a_changed_file_that_drops_a_target_leaves_that_entity(
+        client, db_session, domain, asset, volume):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+
+    volume[f'{ROOT}/only.md'] = "---\ndomain: Customer\n---\nv2\n"
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('updated', 1)
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == f'{ROOT}/only.md').all()
+    assert [d.entity_type for d in docs] == ['data_domain']
+    [stored] = db_session.query(ImportedMarkdownFileDb).filter_by(source_path=f'{ROOT}/only.md')
+    assert stored.content_text == "---\ndomain: Customer\n---\nv2\n"
+    hits = client.get('/api/search', params={'search_term': 'v1'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']
+
+
+def test_a_failed_concept_lookup_keeps_the_concept_documents_of_a_changed_file(
+        client, db_session, domain, concept, volume, monkeypatch):
+    _single_file(volume, "---\ndomain: Customer\nconcepts: [Customer]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+
+    def broken_index():
+        raise RuntimeError('graph unavailable')
+
+    monkeypatch.setattr(app.state.semantic_models_manager, 'concept_name_index', broken_index)
+    volume[f'{ROOT}/only.md'] = "---\ndomain: Customer\nconcepts: [Customer]\n---\nv2\n"
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('updated', 0)
+    assert [(u['kind'], u['reason']) for u in entry['unresolved']] == [
+        ('concept', 'lookup_failed')]
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == f'{ROOT}/only.md').all()
+    assert sorted(d.entity_type for d in docs) == ['concept', 'data_domain']
+
+
+def test_an_unchanged_file_keeps_its_documents_when_a_name_stops_resolving(
+        client, db_session, domain, volume):
+    _single_file(volume, "---\ndomain: Customer\n---\nbody\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    domain.name = 'Clients'
+    db_session.flush()
+
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('unlinked', 0)
+    assert db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == domain.id).count() == 1
+
+
+def test_the_import_is_audited_with_its_counts(client, db_session, domain, volume):
+    from src.db_models.audit_log import AuditLogDb
+
+    _single_file(volume, "---\ndomain: Customer\n---\nbody\n")
+    assert _import(client).status_code == 200
+
+    [entry] = db_session.query(AuditLogDb).filter_by(action='IMPORT_MARKDOWN').all()
+    assert (entry.feature, entry.success) == ('data-domains', True)
+    assert entry.details['path'] == ROOT
+    assert (entry.details['added'], entry.details['unlinked']) == (1, 0)
+
+
+def test_an_unexpected_failure_is_a_generic_500(client, monkeypatch, volume):
+    from src.controller.markdown_import_manager import MarkdownImportManager
+
+    def boom(self, db, ws, **kwargs):
+        raise RuntimeError('db exploded at /internal/path')
+    monkeypatch.setattr(MarkdownImportManager, 'import_from_volume', boom)
+
+    response = _import(client)
+
+    assert response.status_code == 500
+    assert response.json()['detail'] == 'Markdown import failed'
+    assert '/internal/path' not in response.text
+
+
+def test_an_uploaded_document_is_still_downloaded_from_the_volume(
+        client, db_session, domain, mock_workspace_client):
+    doc = DocumentMetadataDb(entity_type='data_domain', entity_id=domain.id, title='Upload',
+                             original_filename='u.txt', content_type='text/plain',
+                             storage_path='/Volumes/c/s/v/uploads/u.txt')
+    db_session.add(doc)
+    db_session.flush()
+    mock_workspace_client.files.download.side_effect = None
+    mock_workspace_client.files.download.return_value = SimpleNamespace(
+        contents=io.BytesIO(b'uploaded bytes'))
+
+    response = client.get(f'/api/documents/{doc.id}/content')
+
+    assert response.status_code == 200, response.text
+    assert response.content == b'uploaded bytes'
+    mock_workspace_client.files.download.assert_called_once_with('/Volumes/c/s/v/uploads/u.txt')
+
+
+# --- Files gone from the imported folder ------------------------------------
+
+def _sources(db_session):
+    return sorted({d.source_path for d in db_session.query(DocumentMetadataDb).all()})
+
+
+def test_a_deleted_file_takes_its_documents_away(client, db_session, domain, asset, volume):
+    assert _import(client).status_code == 200
+    del volume[f'{ROOT}/domain.md']
+
+    body = _import(client).json()
+
+    assert (body['removed'], body['added'], body['unchanged']) == (1, 0, 1)
+    gone = _by_path(body)[f'{ROOT}/domain.md']
+    assert (gone['status'], gone['removed']) == ('removed', 1)
+    assert _sources(db_session) == [f'{ROOT}/glossary/terms.md']
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']
+
+
+def test_a_renamed_file_is_removed_and_added(client, db_session, domain, volume):
+    assert _import(client).status_code == 200
+    volume[f'{ROOT}/customer.md'] = volume.pop(f'{ROOT}/domain.md')
+
+    body = _import(client).json()
+
+    assert (body['removed'], body['added']) == (1, 1)
+    files = _by_path(body)
+    assert files[f'{ROOT}/domain.md']['status'] == 'removed'
+    assert files[f'{ROOT}/customer.md']['status'] == 'added'
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == domain.id).all()
+    assert [d.source_path for d in docs] == [f'{ROOT}/customer.md']
+
+
+def test_documents_imported_from_another_path_are_untouched(client, db_session, domain, volume):
+    # A sibling folder whose name starts like ROOT, and a folder elsewhere
+    for other in (f'{ROOT}-old/notes.md', '/Volumes/main/docs/other/notes.md'):
+        volume.clear()
+        volume[other] = "---\ndomain: Customer\n---\nother\n"
+        assert _import(client, other.rsplit('/', 1)[0]).json()['added'] == 1
+    volume.clear()
+    volume[f'{ROOT}/domain.md'] = DOMAIN_FILE
+
+    body = _import(client).json()
+
+    assert (body['added'], body['removed']) == (1, 0)
+    assert _sources(db_session) == sorted([
+        f'{ROOT}-old/notes.md', '/Volumes/main/docs/other/notes.md', f'{ROOT}/domain.md'])
+
+
+def test_files_in_an_unreadable_subfolder_are_kept(
+        client, db_session, domain, asset, volume, mock_workspace_client):
+    assert _import(client).status_code == 200
+    listing = mock_workspace_client.files.list_directory_contents.side_effect
+
+    def no_glossary(folder):
+        if folder == f'{ROOT}/glossary':
+            raise PermissionDenied('no access')
+        return listing(folder)
+    mock_workspace_client.files.list_directory_contents.side_effect = no_glossary
+
+    body = _import(client).json()
+
+    assert body['removed'] == 0
+    assert f'{ROOT}/glossary/terms.md' in _sources(db_session)
+
+
+# --- Review round 2: per-target rights, hostile files, empty listings -------
+
+def _add_role(db_session, feature_permissions, group):
+    import json as _json
+    from src.db_models.settings import AppRoleDb
+    db_session.add(AppRoleDb(
+        id=str(uuid.uuid4()), name=f'Domain editor {uuid.uuid4().hex[:8]}', description='',
+        feature_permissions=_json.dumps(feature_permissions),
+        assigned_groups=_json.dumps([group]), home_sections='[]', approval_privileges='{}',
+        is_admin=False,
+    ))
+    db_session.flush()
+
+
+def test_a_target_needs_write_access_to_its_feature(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _add_role(db_session, {'data-domains': 'Read/Write', 'assets': 'Read-only'}, 'domain-editors')
+    mock_test_user.groups = ['domain-editors']
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nx\n")
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    entry = _targets(response.json())
+    assert [t['entity_type'] for t in entry['targets']] == ['data_domain']
+    assert entry['unresolved'] == [
+        {'kind': 'asset', 'value': 'main.crm.customers', 'reason': 'forbidden'}]
+    assert db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == str(asset.id)).count() == 0
+
+
+def test_a_nul_byte_fails_only_that_file(client, db_session, domain, volume):
+    volume.clear()
+    volume[f'{ROOT}/bad.md'] = "---\ndomain: Customer\n---\nnul \x00 here\n"
+    volume[f'{ROOT}/good.md'] = "---\ndomain: Customer\n---\nfine\n"
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    files = _by_path(response.json())
+    assert (files[f'{ROOT}/bad.md']['status'], files[f'{ROOT}/bad.md']['reason']) == (
+        'failed', 'not_text')
+    assert files[f'{ROOT}/good.md']['status'] == 'added'
+
+
+def test_deeply_nested_front_matter_fails_only_that_file(client, db_session, domain, volume):
+    volume.clear()
+    volume[f'{ROOT}/deep.md'] = '---\ndomain: ' + '[' * 16000 + '\n---\nx\n'
+    volume[f'{ROOT}/good.md'] = "---\ndomain: Customer\n---\nfine\n"
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    files = _by_path(response.json())
+    assert (files[f'{ROOT}/deep.md']['status'], files[f'{ROOT}/deep.md']['reason']) == (
+        'failed', 'front_matter_invalid')
+    assert _sources(db_session) == [f'{ROOT}/good.md']
+
+
+def test_an_error_on_one_file_rolls_back_only_that_file(
+        client, db_session, domain, volume, monkeypatch):
+    from src.controller.markdown_import_manager import MarkdownImportManager
+
+    volume.clear()
+    for name in ('a', 'b', 'c'):
+        volume[f'{ROOT}/{name}.md'] = f"---\ndomain: Customer\n---\n{name}\n"
+    real = MarkdownImportManager._import_file
+
+    def fail_after_writing_b(self, db, ws, path, *args):
+        entry = real(self, db, ws, path, *args)  # b's document is flushed...
+        if path.endswith('/b.md'):
+            raise RuntimeError('boom')  # ...then the file fails
+        return entry
+    monkeypatch.setattr(MarkdownImportManager, '_import_file', fail_after_writing_b)
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body['added'], body['failed']) == (2, 1)
+    failed = _by_path(body)[f'{ROOT}/b.md']
+    assert (failed['status'], failed['reason']) == ('failed', 'import_error')
+    assert _sources(db_session) == [f'{ROOT}/a.md', f'{ROOT}/c.md']
+    hits = client.get('/api/search', params={'search_term': 'b'}).json()
+    assert f'{ROOT}/b.md' not in {
+        hit.get('extra_data', {}).get('source_path') for hit in hits if hit['type'] == 'document'}
+
+
+def test_a_second_document_for_the_same_file_and_entity_is_refused(db_session, domain):
+    import sqlalchemy as sa
+
+    def imported():
+        return DocumentMetadataDb(
+            entity_type='data_domain', entity_id=domain.id, title='Twice',
+            original_filename='t.md', storage_path=f'{ROOT}/t.md', source_path=f'{ROOT}/t.md',
+            content_hash='h')
+    db_session.add(imported())
+    db_session.flush()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        with db_session.begin_nested():
+            db_session.add(imported())
+
+
+def test_a_concurrent_import_answers_409(client, volume, monkeypatch):
+    from src.controller import markdown_import_manager as mim
+
+    def busy(db, root):
+        raise mim.MarkdownImportInProgressError('busy', path=root)
+    monkeypatch.setattr(mim, 'acquire_import_lock', busy)
+
+    response = _import(client)
+
+    assert response.status_code == 409, response.text
+    assert response.json()['detail']['code'] == 'markdown_import_in_progress'
+
+
+def _stored(db_session):
+    """The files whose text is stored (a fresh query: the routes use their own session)."""
+    return sorted(path for (path,) in db_session.query(ImportedMarkdownFileDb.source_path))
+
+
+def test_the_text_is_stored_once_per_file_and_goes_with_its_last_document(
+        client, db_session, domain, asset, concept, volume):
+    assert _import(client).status_code == 200
+    terms = f'{ROOT}/glossary/terms.md'  # linked to an asset and a concept
+    assert len(_kinds(db_session, terms)) == 2
+    [stored] = db_session.query(ImportedMarkdownFileDb).filter_by(source_path=terms).all()
+    assert stored.content_text == TERMS_FILE
+    asset_doc, concept_doc = sorted(
+        db_session.query(DocumentMetadataDb).filter_by(source_path=terms),
+        key=lambda d: d.entity_type)
+    for doc in (asset_doc, concept_doc):
+        assert client.get(f'/api/documents/{doc.id}/content').text == TERMS_FILE
+
+    assert client.delete(f'/api/documents/{asset_doc.id}').status_code in (200, 204)
+    assert _stored(db_session) == [f'{ROOT}/domain.md', terms]  # the concept's is left
+    assert client.delete(f'/api/documents/{concept_doc.id}').status_code in (200, 204)
+    assert _stored(db_session) == [f'{ROOT}/domain.md']
+
+    del volume[f'{ROOT}/domain.md']
+    body = _import(client).json()
+    assert (body['removed'], body['added']) == (1, 1)  # terms.md comes back
+    assert _stored(db_session) == [terms]
+
+
+def test_an_empty_listing_removes_nothing_and_warns(client, db_session, domain, asset, volume):
+    assert _import(client).status_code == 200
+    before = _sources(db_session)
+    volume.clear()
+
+    body = _import(client).json()
+
+    assert body['removed'] == 0
+    assert body['warnings'] == ['empty_folder']
+    assert _sources(db_session) == before
+
+
+def test_a_single_file_import_removes_nothing(
+        client, db_session, domain, asset, volume, mock_workspace_client):
+    assert _import(client).status_code == 200
+    mock_workspace_client.files.get_metadata.side_effect = None
+    mock_workspace_client.files.get_metadata.return_value = SimpleNamespace(content_length=10)
+
+    body = _import(client, f'{ROOT}/domain.md').json()
+
+    assert body['removed'] == 0
+    assert f'{ROOT}/glossary/terms.md' in _sources(db_session)
+
+
+def _domain_only_user(db_session, mock_test_user):
+    _add_role(db_session, {'data-domains': 'Read/Write', 'assets': 'Read-only'}, 'domain-editors')
+    mock_test_user.groups = ['domain-editors']
+
+
+def _kinds(db_session, path):
+    return sorted(d.entity_type for d in db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == path))
+
+
+def test_a_changed_file_keeps_documents_the_user_cannot_edit(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    _domain_only_user(db_session, mock_test_user)
+    volume[f'{ROOT}/only.md'] = "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv2\n"
+
+    entry = _targets(_import(client).json())
+
+    assert entry['removed'] == 0
+    assert _kinds(db_session, f'{ROOT}/only.md') == ['asset', 'data_domain']
+
+
+def test_a_gone_file_keeps_documents_the_user_cannot_edit(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    volume[f'{ROOT}/keep.md'] = "---\ndomain: Customer\n---\nkeep\n"
+    assert _import(client).json()['added'] == 2
+    _domain_only_user(db_session, mock_test_user)
+    del volume[f'{ROOT}/only.md']
+
+    body = _import(client).json()
+
+    gone = _by_path(body)[f'{ROOT}/only.md']
+    assert (gone['status'], gone['removed']) == ('removed', 1)
+    assert _kinds(db_session, f'{ROOT}/only.md') == ['asset']
+
+
+def test_imported_content_needs_read_access_to_its_entity_feature(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    docs = {d.entity_type: d.id for d in db_session.query(DocumentMetadataDb)}
+    # Reads data-domains (where the documents routes live) but not assets.
+    _add_role(db_session, {'data-domains': 'Read-only'}, 'domain-readers')
+    mock_test_user.groups = ['domain-readers']
+
+    assert client.get(f"/api/documents/{docs['data_domain']}/content").status_code == 200
+    response = client.get(f"/api/documents/{docs['asset']}/content")
+
+    # An asset's document of a user who can't read the asset answers as an unknown row
+    # (the asset rule of #1342, which runs before the feature check).
+    assert response.status_code == 404
+    assert 'v1' not in response.text
+
+
+def _preview(client, path=ROOT):
+    return client.post('/api/metadata/markdown-import/preview', json={'path': path})
+
+
+def test_a_preview_reports_the_import_and_stores_nothing(
+        client, db_session, domain, asset, concept, volume):
+    response = _preview(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['dry_run'] is True
+    assert (body['added'], body['unlinked'], body['failed']) == (2, 1, 0)
+    assert db_session.query(DocumentMetadataDb).count() == 0
+    assert _stored(db_session) == []
+    assert db_session.query(ChangeLogDb).filter(
+        ChangeLogDb.entity_type.like('%:document')).count() == 0
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']
+
+    imported = _import(client).json()
+    assert imported['dry_run'] is False
+    assert imported['added'] == 2
+
+
+def test_a_preview_of_a_gone_file_keeps_its_documents(client, db_session, domain, asset, volume):
+    assert _import(client).status_code == 200
+    before = _sources(db_session)
+    del volume[f'{ROOT}/domain.md']
+
+    body = _preview(client).json()
+
+    assert body['removed'] == 1
+    assert _sources(db_session) == before
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert [hit for hit in hits if hit['type'] == 'document']
+
+
+def test_a_preview_needs_write_access_too(client, volume, mock_test_user):
+    mock_test_user.groups = []
+
+    assert _preview(client).status_code == 403
+
+
+def test_a_domain_only_import_leaves_the_text_of_asset_documents_as_it_was(
+        client, db_session, domain, asset, volume, mock_test_user):
+    v1 = "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n"
+    _single_file(volume, v1)
+    assert _targets(_import(client).json())['status'] == 'added'
+    _domain_only_user(db_session, mock_test_user)
+    v2 = "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv2\n"
+    volume[f'{ROOT}/only.md'] = v2
+
+    assert _targets(_import(client).json())['status'] == 'updated'
+
+    docs = {d.entity_type: d.id for d in db_session.query(DocumentMetadataDb)}
+    assert client.get(f"/api/documents/{docs['data_domain']}/content").text == v2
+    # Reading an asset's documents needs the asset readable: assets Read/Write
+    _add_role(db_session, {'data-domains': 'Read-only', 'assets': 'Read/Write'}, 'readers')
+    mock_test_user.groups = ['readers']
+    assert client.get(f"/api/documents/{docs['asset']}/content").text == v1
+
+
+def test_a_changed_file_that_names_nothing_any_more_takes_its_text_away(
+        client, db_session, domain, volume):
+    _single_file(volume, "---\ndomain: Customer\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    volume[f'{ROOT}/only.md'] = "---\nx: 1\n---\nquibblezap\n"
+
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('unlinked', 1)
+    assert _sources(db_session) == []
+    assert _stored(db_session) == []
+    hits = client.get('/api/search', params={'search_term': 'v1'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']

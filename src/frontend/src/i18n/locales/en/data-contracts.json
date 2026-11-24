@@ -529,6 +529,10 @@
     "personal": "Personal",
     "requestAccess": "Request Access ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} is empty: send a domain id, or leave the field out to keep the contract's domains.",
+    "primaryDomainNotInDomains": "Domain {{primaryDomainId}} is not one of the contract's domains, so it cannot be the primary domain."
+  },
   "createInline": {
     "title": "Create New Contract",
     "description": "Create a minimal data contract. You can add schemas and quality rules later.",

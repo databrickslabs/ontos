@@ -1,9 +1,9 @@
 from typing import List, Optional
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
+from src.common.timestamps import utc_now
 from src.common.repository import CRUDBase
 from src.db_models.workflow_job_runs import WorkflowJobRunDb
 from src.models.workflow_job_runs import WorkflowJobRun, WorkflowJobRunCreate, WorkflowJobRunUpdate
@@ -71,7 +71,7 @@ class WorkflowJobRunRepository(CRUDBase[WorkflowJobRunDb, WorkflowJobRunCreate, 
         if not run:
             return None
 
-        run.notified_at = datetime.utcnow()
+        run.notified_at = utc_now()
         db.commit()
         db.refresh(run)
         logger.info(f"Marked run {run_id} as notified")

@@ -1,5 +1,6 @@
 """File model for App Roles YAML serialization."""
 
+import json
 from typing import Any, Dict
 
 from .base import FileModel, register_file_model
@@ -39,6 +40,14 @@ class RoleFileModel(FileModel[AppRoleDb]):
         # Assigned groups
         if entity.assigned_groups:
             result['assignedGroups'] = entity.assigned_groups
-        
+
+        # Features hidden from the role's navigation (#1325); omitted when none
+        try:
+            hidden = json.loads(getattr(entity, 'hidden_nav_features', None) or '[]')
+        except (TypeError, ValueError):
+            hidden = []
+        if hidden:
+            result['hiddenNavFeatures'] = hidden
+
         return result
 

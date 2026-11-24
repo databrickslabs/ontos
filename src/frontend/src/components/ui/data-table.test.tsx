@@ -268,4 +268,135 @@ describe('DataTable', () => {
       expect(table.style.minWidth).toBe('220px');
     });
   });
+
+  describe('view state persistence (storageKey)', () => {
+    const filterable: ColumnDef<Item>[] = [
+      {
+        accessorKey: 'name',
+        header: ({ column }) => (
+          <>
+            <button onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>Name</button>
+            <button onClick={() => column.setFilterValue('Item 1')}>Filter names</button>
+          </>
+        ),
+      },
+      columns[1],
+    ];
+    const searchInput = () => screen.getByPlaceholderText('filter items...') as HTMLInputElement;
+    const viewOf = (key: string) => JSON.parse(localStorage.getItem(`${key}:view`) ?? 'null');
+
+    it('restores the search filter and page index after a remount', () => {
+      const first = render(<DataTable columns={filterable} data={items} storageKey="dt-view-search" />);
+      fireEvent.change(searchInput(), { target: { value: 'Item' } });
+      fireEvent.click(screen.getByText('pagination.goToNextPage').closest('button') as HTMLElement);
+      expect(viewOf('dt-view-search')).toEqual({
+        columnFilters: [],
+        globalFilter: 'Item',
+        pageIndex: 1,
+        pageSize: 10,
+      });
+      first.unmount();
+
+      const { container } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-search" />);
+      expect(searchInput().value).toBe('Item');
+      expect(names(container)[0]).toBe('Item 10');
+    });
+
+    it('restores a column filter after a remount', () => {
+      const first = render(<DataTable columns={filterable} data={items} storageKey="dt-view-column" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Filter names' }));
+      expect(container10(first.container)).toBe(10);
+      first.unmount();
+
+      const { container } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-column" />);
+      expect(container10(container)).toBe(10);
+      expect(names(container)[0]).toBe('Item 10');
+    });
+
+    it('drops stored column filters for columns that no longer exist', () => {
+      localStorage.setItem(
+        'dt-view-gone:view',
+        JSON.stringify({ columnFilters: [{ id: 'gone', value: 'x' }] }),
+      );
+      const { container } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-gone" />);
+      expect(container10(container)).toBe(10);
+      expect(screen.queryByText('noResults')).toBeNull();
+    });
+
+    it('clamps a stored page beyond the last page once the data shrinks', () => {
+      localStorage.setItem('dt-view-clamp:view', JSON.stringify({ pageIndex: 2, pageSize: 10 }));
+      const { container, rerender } = render(
+        <DataTable columns={filterable} data={items} storageKey="dt-view-clamp" />,
+      );
+      expect(names(container)[0]).toBe('Item 20');
+      rerender(<DataTable columns={filterable} data={items.slice(0, 5)} storageKey="dt-view-clamp" />);
+      expect(names(container)).toEqual(['Item 00', 'Item 01', 'Item 02', 'Item 03', 'Item 04']);
+      expect(viewOf('dt-view-clamp').pageIndex).toBe(0);
+    });
+
+    it('keeps a stored page while the data is still empty (loading)', () => {
+      localStorage.setItem('dt-view-loading:view', JSON.stringify({ pageIndex: 2, pageSize: 10 }));
+      const { container, rerender } = render(
+        <DataTable columns={filterable} data={[]} storageKey="dt-view-loading" />,
+      );
+      rerender(<DataTable columns={filterable} data={items} storageKey="dt-view-loading" />);
+      expect(names(container)[0]).toBe('Item 20');
+    });
+
+    it('moves a stored page back to the first page when a stored search hides every row', () => {
+      localStorage.setItem('dt-view-hidden:view', JSON.stringify({ pageIndex: 2, pageSize: 10, globalFilter: 'zzz' }));
+      render(<DataTable columns={filterable} data={items} storageKey="dt-view-hidden" />);
+      expect(viewOf('dt-view-hidden').pageIndex).toBe(0);
+    });
+
+    it('shows a stored search that hides every row, and clearing it restores the rows', () => {
+      localStorage.setItem('dt-view-none:view', JSON.stringify({ globalFilter: 'zzz' }));
+      const { container } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-none" />);
+      expect(searchInput().value).toBe('zzz');
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+      fireEvent.change(searchInput(), { target: { value: '' } });
+      expect(container10(container)).toBe(10);
+    });
+
+    it('persists the page size', () => {
+      const first = render(<DataTable columns={filterable} data={items} storageKey="dt-view-size" />);
+      fireEvent.change(screen.getByLabelText('page size'), { target: { value: '20' } });
+      expect(viewOf('dt-view-size').pageSize).toBe(20);
+      first.unmount();
+
+      const { container } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-size" />);
+      expect(container10(container)).toBe(20);
+    });
+
+    it('does not persist the search when the parent controls it', () => {
+      render(
+        <DataTable
+          columns={filterable}
+          data={items}
+          storageKey="dt-view-controlled"
+          searchValue="abc"
+          onSearchChange={() => {}}
+        />,
+      );
+      expect(viewOf('dt-view-controlled')).not.toHaveProperty('globalFilter');
+    });
+
+    it('does not copy the view into another storageKey after a key change', () => {
+      localStorage.setItem('dt-view-other:view', JSON.stringify({ pageIndex: 0, pageSize: 20 }));
+      const { rerender } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-first" />);
+      fireEvent.change(screen.getByLabelText('page size'), { target: { value: '30' } });
+      rerender(<DataTable columns={filterable} data={items} storageKey="dt-view-other" />);
+      expect(viewOf('dt-view-other').pageSize).toBe(20);
+    });
+
+    it('ignores a corrupt stored view', () => {
+      localStorage.setItem('dt-view-corrupt:view', 'not json');
+      const { container } = render(<DataTable columns={filterable} data={items} storageKey="dt-view-corrupt" />);
+      expect(container10(container)).toBe(10);
+    });
+  });
 });
+
+function container10(container: HTMLElement) {
+  return container.querySelectorAll('tbody tr').length;
+}

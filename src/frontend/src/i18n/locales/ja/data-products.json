@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "所有者ではありません",
+    "notOwnerMessage": "この製品は閲覧できますが、編集はできません。編集できるのは、所有チーム、そのプロジェクトのメンバー、ドラフトの所有者、またはデータ製品の管理者のみです。"
+  },
   "title": "データ製品",
   "subtitle": "データ製品を管理",
   "newProduct": "新規データ製品",
@@ -679,7 +683,8 @@
     },
     "errors": {
       "cannotRequest": "「{{requestType}}」はステータス {{productStatus}} のプロダクトでは利用できません。",
-      "failedToSubmit": "リクエストの送信に失敗しました"
+      "failedToSubmit": "リクエストの送信に失敗しました",
+      "notProductOwner": "このプロダクトのレビューを依頼できるのは、プロダクトのオーナーまたは管理者のみです。"
     },
     "toast": {
       "statusChanged": "ステータスを変更しました",
@@ -794,7 +799,7 @@
     },
     "hints": {
       "deliveryMethodHint": "このデリバラブルが消費者にデータを提供する方法（例: テーブルアクセス、サービングエンドポイント）",
-      "onlyActiveContracts": "アクティブ／承認済み／認定済みの契約のみを表示しています",
+      "onlyActiveContracts": "アクティブ／承認済みの契約のみを表示しています",
       "containsPiiHint": "このデリバラブルには個人を特定できる情報が含まれていますか？",
       "autoApproveHint": "このデリバラブルのアクセスリクエストを自動的に承認しますか？",
       "afterCreation": "このデリバラブルを作成した後、詳細ページからアセット（テーブル、ビュー、データセットなど）をリンクできます。"
@@ -1126,8 +1131,8 @@
     "exportSuccessfulDesc": "{{filename}} をダウンロードしました",
     "exportFailed": "エクスポートに失敗しました",
     "exportFailedDesc": "データ製品のエクスポートに失敗しました",
-    "exportDescription": "「エクスポート」をクリックすると、この製品が ODPS v1.0.0 準拠の JSON ファイルとしてダウンロードされます。移植性のため、監査フィールド（created_at, updated_at）は除外されます。",
-    "exportAsJson": "JSON としてエクスポート",
+    "exportDescription": "「エクスポート」をクリックすると、この製品が ODPS v1.0.0 の YAML ファイルとしてダウンロードされます。保存済みの製品から生成されるため、再インポートで復元できます。",
+    "exportAsJson": "YAML としてエクスポート",
     "currentProduct": "現在の製品",
     "unnamed": "名前なし",
     "noProductDesc": "製品が選択されていません。エクスポートするには、製品の詳細ページからこのダイアログを開いてください。"

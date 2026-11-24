@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Tuple
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -39,6 +40,22 @@ class CostsManager:
         rows = self._repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id, month=month)
         return [CostItem.model_validate(r, from_attributes=True) for r in rows]
 
+    def get(self, db: Session, *, id: str) -> Optional[CostItem]:
+        db_obj = self._repo.get(db, id=id)
+        return CostItem.model_validate(db_obj, from_attributes=True) if db_obj else None
+
+    def get_owner(self, db: Session, *, id: str) -> Optional[Tuple[str, str]]:
+        """``(entity_type, entity_id)`` of a cost item, from the stored row (no conversion).
+
+        ``None`` when no row has this id; an id that isn't a UUID can't be one.
+        """
+        try:
+            UUID(str(id))
+        except ValueError:
+            return None
+        db_obj = self._repo.get(db, id=id)
+        return (db_obj.entity_type, db_obj.entity_id) if db_obj else None
+
     def update(self, db: Session, *, id: str, data: CostItemUpdate, user_email: Optional[str]) -> Optional[CostItem]:
         db_obj = self._repo.get(db, id=id)
         if not db_obj:
@@ -65,5 +82,9 @@ class CostsManager:
         currency, total, by_center, count = self._repo.summarize_for_entity(db, entity_type=entity_type, entity_id=entity_id, month=month)
         ym = f"{month.year:04d}-{month.month:02d}"
         return CostSummary(month=ym, currency=currency, total_cents=total, items_count=count, by_center=by_center)
+
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        """Delete every cost item of an entity, in the caller's transaction (no commit)."""
+        return self._repo.remove_all_for_entity(db, entity_type=entity_type, entity_id=entity_id)
 
 

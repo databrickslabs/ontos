@@ -53,6 +53,23 @@ class InvalidStatusTransitionError(CodedValueError):
     code = 'invalid_status_transition'
 
 
+class VersioningRequiredError(CodedValueError):
+    """An edit of a non-draft product that breaks consumers: it needs a new version."""
+
+    code = 'versioning_required'
+
+    def __init__(self, message: str, change_analysis: Any, user_can_override: bool):
+        super().__init__(message)
+        self.change_analysis = change_analysis
+        self.user_can_override = user_can_override
+
+
+class UserTokenRequiredError(CodedValueError):
+    """The request has no user (on-behalf-of) token to call Databricks with."""
+
+    code = 'user_token_required'
+
+
 def _coded_cause(exc: BaseException) -> Optional[CodedValueError]:
     """The ``CodedValueError`` an HTTP error was raised from, if it carries its message."""
     seen = set()

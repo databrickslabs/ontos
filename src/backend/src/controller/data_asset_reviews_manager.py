@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -17,6 +16,7 @@ import os
 # dependency issues during app startup. We'll import lazily when needed.
 
 # Import API models
+from src.common.timestamps import utc_now
 from src.models.data_asset_reviews import (
     DataAssetReviewRequest as DataAssetReviewRequestApi,
     DataAssetReviewRequestCreate,
@@ -110,9 +110,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         if not self._ws_client:
              logger.warning("WorkspaceClient was not provided to DataAssetReviewManager. SDK operations will fail.")
 
-    def _determine_asset_type(self, fqn: str) -> AssetType:
-        """Tries to determine the asset type using the Databricks SDK."""
-        # Handle special protocol-based FQNs
+    @staticmethod
+    def _app_asset_type(fqn: str) -> Optional[AssetType]:
+        """The type of an FQN that names no Unity Catalog object (a protocol or an app entity)."""
         if fqn.startswith('mdm://'):
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
@@ -121,11 +121,28 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.KNOWLEDGE_CONCEPT
         if fqn.startswith('concept-changeset://'):
             return AssetType.CONCEPT_CHANGESET
-        app_entity_type = app_entity_asset_type(fqn)
-        if app_entity_type:
-            return app_entity_type
+        return app_entity_asset_type(fqn)
 
-        if not self._ws_client:
+    def reads_catalog(self, fqns: List[str]) -> bool:
+        """Whether typing these FQNs reads Unity Catalog (some is ``catalog.schema.name``)."""
+        return any(
+            self._app_asset_type(fqn) is None and len(fqn.split('.')) == 3 for fqn in fqns
+        )
+
+    def _determine_asset_type(
+        self, fqn: str, ws_client: Optional[WorkspaceClient] = None
+    ) -> AssetType:
+        """Tries to determine the asset type using the Databricks SDK.
+
+        ``ws_client`` is the requesting user's client: an object they can't see is
+        typed TABLE, like one that doesn't exist. Without it the manager's own is used.
+        """
+        app_type = self._app_asset_type(fqn)
+        if app_type:
+            return app_type
+
+        client = self._ws_client if ws_client is None else ws_client
+        if not client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")
             # Default or raise error? For now, default to TABLE as a fallback.
             return AssetType.TABLE
@@ -140,7 +157,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             # Try fetching as Table first (most common)
             try:
-                table_info = self._ws_client.tables.get(full_name=fqn)
+                table_info = client.tables.get(full_name=fqn)
                 if table_info.table_type == TableType.METRIC_VIEW:
                     return AssetType.METRIC
                 if table_info.table_type == TableType.VIEW or table_info.table_type == TableType.MATERIALIZED_VIEW:
@@ -154,7 +171,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             
             # Try fetching as Function
             try:
-                self._ws_client.functions.get(name=fqn)
+                client.functions.get(name=fqn)
                 return AssetType.FUNCTION
             except DatabricksError as e:
                 if "NOT_FOUND" not in str(e) and "PERMISSION_DENIED" not in str(e):
@@ -183,12 +200,19 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected SDK error determining asset type for {fqn}: {e}. Defaulting to TABLE.", exc_info=True)
             return AssetType.TABLE
 
-    def create_review_request(self, request_data: DataAssetReviewRequestCreate, db: Optional[Session] = None) -> DataAssetReviewRequestApi:
+    def create_review_request(
+        self,
+        request_data: DataAssetReviewRequestCreate,
+        db: Optional[Session] = None,
+        ws_client: Optional[WorkspaceClient] = None,
+    ) -> DataAssetReviewRequestApi:
         """Creates a new data asset review request.
         
         Args:
             request_data: The review request data
             db: Optional database session. If not provided, uses the manager's internal session.
+            ws_client: The requesting user's client, to type Unity Catalog assets as
+                them (the route passes it). If not provided, the manager's own is used.
         """
         # Use provided db session or fall back to instance session
         db_session = db if db is not None else self._db
@@ -203,14 +227,14 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     logger.warning(f"Duplicate FQN '{fqn}' in request, skipping.")
                     continue
                 
-                asset_type = self._determine_asset_type(fqn)
+                asset_type = self._determine_asset_type(fqn, ws_client)
                 assets_to_review.append(
                     ReviewedAssetApi(
                         id=str(uuid.uuid4()),
                         asset_fqn=fqn,
                         asset_type=asset_type,
                         status=ReviewedAssetStatus.PENDING, # Start as pending
-                        updated_at=datetime.utcnow()
+                        updated_at=utc_now()
                     )
                 )
                 processed_fqns.add(fqn)
@@ -223,6 +247,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             normalized_title = raw_title if raw_title else None
 
             # Prepare the full API model for the repository
+            now = utc_now()
             full_request = DataAssetReviewRequestApi(
                 id=request_id,
                 requester_email=request_data.requester_email,
@@ -230,8 +255,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 title=normalized_title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=request_data.notes,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=now,
+                updated_at=now,
                 assets=assets_to_review
             )
 
@@ -281,7 +306,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         description=f"Assigned to you by {created_api_obj.requester_email}.",
                         type=NotificationType.INFO,
                         link=f"/data-asset-reviews/{created_api_obj.id}",
-                        created_at=datetime.utcnow(),
+                        created_at=utc_now(),
                     )
                     self._notifications_manager.create_notification(notification)
                     logger.info(f"No workflow configured; sent direct notification to {created_api_obj.reviewer_email}")
@@ -325,7 +350,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error getting review request {request_id}: {e}")
             raise
 
-    def list_review_requests(self, skip: int = 0, limit: int = 100) -> List[DataAssetReviewRequestApi]:
+    def list_review_requests(self, skip: int = 0, limit: Optional[int] = None) -> List[DataAssetReviewRequestApi]:
         """Lists all review requests."""
         try:
             requests_db = self._repo.get_multi(db=self._db, skip=skip, limit=limit)
@@ -705,18 +730,22 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             # Call the two-phased analysis with user token
             result = llm_service.analyze_content(asset_content, user_token=user_token)
 
-            if not result.success and not result.phase1_passed:
-                # Phase 1 failed - return with security warning
-                # The result.content contains the security warning message
-                logger.warning(f"Phase 1 security check failed for asset {asset_id}: {result.error_message}")
+            if not result.success and (not result.phase1_passed or result.refused):
+                # Phase 1 failed or the model refused: result.content holds the
+                # security warning or the capped refusal, shown as plain text.
+                logger.warning(
+                    f"LLM analysis blocked or refused for asset {asset_id}: "
+                    f"{result.error_message}"
+                )
                 return AssetAnalysisResponse(
                     request_id=request_id,
                     asset_id=asset_id,
-                    analysis_summary=sanitize_markdown_input(result.content),  # Sanitize security warning
+                    analysis_summary=sanitize_markdown_input(result.content),
                     llm_model_used=result.llm_model_used,
                     timestamp=result.timestamp,
-                    phase1_passed=False,
-                    render_as_markdown=False  # Must display as plain text
+                    phase1_passed=result.phase1_passed,
+                    render_as_markdown=False,  # Must display as plain text
+                    notice_code=result.notice_code,
                 )
 
             if not result.success:
@@ -741,7 +770,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return None
 
     # Add methods for getting asset content (text/data preview) using ws_client
-    async def get_metric_view_definition(self, asset_fqn: str) -> Optional[Dict[str, Any]]:
+    async def get_metric_view_definition(
+        self, asset_fqn: str, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[Dict[str, Any]]:
         """A metric view's definition: its YAML (``definition``) and the parsed
         spec (``metric_view``: source, filter, joins, dimensions, measures).
 
@@ -750,13 +781,20 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         """
         from src.common.metric_views import parse_metric_view_definition
 
-        definition = await self.get_asset_definition(asset_fqn, AssetType.METRIC)
+        definition = await self.get_asset_definition(asset_fqn, AssetType.METRIC, ws_client)
         if definition is None:
             return None
         return {'definition': definition, 'metric_view': parse_metric_view_definition(definition)}
 
-    async def get_asset_definition(self, asset_fqn: str, asset_type: AssetType) -> Optional[str]:
-        """Fetches the definition (e.g., SQL) for a view or function."""
+    async def get_asset_definition(
+        self, asset_fqn: str, asset_type: AssetType, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[str]:
+        """Fetches the definition (e.g., SQL) for a view or function.
+
+        ``ws_client`` is the requesting user's client (routes pass it, so Unity
+        Catalog decides what they may read); without it the manager's own is used.
+        """
+        client = self._ws_client if ws_client is None else ws_client
         settings: Settings = get_settings()
         is_demo_mode = settings.APP_DEMO_MODE
 
@@ -798,7 +836,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 logger.info(f"{reason_for_fallback} for asset {current_asset_fqn} (type: {current_asset_type.value}). Not in demo mode, so no sample will be loaded.")
             return None
 
-        if not self._ws_client:
+        if not client:
             logger.warning(f"Cannot fetch definition for {asset_fqn}: WorkspaceClient not available.")
             return _try_load_sample_for_demo(asset_type, asset_fqn, "WorkspaceClient not available")
             
@@ -810,16 +848,16 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             definition = None
             if asset_type in (AssetType.VIEW, AssetType.METRIC):
                  # A metric view's view_definition is its YAML spec
-                 table_info = self._ws_client.tables.get(full_name=asset_fqn)
+                 table_info = client.tables.get(full_name=asset_fqn)
                  definition = table_info.view_definition
             elif asset_type == AssetType.FUNCTION:
-                 func_info = self._ws_client.functions.get(name=asset_fqn)
+                 func_info = client.functions.get(name=asset_fqn)
                  definition = func_info.definition
             elif asset_type == AssetType.NOTEBOOK:
                 try:
                     notebook_path = asset_fqn # This might need adjustment
                     logger.info(f"Attempting to export notebook from workspace path: {notebook_path}")
-                    exported_content = self._ws_client.workspace.export_notebook(notebook_path)
+                    exported_content = client.workspace.export_notebook(notebook_path)
                     definition = exported_content
                     logger.info(f"Successfully exported notebook {asset_fqn}.")
                 except Exception as nb_export_error:
@@ -850,9 +888,12 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error fetching definition for {asset_fqn} (type: {asset_type.value}): {e}", exc_info=True)
             return _try_load_sample_for_demo(asset_type, asset_fqn, f"Unexpected error: {e}")
         
-    async def get_table_preview(self, table_fqn: str, limit: int = 25) -> Optional[Dict[str, Any]]:
-        """Fetches a preview of data from a table."""
-        if not self._ws_client:
+    async def get_table_preview(
+        self, table_fqn: str, limit: int = 25, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Fetches a preview of data from a table (with ``ws_client``, the user's, if given)."""
+        client = self._ws_client if ws_client is None else ws_client
+        if not client:
             logger.warning(f"Cannot fetch preview for {table_fqn}: WorkspaceClient not available.")
             return None
             
@@ -867,7 +908,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
              
              # --- Attempting preview via sql.execute --- #
             try:
-                table_info = self._ws_client.tables.get(full_name=table_fqn)
+                table_info = client.tables.get(full_name=table_fqn)
                 schema = table_info.columns
                 formatted_schema = [{"name": col.name, "type": col.type_text, "nullable": col.nullable} for col in schema]
                 
@@ -875,7 +916,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 # Note: This requires ws_client to be configured with appropriate
                 # credentials and potentially a host/warehouse for SQL execution.
                 # It might fail if only configured for workspace APIs.
-                result = self._ws_client.sql.execute(
+                result = client.sql.execute(
                     statement=f"SELECT * FROM {table_fqn} LIMIT {limit}",
                     # warehouse_id="YOUR_WAREHOUSE_ID" # Usually required
                 )

@@ -110,7 +110,9 @@ def test_a_contract_without_these_values_has_no_sla(db_session, imported):
 
     # Only the imported latency: nothing for the SLA card to show
     assert api['sla'] is None
-    assert api['slaProperties'] == [{'property': 'latency', 'value': '4', 'valueExt': None, 'unit': 'd',
+    # The value with its type, and the ODCS id (none here) (#610)
+    assert api['slaProperties'] == [{'id': None, 'property': 'latency', 'value': 4,
+                                     'valueExt': None, 'unit': 'd',
                                      'element': None, 'driver': None}]
 
 

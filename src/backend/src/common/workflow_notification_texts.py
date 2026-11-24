@@ -13,6 +13,10 @@ user's language:
   the one shipped in ``default_workflows.yaml``. A message an admin wrote or
   changed has no key and is shown as written.
 
+``lifecycle_notice`` builds the owner notice of a deprecation or a retirement
+(templates ``entity_deprecated`` / ``entity_retired``): one line per fact, the
+template's message, then the reason, sunset date and replacement when set.
+
 ``approval_notification_i18n`` does the same for the notification of an
 approval step ("Approval Required"): its description is one line per fact
 (requester, resource, permission ...), each sent with its key, and the step's
@@ -51,6 +55,8 @@ TEMPLATE_TITLES: Dict[str, str] = {
     'request_rejected': "Request Denied",
     'dataset_updated': "Dataset Updated",
     'pii_detected': "PII Detected",
+    'entity_deprecated': "Deprecation Notice",
+    'entity_retired': "Retirement Notice",
 }
 DEFAULT_TEMPLATE_TITLE = "Workflow Notification"
 
@@ -65,6 +71,8 @@ TEMPLATE_MESSAGES: Dict[str, str] = {
     'request_rejected': "Your request for {entity_type} '{entity_name}' has been denied.",
     'dataset_updated': "Dataset '{entity_name}' has been updated.",
     'pii_detected': "Potential PII detected in {entity_type} '{entity_name}'. Please review.",
+    'entity_deprecated': "{entity_type} '{entity_name}' has been deprecated.",
+    'entity_retired': "{entity_type} '{entity_name}' has been retired.",
 }
 DEFAULT_TEMPLATE_MESSAGE = "Workflow notification for {entity_name}"
 
@@ -240,3 +248,84 @@ def approval_notification_i18n(
         'title': f"{KEY_PREFIX}.approval.title",
         'descriptionLines': [line_text(line) for line in description.split('\n')],
     }}
+
+
+# --- Lifecycle notices -----------------------------------------------------
+
+# Templates of the owner notices of a deprecation and a retirement (default
+# workflows "Owner Deprecation Notice" / "Owner Retirement Notice").
+LIFECYCLE_TEMPLATES = ('entity_deprecated', 'entity_retired')
+LIFECYCLE_LINE_PREFIX = 'notifications:lifecycle.ownerNotice'
+
+
+# English texts of the lines that name a version (``{version}`` filled in
+# with str.format, as the template messages are)
+LIFECYCLE_VERSION_MESSAGES: Dict[str, str] = {
+    'entity_deprecated': "{entity_type} '{entity_name}' (version {version}) has been deprecated.",
+    'entity_retired': "{entity_type} '{entity_name}' (version {version}) has been retired.",
+}
+LIFECYCLE_VERSION_KEYS = {
+    'entity_deprecated': 'deprecatedVersion',
+    'entity_retired': 'retiredVersion',
+}
+# Pages of the entities a notice links to
+ENTITY_PAGES = {'data_product': '/data-products/{id}', 'data_contract': '/data-contracts/{id}'}
+
+
+def lifecycle_notice(
+    template: str,
+    entity_type: Optional[str],
+    entity_id: Optional[str],
+    entity_name: Optional[str],
+    entity: Mapping[str, Any],
+) -> tuple:
+    """The English message, the ``data`` and the link of an owner lifecycle notice.
+
+    ``entity`` is the on_status_change payload, which carries the lifecycle
+    fields (``lifecycle_trigger_data``). The message has one line per fact:
+    the change (with the entity's version when known, since new versions
+    keep the name), then the reason, the sunset date and the replacement
+    (with its version), each only when set. Each line is sent in
+    ``i18n.descriptionLines`` with its key and params, as approval
+    notifications are. The link is the replacement's page when there is
+    one, else the entity's (None for other entity types).
+    """
+    version = entity.get('version')
+    params: Dict[str, Any] = {'entity_type': entity_type, 'entity_name': entity_name}
+    if version:
+        params['version'] = str(version)
+        first = LIFECYCLE_VERSION_MESSAGES[template].format(**params)
+        first_key = f"{LIFECYCLE_LINE_PREFIX}.{LIFECYCLE_VERSION_KEYS[template]}"
+    else:
+        first = TEMPLATE_MESSAGES[template].format(**params)
+        first_key = template_message_key(template)
+    lines: List[Dict[str, Any]] = [{'key': first_key, 'text': first, 'params': params}]
+
+    def add(key: str, text: str, **line_params: Any) -> None:
+        lines.append({
+            'key': f"{LIFECYCLE_LINE_PREFIX}.{key}", 'text': text, 'params': line_params,
+        })
+
+    reason = entity.get('deprecation_reason')
+    if reason:
+        add('reason', f"Reason: {reason}", reason=str(reason))
+    sunset = entity.get('sunset_date')
+    if sunset:
+        add('sunsetDate', f"Sunset date: {sunset}", sunsetDate=str(sunset))
+    replacement_id = entity.get('replacement_id')
+    if replacement_id:
+        name = str(entity.get('replacement_name') or replacement_id)
+        replacement_version = entity.get('replacement_version')
+        if replacement_version:
+            add('replacementVersion', f"Replacement: {name} (version {replacement_version})",
+                replacementName=name, replacementVersion=str(replacement_version),
+                replacementId=str(replacement_id))
+        else:
+            add('replacement', f"Replacement: {name}",
+                replacementName=name, replacementId=str(replacement_id))
+    page = ENTITY_PAGES.get((entity_type or '').lower())
+    target = replacement_id or entity_id
+    link = page.format(id=target) if page and target else None
+    message = '\n'.join(line['text'] for line in lines)
+    data = {'i18n': {'title': template_title_key(template), 'descriptionLines': lines}}
+    return message, data, link

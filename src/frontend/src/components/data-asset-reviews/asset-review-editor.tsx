@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertCircle, SparklesIcon } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
+import { serverErrorText, USER_TOKEN_REQUIRED_CODE } from '@/lib/server-error-text';
 import { useToast } from "@/hooks/use-toast";
 import {
     ReviewedAsset,
@@ -53,8 +54,23 @@ interface AssetReviewEditorProps {
     totalCount?: number; // Total assets in review
 }
 
+// Notices the backend sends as `notice_code`: the i18n key under
+// `editor.aiNotices`, and whether the notice replaces the summary text.
+const AI_NOTICES: Record<string, { key: string; replacesSummary: boolean }> = {
+    llm_analysis_refused: { key: 'analysisRefused', replacesSummary: false },
+    // The refusal itself is never shown: it can quote the security-check prompt
+    llm_safety_check_refused: { key: 'safetyCheckRefused', replacesSummary: true },
+};
+
 // Helper function to check API response
-const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
+const checkApiResponse = <T,>(
+    response: { data?: T | { detail?: string }, error?: string | null, errorCode?: string | null },
+    name: string,
+): T => {
+    // A missing user token is already in the user's language: show it as is
+    if (response.error && response.errorCode === USER_TOKEN_REQUIRED_CODE) {
+        throw new Error(response.error);
+    }
     if (response.error) throw new Error(`${name} fetch failed: ${response.error}`);
     if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
         throw new Error(`${name} fetch failed: ${response.data.detail}`);
@@ -133,7 +149,8 @@ export default function AssetReviewEditor({
                 if (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) {
                     const response = await fetch(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/definition`);
                     if (!response.ok) {
-                        const errorText = await response.text();
+                        const errorBody = await response.text();
+                        const errorText = serverErrorText(errorBody) ?? errorBody;
                         throw new Error(errorText || t('data-asset-reviews:editor.messages.fetchDefinitionFailed', { status: response.status }));
                     }
                     const textDefinition = await response.text();
@@ -222,6 +239,14 @@ export default function AssetReviewEditor({
             setIsAnalyzing(false);
         }
     };
+
+    const analysisNotice = analysisResult?.notice_code
+        ? AI_NOTICES[analysisResult.notice_code]
+        : undefined;
+    const analysisNoticeText = analysisNotice
+        ? t(`data-asset-reviews:editor.aiNotices.${analysisNotice.key}`)
+        : null;
+    const showSummary = !analysisNotice?.replacesSummary;
 
     // --- Render Content --- //
     const renderAssetContent = () => {
@@ -448,8 +473,13 @@ export default function AssetReviewEditor({
                                 </p>
                             </CardHeader>
                             <CardContent>
+                                {analysisNoticeText && (
+                                    <p className="mb-2 text-sm text-muted-foreground">
+                                        {analysisNoticeText}
+                                    </p>
+                                )}
                                 {/* Render as plain text if security check failed */}
-                                {!analysisResult.render_as_markdown ? (
+                                {!showSummary ? null : !analysisResult.render_as_markdown ? (
                                     <div className="p-3 bg-muted rounded-md font-mono text-xs whitespace-pre-wrap">
                                         {analysisResult.analysis_summary}
                                     </div>

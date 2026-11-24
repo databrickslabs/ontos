@@ -52,7 +52,7 @@ Ontos is designed to run as a **Databricks App**:
 
 ### Prerequisites
 
-- Python 3.10 - 3.12
+- Python 3.11 - 3.12
 - Node.js 18+ (includes npm)
 - Hatch (Python build tool)
 - PostgreSQL (for local development)

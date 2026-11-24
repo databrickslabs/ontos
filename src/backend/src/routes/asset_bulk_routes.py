@@ -5,17 +5,20 @@ Provides endpoints for exporting assets as CSV/XLSX and importing
 assets from uploaded files with preview and validation.
 """
 
-from typing import Optional
+import time
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import (
     AuditCurrentUserDep,
     AuditManagerDep,
     DBSessionDep,
+    SettingsDep,
 )
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
@@ -24,20 +27,33 @@ from src.controller.asset_bulk_manager import (
     ImportPreviewResult,
     ImportResult,
 )
+from src.controller.assets_manager import AssetsManager
+from src.routes.assets_routes import get_assets_manager
+from src.controller.uc_description_sync_manager import (
+    ImportTimeBudgetError, ImportWriteLimitError, SyncOutcome, UcDescriptionSyncManager,
+    import_writes_failed_warning, write_failed_warning,
+)
+from src.common.uc_comments import read_comment
+from src.db_models.assets import AssetDb
 
 logger = get_logger(__name__)
+
+# The Unity Catalog calls of one import share this much time: each read and each
+# write waits at most what is left of it
+UC_IMPORT_WRITE_BUDGET_SECONDS = 120
 
 router = APIRouter(prefix="/api/assets/bulk", tags=["Asset Bulk"])
 FEATURE_ID = "assets"
 
-_bulk_manager: Optional[AssetBulkManager] = None
 
+def get_bulk_manager(request: Request = None) -> AssetBulkManager:
+    """Build the bulk manager around the AssetsManager wired at startup.
 
-def get_bulk_manager() -> AssetBulkManager:
-    global _bulk_manager
-    if _bulk_manager is None:
-        _bulk_manager = AssetBulkManager()
-    return _bulk_manager
+    The wired instance has the search manager, so bulk-created assets reach the
+    search index; the module singleton does not. Falls back to the singleton
+    when there is no request context.
+    """
+    return AssetBulkManager(assets_manager=get_assets_manager(request))
 
 
 # ------------------------------------------------------------------
@@ -130,15 +146,28 @@ def export_template(
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 async def preview_import(
+    request: Request,
+    settings: SettingsDep,
     db: DBSessionDep,
     file: UploadFile = File(..., description="CSV or XLSX file to preview"),
     manager: AssetBulkManager = Depends(get_bulk_manager),
 ):
-    """Upload a file and preview what will be created, updated, or skipped."""
+    """Upload a file and preview what will be created, updated, or skipped.
+
+    With the Unity Catalog description setting on, a row whose import would change
+    a Unity Catalog comment is flagged; the comments are read as the user, within
+    the import's limits on rows and time.
+    """
     try:
         contents = await file.read()
         filename = file.filename or "upload.csv"
-        result = manager.preview_import(db, file_bytes=contents, filename=filename)
+        write_to_uc = UcDescriptionSyncManager(settings).enabled
+        # Sync database and Unity Catalog work stays off the event loop
+        result = await run_in_threadpool(
+            manager.preview_import, db, file_bytes=contents, filename=filename,
+            write_to_uc=write_to_uc,
+            read_uc_comment=_preview_comment_reader(settings, request) if write_to_uc else None,
+        )
         return result
     except Exception as e:
         logger.exception("Failed to preview import")
@@ -152,38 +181,176 @@ async def preview_import(
 )
 async def execute_import(
     request: Request,
+    settings: SettingsDep,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     file: UploadFile = File(..., description="CSV or XLSX file to import"),
     manager: AssetBulkManager = Depends(get_bulk_manager),
 ):
-    """Upload a file and execute the import, creating/updating assets."""
+    """Upload a file and execute the import, creating/updating assets.
+
+    With the "write asset descriptions to Unity Catalog" setting on, imported
+    table, view and column descriptions are written there as the user once
+    the import is committed; a failed write is a warning on its row, never
+    an error. An empty description cell removes the Unity Catalog comment, as
+    a save with an empty description does.
+    """
     success = False
     details: dict = {"params": {"filename": file.filename}}
+    saved: List[Tuple[UUID, Optional[str], bool]] = []
+
+    def record_saved(asset_id: UUID, previous_description: Optional[str], described: bool) -> None:
+        saved.append((asset_id, previous_description, described))
+
     try:
         contents = await file.read()
         filename = file.filename or "upload.csv"
-        result = manager.execute_import(
-            db, file_bytes=contents, filename=filename, current_user_id=current_user.email,
+        # Sync database and Unity Catalog work stays off the event loop
+        result = await run_in_threadpool(
+            manager.execute_import, db, file_bytes=contents, filename=filename,
+            current_user_id=current_user.email, after_save=record_saved,
         )
+        # Commit first, then index: a failed commit must leave no search-index entries.
+        db.commit()
+        manager.index_committed_import(db, result)
+        uc_comments = await run_in_threadpool(
+            _write_imported_descriptions, db, settings, request, result, saved)
+        if uc_comments:
+            details["uc_comments"] = uc_comments
         success = result.errors == 0
         details["result"] = {
             "created": result.created,
             "updated": result.updated,
             "errors": result.errors,
+            "warnings": result.warnings,
         }
         return result
     except Exception as e:
         logger.exception("Failed to execute import")
+        db.rollback()
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to import: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to execute import",
+        )
     finally:
         audit_manager.log_action(
             db=db, username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="IMPORT_ASSETS", success=success, details=details,
         )
+
+
+def _preview_comment_reader(settings, request: Request):
+    """``read(table_fqn, column_name)`` of Unity Catalog comments for an import preview.
+
+    Reads as the user, at most as many rows as the import would try and within the
+    import's time budget; past either, and without a user client, it returns None
+    (the row is then flagged as written, unread). Its errors are the caller's.
+    """
+    from src.routes.assets_routes import _user_workspace_client
+
+    limit = int(getattr(settings, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', 100) or 0)
+    deadline = time.monotonic() + UC_IMPORT_WRITE_BUDGET_SECONDS
+    state: dict = {'reads': 0}
+
+    def read(table_fqn: str, column_name: Optional[str]):
+        time_left = deadline - time.monotonic()
+        if time_left <= 0 or state['reads'] >= limit or 'unavailable' in state:
+            return None
+        if 'ws' not in state:
+            try:
+                state['ws'] = _user_workspace_client(request)
+            except Exception as e:
+                logger.info("The import preview has no user client: %s", type(e).__name__)
+                state['unavailable'] = True
+                return None
+        state['reads'] += 1
+        return read_comment(state['ws'], table_fqn, column_name, timeout_seconds=time_left)
+
+    return read
+
+
+def _write_imported_descriptions(
+    db, settings, request: Request, result: ImportResult,
+    saved: List[Tuple[UUID, Optional[str], bool]],
+) -> list:
+    """Write the committed rows' descriptions to Unity Catalog, one commit per row.
+
+    The user's client is built once per import. ``UC_DESCRIPTION_IMPORT_WRITE_LIMIT``
+    caps the rows tried in Unity Catalog (a row counts whether its comment is
+    written, kept or skipped as a metric view), and the reads and writes share
+    ``UC_IMPORT_WRITE_BUDGET_SECONDS``: each waits at most what is left, and rows
+    past either limit get a warning. Never raises: the import is committed, so a failure here is a
+    warning on the row or on the result. Returns the audit entries of the
+    Unity Catalog comments that were read.
+    """
+    try:
+        from src.routes.assets_routes import _user_workspace_client
+
+        description_sync = UcDescriptionSyncManager(settings)
+        limit = int(getattr(settings, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', 100) or 0)
+        items = {item.asset_id: item for item in result.items if item.asset_id}
+    except Exception as e:
+        logger.warning("Could not prepare the Unity Catalog writes of an import: %s",
+                       type(e).__name__)
+        result.warning_messages.append(import_writes_failed_warning())
+        return []
+
+    deadline = time.monotonic() + UC_IMPORT_WRITE_BUDGET_SECONDS
+    client: dict = {}
+
+    def time_left() -> float:
+        return deadline - time.monotonic()
+
+    def user_client():
+        """The user's client, built on the first row tried; each call is one row tried."""
+        if time_left() <= 0:
+            raise ImportTimeBudgetError('The import time budget is used up.')
+        if client.get('attempts', 0) >= limit:
+            raise ImportWriteLimitError('The import write limit is reached.', limit=limit)
+        if 'error' in client:
+            raise client['error']
+        if 'ws' not in client:
+            try:
+                client['ws'] = _user_workspace_client(request)
+            except Exception as e:
+                client['error'] = e
+                raise
+        client['attempts'] = client.get('attempts', 0) + 1
+        return client['ws']
+
+    audit: list = []
+    for asset_id, previous_description, described in saved:
+        item = items.get(str(asset_id))
+        try:
+            outcome: SyncOutcome = description_sync.sync_after_update(
+                db, asset_id,
+                description_sent=described,
+                previous_description=previous_description,
+                user_client=user_client,
+                time_left=time_left,
+            )
+            if outcome.in_sync:
+                asset = db.get(AssetDb, asset_id)
+                if asset is not None:
+                    AssetsManager.update_table_column_snapshot(db, asset)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            # The error's type only: its text and traceback can carry the SQL parameters,
+            # i.e. the description
+            logger.warning("Writing the imported description of asset %s failed: %s",
+                           asset_id, type(e).__name__)
+            label = item.name if item else str(asset_id)
+            outcome = SyncOutcome(warning=write_failed_warning(label))
+        if outcome.audit:
+            audit.append({'asset_id': str(asset_id), **outcome.audit})
+        if outcome.warning is not None and item is not None:
+            item.warnings.append(outcome.warning)
+            result.warnings += 1
+    return audit
 
 
 def register_routes(app):

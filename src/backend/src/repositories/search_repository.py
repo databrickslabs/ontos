@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
-from src.common.search_interfaces import SearchIndexItem
+from src.common.search_interfaces import TYPE_PREFIX_WILDCARD, SearchIndexItem
 
 logger = get_logger(__name__)
 
@@ -98,11 +98,33 @@ def _where(
     type_filter: Optional[str],
     filters: Optional[Dict[str, Optional[str]]],
     allowed_features: Optional[Iterable[str]],
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
 ) -> tuple[str, Dict[str, Any], bool]:
-    """Build the shared WHERE clause + params. Returns (sql, params, has_query)."""
+    """Build the shared WHERE clause + params. Returns (sql, params, has_query).
+
+    ``allowed_ids_by_type`` (type -> document ids, ``product::<id>``): a
+    document of a listed type is kept only when its id is listed, in the
+    results, the counts and the facets alike; a ``<prefix>*`` key covers every
+    type with that prefix (``asset-*``). Each list is bound as one array
+    parameter (``id = ANY(:allowed_n)``), so its size doesn't change the
+    statement or hit a placeholder limit.
+    """
     clauses: List[str] = []
     params: Dict[str, Any] = {}
     has_query = bool(query) and query.strip() not in ("", "*")
+
+    for n, (doc_type, ids) in enumerate(sorted((allowed_ids_by_type or {}).items())):
+        if doc_type.endswith(TYPE_PREFIX_WILDCARD):
+            # ``asset-*``: every type with the prefix (compared as text, no LIKE pattern).
+            doc_type = doc_type[:-1]
+            clauses.append(
+                f"(left(type, :allowed_len_{n}) <> :allowed_type_{n} OR id = ANY(:allowed_{n}))"
+            )
+            params[f"allowed_len_{n}"] = len(doc_type)
+        else:
+            clauses.append(f"(type <> :allowed_type_{n} OR id = ANY(:allowed_{n}))")
+        params[f"allowed_type_{n}"] = doc_type
+        params[f"allowed_{n}"] = list(ids)
 
     if type_filter:
         clauses.append("type = :type_filter")
@@ -219,11 +241,14 @@ def search(
     offset: int = 0,
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
 ) -> Dict[str, Any]:
     """Full-text search over search_documents; result shape matches search_scoring.search_index."""
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    where, params, has_query = _where(query, type_filter, filters, allowed_features)
+    where, params, has_query = _where(
+        query, type_filter, filters, allowed_features, allowed_ids_by_type
+    )
 
     if has_query:
         sql = (
@@ -254,6 +279,19 @@ def search(
         "facets": _facets(db, where, params) if include_facets else {},
         "query": query,
     }
+
+
+def match_ids(
+    db: Session,
+    query: str,
+    *,
+    type_filter: Optional[str] = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+) -> List[str]:
+    """Document ids that ``search`` would match (same WHERE), unpaginated."""
+    where, params, _has_query = _where(query, type_filter, filters, None, allowed_ids_by_type)
+    return [r[0] for r in db.execute(text(f"SELECT id FROM search_documents{where}"), params)]
 
 
 def _row_to_item(row: Any) -> SearchIndexItem:

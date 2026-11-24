@@ -100,15 +100,52 @@ async def list_approval_sessions(
 
 @router.get('/approvals/queue')
 async def get_approvals_queue(
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager: ApprovalsManager = Depends(get_approvals_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Get all items awaiting approval (contracts, products, etc.)."""
+    """Items awaiting approval (contracts, products) that the caller may open (#1117).
+
+    Open to callers with data-contracts **or** data-products read; each item
+    type is filtered by its own read permission, so a 403 means the caller can
+    read neither.
+
+    Each entry links to the entity's page, so it is listed only when that page
+    would show it: the queue must not disclose a draft whose page answers 404.
+
+    * A product: the caller has data-products read and may read the product by
+      id (``_caller_can_read_product``: published, data-products admin, owner,
+      or pending reviewer of an open review or approval).
+    * A contract: the caller has data-contracts read; ``GET
+      /api/data-contracts/{id}`` has no gate beyond it.
+    """
+    from src.common.authorization import has_feature_permission
+    from src.routes.data_product_routes import _caller_can_read_product
+
+    # A failing check (5xx) propagates: it must not read as "no access" (403).
+    read = FeatureAccessLevel.READ_ONLY
+    reads_contracts = await has_feature_permission('data-contracts', read, current_user, request)
+    reads_products = await has_feature_permission('data-products', read, current_user, request)
+    if not (reads_contracts or reads_products):
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions: the approvals queue needs data-contracts "
+                   "or data-products read.",
+        )
+
+    def can_see_product(product) -> bool:
+        return reads_products and _caller_can_read_product(
+            request, db, current_user, None, product,
+        )
+
     try:
-        return manager.get_approvals_queue(db)
-    except Exception as e:
+        return manager.get_approvals_queue(
+            db,
+            can_see_contract=lambda contract: reads_contracts,
+            can_see_product=can_see_product,
+        )
+    except Exception:
         logger.exception("Failed to build approvals queue")
         raise HTTPException(status_code=500, detail="Failed to build approvals queue")
 

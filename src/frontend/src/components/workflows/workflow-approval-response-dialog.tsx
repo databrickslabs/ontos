@@ -44,6 +44,9 @@ interface DefaultResponseWorkflowStep {
 
 export interface WorkflowApprovalResponseDialogPayload {
   execution_id: string;
+  // The approval step the notification is for: a decision after that step
+  // has ended gets 409 approval_no_longer_pending
+  step_id?: string;
   entity_name?: string;
   // Structured request context populated by the backend approval step
   // (see ApprovalStepHandler in workflow_executor.py). All optional — only
@@ -77,6 +80,19 @@ const SKIP_KEYS = new Set([
   'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
+
+/**
+ * A requested deprecation carries its replacement's name next to its id: the
+ * approver sees the name, and the id only when there is no name. Pure.
+ */
+export function withReplacementName(fullPayload: Record<string, unknown>): Record<string, unknown> {
+  const { replacement_name: name, ...rest } = fullPayload;
+  if (typeof name === 'string' && name && rest.replacement_id) {
+    const { replacement_id: _id, ...others } = rest;
+    return { ...others, replacement_name: name };
+  }
+  return rest;
+}
 
 interface DetailRow {
   label: string;
@@ -187,7 +203,7 @@ function buildDetailRows(
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
       'definition', 'concept_type', 'source_context', 'source_label',
     ]);
-    for (const [key, val] of Object.entries(payload.full_payload)) {
+    for (const [key, val] of Object.entries(withReplacementName(payload.full_payload))) {
       if (key.startsWith('_')) continue;
       if (SKIP_KEYS.has(key)) continue;
       if (alreadySurfaced.has(key)) continue;
@@ -282,6 +298,7 @@ export default function WorkflowApprovalResponseDialog({
       // coded "Request denied" (approval_rejected) that each user sees in
       // their own language, not the approver's word for it.
       const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      if (payload.step_id) body.step_id = payload.step_id;
       if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
       if (grantedPermission) body.permission_level = grantedPermission;
@@ -294,6 +311,22 @@ export default function WorkflowApprovalResponseDialog({
             : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
+        return;
+      }
+      // require_all: the decision is recorded and other approvers still decide.
+      // Only then is there a count: a step that moves on to another approval
+      // step is 'paused' too, but this decision was the step's.
+      const decision = response.data as { status?: string; pending_approvers?: number } | null;
+      const pendingApprovers = decision?.pending_approvers;
+      if (typeof pendingApprovers === 'number' && pendingApprovers > 0) {
+        toast({
+          title: t('workflows:approvalResponse.messages.decisionRecorded'),
+          description: t('workflows:approvalResponse.messages.waitingForApprovers', {
+            count: pendingApprovers,
+          }),
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
         return;
       }
       toast({

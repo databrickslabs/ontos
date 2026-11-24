@@ -4,6 +4,7 @@ Pydantic models for process workflows.
 Defines the API request/response schemas for workflow definitions, steps, and executions.
 """
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -33,6 +34,8 @@ class TriggerType(str, Enum):
     ON_REQUEST_PUBLISH = "on_request_publish"  # Marketplace publication requested
     ON_REQUEST_DEPLOY = "on_request_deploy"  # Deployment to Unity Catalog requested (contracts)
     ON_REQUEST_STATUS_CHANGE = "on_request_status_change"  # When status change is requested
+    # A metric view definition change request was submitted (#1124)
+    ON_REQUEST_DEFINITION_CHANGE = "on_request_definition_change"
     
     # Job lifecycle triggers
     ON_JOB_SUCCESS = "on_job_success"  # When a background job completes successfully
@@ -93,6 +96,7 @@ class EntityType(str, Enum):
     ONTOLOGY_CONCEPT = "ontology_concept"  # A SKOS concept (RDF triples keyed by IRI)
     ONTOLOGY_COLLECTION = "ontology_collection"  # A concept scheme / collection
     CONCEPT_CHANGESET = "concept_changeset"  # A bulk RDF-upload changeset awaiting approval
+    METRIC_VIEW = "metric_view"  # The asset of a Unity Catalog metric view (#1124)
 
 
 class ScopeType(str, Enum):
@@ -134,6 +138,30 @@ class StepType(str, Enum):
     DELIVER = "deliver"
     GRANT_PERMISSIONS = "grant_permissions"  # Process workflow: grant UC permissions via SP workspace client
     ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start ()
+
+
+# Steps that end a process workflow run with their own outcome. They have no next
+# step: a stored on_pass / on_fail (older designers saved one, the canvas never
+# drew it) is ignored when the workflow runs and dropped when it is saved.
+# Approval (wizard) workflows are not covered: their runtime treats a Pass step
+# with a link as a step it passes through.
+TERMINAL_STEP_TYPES = frozenset({StepType.PASS.value, StepType.FAIL.value})
+
+
+def is_terminal_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) ends the run."""
+    return getattr(step_type, 'value', step_type) in TERMINAL_STEP_TYPES
+
+
+def is_conditional_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) is a conditional."""
+    return getattr(step_type, 'value', step_type) == StepType.CONDITIONAL.value
+
+
+def ends_process_run(workflow_type: Any, step_type: Any) -> bool:
+    """Whether a step of a workflow of this type ends the run, so its links are dropped."""
+    return (getattr(workflow_type, 'value', workflow_type) or WorkflowType.PROCESS.value) \
+        == WorkflowType.PROCESS.value and is_terminal_step_type(step_type)
 
 
 class ExecutionStatus(str, Enum):
@@ -183,13 +211,29 @@ class WorkflowTrigger(BaseModel):
     """Trigger configuration for a workflow."""
     type: TriggerType = Field(..., description="Type of trigger")
     entity_types: List[EntityType] = Field(default_factory=list, description="Entity types that trigger this workflow")
+    # Stored values that are no ``EntityType`` (a removed type such as ``dataset``). They
+    # match no event, are written back with ``entity_types`` (stored_config_json), and a
+    # save that still lists them is refused (``trigger_entity_type_unknown``).
+    unknown_entity_types: List[str] = Field(
+        default_factory=list,
+        description="Stored entity types this version doesn't know; they match no event",
+    )
 
     # For on_status_change
     from_status: Optional[str] = Field(None, description="Status to transition from (for status change triggers)")
     to_status: Optional[str] = Field(None, description="Status to transition to (for status change triggers)")
 
     # For scheduled
-    schedule: Optional[str] = Field(None, description="Cron expression for scheduled triggers")
+    schedule: Optional[str] = Field(
+        None,
+        description=(
+            "scheduled only: Quartz cron expression (sec min hour day-of-month month "
+            "day-of-week [year]), e.g. '0 30 2 * * ?'; see common/quartz_cron.py"
+        ),
+    )
+    timezone: Optional[str] = Field(
+        None, description="scheduled only: IANA timezone of the schedule; empty means UTC",
+    )
 
     # For before_status_change
     on_error: GateErrorMode = Field(
@@ -207,6 +251,14 @@ class WorkflowTrigger(BaseModel):
             "this gate is switched off for. Skips are logged and audited."
         ),
     )
+
+    def stored_config_json(self) -> str:
+        """The trigger as stored: one ``entity_types`` list, unknown values included."""
+        data = self.model_dump(mode='json', exclude={'unknown_entity_types'})
+        data['entity_types'] = list(dict.fromkeys(
+            [*data['entity_types'], *self.unknown_entity_types]
+        ))
+        return json.dumps(data)
 
     class Config:
         json_schema_extra = {
@@ -446,8 +498,8 @@ class NotificationStepConfig(BaseModel):
 class AssignTagStepConfig(BaseModel):
     """Configuration for tag assignment steps."""
     key: str = Field(..., description="Tag key to assign")
-    value: Optional[str] = Field(None, description="Static tag value")
-    value_source: Optional[str] = Field(None, description="Dynamic value source: 'current_user', 'project_name', etc.")
+    value: Optional[str] = Field(None, description="Static tag value. Without value and value_source the tag is assigned without a value, and a value the entity already has is kept.")
+    value_source: Optional[str] = Field(None, description="Dynamic value source: 'current_user', 'project_name', 'entity_name', 'timestamp'. Wins over value.")
     
     class Config:
         json_schema_extra = {
@@ -659,6 +711,12 @@ class ProcessWorkflow(ProcessWorkflowBase):
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
+    # Read only: stored trigger entity types that match no event (an unknown type, a
+    # pair no code fires). The workflow is kept as stored; saves don't send this.
+    trigger_warnings: List['WorkflowValidationIssue'] = Field(
+        default_factory=list,
+        description="Trigger entity types of the stored workflow that match no event",
+    )
 
     class Config:
         from_attributes = True
@@ -692,6 +750,8 @@ class WorkflowStepExecutionResult(BaseModel):
     passed: Optional[bool] = None
     result_data: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
+    # The step's message (results recorded before it was stored have none)
+    message: Optional[str] = None
     duration_ms: Optional[float] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -891,6 +951,11 @@ class WorkflowValidationIssue(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
+# ``ProcessWorkflow.trigger_warnings`` refers to the issue model defined above
+ProcessWorkflow.model_rebuild()
+WorkflowListResponse.model_rebuild()
+
+
 class WorkflowValidationResult(BaseModel):
     """Result of workflow validation."""
     valid: bool
@@ -898,18 +963,26 @@ class WorkflowValidationResult(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     # Same errors as ``errors``, with a code and parameters each.
     issues: List[WorkflowValidationIssue] = Field(default_factory=list)
+    # Same warnings as ``warnings``, with a code and parameters each.
+    warning_issues: List[WorkflowValidationIssue] = Field(default_factory=list)
+
+    @staticmethod
+    def _coded(messages: Any, default_code: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                'code': getattr(message, 'code', default_code),
+                'message': str(message),
+                'params': dict(getattr(message, 'params', {}) or {}),
+            }
+            for message in messages or []
+        ]
 
     @model_validator(mode='before')
     @classmethod
     def _issues_from_errors(cls, data: Any) -> Any:
         if isinstance(data, dict) and 'issues' not in data:
-            data = {**data, 'issues': [
-                {
-                    'code': getattr(error, 'code', 'workflow_validation_error'),
-                    'message': str(error),
-                    'params': dict(getattr(error, 'params', {}) or {}),
-                }
-                for error in data.get('errors') or []
-            ]}
+            data = {**data, 'issues': cls._coded(data.get('errors'), 'workflow_validation_error')}
+        if isinstance(data, dict) and 'warning_issues' not in data:
+            data = {**data, 'warning_issues': cls._coded(data.get('warnings'), 'workflow_validation_warning')}
         return data
 

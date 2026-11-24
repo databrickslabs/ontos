@@ -37,7 +37,29 @@ from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
-from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS, DATA_PRODUCT_TRANSITIONS
+
+# Frozen: development's DATA_PRODUCT_TRANSITIONS / DATA_CONTRACT_TRANSITIONS before
+# Lifecycle Stage Groups (#1213), targets in stage order (the order the lifecycle
+# service lists them). Not read from lifecycle_defaults, so drift there fails here.
+DATA_PRODUCT_TRANSITIONS = {
+    'draft': ['sandbox', 'proposed', 'deprecated'],
+    'sandbox': ['draft', 'proposed', 'deprecated'],
+    'proposed': ['draft', 'under_review', 'deprecated'],
+    'under_review': ['draft', 'approved', 'deprecated'],
+    'approved': ['draft', 'active', 'deprecated'],
+    'active': ['deprecated'],
+    'deprecated': ['active', 'retired'],
+    'retired': [],
+}
+DATA_CONTRACT_TRANSITIONS = {
+    'draft': ['proposed', 'deprecated'],
+    'proposed': ['draft', 'under_review', 'approved', 'deprecated'],
+    'under_review': ['draft', 'approved', 'deprecated'],
+    'approved': ['draft', 'active', 'deprecated'],
+    'active': ['deprecated'],
+    'deprecated': ['active', 'retired'],
+    'retired': [],
+}
 
 
 @pytest.fixture
@@ -265,14 +287,26 @@ class TestMcpUpdateTools:
     def _ctx(db_session, product_manager=None, contract_manager=None):
         from src.tools.base import ToolContext
 
+        from src.tools.base import ToolCaller
+
+        # These tests change drafts: act for an admin of both features.
+        admin = ToolCaller(email='a@b.com', auth_path='test',
+                           products_admin=True, contracts_admin=True)
         return ToolContext(
-            db=db_session, settings=MagicMock(),
+            db=db_session, settings=MagicMock(), caller=admin,
             data_products_manager=product_manager, data_contracts_manager=contract_manager,
         )
 
-    def test_a_product_status_change_is_a_transition(self, product_manager, db_session):
+    def test_a_product_status_change_is_a_transition(
+        self, product_manager, db_session, monkeypatch
+    ):
         import asyncio
+        from src.controller import audit_manager
         from src.tools.data_products import UpdateDataProductTool
+
+        # The tool's audit entry is written in its own session, whose commit
+        # would commit this test's rows on the shared in-memory connection.
+        monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
         pid = _product(db_session, status='draft')
         result = asyncio.run(UpdateDataProductTool().execute(
@@ -281,6 +315,7 @@ class TestMcpUpdateTools:
         # draft -> active is not a lifecycle transition (draft -> proposed -> ...)
         assert result.success is False
         assert 'Invalid status transition' in result.error
+        assert result.error_code == 'invalid_status_transition'
         db_session.expire_all()
         assert db_session.get(DataProductDb, pid).status == 'draft'
 
@@ -292,10 +327,32 @@ class TestMcpUpdateTools:
         db_session.expire_all()
         assert db_session.get(DataProductDb, pid).status == 'proposed'
 
+    def test_a_contract_status_change_outside_the_lifecycle_is_refused(
+        self, contract_manager, db_session,
+    ):
+        import asyncio
+        from src.tools.data_contracts import UpdateDataContractTool
+
+        cid = _contract(db_session, status='draft')
+        result = asyncio.run(UpdateDataContractTool().execute(
+            self._ctx(db_session, contract_manager=contract_manager), contract_id=cid,
+            status='active',
+        ))
+        assert result.success is False
+        assert result.error_code == 'invalid_status_transition'
+        assert "from 'draft' to 'active'" in result.error
+        db_session.expire_all()
+        assert db_session.get(DataContractDb, cid).status == 'draft'
+
     def test_a_blocking_gate_stops_a_contract_status_change(self, contract_manager, db_session, monkeypatch):
         import asyncio
         from src.common import workflow_triggers
+        from src.controller import audit_manager
         from src.tools.data_contracts import UpdateDataContractTool
+
+        # The tool's audit entry is written in its own session, whose commit
+        # would commit this test's rows on the shared in-memory connection.
+        monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
         cid = _contract(db_session, status='draft')
         registry = MagicMock()
@@ -305,6 +362,8 @@ class TestMcpUpdateTools:
             self._ctx(db_session, contract_manager=contract_manager), contract_id=cid, status='proposed',
         ))
         assert result.success is False
-        assert 'StatusChangeBlockedError' in result.error
+        # The workflow's coded refusal, not the exception class (#1143)
+        assert result.error_code == 'status_change_blocked'
+        assert 'blocked by workflow' in result.error
         db_session.expire_all()
         assert db_session.get(DataContractDb, cid).status == 'draft'

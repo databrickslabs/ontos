@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Optional, Dict
-from uuid import UUID
-from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from datetime import date, datetime
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class CostCenter(str):
@@ -17,14 +17,19 @@ class CostCenter(str):
 class CostItemBase(BaseModel):
     entity_id: str
     entity_type: str = Field(..., pattern=r"^(data_domain|data_product|data_contract)$")
-    title: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = Field(None, max_length=2000)
+    title: str | None = Field(None, max_length=255)
+    description: str | None = Field(None, max_length=2000)
     cost_center: str = Field(..., pattern=r"^(INFRASTRUCTURE|HR|STORAGE|MAINTENANCE|OTHER)$")
-    custom_center_name: Optional[str] = Field(None, max_length=255)
+    custom_center_name: str | None = Field(None, max_length=255)
     amount_cents: int = Field(..., ge=0)
     currency: str = Field("USD", min_length=3, max_length=3)
     start_month: date
-    end_month: Optional[date] = None
+    end_month: date | None = None
+
+    @field_validator("cost_center", mode="before")
+    @classmethod
+    def normalize_cost_center(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class CostItemCreate(CostItemBase):
@@ -32,26 +37,31 @@ class CostItemCreate(CostItemBase):
 
 
 class CostItemUpdate(BaseModel):
-    title: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = Field(None, max_length=2000)
-    cost_center: Optional[str] = Field(None, pattern=r"^(INFRASTRUCTURE|HR|STORAGE|MAINTENANCE|OTHER)$")
-    custom_center_name: Optional[str] = Field(None, max_length=255)
-    amount_cents: Optional[int] = Field(None, ge=0)
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
-    start_month: Optional[date] = None
-    end_month: Optional[date] = None
+    title: str | None = Field(None, max_length=255)
+    description: str | None = Field(None, max_length=2000)
+    cost_center: str | None = Field(
+        None, pattern=r"^(INFRASTRUCTURE|HR|STORAGE|MAINTENANCE|OTHER)$"
+    )
+    custom_center_name: str | None = Field(None, max_length=255)
+    amount_cents: int | None = Field(None, ge=0)
+    currency: str | None = Field(None, min_length=3, max_length=3)
+    start_month: date | None = None
+    end_month: date | None = None
+
+    @field_validator("cost_center", mode="before")
+    @classmethod
+    def normalize_cost_center(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class CostItem(CostItemBase):
     id: UUID
-    created_by: Optional[str] = None
-    updated_by: Optional[str] = None
+    created_by: str | None = None
+    updated_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
 
 
 class CostSummary(BaseModel):
@@ -59,6 +69,4 @@ class CostSummary(BaseModel):
     currency: str
     total_cents: int
     items_count: int
-    by_center: Dict[str, int]
-
-
+    by_center: dict[str, int]

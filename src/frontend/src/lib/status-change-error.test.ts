@@ -72,6 +72,29 @@ describe('statusChangeErrorText', () => {
       .toBe(MESSAGE);
   });
 
+  it('translates the deprecation checks with their parameters', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText({
+      error: 'Replacement p-2 is deprecated; it is replaced by p-3',
+      errorCode: 'replacement_deprecated_replaced',
+      errorParams: { replacementId: 'p-2', replacedBy: 'p-3' },
+    }, i18n.t, 'data-products')).toBe('O substituto p-2 está obsoleto; ele é substituído por p-3.');
+    expect(statusChangeErrorText({
+      error: 'The sunset date 2026-10-18 is in the past',
+      errorCode: 'sunset_date_in_past',
+      errorParams: { sunsetDate: '2026-10-18' },
+    }, i18n.t, 'data-contracts')).toBe('A data de desativação 2026-10-18 está no passado.');
+  });
+
+  it('keeps the English text for a deprecation code without a translation', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText(
+      { error: 'Something new', errorCode: 'not_a_deprecation_code' }, i18n.t, 'data-products',
+    )).toBe('Something new');
+  });
+
   it('translates an edit that tries to change the status', async () => {
     await i18n.changeLanguage('pt');
 
@@ -97,6 +120,25 @@ describe('statusChangeErrorText', () => {
       errorCode: 'invalid_status',
       errorParams: { status: 'archived', allowed: ['draft', 'active'] },
     }, i18n.t, 'data-contracts')).toBe('archived não é um status do ciclo de vida. Use um destes: Rascunho, Ativo.');
+  });
+
+  it('translates a policy check whose WHERE clause could not be evaluated', async () => {
+    const reason = {
+      workflow: 'Purpose Gate',
+      text: "The WHERE clause of policy 'Purpose' could not be evaluated on data_contract c-1",
+      code: 'rule_where_evaluation_failed',
+      params: { policyName: 'Purpose', entityType: 'data_contract', entityId: 'c-1' },
+    };
+    const blocked = {
+      ...BLOCKED,
+      errorParams: { fromStatus: 'draft', toStatus: 'active', reasons: [reason] },
+    };
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText(blocked, i18n.t, 'data-contracts')).toBe(
+      'A mudança de status de Rascunho para Ativo foi bloqueada por um workflow: Purpose Gate: '
+      + "não foi possível avaliar a cláusula WHERE da política 'Purpose' em data_contract c-1",
+    );
   });
 
   it('translates a fail_closed gate that could not be evaluated (#1103)', async () => {

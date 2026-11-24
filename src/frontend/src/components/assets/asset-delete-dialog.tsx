@@ -40,6 +40,7 @@ interface AssetDeleteDialogProps {
 const TYPE_ICONS: Record<string, React.ElementType> = {
   Table: Table2,
   View: Eye,
+  'Metric View': Eye,
   Column: Columns2,
   Dataset: Database,
 };

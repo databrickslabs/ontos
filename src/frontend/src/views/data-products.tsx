@@ -14,9 +14,13 @@ import {
   ColumnDef,
 } from "@tanstack/react-table"
 import { useApi } from '@/hooks/use-api';
+import { usePersistentState } from '@/hooks/use-persistent-state';
+
+const isStoredBoolean = (v: unknown): v is boolean => typeof v === 'boolean';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
 import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { productUploadSuccessText } from '@/lib/upload-text';
+import { importItemLine, reportedImportItems } from '@/lib/import-item-text';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
@@ -71,7 +75,7 @@ export default function DataProducts() {
   // "Show all versions" toggle — flips include_history on the products list
   // endpoint. Off (default) collapses each family to its newest visible
   // version and surfaces a "N versions" badge per row. See PRD #442.
-  const [includeHistory, setIncludeHistory] = useState(false);
+  const [includeHistory, setIncludeHistory] = usePersistentState('data-products-include-history', false, isStoredBoolean);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -102,9 +106,11 @@ export default function DataProducts() {
   const [previewProductTitle, setPreviewProductTitle] = useState('');
 
   // Subscription filter state
-  const [showMySubscriptions, setShowMySubscriptions] = useState(false);
+  const [showMySubscriptions, setShowMySubscriptions] = usePersistentState('data-products-my-subscriptions', false, isStoredBoolean);
   const [mySubscribedProductIds, setMySubscribedProductIds] = useState<Set<string>>(new Set());
   const [_subscriptionsLoading, _setSubscriptionsLoading] = useState(false);
+  // Until the subscriptions have loaded, a restored "My Subscriptions" filter has no ids to match.
+  const [subscriptionsLoaded, setSubscriptionsLoaded] = useState(false);
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([]);
 
   const api = useApi();
@@ -214,6 +220,8 @@ export default function DataProducts() {
         }
       } catch (err) {
         console.warn('Failed to fetch subscriptions:', err);
+      } finally {
+        setSubscriptionsLoaded(true);
       }
     };
     
@@ -262,12 +270,12 @@ export default function DataProducts() {
     }
 
     // Apply subscription filter
-    if (showMySubscriptions) {
+    if (showMySubscriptions && subscriptionsLoaded) {
       filtered = filtered.filter(p => mySubscribedProductIds.has(p.id));
     }
 
     return filtered;
-  }, [products, showMySubscriptions, mySubscribedProductIds, searchParams]);
+  }, [products, showMySubscriptions, subscriptionsLoaded, mySubscribedProductIds, searchParams]);
 
   // Function to refetch products list
   const fetchProducts = async () => {
@@ -473,28 +481,28 @@ export default function DataProducts() {
       }
 
       const result = response.data;
-      // Surface anything not created: failed entities AND files skipped as the
-      // wrong type (e.g. an ODCS contract dropped here).
-      const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
+      // Surface anything not created (failed entities AND files skipped as the
+      // wrong type, e.g. an ODCS contract dropped here) and the notes on created
+      // ones (e.g. a replacement that isn't here).
+      const reportedItems = result ? reportedImportItems(result) : [];
+      const detail = reportedItems.slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
       const allCreated = !!result && result.failed === 0 && result.skipped === 0;
       if (result && (result.failed > 0 || result.skipped > 0)) {
         // Partial success: surface the truthful summary plus the first issues.
-        const detail = unimportedItems
-          .slice(0, 5)
-          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
-          .join('\n');
         toast({
           title: result.created > 0 ? t('upload.partialSuccess', 'Imported with issues') : t('upload.failed'),
           description: `${summarizeImport(result, t)}${detail ? `\n${detail}` : ''}`,
           variant: result.failed > 0 && result.created === 0 ? 'destructive' : 'default',
           duration: 10000,
         });
-        if (unimportedItems.length > 0) setError(`${summarizeImport(result, t)}\n${detail}`);
+        if (reportedItems.length > 0) setError(`${summarizeImport(result, t)}\n${detail}`);
       } else {
         setUploadDialogOpen(false);
+        const success = productUploadSuccessText(files, result?.created ?? 0, t);
         toast({
           title: t('upload.success'),
-          description: productUploadSuccessText(files, result?.created ?? 0, t),
+          description: detail ? `${success}\n${detail}` : success,
+          ...(detail ? { duration: 10000 } : {}),
         });
       }
       await fetchProducts();
@@ -595,7 +603,7 @@ export default function DataProducts() {
   // --- Column Definitions (Keep as they are for the DataTable) ---
   const columns = useMemo<ColumnDef<DataProduct>[]>(() => [
     {
-      accessorKey: "info.title",
+      accessorKey: "name",
       header: ({ column }: { column: Column<DataProduct, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           {t('table.title')} <ChevronDown className="ml-2 h-4 w-4" />
@@ -833,7 +841,7 @@ export default function DataProducts() {
             <DataTable
               columns={columns}
               data={displayedProducts}
-              searchColumn="info.title"
+              searchColumn="name"
               storageKey="data-products-sort"
               toolbarActions={
                 <>

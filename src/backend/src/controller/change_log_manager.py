@@ -22,9 +22,14 @@ class ChangeLogManager:
         entity_id: str, 
         action: str, 
         username: Optional[str], 
-        details_json: Optional[str] = None
+        details_json: Optional[str] = None,
+        commit: bool = True,
     ) -> ChangeLogDb:
-        """Log a change to the change log."""
+        """Log a change to the change log.
+
+        With ``commit=False`` the entry is only flushed, so it is committed (or
+        rolled back) with the caller's transaction.
+        """
         logger.info(f"Logging change: {entity_type}:{entity_id} - {action} by {username}")
         
         entry = ChangeLogDb(
@@ -35,6 +40,9 @@ class ChangeLogManager:
             details_json=details_json,
         )
         db.add(entry)
+        if not commit:
+            db.flush()
+            return entry
         db.commit()
         db.refresh(entry)
         return entry
@@ -47,7 +55,8 @@ class ChangeLogManager:
         entity_id: str, 
         action: str, 
         username: Optional[str], 
-        details: Optional[dict] = None
+        details: Optional[dict] = None,
+        commit: bool = True,
     ) -> ChangeLogDb:
         """Log a change with structured details."""
         details_json = None
@@ -63,7 +72,8 @@ class ChangeLogManager:
             entity_id=entity_id,
             action=action,
             username=username,
-            details_json=details_json
+            details_json=details_json,
+            commit=commit,
         )
 
     def get_changes_for_entity(

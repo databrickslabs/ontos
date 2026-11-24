@@ -95,6 +95,9 @@
     },
     "conceptReviewRequest": {
       "rejected": "La revisión del concepto no fue aprobada"
+    },
+    "metricViewChangeRequest": {
+      "rejected": "La solicitud de cambio de la metric view fue rechazada"
     }
   },
   "workflowNames": {
@@ -123,11 +126,14 @@
     "request-publish": "Solicitar publicación",
     "request-status-change": "Solicitar cambio de estado",
     "before-status-change-default": "Puerta de cambio de estado (predeterminada)",
+    "owner-deprecation-notice": "Aviso de obsolescencia a los responsables",
+    "owner-retirement-notice": "Aviso de retirada a los responsables",
     "on-publish-notification": "Notificación de publicación",
     "on-unpublish-notification": "Notificación de retirada de publicación",
     "certification-request-review": "Revisión de solicitudes de certificación",
     "publication-request-review": "Revisión de solicitudes de publicación",
     "first-access-welcome": "Bienvenida: términos de uso",
-    "on-request-access-grant-permissions-reference": "Referencia: conceder SELECT de UC al solicitante (on_request_access)"
+    "on-request-access-grant-permissions-reference": "Referencia: conceder SELECT de UC al solicitante (on_request_access)",
+    "metric-view-change-request": "Solicitud de cambio de metric view"
   }
 }

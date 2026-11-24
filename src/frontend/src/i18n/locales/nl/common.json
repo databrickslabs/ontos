@@ -6,6 +6,7 @@
     "loading": "Laden...",
     "cancel": "Annuleren",
     "close": "Sluiten",
+    "openMenu": "Menu openen",
     "delete": "Verwijderen",
     "deleteSelected": "Geselecteerde Verwijderen ({{count}})",
     "edit": "Bewerken",
@@ -41,10 +42,12 @@
     "discard": "Verwerpen",
     "apply": "Toepassen",
     "select": "Selecteren",
+    "done": "Gereed",
     "remove": "Verwijderen",
     "link": "Koppelen",
     "unlink": "Ontkoppelen",
-    "assign": "Toewijzen"
+    "assign": "Toewijzen",
+    "rename": "Hernoemen"
   },
   "labels": {
     "name": "Naam",
@@ -338,7 +341,8 @@
       "for_request_access": "Toegang Aanvragen (Wizard)",
       "for_request_publish": "Publicatie Aanvragen (Wizard)",
       "for_request_certify": "Certificering Aanvragen (Wizard)",
-      "for_request_status_change": "Statuswijziging Aanvragen (Wizard)"
+      "for_request_status_change": "Statuswijziging Aanvragen (Wizard)",
+      "on_request_definition_change": "Verzoek tot definitiewijziging"
     },
     "entityTypes": {
       "catalog": "Catalogus",
@@ -355,7 +359,11 @@
       "data_asset_review": "Asset Beoordeling",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Gebruiker"
+      "user": "Gebruiker",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collectie",
+      "concept_changeset": "Concept-wijzigingsset",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validatie",
@@ -472,7 +480,13 @@
     "selectRelTypePrompt": "Selecteer een relatietype om doelentiteiten te vinden",
     "createRelationship": "Relatie aanmaken",
     "relationshipCreated": "Relatie aangemaakt",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "'{{relationship}}' koppelt dit item als relatie aan een concept: die verschijnt onder Relaties en in de lineage. Gebruik {{section}} om het concept in de details van dit item en onder {{conceptSection}} op de conceptpagina te tonen.",
+    "targetNotPickable": "{{type}} kan hier niet worden gekozen. Het wordt op een eigen pagina beheerd.",
+    "noAccessToTarget": "U hebt geen toegang tot {{type}}. Vraag een beheerder om leestoegang om ernaar te koppelen."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "De opgeslagen eigenschappen van het asset konden niet worden geladen, dus het kan hier niet worden opgeslagen. Sluit het dialoogvenster en probeer het opnieuw."
   },
   "assetForm": {
     "groups": {
@@ -559,16 +573,25 @@
     "removeConfirm": "Weet je zeker dat je deze relatie wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Selecteer {{kind}}…",
     "latestSuffix": "{{name}} (nieuwste)",
     "pinVersionTitle": "Een specifieke versie vastzetten",
     "pinVersion": "Versie vastzetten",
     "followLatestTitle": "Altijd de nieuwste zichtbare versie van de familie volgen",
     "followLatest": "Nieuwste volgen",
-    "searchPlaceholder": "Zoek {{kind}}s…",
     "loading": "Laden…",
-    "noMatching": "Geen overeenkomende {{kind}}s.",
     "unnamed": "(naamloos)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Selecteer een contract…",
+      "search": "Zoek contracten…",
+      "noMatching": "Geen overeenkomende contracten."
+    },
+    "product": {
+      "select": "Selecteer een product…",
+      "search": "Zoek producten…",
+      "noMatching": "Geen overeenkomende producten."
+    }
   },
   "entityTree": {
     "title": "Gerelateerde entiteiten",
@@ -632,6 +655,8 @@
   "edit": "Bewerken",
   "error": "Fout",
   "home": "Home",
+  "loading": "Laden…",
+  "optional": "(optioneel)",
   "refresh": "Vernieuwen",
   "retry": "Opnieuw proberen",
   "save": "Opslaan",
@@ -762,5 +787,39 @@
     "createdSkipped": "Aangemaakt: {{created}}, overgeslagen: {{skipped}}.",
     "createdFailed": "Aangemaakt: {{created}}, mislukt: {{failed}}.",
     "createdSkippedFailed": "Aangemaakt: {{created}}, overgeslagen: {{skipped}}, mislukt: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Reden voor uitfasering",
+    "reasonPlaceholder": "Waarom wordt het uitgefaseerd? Afnemers zien deze tekst.",
+    "sunsetDate": "Einddatum",
+    "replacement": "Vervanging",
+    "noReplacement": "Geen vervanging",
+    "reasonRequired": "Een reden is verplicht om uit te faseren.",
+    "requestHint": "De motivatie wordt de reden voor de uitfasering.",
+    "errors": {
+      "deprecation_reason_required": "Een reden is verplicht om uit te faseren.",
+      "sunset_date_in_past": "De einddatum {{sunsetDate}} ligt in het verleden.",
+      "replacement_is_self": "Een entiteit kan niet haar eigen vervanging zijn.",
+      "replacement_not_found": "De vervanging {{replacementId}} is niet gevonden.",
+      "replacement_retired": "De vervanging {{replacementId}} is buiten gebruik.",
+      "replacement_deprecated": "De vervanging {{replacementId}} is verouderd.",
+      "replacement_deprecated_replaced": "De vervanging {{replacementId}} is verouderd; ze wordt vervangen door {{replacedBy}}.",
+      "replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Ongeldige {{property}} \"{{value}}\": ISO-datum verwacht.",
+      "replacement_is_self": "De vervanging (ontosReplacedBy) kan niet de entiteit zelf zijn.",
+      "replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit: {{chain}}.",
+      "imported_replacement_dropped": "De vervanging {{replacementId}} is hier niet aanwezig en is daarom niet gekoppeld.",
+      "imported_replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit ({{chain}}) en is daarom niet gekoppeld.",
+      "imported_status_mapped": "'{{status}}' is geen levenscyclusstatus en is daarom geïmporteerd als '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' is een oudere statusnaam en is daarom geïmporteerd als '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' is geen status meer en is daarom geïmporteerd als '{{mappedTo}}'. Certificering wordt niet geïmporteerd: certificeer de entiteit in Ontos."
+    },
+    "notice": {
+      "deprecated": "Verouderd",
+      "retired": "Buiten Gebruik",
+      "noReason": "Geen reden vastgelegd"
+    }
   }
 }

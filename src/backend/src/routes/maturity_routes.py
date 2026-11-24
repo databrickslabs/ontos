@@ -5,9 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.dependencies import DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
+from src.routes.data_contracts_routes import readable_contract
+from src.routes.data_product_routes import readable_product
 from src.models.maturity import (
     MaturityLevelCreate,
     MaturityLevelRead,
@@ -27,6 +30,12 @@ router = APIRouter(prefix="/api", tags=["Maturity Levels"])
 SETTINGS_FEATURE_ID = "settings"
 DP_FEATURE_ID = "data-products"
 DC_FEATURE_ID = "data-contracts"
+
+
+class MaturityGateLlmCheckError(CodedValueError):
+    """A maturity gate on a policy whose rule uses LLM_CHECK."""
+
+    code = 'maturity_gate_policy_uses_llm_check'
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +230,14 @@ async def add_gate(
     policy = db.get(CompliancePolicyDb, body.compliance_policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Compliance policy not found")
+    from src.controller.compliance_manager import rule_uses_llm_check
+    if rule_uses_llm_check(policy.rule):
+        # Gates evaluate the rule without a model: LLM_CHECK would fail every entity
+        error = MaturityGateLlmCheckError(
+            "This policy uses LLM_CHECK, which is only evaluated in compliance runs; "
+            "a maturity gate would fail every entity",
+        )
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     try:
         gate = maturity_repo.add_gate(
@@ -278,7 +295,10 @@ def _get_evaluator(request: Request):
 @router.get(
     "/data-products/{product_id}/maturity",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_product),  # the same read rule as the product page
+    ],
 )
 def get_product_maturity(product_id: str, db: DBSessionDep, request: Request):
     """Get current maturity assessment for a data product."""
@@ -292,7 +312,10 @@ def get_product_maturity(product_id: str, db: DBSessionDep, request: Request):
 @router.post(
     "/data-products/{product_id}/maturity/evaluate",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_product),  # the same read rule as the product page
+    ],
 )
 def evaluate_product_maturity(product_id: str, db: DBSessionDep, request: Request):
     """Force re-evaluate maturity for a data product."""
@@ -306,7 +329,10 @@ def evaluate_product_maturity(product_id: str, db: DBSessionDep, request: Reques
 @router.get(
     "/data-products/{product_id}/maturity/history",
     response_model=List[MaturitySnapshotRead],
-    dependencies=[Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_product),  # the same read rule as the product page
+    ],
 )
 def get_product_maturity_history(product_id: str, db: DBSessionDep, limit: int = 50):
     """Get maturity evaluation history for a data product."""
@@ -316,7 +342,10 @@ def get_product_maturity_history(product_id: str, db: DBSessionDep, limit: int =
 @router.get(
     "/data-contracts/{contract_id}/maturity",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_contract),  # the same read rule as the contract list
+    ],
 )
 def get_contract_maturity(contract_id: str, db: DBSessionDep, request: Request):
     """Get current maturity assessment for a data contract."""
@@ -330,7 +359,10 @@ def get_contract_maturity(contract_id: str, db: DBSessionDep, request: Request):
 @router.post(
     "/data-contracts/{contract_id}/maturity/evaluate",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_contract),  # the same read rule as the contract list
+    ],
 )
 def evaluate_contract_maturity(contract_id: str, db: DBSessionDep, request: Request):
     """Force re-evaluate maturity for a data contract."""
@@ -344,7 +376,10 @@ def evaluate_contract_maturity(contract_id: str, db: DBSessionDep, request: Requ
 @router.get(
     "/data-contracts/{contract_id}/maturity/history",
     response_model=List[MaturitySnapshotRead],
-    dependencies=[Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_contract),  # the same read rule as the contract list
+    ],
 )
 def get_contract_maturity_history(contract_id: str, db: DBSessionDep, limit: int = 50):
     """Get maturity evaluation history for a data contract."""

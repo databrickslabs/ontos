@@ -14,3 +14,8 @@ class UserInfo(BaseModel):
 
 # Type alias for the permissions response
 UserPermissions = Dict[str, FeatureAccessLevel]
+
+
+class UserNavigation(BaseModel):
+    """What the current user's menus hide (#1325). Visibility only, never access."""
+    hidden_features: List[str] = []

@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "No es propietario",
+    "notOwnerMessage": "Puede ver este producto, pero no editarlo. Solo el equipo propietario, los miembros de su proyecto, el propietario del borrador o un administrador de productos de datos pueden editarlo."
+  },
   "title": "Productos de Datos",
   "subtitle": "Gestiona tus productos de datos",
   "newProduct": "Nuevo Producto de Datos",
@@ -1183,9 +1187,5 @@
     "colSubscriber": "Suscriptor",
     "colSubscribed": "Suscrito",
     "colReason": "Motivo"
-  },
-  "productAccess": {
-    "notOwnerTitle": "No es propietario",
-    "notOwnerMessage": "Puede ver este producto, pero no editarlo. Solo el equipo propietario, los miembros de su proyecto, el propietario del borrador o un administrador de productos de datos pueden editarlo."
   }
 }

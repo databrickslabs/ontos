@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Non proprietario",
+    "notOwnerMessage": "Puoi visualizzare questo prodotto ma non modificarlo. Solo il team proprietario, i membri del suo progetto, il proprietario della bozza o un amministratore dei prodotti dati possono modificarlo."
+  },
   "title": "Prodotti Dati",
   "subtitle": "Gestisci i tuoi prodotti dati",
   "newProduct": "Nuovo Prodotto Dati",
@@ -1183,9 +1187,5 @@
     "colSubscriber": "Sottoscrittore",
     "colSubscribed": "Sottoscritto",
     "colReason": "Motivo"
-  },
-  "productAccess": {
-    "notOwnerTitle": "Non proprietario",
-    "notOwnerMessage": "Puoi visualizzare questo prodotto ma non modificarlo. Solo il team proprietario, i membri del suo progetto, il proprietario della bozza o un amministratore dei prodotti dati possono modificarlo."
   }
 }

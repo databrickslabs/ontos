@@ -272,9 +272,9 @@ class SearchManager:
         # Project search leaks names the list hides (same feature permission, but
         # the list filters by team-domain membership). Apply the same visibility
         # here so search isn't a side-channel (#919 review).
+        results = self._apply_entity_read_rules(results, auth_manager, effective_permissions, user)
         results = self._apply_project_visibility(results, user)
         results = self._apply_asset_visibility(results, auth_manager, effective_permissions)
-        results = self._apply_entity_read_rules(results, auth_manager, effective_permissions, user)
 
         logger.info(
             f"Search for '{query}' returned {len(results)} results "
@@ -311,9 +311,9 @@ class SearchManager:
             item for item in candidates
             if auth_manager.has_permission(effective_permissions, item.feature_id, FeatureAccessLevel.READ_ONLY)
         ]
+        results = self._apply_entity_read_rules(results, auth_manager, effective_permissions, user)
         results = self._apply_project_visibility(results, user)
         results = self._apply_asset_visibility(results, auth_manager, effective_permissions)
-        results = self._apply_entity_read_rules(results, auth_manager, effective_permissions, user)
         logger.info(
             f"Postgres search for '{query}' returned {len(results)} results "
             f"after permission filtering for user {user.username}."
@@ -366,18 +366,6 @@ class SearchManager:
             if getattr(item, 'type', '') != 'project'
             or ('::' in (item.id or '') and item.id.split('::', 1)[1] in visible)
         ]
-
-    def _apply_entity_read_rules(self, results, auth_manager, effective_permissions, user):
-        """Leave out products and contracts the caller can't read by id (drafts...)."""
-        from src.common.app_state import get_app_state_manager
-        from src.common.search_entity_visibility import apply_entity_read_rules
-        from src.controller.data_contracts_manager import DataContractsManager
-
-        return apply_entity_read_rules(
-            results, auth_manager, effective_permissions, user,
-            contracts_manager=self._manager_of(DataContractsManager),
-            notifications_manager=get_app_state_manager('notifications_manager'),
-        )
 
     @staticmethod
     def asset_of_item(item: SearchIndexItem) -> Optional[str]:
@@ -669,3 +657,15 @@ class SearchManager:
     def get_config(self) -> SearchConfig:
         """Get the current search configuration."""
         return self.config
+
+    def _apply_entity_read_rules(self, results, auth_manager, effective_permissions, user):
+        """Leave out products and contracts the caller can't read by id (drafts...)."""
+        from src.common.app_state import get_app_state_manager
+        from src.common.search_entity_visibility import apply_entity_read_rules
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        return apply_entity_read_rules(
+            results, auth_manager, effective_permissions, user,
+            contracts_manager=self._manager_of(DataContractsManager),
+            notifications_manager=get_app_state_manager('notifications_manager'),
+        )

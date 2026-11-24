@@ -63,6 +63,12 @@ type PrincipalKind = 'user' | 'group';
 interface CommonProps {
   /** Which principal types to accept. Defaults to both. */
   accepts?: PrincipalKind[];
+  /**
+   * When the directory can't be searched (not configured, or the caller may
+   * not use it), suggest the users of the Ontos teams the caller can read
+   * while they type (#1618). Users only; typing any value still works.
+   */
+  suggestKnownUsers?: boolean;
   /** Disables the entire control. */
   disabled?: boolean;
   /** Placeholder shown in the input when no selection exists. */
@@ -72,12 +78,6 @@ interface CommonProps {
   /** Optional aria-label when no surrounding <Label htmlFor=...> exists. */
   'aria-label'?: string;
   className?: string;
-  /**
-   * When the directory can't be searched (not configured, or the caller may
-   * not use it), suggest the users of the Ontos teams the caller can read
-   * while they type (#1618). Users only; typing any value still works.
-   */
-  suggestKnownUsers?: boolean;
 }
 
 type SingleProps = CommonProps & {
@@ -124,11 +124,11 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 export function PrincipalPicker(props: PrincipalPickerProps) {
   const {
     accepts = DEFAULT_ACCEPTS,
+    suggestKnownUsers,
     disabled,
     placeholder,
     className,
     multiple,
-    suggestKnownUsers,
   } = props as PrincipalPickerProps & { multiple?: boolean };
   const { t } = useTranslation('common');
   const inputId = useId();

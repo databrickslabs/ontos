@@ -302,3 +302,30 @@ def test_delivery_service_keeps_the_coded_failure_in_the_direct_result():
     details = results.results[0].details
     assert details["error_code"] == "grant_failed"
     assert "secret detail" not in str(results.to_dict())
+
+
+def test_null_privileges_on_revoke_means_revoke_all():
+    workspace_client = MagicMock()
+    workspace_client.grants.get.return_value = GetPermissionsResponse(
+        privilege_assignments=[
+            PrivilegeAssignment(principal="analyst@example.com", privileges=[Privilege.SELECT])
+        ]
+    )
+    manager = GrantManager(ws_client=workspace_client, settings=MagicMock())
+
+    result = manager.apply_revoke({**_grant_payload(), "privileges": None})
+
+    assert result["success"] is True
+    changes = workspace_client.grants.update.call_args.kwargs["changes"]
+    assert changes[0].remove == [Privilege.SELECT]
+
+
+def test_null_privileges_on_grant_is_a_coded_refusal():
+    workspace_client = MagicMock()
+    manager = GrantManager(ws_client=workspace_client, settings=MagicMock())
+
+    result = manager.apply_grant({**_grant_payload(), "privileges": None})
+
+    assert result["success"] is False
+    assert result["error_code"] == "missing_required_fields"
+    workspace_client.grants.update.assert_not_called()

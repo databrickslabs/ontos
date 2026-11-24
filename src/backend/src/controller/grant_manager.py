@@ -240,7 +240,7 @@ class GrantManager:
             )
         
         principal = data.get("principal")
-        privileges = data.get("privileges", [])
+        privileges = data.get("privileges") or []
         securable_type = data.get("securable_type", "table")
         securable_name = data.get("securable_name")
         
@@ -336,7 +336,7 @@ class GrantManager:
             )
         
         principal = data.get("principal")
-        privileges = data.get("privileges", [])
+        privileges = data.get("privileges") or []
         securable_type = data.get("securable_type", "table")
         securable_name = data.get("securable_name")
         

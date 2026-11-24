@@ -299,6 +299,27 @@
       "pills": "リスト",
       "graph": "グラフ"
     },
+    "filters": {
+      "activeDomains": "絞り込み:",
+      "removeDomain": "フィルターから{{name}}を削除",
+      "focusNotFiltering": "{{name}}はグラフに表示されていますが、絞り込みには使われていません。ノードをクリックするとそのドメインで絞り込めます。",
+      "noDomainFilter": "すべてのドメインの製品を表示中です。グラフでドメインをクリックすると絞り込めます。",
+      "advanced": "詳細フィルター"
+    },
+    "graph": {
+      "rootDomain": "最上位ドメイン"
+    },
+    "trust": {
+      "retiring": "提供終了予定",
+      "preview": "プレビュー",
+      "retiringUseInstead": "提供終了予定です。代わりに{{name}}をご利用ください",
+      "retiringNoReplacement": "提供終了予定(代替先の指定なし)"
+    },
+    "search": {
+      "error": "現在、検索を利用できません。",
+      "clear": "検索をクリア",
+      "searchAllDomains": "すべてのドメインで検索"
+    },
     "exactMatchOnly": "完全一致のみ",
     "selectDomainForGraph": "ドメインを選択して階層を表示します。",
     "domainInfo": {

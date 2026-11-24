@@ -299,6 +299,27 @@
       "pills": "Liste",
       "graph": "Graph"
     },
+    "filters": {
+      "activeDomains": "Gefiltert nach:",
+      "removeDomain": "{{name}} aus dem Filter entfernen",
+      "focusNotFiltering": "{{name}} wird im Graphen angezeigt, filtert aber nicht. Klicken Sie auf einen Knoten, um danach zu filtern.",
+      "noDomainFilter": "Produkte aller Domänen werden angezeigt. Klicken Sie im Graphen auf eine Domäne, um zu filtern.",
+      "advanced": "Erweiterte Filter"
+    },
+    "graph": {
+      "rootDomain": "Domäne der obersten Ebene"
+    },
+    "trust": {
+      "retiring": "Wird eingestellt",
+      "preview": "Vorschau",
+      "retiringUseInstead": "Wird eingestellt, stattdessen {{name}} verwenden",
+      "retiringNoReplacement": "Wird eingestellt, kein Ersatz genannt"
+    },
+    "search": {
+      "error": "Die Suche ist derzeit nicht verfügbar.",
+      "clear": "Suche zurücksetzen",
+      "searchAllDomains": "In allen Domänen suchen"
+    },
     "exactMatchOnly": "Nur exakte Übereinstimmung",
     "selectDomainForGraph": "Wählen Sie eine Domain, um ihre Hierarchie anzuzeigen.",
     "domainInfo": {

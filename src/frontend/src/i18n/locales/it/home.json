@@ -299,6 +299,27 @@
       "pills": "Lista",
       "graph": "Grafo"
     },
+    "filters": {
+      "activeDomains": "Filtrato per:",
+      "removeDomain": "Rimuovi {{name}} dal filtro",
+      "focusNotFiltering": "{{name}} è mostrato nel grafo ma non filtra. Fai clic su un nodo per filtrare con esso.",
+      "noDomainFilter": "Prodotti di tutti i domini. Fai clic su un dominio nel grafo per filtrare.",
+      "advanced": "Filtri avanzati"
+    },
+    "graph": {
+      "rootDomain": "Dominio di primo livello"
+    },
+    "trust": {
+      "retiring": "In dismissione",
+      "preview": "Anteprima",
+      "retiringUseInstead": "In dismissione, usa {{name}}",
+      "retiringNoReplacement": "In dismissione, nessun sostituto indicato"
+    },
+    "search": {
+      "error": "La ricerca non è disponibile al momento.",
+      "clear": "Cancella ricerca",
+      "searchAllDomains": "Cerca in tutti i domini"
+    },
     "exactMatchOnly": "Solo corrispondenza esatta",
     "selectDomainForGraph": "Seleziona un dominio per visualizzare la sua gerarchia.",
     "domainInfo": {

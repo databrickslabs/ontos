@@ -299,6 +299,27 @@
       "pills": "Lijst",
       "graph": "Grafiek"
     },
+    "filters": {
+      "activeDomains": "Gefilterd op:",
+      "removeDomain": "{{name}} uit het filter verwijderen",
+      "focusNotFiltering": "{{name}} staat in de grafiek maar filtert niet. Klik op een knooppunt om erop te filteren.",
+      "noDomainFilter": "Producten van alle domeinen worden getoond. Klik op een domein in de grafiek om te filteren.",
+      "advanced": "Geavanceerde filters"
+    },
+    "graph": {
+      "rootDomain": "Domein op hoogste niveau"
+    },
+    "trust": {
+      "retiring": "Wordt uitgefaseerd",
+      "preview": "Voorbeeld",
+      "retiringUseInstead": "Wordt uitgefaseerd, gebruik {{name}}",
+      "retiringNoReplacement": "Wordt uitgefaseerd, geen vervanger genoemd"
+    },
+    "search": {
+      "error": "Zoeken is momenteel niet beschikbaar.",
+      "clear": "Zoekopdracht wissen",
+      "searchAllDomains": "Zoeken in alle domeinen"
+    },
     "exactMatchOnly": "Alleen exacte overeenkomst",
     "selectDomainForGraph": "Selecteer een domein om de hiërarchie te bekijken.",
     "domainInfo": {

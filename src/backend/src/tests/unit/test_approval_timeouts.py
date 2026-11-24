@@ -207,6 +207,23 @@ class TestSchedulerLooksForOverdueApprovals:
 
         assert len(_reminders(db_session)) == 3
 
+    def test_a_request_in_a_new_slot_looks_even_without_a_change_check(self, db_session):
+        scheduler = WorkflowScheduler(_Sessions(db_session), instance_id='a')
+        scheduler.run_once(ASKED)
+        _paused(db_session)
+        db_session.commit()
+        later = ASKED + timedelta(days=4)
+        scheduler._clock = lambda: later
+        scheduler._last_look = later  # a change check just ran: none is due now
+
+        scheduler.note_database_activity()
+        scheduler.run_once(later)
+
+        assert len(_reminders(db_session)) == 3
+        # Same slot: a later request doesn't look again
+        scheduler.note_database_activity()
+        assert scheduler._timeouts_requested is False
+
     def test_can_be_turned_off(self, db_session):
         _paused(db_session)
         db_session.commit()

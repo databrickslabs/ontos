@@ -3,7 +3,9 @@
  *
  * Containment relationships (hasTable, hasColumn, etc.) nest children inside
  * parent cards. Only root-level entities get positioned in columns.
- * Infrastructure edges (belongsToSystem) become metadata, not visual edges.
+ * Infrastructure edges (belongsToSystem) become a badge on the asset card, unless
+ * the System node itself is in the graph: then it is drawn as a source (or sink)
+ * card like any other lineage node.
  *
  * Flow edges preserve child-level source/target handles so that edges can
  * connect to specific column rows within ERD-style cards.
@@ -195,13 +197,18 @@ export function layoutLineageGraph(
   // Infrastructure edges (belongsToSystem, deployedOnSystem) are treated as
   // containment when they touch the center entity — e.g., when viewing a System,
   // assets that "belong to" it become nested children. Otherwise they become
-  // metadata badges.
+  // metadata badges. When the API returned the System node itself (it is part
+  // of the traversed path), the edge is a flow edge and the System is drawn.
 
   const centerNode = nodeMap.get(centerId);
   const centerIsSystem = centerNode?.entity_type === 'System';
   const layerMode = graph.nodes.every((n) => !!n.layer);
   const sameLayer = (a: string, b: string) =>
     !layerMode || nodeMap.get(a)?.layer === nodeMap.get(b)?.layer;
+
+  // A System node other than the center, present in the returned graph
+  const isDrawnSystem = (id: string) =>
+    id !== centerId && nodeMap.get(id)?.entity_type === 'System';
 
   const containmentEdges: LineageGraphEdge[] = [];
   const infraEdges: LineageGraphEdge[] = [];
@@ -222,6 +229,8 @@ export function layoutLineageGraph(
           source: e.target,  // System = parent
           target: e.source,  // entity = child
         });
+      } else if (isDrawnSystem(e.source) || isDrawnSystem(e.target)) {
+        flowEdges.push(orient(e));
       } else {
         infraEdges.push(e);
       }
@@ -267,9 +276,6 @@ export function layoutLineageGraph(
   const rootIds = new Set<string>();
   for (const n of graph.nodes) {
     if (!parentOf.has(n.id)) {
-      // Skip System nodes unless the center IS a System
-      const isSystemNode = n.entity_type === 'System';
-      if (isSystemNode && n.id !== centerId) continue;
       rootIds.add(n.id);
     }
   }

@@ -106,6 +106,56 @@ describe('layoutLineageGraph (detail level vs. selected rows)', () => {
   });
 });
 
+describe('layoutLineageGraph (System nodes)', () => {
+  // Upstream path of a table: table <- table <- system (stored asset -> system, against the flow)
+  const sysGraph = (layered: boolean): LineageGraph => {
+    const n = (id: string) => {
+      const base = node(id, 'physical');
+      return layered ? base : { ...base, layer: undefined };
+    };
+    return {
+      center_entity_type: 'Table',
+      center_entity_id: 't',
+      nodes: [n('Table:t'), n('Table:u'), n('System:erp'), n('System:historian')],
+      edges: [
+        edge('Table:t', 'Table:u', 'derivedFrom', true),
+        edge('Table:u', 'System:erp', 'belongsToSystem', true),
+        edge('Table:u', 'System:historian', 'someSourceRel', true),
+      ],
+    };
+  };
+
+  for (const layered of [true, false]) {
+    it(`draws System nodes as upstream sources (${layered ? 'layer' : 'column'} mode)`, () => {
+      const l = layoutLineageGraph(sysGraph(layered));
+      const x = (id: string) => l.groups.find((g) => g.id === id)?.x;
+      expect(l.groups.map((g) => g.id).sort()).toEqual(
+        ['System:erp', 'System:historian', 'Table:t', 'Table:u'],
+      );
+      expect(x('System:erp')!).toBeLessThan(x('Table:u')!);
+      expect(x('Table:u')!).toBeLessThan(x('Table:t')!);
+      const pairs = l.edges.map((e) => `${e.edge.source}>${e.edge.target}`).sort();
+      expect(pairs).toEqual([
+        'Table:t>Table:u',
+        'Table:u>System:erp',
+        'Table:u>System:historian',
+      ]);
+      expect(l.groups.find((g) => g.id === 'Table:u')!.system).toBeUndefined();
+    });
+  }
+
+  it('still nests assets inside a System that is the center', () => {
+    const l = layoutLineageGraph({
+      center_entity_type: 'System',
+      center_entity_id: 'erp',
+      nodes: [node('System:erp', 'physical'), node('Table:a', 'physical')],
+      edges: [edge('Table:a', 'System:erp', 'belongsToSystem', true)],
+    });
+    expect(l.groups.map((g) => g.id)).toEqual(['System:erp']);
+    expect(l.parentOf.get('Table:a')).toBe('System:erp');
+  });
+});
+
 function defaultsWith(detail: LineageDetail) {
   return { ...DEFAULT_CONFIG, detail };
 }

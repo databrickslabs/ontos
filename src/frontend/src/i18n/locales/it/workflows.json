@@ -410,8 +410,13 @@
       "waitingForApprovers_other": "In attesa di altri {{count}} approvatori."
     },
     "errors": {
+      "access_request_already_decided": "Questa richiesta di accesso è già stata decisa.",
+      "access_terms_duration_not_allowed": "{{days}} giorni non è una durata consentita (consentite: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Puoi concedere al massimo i {{requested}} giorni richiesti.",
+      "access_terms_exceed_requested_permission": "Puoi concedere al massimo il livello richiesto ({{requested}}).",
       "access_terms_invalid_duration": "La durata deve essere compresa tra {{min}} e {{max}} giorni.",
       "access_terms_invalid_permission": "Questo livello di autorizzazione non può essere concesso.",
+      "own_access_request_approval": "Non puoi decidere la tua richiesta di accesso.",
       "own_owner_approval": "Questa approvazione spetta ai proprietari; non puoi approvare la tua stessa richiesta.",
       "own_change_request_approval": "Non puoi approvare la tua stessa richiesta di modifica.",
       "approval_already_decided": "Hai già deciso su questa approvazione.",
@@ -896,6 +901,7 @@
       "rejectResumeSuccess": "Workflow rifiutato e ripreso",
       "rejectFailed": "Impossibile rifiutare il workflow",
       "forceDecisionRequireAll": "Solo gli approvatori possono decidere questo passaggio (tutti devono decidere). Puoi invece annullare l'esecuzione.",
+      "forceDecisionAccessRequest": "Le richieste di accesso sono decise dai loro approvatori, non forzate da qui.",
       "noChanges": "Nessuna modifica",
       "allAlreadyEnabled": "Tutti i workflow selezionati sono già abilitati.",
       "allAlreadyDisabled": "Tutti i workflow selezionati sono già disabilitati.",

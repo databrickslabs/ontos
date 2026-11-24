@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import i18n from '@/i18n/config';
-import WorkflowApprovalResponseDialog from './workflow-approval-response-dialog';
+import WorkflowApprovalResponseDialog, {
+  grantableLevels,
+} from './workflow-approval-response-dialog';
 
 const api = vi.hoisted(() => ({
   get: async () => ({ data: null }),
@@ -60,5 +62,17 @@ describe('WorkflowApprovalResponseDialog permission level', () => {
     expect(api.post.mock.calls[0][1]).toEqual(expect.objectContaining({
       approved: true, permission_level: 'READ', granted_duration_days: 30,
     }));
+  });
+
+  it('offers only the requested level or a narrower one', () => {
+    expect(grantableLevels('READ')).toEqual(['READ']);
+    expect(grantableLevels('WRITE')).toEqual(['READ', 'WRITE']);
+    expect(grantableLevels('MANAGE')).toEqual(['READ', 'WRITE', 'MANAGE']);
+    expect(grantableLevels('CAN_USE')).toEqual(['READ', 'WRITE', 'MANAGE']);
+  });
+
+  it('caps the duration at the requested one', async () => {
+    renderDialog();
+    expect(await screen.findByLabelText(/Duration/)).toHaveAttribute('max', '30');
   });
 });

@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.access_grants import (
@@ -44,6 +45,23 @@ from src.repositories.access_grants_repository import (
 )
 
 logger = get_logger(__name__)
+
+# Access levels from the narrowest; an approver may grant the requested one or a narrower one
+PERMISSION_ORDER = ('READ', 'WRITE', 'MANAGE')
+
+
+class AccessRequestAlreadyDecidedError(CodedValueError):
+    """The access request was decided meanwhile (e.g. on the Access Grants page)."""
+
+    code = 'access_request_already_decided'
+
+
+class AccessTermsError(CodedValueError):
+    """Approval terms that can't be granted for this request."""
+
+    def __init__(self, code: str, message: str, **params):
+        super().__init__(message, **params)
+        self.code = code
 
 
 class AccessGrantsManager:
@@ -305,78 +323,20 @@ class AccessGrantsManager:
         Returns:
             Tuple of (updated request, created grant if approved)
         """
-        request = self._request_repo.get_by_id(db, payload.request_id)
+        # Locked until the commit: two decisions can't both find it pending (no-op on SQLite)
+        request = self.lock_request(db, payload.request_id)
         if not request:
             raise ValueError(f"Request {payload.request_id} not found")
         
         if request.status != AccessGrantRequestStatus.PENDING.value:
             raise ValueError(f"Request {payload.request_id} is not pending (status: {request.status})")
-        
-        grant = None
-        
-        if payload.approved:
-            # Create the grant
-            duration_days = payload.granted_duration_days or request.requested_duration_days
-            permission_level = payload.permission_level.value if payload.permission_level else request.permission_level
-            expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
-            
-            grant_db = self._grant_repo.create(
-                db,
-                request_id=request.id,
-                grantee_email=request.requester_email,
-                entity_type=request.entity_type,
-                entity_id=request.entity_id,
-                entity_name=request.entity_name,
-                permission_level=permission_level,
-                expires_at=expires_at,
-                granted_by=admin_email
-            )
-            
-            # Update request status
-            self._request_repo.update_status(
-                db,
-                request.id,
-                status=AccessGrantRequestStatus.APPROVED.value,
-                handled_by=admin_email,
-                admin_message=payload.message
-            )
-            
-            grant = AccessGrantResponse.model_validate(grant_db)
-            grant.days_until_expiry = grant_db.days_until_expiry
-            grant.is_active = grant_db.is_active
-            
-            # Notify requester of approval
-            if notify_requester:
-                self._notify_requester_decision(
-                    db,
-                    request,
-                    approved=True,
-                    message=payload.message,
-                    expires_at=expires_at
-                )
-            
-            logger.info(
-                f"Approved access request {request.id}: {request.requester_email} "
-                f"granted {permission_level} access to {request.entity_type}/{request.entity_id} "
-                f"for {duration_days} days"
-            )
-        else:
-            # Deny the request
-            self._request_repo.update_status(
-                db,
-                request.id,
-                status=AccessGrantRequestStatus.DENIED.value,
-                handled_by=admin_email,
-                admin_message=payload.message
-            )
-            
-            # Notify requester of denial
-            if notify_requester:
-                self._notify_requester_decision(
-                    db, request, approved=False, message=payload.message,
-                )
-            
-            logger.info(f"Denied access request {request.id}")
+
+        grant = self._decide(
+            db, request, admin_email, payload.approved,
+            payload.granted_duration_days,
+            payload.permission_level.value if payload.permission_level else None,
+            payload.message, notify_requester=notify_requester,
+        )
 
         db.commit()
         # After the commit: the handle path commits, and rolls back on an error
@@ -388,44 +348,156 @@ class AccessGrantsManager:
         
         return request_response, grant
     
+    def lock_request(self, db: Session, request_id: Any) -> Optional[AccessGrantRequestDb]:
+        """The request, its row locked until the transaction ends (``FOR UPDATE``; SQLite
+        ignores it). None when the id is not a request's."""
+        try:
+            key = request_id if isinstance(request_id, uuid.UUID) else uuid.UUID(str(request_id))
+        except ValueError:
+            return None
+        return self.locked_request_query(db, key).first()
+
+    @staticmethod
+    def locked_request_query(db: Session, request_id: uuid.UUID):
+        """``SELECT ... FOR UPDATE`` of one request (SQLite leaves ``FOR UPDATE`` out)."""
+        return db.query(AccessGrantRequestDb).filter(
+            AccessGrantRequestDb.id == request_id
+        ).with_for_update()
+
+    def check_terms(
+        self,
+        db: Session,
+        request: AccessGrantRequestDb,
+        granted_duration_days: Optional[int],
+        permission_level: Optional[str],
+    ) -> Tuple[int, str]:
+        """The terms an approver grants: (days, level), the requested ones when not given.
+
+        An approver may only narrow the request: a level up to the requested one, a
+        duration up to the requested one and allowed for the entity type (the check of
+        request creation). Raises ``AccessTermsError`` otherwise.
+        """
+        days = request.requested_duration_days if granted_duration_days is None else (
+            granted_duration_days)
+        level = permission_level or request.permission_level
+        if isinstance(days, bool) or not isinstance(days, int) or days < 1:
+            raise AccessTermsError(
+                'access_terms_invalid_duration', 'The duration must be at least 1 day.',
+                min=1, max=request.requested_duration_days,
+            )
+        if days > request.requested_duration_days:
+            raise AccessTermsError(
+                'access_terms_exceed_requested_duration',
+                'The duration can be at most the requested one.',
+                requested=request.requested_duration_days,
+            )
+        config = self._config_repo.get_by_entity_type(db, request.entity_type)
+        if config and not config.is_duration_allowed(days):
+            raise AccessTermsError(
+                'access_terms_duration_not_allowed', 'This duration is not allowed.',
+                days=days, allowed=config.get_duration_options(),
+            )
+        if level not in PERMISSION_ORDER:
+            raise AccessTermsError(
+                'access_terms_invalid_permission', 'Unknown permission level.',
+                allowed=list(PERMISSION_ORDER),
+            )
+        requested = request.permission_level
+        if requested in PERMISSION_ORDER and (
+            PERMISSION_ORDER.index(level) > PERMISSION_ORDER.index(requested)
+        ):
+            raise AccessTermsError(
+                'access_terms_exceed_requested_permission',
+                'The permission level can be at most the requested one.',
+                requested=requested,
+            )
+        return days, level
+
     def apply_workflow_decision(
         self,
         db: Session,
-        request_id: str,
+        request: AccessGrantRequestDb,
         *,
         approved: bool,
         decided_by: str,
-        granted_duration_days: Optional[int] = None,
-        permission_level: Optional[str] = None,
+        terms: Optional[Tuple[int, str]] = None,
         message: Optional[str] = None,
-    ) -> Optional[AccessGrantRequestResponse]:
+    ) -> None:
         """Record an approval workflow's decision on the access request it was started for.
 
         An access request fires ``on_request_access``; its approval step is decided through
         ``/api/workflows/handle-approval``, which before this left the request pending, with
-        no grant (#1615). Approved: the grant with the approver's terms (else the requested
-        ones); rejected: denied. The workflow notifies the requester itself.
-
-        Returns None when there is nothing to record: the request doesn't exist or another
-        decision (e.g. a second access workflow, or the Access Grants page) handled it.
+        no grant (#1615). Approved: the grant with the checked ``terms`` (``check_terms``);
+        rejected: denied. ``request`` is the row the caller locked (``lock_request``) and
+        found pending. Not committed: the caller commits with the rest of the decision. The
+        workflow notifies the requester itself.
         """
+        days, level = terms if (approved and terms) else (None, None)
+        self._decide(db, request, decided_by, approved, days, level, message,
+                     notify_requester=False)
+
+    def _decide(
+        self,
+        db: Session,
+        request: AccessGrantRequestDb,
+        decided_by: str,
+        approved: bool,
+        granted_duration_days: Optional[int],
+        permission_level: Optional[str],
+        message: Optional[str],
+        *,
+        notify_requester: bool,
+    ) -> Optional[AccessGrantResponse]:
+        """Approve (with a grant) or deny a pending request; flushed, not committed."""
+        if not approved:
+            self._request_repo.update_status(
+                db, request.id, status=AccessGrantRequestStatus.DENIED.value,
+                handled_by=decided_by, admin_message=message,
+            )
+            if notify_requester:
+                self._notify_requester_decision(db, request, approved=False, message=message)
+            logger.info(f"Denied access request {request.id}")
+            return None
+        duration_days = granted_duration_days or request.requested_duration_days
+        permission_level = permission_level or request.permission_level
+        expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
+        grant_db = self._grant_repo.create(
+            db,
+            request_id=request.id,
+            grantee_email=request.requester_email,
+            entity_type=request.entity_type,
+            entity_id=request.entity_id,
+            entity_name=request.entity_name,
+            permission_level=permission_level,
+            expires_at=expires_at,
+            granted_by=decided_by,
+        )
+        self._request_repo.update_status(
+            db, request.id, status=AccessGrantRequestStatus.APPROVED.value,
+            handled_by=decided_by, admin_message=message,
+        )
+        grant = AccessGrantResponse.model_validate(grant_db)
+        grant.days_until_expiry = grant_db.days_until_expiry
+        grant.is_active = grant_db.is_active
+        if notify_requester:
+            self._notify_requester_decision(
+                db, request, approved=True, message=message, expires_at=expires_at,
+            )
+        logger.info(
+            f"Approved access request {request.id}: {request.requester_email} "
+            f"granted {permission_level} access to {request.entity_type}/{request.entity_id} "
+            f"for {duration_days} days"
+        )
+        return grant
+
+    def mark_request_notifications_handled(self, db: Session, request_id: Any) -> None:
+        """Public form of ``_mark_request_notifications_handled`` for a decided request."""
         try:
             request = self._request_repo.get_by_id(db, uuid.UUID(str(request_id)))
         except ValueError:
-            return None
-        if request is None or request.status != AccessGrantRequestStatus.PENDING.value:
-            return None
-        payload = AccessGrantHandlePayload(
-            request_id=request.id,
-            approved=approved,
-            granted_duration_days=(
-                (granted_duration_days or request.requested_duration_days) if approved else None
-            ),
-            permission_level=(permission_level or request.permission_level) if approved else None,
-            message=message,
-        )
-        response, _ = self.handle_request(db, decided_by, payload, notify_requester=False)
-        return response
+            return
+        if request is not None:
+            self._mark_request_notifications_handled(db, request)
 
     def get_pending_requests_for_entity(
         self,

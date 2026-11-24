@@ -1375,6 +1375,18 @@ async def resume_workflow_execution(
         
         user_email = current_user.email if current_user else None
 
+        # An access request is decided by its approvers through handle-approval, which
+        # checks the requester, the terms and the request's state and records the grant
+        if _access_request_of_execution(db, execution_id):
+            raise HTTPException(
+                status_code=403,
+                # code: translated by the UI (workflows:view.messages.*)
+                detail={
+                    'code': 'access_request_resume_refused',
+                    'message': "Access requests are decided by their approvers.",
+                },
+            )
+
         # require_all (#1119): only the step's approvers decide it, through
         # handle-approval; an admin may cancel the execution instead
         if executor.paused_at_required_approval(execution_id):
@@ -1611,10 +1623,10 @@ def _is_own_definition_change_request(
     return bool(requester) and requester.lower() in caller
 
 
-def _access_request_of_execution(db: Session, execution_id: str) -> Optional[str]:
-    """The access request an execution was started for (``on_request_access``), if any.
+def _access_trigger(db: Session, execution_id: str) -> Optional[Dict[str, Any]]:
+    """The trigger context of an execution started for an access request, if it is one.
 
-    The trigger runs on the proxy entity ``access_grant`` whose id is the request's id.
+    ``on_request_access`` runs on the proxy entity ``access_grant`` whose id is the request's.
     """
     from src.db_models.process_workflows import WorkflowExecutionDb
 
@@ -1625,78 +1637,118 @@ def _access_request_of_execution(db: Session, execution_id: str) -> Optional[str
         context = json.loads(execution.trigger_context) or {}
     except (TypeError, ValueError):
         return None
+    if not isinstance(context, dict):
+        return None
     if str(context.get('entity_type') or '').lower() != EntityType.ACCESS_GRANT.value:
+        return None
+    return context
+
+
+def _access_request_of_execution(db: Session, execution_id: str) -> Optional[str]:
+    """The id of the access request an execution was started for, if any."""
+    context = _access_trigger(db, execution_id)
+    if context is None:
         return None
     request_id = (context.get('entity_data') or {}).get('request_id') or context.get('entity_id')
     return str(request_id) if request_id else None
 
 
-def _access_terms(body: Dict[str, Any]) -> tuple:
-    """The approver's terms for an access request: (duration in days, permission level).
+def _is_own_access_request(db: Session, execution_id: str, user_info: UserInfo) -> bool:
+    """Whether ``user_info`` made the access request the execution decides.
 
-    Either may be None (the requested one is kept). Checked before the decision is
-    recorded, so terms that can't be granted don't approve the workflow.
+    A requester never decides their own access request, whatever the approvers are
+    (a role, group or email that includes them).
     """
-    from src.models.access_grants import PermissionLevel
+    context = _access_trigger(db, execution_id)
+    requester = (context or {}).get('user_email')
+    if not requester:
+        return False
+    caller = {(user_info.email or '').lower(), (user_info.username or '').lower()} - {''}
+    return str(requester).lower() in caller
 
-    days = body.get('granted_duration_days')
-    level = body.get('permission_level')
-    if days is not None and (
-        isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365
-    ):
+
+def _access_grants_manager(request: Request, notifications_manager: NotificationsManager):
+    from src.controller.access_grants_manager import AccessGrantsManager
+
+    return getattr(request.app.state, 'access_grants_manager', None) or (
+        AccessGrantsManager(notifications_manager=notifications_manager)
+    )
+
+
+def _lock_pending_access_request(db: Session, manager: Any, request_id: str) -> Any:
+    """The access request, locked until the decision's commit; 409 when it was decided
+    meanwhile (e.g. on the Access Grants page), before the workflow state changes."""
+    from src.db_models.access_grants import AccessGrantRequestStatus
+
+    row = manager.lock_request(db, request_id)
+    if row is None or row.status != AccessGrantRequestStatus.PENDING.value:
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             # code: translated by the UI (workflows:approvalResponse.errors.*)
             detail={
-                'code': 'access_terms_invalid_duration',
-                'message': 'The duration must be between 1 and 365 days.',
-                'params': {'min': 1, 'max': 365},
+                'code': 'access_request_already_decided',
+                'message': 'This access request has already been decided.',
+                'params': {'status': row.status if row is not None else None},
             },
         )
-    if level is not None and level not in {p.value for p in PermissionLevel}:
+    return row
+
+
+def _checked_access_terms(db: Session, manager: Any, row: Any, body: Dict[str, Any]) -> tuple:
+    """The approver's terms (days, level), checked: they may only narrow the request.
+
+    Coded 400 (``access_terms_*``) otherwise. Only for an approval: a rejection grants
+    nothing, so its terms are ignored.
+    """
+    from src.controller.access_grants_manager import AccessTermsError
+
+    try:
+        return manager.check_terms(
+            db, row, body.get('granted_duration_days'), body.get('permission_level'),
+        )
+    except AccessTermsError as e:
         raise HTTPException(
             status_code=400,
-            detail={
-                'code': 'access_terms_invalid_permission',
-                'message': 'Unknown permission level.',
-                'params': {'allowed': [p.value for p in PermissionLevel]},
-            },
+            detail={'code': e.code, 'message': str(e), 'params': e.params},
         )
-    return days, level
 
 
 def _record_access_decision(
-    request: Request, db: Session, notifications_manager: NotificationsManager,
-    request_id: str, approved: bool, status: Any, decided_by: Optional[str],
-    terms: tuple, message: Optional[str],
-) -> None:
-    """Carry an access workflow's outcome to its access request (#1615).
+    db: Session, manager: Any, row: Any, approved: bool, status: Any,
+    decided_by: Optional[str], terms: Optional[tuple], message: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Carry an access workflow's outcome to its access request (#1615); the applied terms.
 
     When the execution has ended: approved and succeeded grants the access with the
-    approver's terms; rejected denies it. An execution paused at a further step, or
-    approved but failed later, leaves the request pending. Best effort, after the
-    decision's commit: a failure here is logged, the decision stays recorded.
+    checked terms; rejected denies it. An execution paused at a further step, or approved
+    but failed later, leaves the request pending (None). In the route's transaction, which
+    holds the request's lock; a failure rolls back only this part (a savepoint) and is
+    logged. The workflow's own step commits run in the executor's session first, so the
+    two can't share one transaction.
     """
-    from src.controller.access_grants_manager import AccessGrantsManager
     from src.models.process_workflows import ExecutionStatus
 
     status = getattr(status, 'value', status)
     if status == ExecutionStatus.PAUSED.value or (
         approved and status != ExecutionStatus.SUCCEEDED.value
     ):
-        return
-    days, level = terms
+        return None
     try:
-        manager = getattr(request.app.state, 'access_grants_manager', None) or (
-            AccessGrantsManager(notifications_manager=notifications_manager)
-        )
-        manager.apply_workflow_decision(
-            db, request_id, approved=approved, decided_by=decided_by or 'workflow',
-            granted_duration_days=days, permission_level=level, message=message,
-        )
+        with db.begin_nested():
+            manager.apply_workflow_decision(
+                db, row, approved=approved, decided_by=decided_by or 'workflow',
+                terms=terms, message=message,
+            )
     except Exception:
-        db.rollback()
-        logger.exception("Failed to record the workflow decision on access request %s", request_id)
+        logger.exception("Failed to record the workflow decision on access request %s", row.id)
+        return None
+    if not approved:
+        return {'access_request': str(row.id), 'decision': 'denied'}
+    days, level = terms
+    return {
+        'access_request': str(row.id), 'decision': 'approved',
+        'granted_duration_days': days, 'permission_level': level,
+    }
 
 
 def _assert_caller_authorized_for_execution(
@@ -1759,6 +1811,15 @@ def _assert_caller_authorized_for_execution(
             detail={
                 'code': 'own_change_request_approval',
                 'message': "You can't approve your own change request.",
+            },
+        )
+    if not for_read and _is_own_access_request(db, execution_id, user_info):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'own_access_request_approval',
+                'message': "You can't decide your own access request.",
             },
         )
     if _is_own_owner_approval(db, execution_id, pending_step, user_info):
@@ -2099,9 +2160,15 @@ async def handle_workflow_approval(
             user_info=current_user,
         )
 
-        # An access request's approval: the approver's terms are checked up front
+        # An access request: still pending (locked until the commit) and, to approve it,
+        # terms that only narrow it; checked before the workflow state changes
         access_request_id = _access_request_of_execution(db, execution_id)
-        access_terms = _access_terms(body) if access_request_id else (None, None)
+        access_manager = access_row = access_terms = None
+        if access_request_id:
+            access_manager = _access_grants_manager(request, notifications_manager)
+            access_row = _lock_pending_access_request(db, access_manager, access_request_id)
+            if approved:
+                access_terms = _checked_access_terms(db, access_manager, access_row, body)
 
         # require_all (#1119): each resolved approver decides once (a user for
         # themselves, any one member for a group or role). The execution stays
@@ -2176,6 +2243,13 @@ async def handle_workflow_approval(
                 decider=current_user, decides_for=decides_for, open_ids=open_before,
             )
 
+        access_decision = None
+        if access_row is not None:
+            access_decision = _record_access_decision(
+                db, access_manager, access_row, bool(approved), result.status,
+                user_email, access_terms, message,
+            )
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -2183,16 +2257,19 @@ async def handle_workflow_approval(
             feature='process-workflows',
             action='HANDLE_APPROVAL',
             success=True,
-            details={'execution_id': execution_id, 'approved': approved}
+            details={
+                'execution_id': execution_id, 'approved': approved,
+                **({'access_grant': access_decision} if access_decision else {}),
+            },
         )
-        
-        db.commit()
 
-        if access_request_id:
-            _record_access_decision(
-                request, db, notifications_manager, access_request_id, bool(approved),
-                result.status, user_email, access_terms, message,
-            )
+        db.commit()
+        if access_decision:
+            try:
+                access_manager.mark_request_notifications_handled(db, access_row.id)
+            except Exception:
+                logger.warning("Could not mark the access request's notifications handled",
+                               exc_info=True)
 
         logger.info(f"Workflow approval handled for execution {execution_id}: {'approved' if approved else 'rejected'}")
         

@@ -31,6 +31,12 @@ import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 /** Permission levels of an access grant (backend ``PermissionLevel``). */
 const ACCESS_PERMISSION_LEVELS = ['READ', 'WRITE', 'MANAGE'] as const;
 
+/** The levels an approver may grant: the requested one or a narrower one. */
+export function grantableLevels(requested?: string): string[] {
+  const index = ACCESS_PERMISSION_LEVELS.indexOf(requested as never);
+  return index < 0 ? [...ACCESS_PERMISSION_LEVELS] : ACCESS_PERMISSION_LEVELS.slice(0, index + 1);
+}
+
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
   workflow_id: string;
@@ -414,7 +420,7 @@ export default function WorkflowApprovalResponseDialog({
                       id="granted-days"
                       type="number"
                       min={1}
-                      max={365}
+                      max={payload.requested_duration_days ?? 365}
                       value={grantedDays}
                       onChange={(e) => setGrantedDays(e.target.value === '' ? '' : Number(e.target.value))}
                       disabled={submitting}
@@ -432,7 +438,7 @@ export default function WorkflowApprovalResponseDialog({
                       <SelectContent>
                         {/* The access request's levels (READ / WRITE / MANAGE): the
                             requested one must be an option to show selected (#1615) */}
-                        {ACCESS_PERMISSION_LEVELS.map((level) => (
+                        {grantableLevels(payload.permission_level).map((level) => (
                           <SelectItem key={level} value={level}>
                             {t(`access-grants:permissionOptions.${level}`)}
                           </SelectItem>

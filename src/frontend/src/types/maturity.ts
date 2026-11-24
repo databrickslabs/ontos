@@ -34,6 +34,8 @@ export interface GateResult {
   message_params?: Record<string, unknown> | null;
   /** False when the rule reads fields that couldn't be loaded; passed is then false too */
   evaluated?: boolean;
+  /** The gate policy's own failure text, set on a failed gate */
+  failure_message?: string | null;
 }
 
 export interface MaturityNotice {

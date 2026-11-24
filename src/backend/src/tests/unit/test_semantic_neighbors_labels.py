@@ -52,3 +52,29 @@ def test_neighbors_literal_has_no_labels(manager):
     items = manager.neighbors(EX + "Root")
     lit = next(i for i in items if i["predicate"] == str(SKOS.definition))
     assert lit["displayLabels"] == {"prefLabel": {}, "rdfsLabel": {}}
+
+
+def test_collect_label_maps_is_deterministic_per_language():
+    from src.controller.semantic_models_manager import collect_label_maps
+
+    node = URIRef(EX + "Thing")
+    for order in (("b", "a", "c"), ("c", "b", "a")):
+        g = Graph()
+        for v in order:
+            g.add((node, SKOS.prefLabel, Literal(v, lang="en")))
+        assert collect_label_maps(g, node)["prefLabel"] == {"en": "a"}
+
+
+def test_concept_details_keep_pref_and_rdfs_labels_apart(manager):
+    from rdflib import ConjunctiveGraph
+
+    cg = ConjunctiveGraph()
+    ctx = cg.get_context(URIRef("urn:ctx:test"))
+    c = URIRef(EX + "Thing")
+    ctx.add((c, RDF.type, URIRef("http://www.w3.org/2002/07/owl#Class")))
+    ctx.add((c, SKOS.prefLabel, Literal("PrefEN", lang="en")))
+    ctx.add((c, RDFS.label, Literal("RdfsPT", lang="pt")))
+    manager._graph = cg
+    concept = manager.get_concept_details(EX + "Thing")
+    assert concept.label_maps == {"prefLabel": {"en": "PrefEN"}, "rdfsLabel": {"pt": "RdfsPT"}}
+    assert concept.labels == {"en": "PrefEN", "pt": "RdfsPT"}

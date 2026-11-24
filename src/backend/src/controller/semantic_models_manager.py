@@ -241,6 +241,32 @@ class ConceptNameIndex:
         return sorted(self._labels.get(needle) or self._local_names.get(needle) or ())
 
 
+def collect_label_maps(graph: Any, node: Any) -> Dict[str, Dict[str, str]]:
+    """Language-keyed skos:prefLabel / rdfs:label maps of a resource, kept apart.
+
+    When one language has several literals of the same kind, the smallest value
+    wins so the result does not depend on graph iteration order.
+    """
+    maps: Dict[str, Dict[str, str]] = {}
+    for name, pred in (('prefLabel', SKOS.prefLabel), ('rdfsLabel', RDFS.label)):
+        by_lang: Dict[str, str] = {}
+        for lit in graph.objects(node, pred):
+            lang = getattr(lit, 'language', None) or ''
+            value = str(lit)
+            if lang not in by_lang or value < by_lang[lang]:
+                by_lang[lang] = value
+        maps[name] = by_lang
+    return maps
+
+
+def merge_label_maps(maps: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Legacy merged dict: prefLabel first, rdfs:label fills missing languages."""
+    merged = dict(maps['prefLabel'])
+    for lang, value in maps['rdfsLabel'].items():
+        merged.setdefault(lang, value)
+    return merged
+
+
 @searchable_asset
 class SemanticModelsManager(SearchableAsset):
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
@@ -2694,12 +2720,7 @@ class SemanticModelsManager(SearchableAsset):
                 return {'prefLabel': {}, 'rdfsLabel': {}}
             key = str(node)
             if key not in label_cache:
-                maps: Dict[str, Dict[str, str]] = {}
-                for name, pred in (('prefLabel', SKOS.prefLabel), ('rdfsLabel', RDFS.label)):
-                    maps[name] = {}
-                    for lit in self._graph.objects(node, pred):
-                        lang = getattr(lit, 'language', None) or ''
-                        maps[name].setdefault(lang, str(lit))
+                maps = collect_label_maps(self._graph, node)
                 label_cache[key] = maps
             return label_cache[key]
 
@@ -3078,18 +3099,9 @@ class SemanticModelsManager(SearchableAsset):
                 for concept_iri in unique_concept_iris:
                     concept_uri = URIRef(concept_iri)
 
-                    # Build labels dictionary from all available labels with language tags
-                    labels = {}
-                    # Get skos:prefLabel values (preferred)
-                    for label_literal in context.objects(concept_uri, SKOS.prefLabel):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        labels[lang] = str(label_literal)
-                    # Get rdfs:label values (fallback, don't overwrite prefLabel)
-                    for label_literal in context.objects(concept_uri, RDFS.label):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        if lang not in labels:
-                            labels[lang] = str(label_literal)
-                    
+                    label_maps = collect_label_maps(context, concept_uri)
+                    labels = merge_label_maps(label_maps)
+
                     # Helper to find label by language with regional variant support (en-US, en-GB -> en)
                     def find_by_lang(d: dict, lang: str) -> str | None:
                         if lang in d:
@@ -3222,6 +3234,7 @@ class SemanticModelsManager(SearchableAsset):
                             iri=concept_iri,
                             label=primary_label,
                             labels=labels,
+                            label_maps=label_maps,
                             comment=comment,
                             comments=comments,
                             concept_type=concept_type,
@@ -3286,9 +3299,13 @@ class SemanticModelsManager(SearchableAsset):
                 continue
             
             # Get basic info
-            labels = list(context.objects(concept_uri, RDFS.label))
-            labels.extend(list(context.objects(concept_uri, SKOS.prefLabel)))
-            label = str(labels[0]) if labels else None
+            label_maps = collect_label_maps(context, concept_uri)
+            merged_labels = merge_label_maps(label_maps)
+            label = (
+                (merged_labels.get('en') or merged_labels.get('') or min(merged_labels.values()))
+                if merged_labels
+                else None
+            )
             
             comments = list(context.objects(concept_uri, RDFS.comment))  
             comments.extend(list(context.objects(concept_uri, SKOS.definition)))
@@ -3348,6 +3365,8 @@ class SemanticModelsManager(SearchableAsset):
             concept = OntologyConcept(
                 iri=concept_iri,
                 label=label,
+                labels=merged_labels,
+                label_maps=label_maps,
                 comment=comment,
                 concept_type=concept_type,
                 property_type=meta["property_type"],
@@ -3697,18 +3716,9 @@ class SemanticModelsManager(SearchableAsset):
 
                     prop_uri = URIRef(prop_iri)
 
-                    # Build labels dictionary with all language variants
-                    labels_dict = {}
-                    # Get skos:prefLabel values (preferred)
-                    for label_literal in context.objects(prop_uri, SKOS.prefLabel):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        labels_dict[lang] = str(label_literal)
-                    # Get rdfs:label values (fallback, don't overwrite prefLabel)
-                    for label_literal in context.objects(prop_uri, RDFS.label):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        if lang not in labels_dict:
-                            labels_dict[lang] = str(label_literal)
-                    
+                    prop_label_maps = collect_label_maps(context, prop_uri)
+                    labels_dict = merge_label_maps(prop_label_maps)
+
                     # Helper to find label by language with regional variant support
                     def find_by_lang(d: dict, lang: str) -> str | None:
                         if lang in d:
@@ -3772,6 +3782,7 @@ class SemanticModelsManager(SearchableAsset):
                         "iri": prop_iri,
                         "label": primary_label,
                         "labels": labels_dict,  # All labels with language tags
+                        "label_maps": prop_label_maps,
                         "comment": primary_comment,
                         "comments": comments_dict,  # All comments with language tags
                         "concept_type": "property",  # For tree compatibility

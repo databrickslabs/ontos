@@ -1,11 +1,12 @@
 import type { OntologyConcept } from '@/types/ontology';
 
-/** IRI local name (after the last # or /); the IRI itself when there is none. */
+/** IRI local name (after the last # or /, ignoring a trailing one); the IRI itself when none. */
 export function iriLocalName(iri: string): string {
   if (!iri) return '';
-  const fragment = iri.split('#').pop();
-  if (fragment && fragment !== iri) return fragment;
-  const path = iri.split('/').pop();
+  const trimmed = iri.replace(/[/#]+$/, '');
+  const fragment = trimmed.split('#').pop();
+  if (fragment && fragment !== trimmed) return fragment;
+  const path = trimmed.split('/').pop();
   return path || iri;
 }
 
@@ -15,24 +16,28 @@ export interface LabelMaps {
   rdfsLabel?: Record<string, string> | null;
 }
 
-// Pick a label by language, including regional variants (en-US, en-GB, etc.).
+// Pick a label by language (case-insensitive tags), including regional variants
+// (en-US, pt-BR, ...). Blank values are ignored; ties resolve by sorted tag.
 function pickByLang(map: Record<string, string>, lang: string): string | undefined {
-  if (map[lang]) return map[lang];
-  const prefix = lang + '-';
-  for (const [key, value] of Object.entries(map)) {
-    if (value && key.startsWith(prefix)) return value;
-  }
-  return undefined;
+  const want = lang.toLowerCase();
+  const entries = Object.entries(map)
+    .filter(([, v]) => typeof v === 'string' && v.trim() !== '')
+    .map(([k, v]) => [k.toLowerCase(), v] as const)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const exact = entries.find(([k]) => k === want);
+  if (exact) return exact[1];
+  const regional = entries.find(([k]) => k.startsWith(want + '-'));
+  return regional?.[1];
 }
 
 // UI language, then English, then untagged, then any other language.
 function pickLabel(map: Record<string, string>, preferredLang: string): string | undefined {
-  return (
-    pickByLang(map, preferredLang) ||
-    pickByLang(map, 'en') ||
-    map[''] ||
-    Object.values(map).find(Boolean)
-  );
+  const byLang = pickByLang(map, preferredLang) || pickByLang(map, 'en');
+  if (byLang) return byLang;
+  const rest = Object.entries(map)
+    .filter(([, v]) => typeof v === 'string' && v.trim() !== '')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return (rest.find(([k]) => k === '') || rest[0])?.[1];
 }
 
 /**
@@ -60,7 +65,7 @@ export function resolveLabelFromMaps(
     pickLabel(maps?.prefLabel || {}, preferredLang) ||
     pickLabel(maps?.rdfsLabel || {}, preferredLang);
   if (found) return found;
-  if (legacyLabel && legacyLabel !== iri) return legacyLabel;
+  if (legacyLabel && legacyLabel.trim() && legacyLabel !== iri) return legacyLabel;
   return iriLocalName(iri) || iri;
 }
 
@@ -89,7 +94,14 @@ export function resolveLabel(
   concept: OntologyConcept,
   preferredLang: string = 'en'
 ): string {
-  return resolveLabelFromMap(concept.labels, concept.iri, preferredLang, concept.label);
+  return resolveLabelFromMaps(
+    concept.label_maps && (concept.label_maps.prefLabel || concept.label_maps.rdfsLabel)
+      ? concept.label_maps
+      : { prefLabel: concept.labels },
+    concept.iri,
+    preferredLang,
+    concept.label
+  );
 }
 
 /**

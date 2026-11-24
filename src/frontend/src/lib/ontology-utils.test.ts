@@ -112,6 +112,43 @@ describe('ontology-utils', () => {
       expect(resolveLabelFromMaps(null, iri, 'pt')).toBe('BiogenicCarbon');
     });
 
+    it('title: prefLabel@en beats rdfs:label@pt for a pt UI (label_maps)', () => {
+      const c = concept({
+        iri,
+        label: 'RdfsPT',
+        labels: { en: 'PrefEN', pt: 'RdfsPT' },
+        label_maps: { prefLabel: { en: 'PrefEN' }, rdfsLabel: { pt: 'RdfsPT' } },
+      });
+      expect(resolveLabel(c, 'pt')).toBe('PrefEN');
+    });
+
+    it('old payloads without label_maps still use the merged labels', () => {
+      const c = concept({ iri, labels: { pt: 'Merged' } });
+      expect(resolveLabel(c, 'pt')).toBe('Merged');
+    });
+
+    it('skips whitespace-only labels', () => {
+      expect(resolveLabelFromMaps({ prefLabel: { pt: '   ', en: 'E' } }, iri, 'pt')).toBe('E');
+      expect(resolveLabelFromMaps({ prefLabel: { pt: ' ' } }, iri, 'pt')).toBe('BiogenicCarbon');
+    });
+
+    it('compares language tags case-insensitively', () => {
+      expect(resolveLabelFromMaps({ prefLabel: { PT: 'Upper' } }, iri, 'pt')).toBe('Upper');
+      expect(resolveLabelFromMaps({ prefLabel: { 'pt-BR': 'BR', en: 'E' } }, iri, 'pt')).toBe('BR');
+      expect(resolveLabelFromMaps({ prefLabel: { EN: 'E', de: 'D' } }, iri, 'pt')).toBe('E');
+    });
+
+    it('is stable regardless of key order for ties', () => {
+      const a = resolveLabelFromMaps({ prefLabel: { de: 'D', fr: 'F' } }, iri, 'pt');
+      const b = resolveLabelFromMaps({ prefLabel: { fr: 'F', de: 'D' } }, iri, 'pt');
+      expect(a).toBe(b);
+    });
+
+    it('iriLocalName ignores a trailing / or #', () => {
+      expect(iriLocalName('http://x/o#')).toBe('o');
+      expect(iriLocalName('http://x/a/')).toBe('a');
+    });
+
     it('iriLocalName handles fragment, path and empty IRIs', () => {
       expect(iriLocalName('http://a/b#c')).toBe('c');
       expect(iriLocalName('http://a/b/c')).toBe('c');

@@ -1749,6 +1749,28 @@ def _narrowest_terms(decisions: List[Dict[str, Any]], current: Optional[tuple]) 
     )
 
 
+def _earlier_step_terms(db: Session, execution_id: str) -> List[Dict[str, Any]]:
+    """The approved decisions earlier approval steps of an execution kept (their stored
+    ``access_decision``), in the shape ``_narrowest_terms`` reads. A multi-step access
+    workflow grants no more than its narrowest step allowed."""
+    import json
+    from src.controller.access_grants_manager import ACCESS_DECISION_KEY
+    from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+    decisions: List[Dict[str, Any]] = []
+    for step in db.query(WorkflowStepExecutionDb.result_data).filter(
+        WorkflowStepExecutionDb.execution_id == execution_id,
+        WorkflowStepExecutionDb.result_data.contains(f'"{ACCESS_DECISION_KEY}"'),
+    ).all():
+        try:
+            kept = (json.loads(step.result_data or '{}') or {}).get(ACCESS_DECISION_KEY)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(kept, dict) and kept.get('approved') is True:
+            decisions.append({'decision': 'approved', 'terms': kept.get('terms')})
+    return decisions
+
+
 def _access_decision_record(
     row: Any, approved: bool, decided_by: Optional[str], terms: Optional[tuple],
     message: Optional[str],
@@ -2278,6 +2300,12 @@ async def handle_workflow_approval(
             if approved and access_row is not None:
                 # Every approver's checked terms count: the narrowest of them is granted
                 access_terms = _narrowest_terms(required['decisions'], access_terms)
+        if approved and access_row is not None:
+            # An earlier approval step's narrowing holds (read before this step's own
+            # result is stored; the reconciliation reads the last step's record)
+            access_terms = _narrowest_terms(
+                _earlier_step_terms(db, execution_id), access_terms,
+            )
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)

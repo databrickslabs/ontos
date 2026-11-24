@@ -684,3 +684,65 @@ class TestFailedDecisionRecord:
 
         assert _reconcile(db_session) == 0
         assert _grants(db_session, request_id) == []
+
+
+def _two_step_workflow(client, as_user):
+    """An access workflow of two approval steps in a row: Ana's, then Ben's."""
+    as_user(ADMIN)
+    response = client.post('/api/workflows', json={
+        'name': f'Two steps {uuid.uuid4().hex[:8]}',
+        'trigger': {'type': 'on_request_access', 'entity_types': ['access_grant']},
+        'is_active': True,
+        'steps': [
+            {'step_id': 'first', 'name': 'First', 'step_type': 'approval',
+             'config': {'approvers': ANA[0]}, 'on_pass': 'second', 'on_fail': 'no'},
+            {'step_id': 'second', 'name': 'Second', 'step_type': 'approval',
+             'config': {'approvers': BEN[0]}, 'on_pass': 'ok', 'on_fail': 'no'},
+            {'step_id': 'ok', 'name': 'Granted', 'step_type': 'pass'},
+            {'step_id': 'no', 'name': 'Denied', 'step_type': 'fail'},
+        ],
+    })
+    assert response.status_code == 200, response.text
+    return response.json()['id']
+
+
+class TestSequentialApprovalSteps:
+    """Each approval step's narrowing holds in the steps after it (#1687 review)."""
+
+    def test_an_earlier_steps_narrowing_is_granted(self, client, as_user, db_session):
+        workflow_id = _two_step_workflow(client, as_user)
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+
+        first = _decide(client, as_user, execution_id, True, identity=ANA,
+                        granted_duration_days=7, permission_level='READ')
+        assert first.status_code == 200, first.text
+        assert first.json()['status'] == 'paused'
+        assert _grants(db_session, request_id) == []
+
+        # The second step approves with the requested terms
+        second = _decide(client, as_user, execution_id, True, identity=BEN)
+
+        assert second.status_code == 200, second.text
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'READ'
+        assert _days(grant) in (6, 7)
+
+    def test_the_reconciliation_keeps_the_earlier_narrowing(
+        self, client, as_user, db_session,
+    ):
+        workflow_id = _two_step_workflow(client, as_user)
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+        _decide(client, as_user, execution_id, True, identity=ANA,
+                granted_duration_days=7, permission_level='READ')
+
+        with _failing_record():
+            response = _decide(client, as_user, execution_id, True, identity=BEN)
+
+        assert response.json()['warning']['code'] == 'access_decision_failed', response.text
+        assert _reconcile(db_session) == 1
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'READ'
+        assert _days(grant) in (6, 7)
+

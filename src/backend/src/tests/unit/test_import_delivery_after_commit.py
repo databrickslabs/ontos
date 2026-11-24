@@ -159,3 +159,84 @@ class TestRunAfterCommit:
         run_after_commit(committing_session, lambda: ran.append(1))
         committing_session.commit()
         assert ran == [1]
+
+
+class TestRunAfterCommitOwnEngine:
+    """Sessions of a small pool: the callbacks run once the connection is back."""
+
+    @pytest.fixture
+    def engine(self, tmp_path):
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import QueuePool
+
+        engine = create_engine(
+            f"sqlite:///{tmp_path / 'pool.db'}", poolclass=QueuePool,
+            pool_size=1, max_overflow=0, pool_timeout=1,
+        )
+        yield engine
+        engine.dispose()
+
+    def test_a_callback_can_open_a_connection_with_a_pool_of_one(self, engine):
+        seen = []
+
+        def callback():
+            with Session(engine) as other:
+                seen.append(other.execute(text("SELECT 1")).scalar())
+
+        session = Session(engine)
+        session.execute(text("SELECT 1"))
+        run_after_commit(session, callback)
+        session.commit()
+        session.close()
+
+        assert seen == [1]
+
+    def test_a_closed_session_without_a_commit_does_not_run_them_later(self, engine):
+        ran = []
+        session = Session(engine)
+        session.execute(text("SELECT 1"))
+        run_after_commit(session, lambda: ran.append("stale"))
+        session.close()
+
+        session.execute(text("SELECT 1"))
+        session.commit()
+
+        assert ran == []
+        assert "ontos_after_commit_callbacks" not in session.info
+        session.close()
+
+    def test_a_callback_queued_by_a_callback_runs_in_the_same_pass(self, engine):
+        ran = []
+        session = Session(engine)
+
+        def first():
+            ran.append("first")
+            run_after_commit(session, lambda: ran.append("second"))
+
+        session.execute(text("SELECT 1"))
+        run_after_commit(session, first)
+        session.commit()
+
+        assert ran == ["first", "second"]
+        session.execute(text("SELECT 1"))
+        session.commit()
+        assert ran == ["first", "second"]
+        session.close()
+
+    def test_a_chain_of_callbacks_is_bounded(self, engine):
+        ran = []
+        session = Session(engine)
+
+        def again():
+            ran.append(1)
+            run_after_commit(session, again)
+
+        session.execute(text("SELECT 1"))
+        run_after_commit(session, again)
+        session.commit()
+
+        assert len(ran) == 100
+        session.execute(text("SELECT 1"))
+        session.commit()
+        assert len(ran) == 100
+        session.close()

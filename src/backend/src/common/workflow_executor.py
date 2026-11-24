@@ -4575,7 +4575,8 @@ class WorkflowExecutor:
         # governing workflow the single source of truth for a governed concept
         # (no separate DataAssetReview needed). Best-effort: a reflection failure
         # must not sink the workflow resume.
-        if context.entity_type == 'ontology_concept' and context.entity_id:
+        # A clarification is no decision yet: the concept stays as it is
+        if context.entity_type == 'ontology_concept' and context.entity_id and not clarify:
             try:
                 from src.common.app_state import get_app_state_manager
                 smm = get_app_state_manager('semantic_models_manager')
@@ -4981,6 +4982,15 @@ class WorkflowExecutor:
         if not entity_type or not entity_id or not trigger_type:
             return
         
+        # A clarification is "no decision yet": the entity keeps its status and
+        # only the notification goes out. A status change request is the one
+        # exception: it is still closed ('workflow_clarified') below.
+        if clarified and not (
+            entity_type in ('data_product', 'data_contract')
+            and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')
+        ):
+            return
+
         try:
             # Handle asset review completion (covers former dataset reviews)
             if entity_type in ('asset', 'dataset') and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):

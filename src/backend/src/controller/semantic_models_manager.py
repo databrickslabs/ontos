@@ -2686,6 +2686,21 @@ class SemanticModelsManager(SearchableAsset):
         seen: set[tuple[str, str, str]] = set()  # (direction, predicate, display)
         count = 0
         uri = URIRef(resource_iri)
+        label_cache: Dict[str, Dict[str, str]] = {}
+
+        def label_map(node: any) -> Dict[str, str]:
+            """Language-keyed labels of a resource: skos:prefLabel wins over rdfs:label."""
+            if not isinstance(node, URIRef):
+                return {}
+            key = str(node)
+            if key not in label_cache:
+                labels: Dict[str, str] = {}
+                for pred in (SKOS.prefLabel, RDFS.label):
+                    for lit in self._graph.objects(node, pred):
+                        lang = getattr(lit, 'language', None) or ''
+                        labels.setdefault(lang, str(lit))
+                label_cache[key] = labels
+            return label_cache[key]
 
         def detect_type(node: any) -> str:
             if not isinstance(node, URIRef):
@@ -2714,6 +2729,8 @@ class SemanticModelsManager(SearchableAsset):
                 'predicate': str(predicate),
                 'display': display_str,
                 'displayType': detect_type(display_node),
+                'displayLabels': label_map(display_node),
+                'predicateLabels': label_map(predicate),
                 'stepIri': str(step_node) if isinstance(step_node, URIRef) else None,
                 'stepIsResource': isinstance(step_node, URIRef),
             }

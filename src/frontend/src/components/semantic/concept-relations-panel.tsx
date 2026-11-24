@@ -15,12 +15,15 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { useApi } from '@/hooks/use-api'
+import { resolveLabelFromMap } from '@/lib/ontology-utils'
 
 interface NeighborItem {
   direction: 'outgoing' | 'incoming' | 'predicate'
   predicate: string
   display: string
   displayType: 'resource' | 'property' | 'literal'
+  displayLabels?: Record<string, string>
+  predicateLabels?: Record<string, string>
   stepIri?: string | null
   stepIsResource?: boolean
 }
@@ -83,13 +86,6 @@ const PREDICATE_COLORS: Array<[RegExp, string]> = [
   [/isDefinedBy$/i, 'bg-slate-500/10 text-slate-600 border-slate-500/30'],
 ]
 
-const localName = (iri: string): string => {
-  if (!iri) return ''
-  const fragment = iri.split('#').pop()
-  if (fragment && fragment !== iri) return fragment
-  const path = iri.split('/').pop()
-  return path || iri
-}
 
 const colourFor = (predicate: string): string => {
   for (const [re, cls] of PREDICATE_COLORS) {
@@ -116,7 +112,8 @@ export default function ConceptRelationsPanel({
   embedded = false,
 }: ConceptRelationsPanelProps) {
   const { get } = useApi()
-  const { t } = useTranslation(['semantic-models', 'common'])
+  const { t, i18n } = useTranslation(['semantic-models', 'common'])
+  const lang = i18n?.language?.split('-')[0] || 'en'
 
   const [neighbors, setNeighbors] = useState<NeighborItem[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -175,7 +172,7 @@ export default function ConceptRelationsPanel({
       const targetLabel =
         n.displayType === 'literal'
           ? n.display
-          : localName(n.display) || n.display
+          : resolveLabelFromMap(n.displayLabels, n.display, lang)
 
       const key = `${n.direction}|${n.predicate}|${n.display}`
       if (seen.has(key)) continue
@@ -184,7 +181,7 @@ export default function ConceptRelationsPanel({
         key,
         direction: n.direction,
         predicate: n.predicate,
-        predicateShort: localName(n.predicate) || n.predicate,
+        predicateShort: resolveLabelFromMap(n.predicateLabels, n.predicate, lang),
         targetLabel,
         targetIri,
         isResource: !!n.stepIsResource,
@@ -200,7 +197,7 @@ export default function ConceptRelationsPanel({
       return a.targetLabel.localeCompare(b.targetLabel)
     })
     return out
-  }, [neighbors])
+  }, [neighbors, lang])
 
   const counts = useMemo(() => {
     let outgoing = 0

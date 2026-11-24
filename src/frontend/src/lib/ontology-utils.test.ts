@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { OntologyConcept } from '@/types/ontology';
 import {
   resolveLabel,
+  resolveLabelFromMap,
+  iriLocalName,
   resolveComment,
   getAvailableLanguages,
   getLanguageDisplayName,
@@ -69,6 +71,32 @@ describe('ontology-utils', () => {
       // guard; falls through to the IRI local name.
       const c = concept({ iri: 'http://example.org/onto#Widget' });
       expect(resolveLabel(c, 'fr')).toBe('Widget');
+    });
+  });
+
+  describe('label precedence (issue #1616)', () => {
+    const iri = 'http://example.org/onto#BiogenicCarbon';
+
+    it('prefers a label in any other language over the IRI local name', () => {
+      const c = concept({ iri, label: 'BiogenicCarbon', labels: { pt: 'Carbono biogenico' } });
+      expect(resolveLabel(c, 'en')).toBe('Carbono biogenico');
+    });
+
+    it('prefers the UI language label over other languages', () => {
+      const labels = { en: 'Biogenic carbon', pt: 'Carbono biogenico' };
+      expect(resolveLabelFromMap(labels, iri, 'pt')).toBe('Carbono biogenico');
+      expect(resolveLabelFromMap(labels, iri, 'en')).toBe('Biogenic carbon');
+    });
+
+    it('falls to the local name only when there is no label at all', () => {
+      expect(resolveLabelFromMap({}, iri, 'pt')).toBe('BiogenicCarbon');
+      expect(resolveLabelFromMap(undefined, iri, 'pt')).toBe('BiogenicCarbon');
+    });
+
+    it('iriLocalName handles fragment, path and empty IRIs', () => {
+      expect(iriLocalName('http://a/b#c')).toBe('c');
+      expect(iriLocalName('http://a/b/c')).toBe('c');
+      expect(iriLocalName('')).toBe('');
     });
   });
 

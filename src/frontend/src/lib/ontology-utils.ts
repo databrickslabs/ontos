@@ -1,15 +1,70 @@
 import type { OntologyConcept } from '@/types/ontology';
 
+/** IRI local name (after the last # or /); the IRI itself when there is none. */
+export function iriLocalName(iri: string): string {
+  if (!iri) return '';
+  const fragment = iri.split('#').pop();
+  if (fragment && fragment !== iri) return fragment;
+  const path = iri.split('/').pop();
+  return path || iri;
+}
+
 /**
- * Resolve the best label for a concept based on language preference.
- * 
- * Priority chain:
- * 1. Preferred language (e.g., user's selected language)
+ * Resolve the display label for a resource from its language-keyed labels.
+ *
+ * The map is built by the backend with skos:prefLabel taking precedence over
+ * rdfs:label for the same language, so the precedence applied here is:
+ * 1. Preferred language (UI language, regional variants included)
  * 2. English ('en')
  * 3. No language tag ('')
- * 4. IRI local name (after last # or /) — matches Protégé behavior
- * 5. Any available label (last resort, may be in a different language)
- * 
+ * 4. Any other language
+ * 5. Legacy single `label` (when it is not just the IRI)
+ * 6. IRI local name (after last # or /)
+ * 7. The IRI itself
+ *
+ * @param labels Language-keyed labels ({"en": "Dataset", "pt": "Conjunto"}), may be empty
+ * @param iri The resource IRI
+ * @param preferredLang The preferred language code (e.g., 'en', 'pt')
+ * @param legacyLabel Optional single-valued label
+ */
+export function resolveLabelFromMap(
+  labels: Record<string, string> | null | undefined,
+  iri: string,
+  preferredLang: string = 'en',
+  legacyLabel?: string
+): string {
+  const map = labels || {};
+
+  // Helper to find label by language, including regional variants (en-US, en-GB, etc.)
+  const findByLang = (lang: string): string | undefined => {
+    if (map[lang]) return map[lang];
+    const prefix = lang + '-';
+    for (const [key, value] of Object.entries(map)) {
+      if (value && key.startsWith(prefix)) return value;
+    }
+    return undefined;
+  };
+
+  const preferred = findByLang(preferredLang);
+  if (preferred) return preferred;
+
+  const english = findByLang('en');
+  if (english) return english;
+
+  if (map['']) return map[''];
+
+  const anyLabel = Object.values(map).find(Boolean);
+  if (anyLabel) return anyLabel;
+
+  if (legacyLabel && legacyLabel !== iri) return legacyLabel;
+
+  return iriLocalName(iri) || iri;
+}
+
+/**
+ * Resolve the best label for a concept based on language preference.
+ * See {@link resolveLabelFromMap} for the precedence.
+ *
  * @param concept The ontology concept
  * @param preferredLang The preferred language code (e.g., 'en', 'ja', 'de')
  * @returns The best available label for display
@@ -18,43 +73,7 @@ export function resolveLabel(
   concept: OntologyConcept,
   preferredLang: string = 'en'
 ): string {
-  const labels = concept.labels || {};
-  
-  // Helper to find label by language, including regional variants (en-US, en-GB, etc.)
-  const findByLang = (lang: string): string | undefined => {
-    // Exact match first
-    if (labels[lang]) return labels[lang];
-    // Try regional variants (e.g., 'en' matches 'en-US', 'en-GB')
-    const prefix = lang + '-';
-    for (const [key, value] of Object.entries(labels)) {
-      if (key.startsWith(prefix)) return value;
-    }
-    return undefined;
-  };
-  
-  // Priority: preferred lang > English > no lang tag > IRI local name > any available label
-  const preferred = findByLang(preferredLang);
-  if (preferred) return preferred;
-  
-  const english = findByLang('en');
-  if (english) return english;
-  
-  if (labels['']) return labels[''];  // No language tag
-  
-  // Prefer IRI local name over a label in a non-matching language (matches Protégé behavior)
-  const localName = concept.iri.split(/[/#]/).pop();
-  if (localName && localName !== concept.iri) return localName;
-  
-  // Legacy fallback: use the label field if available
-  if (concept.label && concept.label !== concept.iri) {
-    return concept.label;
-  }
-  
-  // Last resort: any available label regardless of language
-  const anyLabel = Object.values(labels)[0];
-  if (anyLabel) return anyLabel;
-  
-  return concept.iri;
+  return resolveLabelFromMap(concept.labels, concept.iri, preferredLang, concept.label);
 }
 
 /**

@@ -199,4 +199,51 @@ describe('ConceptNeighborhoodGraph', () => {
     // Graph canvas is not mounted in list view.
     expect(screen.queryByTestId('rf-nodes')).not.toBeInTheDocument()
   })
+
+  it('labels list targets and predicates with prefLabel / rdfs:label (#1616)', async () => {
+    mockGet.mockImplementation(async () => ({
+      data: [
+        {
+          direction: 'outgoing',
+          predicate: 'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+          display: 'https://example.org/onto#Party',
+          displayType: 'resource',
+          stepIri: 'https://example.org/onto#Party',
+          stepIsResource: true,
+        },
+        {
+          direction: 'outgoing',
+          predicate: 'http://example.org/onto#containsSubstance',
+          predicateLabels: { en: 'contains substance' },
+          display: 'http://example.org/onto#BiogenicCarbon',
+          displayLabels: { pt: 'Carbono biogenico' },
+          displayType: 'resource',
+          stepIri: 'http://example.org/onto#BiogenicCarbon',
+          stepIsResource: true,
+        },
+      ],
+    }))
+    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} />)
+    expect(await screen.findByText('Carbono biogenico')).toBeInTheDocument()
+    expect(screen.getByText('contains substance')).toBeInTheDocument()
+    expect(screen.queryByText('http://example.org/onto#BiogenicCarbon')).not.toBeInTheDocument()
+  })
+
+  it('labels graph parent nodes with their prefLabel (#1616)', async () => {
+    mockGet.mockImplementation(async () => ({
+      data: [
+        {
+          direction: 'outgoing',
+          predicate: 'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+          display: 'https://example.org/onto#Party',
+          displayLabels: { pt: 'Parte' },
+          displayType: 'resource',
+          stepIri: 'https://example.org/onto#Party',
+          stepIsResource: true,
+        },
+      ],
+    }))
+    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} view="graph" />)
+    expect(await screen.findByText('Parte')).toBeInTheDocument()
+  })
 })

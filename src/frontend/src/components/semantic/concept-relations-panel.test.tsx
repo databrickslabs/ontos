@@ -193,4 +193,37 @@ describe('ConceptRelationsPanel', () => {
       expect(screen.getByText(/No concept-to-concept relations yet/i)).toBeInTheDocument()
     })
   })
+
+  it('shows prefLabel / rdfs:label instead of IRI local names (#1616)', async () => {
+    mockGet.mockResolvedValue({
+      data: [
+        {
+          direction: 'outgoing',
+          predicate: 'http://example.org/onto#containsSubstance',
+          predicateLabels: { en: 'contains substance' },
+          display: 'http://example.org/onto#BiogenicCarbon',
+          displayLabels: { pt: 'Carbono biogenico' },
+          displayType: 'resource',
+          stepIri: 'http://example.org/onto#BiogenicCarbon',
+          stepIsResource: true,
+        },
+        {
+          direction: 'outgoing',
+          predicate: 'http://example.org/onto#unlabelled',
+          display: 'http://example.org/onto#NoLabel',
+          displayType: 'resource',
+          stepIri: 'http://example.org/onto#NoLabel',
+          stepIsResource: true,
+        },
+      ],
+    })
+    renderPanel()
+
+    expect(await screen.findByText('Carbono biogenico')).toBeInTheDocument()
+    expect(screen.getByText('contains substance')).toBeInTheDocument()
+    expect(screen.queryByText('BiogenicCarbon')).not.toBeInTheDocument()
+    expect(screen.queryByText('containsSubstance')).not.toBeInTheDocument()
+    // No label: the local name is still the fallback
+    expect(screen.getByText('NoLabel')).toBeInTheDocument()
+  })
 })

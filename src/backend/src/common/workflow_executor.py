@@ -1391,7 +1391,10 @@ def _server_entity_name(db: Optional[Session], entity_type: Any, entity_id: Any)
             from src.db_models.data_contracts import DataContractDb as model
         else:
             return None
-        name = db.query(model.name).filter(model.id == str(entity_id)).scalar()
+        # a savepoint: a failed SELECT aborts the whole transaction on Postgres, and
+        # this session is the step's own
+        with db.begin_nested():
+            name = db.query(model.name).filter(model.id == str(entity_id)).scalar()
     except SQLAlchemyError:
         logger.warning(f"Could not read the name of {kind} {entity_id}", exc_info=True)
         return None

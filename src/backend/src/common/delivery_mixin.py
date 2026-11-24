@@ -21,6 +21,9 @@ Usage:
 
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
+from sqlalchemy.orm import Session
+
+from src.common.after_commit import run_after_commit
 from src.common.logging import get_logger
 
 if TYPE_CHECKING:
@@ -97,6 +100,28 @@ class DeliveryMixin:
             logger.warning(f"Failed to queue delivery for {self.DELIVERY_ENTITY_TYPE}: {e}")
             return False
     
+    def _queue_delivery_after_commit(
+        self,
+        db: Session,
+        entity: Any,
+        change_type: 'DeliveryChangeType',
+        user: Optional[str] = None,
+    ) -> None:
+        """Deliver a changed entity once ``db`` commits (synchronously, best effort).
+
+        For callers that write in a transaction they don't commit themselves (an
+        import): delivering before the commit would leave a Unity Catalog change
+        or a Git file behind for an entity a rollback removes. Nothing is
+        delivered when the transaction, or the savepoint the entity was queued
+        in, rolls back.
+        """
+        run_after_commit(
+            db,
+            lambda: self._queue_delivery(
+                entity=entity, change_type=change_type, user=user,
+            ),
+        )
+
     def _get_entity_id(self, entity: Any) -> str:
         """Extract ID from an entity.
         

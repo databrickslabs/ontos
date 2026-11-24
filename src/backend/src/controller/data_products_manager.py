@@ -658,13 +658,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except Exception as log_err:
                 logger.warning(f"Failed to log change for product creation: {log_err}")
 
-            # Queue delivery for active modes
-            self._queue_delivery(
-                entity=created_db_obj,
-                change_type=DeliveryChangeType.PRODUCT_CREATE,
-                user=user,
-                background_tasks=background_tasks,
-            )
+            # Queue delivery for active modes. An import delivers once the
+            # product is committed: a product that is rolled back must not
+            # leave a Unity Catalog change or a Git file behind.
+            if importing:
+                self._queue_delivery_after_commit(
+                    db_session, entity=created_db_obj,
+                    change_type=DeliveryChangeType.PRODUCT_CREATE, user=user,
+                )
+            else:
+                self._queue_delivery(
+                    entity=created_db_obj,
+                    change_type=DeliveryChangeType.PRODUCT_CREATE,
+                    user=user,
+                    background_tasks=background_tasks,
+                )
             
             self._update_search_index(result)
             self._fire_create_trigger(db_session, result, workflow_user or user)

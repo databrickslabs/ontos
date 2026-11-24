@@ -168,7 +168,9 @@ export default function NavigationPresetsCard({ onChanged }: NavigationPresetsCa
     return t('settings:navigationPresets.lastApplied', {
       preset: presetName(lastApplied.preset_id),
       user: lastApplied.applied_by || t('settings:navigationPresets.unknownUser'),
-      date: Number.isNaN(when.getTime()) ? lastApplied.applied_at : when.toLocaleString(i18n.language),
+      date: Number.isNaN(when.getTime())
+        ? lastApplied.applied_at
+        : when.toLocaleString(i18n.language),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastApplied, t, i18n.language]);
@@ -271,7 +273,9 @@ export default function NavigationPresetsCard({ onChanged }: NavigationPresetsCa
                 size="sm"
                 disabled={busy || !selected || changedCount === 0}
                 onClick={() => setConfirming('apply')}
-                title={changedCount === 0 ? t('settings:navigationPresets.nothingToApply') : undefined}
+                title={
+                  changedCount === 0 ? t('settings:navigationPresets.nothingToApply') : undefined
+                }
               >
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {t('settings:navigationPresets.actions.apply')}

@@ -113,7 +113,7 @@ describe('NavigationPresetsCard', () => {
     expect(screen.queryByTestId('preset-role-Data Steward')).not.toBeInTheDocument();
   });
 
-  it('applies after a confirmation, then refreshes the preview, the roles and the menus', async () => {
+  it('applies after a confirmation, then refreshes the preview, roles and menus', async () => {
     mockPost.mockResolvedValue({ data: {
       preset_id: 'essentials', changed_roles: [{ role_id: 'r1', role_name: 'Data Consumer' }],
       unchanged_roles: ['Data Steward'], missing_roles: ['Data Governance Officer'],

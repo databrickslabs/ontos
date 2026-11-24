@@ -46,7 +46,7 @@ describe('RolesSettings navigation presets', () => {
     });
   });
 
-  it('shows the card to a role admin and reloads the table and the role store on a change', async () => {
+  it('shows the card to a role admin and reloads the table and role store', async () => {
     render(<RolesSettings />);
     fireEvent.click(await screen.findByTestId('presets-card'));
 

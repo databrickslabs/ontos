@@ -235,8 +235,49 @@ class TestRunAfterCommitOwnEngine:
         run_after_commit(session, again)
         session.commit()
 
-        assert len(ran) == 100
+        # The queued callback plus 100 chained ones
+        assert len(ran) == 101
         session.execute(text("SELECT 1"))
         session.commit()
-        assert len(ran) == 100
+        assert len(ran) == 101
         session.close()
+
+    def test_more_than_the_bound_queued_by_the_transaction_all_run(self, engine):
+        ran = []
+        session = Session(engine)
+        session.execute(text("SELECT 1"))
+        for i in range(150):
+            run_after_commit(session, lambda i=i: ran.append(i))
+        session.commit()
+        session.close()
+
+        assert ran == list(range(150))
+
+    def test_a_failed_flush_in_a_savepoint_keeps_the_outer_callbacks(self, engine):
+        from sqlalchemy.exc import IntegrityError
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+        class _Base(DeclarativeBase):
+            pass
+
+        class _Row(_Base):
+            __tablename__ = "after_commit_rows"
+            id: Mapped[int] = mapped_column(primary_key=True)
+
+        _Base.metadata.create_all(engine)
+        ran = []
+        session = Session(engine)
+        session.execute(text("SELECT 1"))
+        run_after_commit(session, lambda: ran.append("outer"))
+        savepoint = session.begin_nested()
+        session.add(_Row(id=1))
+        session.flush()
+        session.expunge_all()
+        session.add(_Row(id=1))
+        with pytest.raises(IntegrityError):
+            session.flush()
+        savepoint.rollback()
+        session.commit()
+        session.close()
+
+        assert ran == ["outer"]

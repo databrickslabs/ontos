@@ -53,10 +53,13 @@ def _transaction_ended(session: Session, transaction) -> None:
         return
     # Callbacks queued by a callback join the same run (bounded); they are never
     # kept for an unrelated later commit.
+    # Every callback queued by the transaction runs; the bound only applies to
+    # the ones callbacks queue while the pass runs.
     session.info[_PENDING_KEY] = pending
+    budget = len(pending) + _MAX_CALLBACKS_PER_COMMIT
     ran = 0
     while session.info.get(_PENDING_KEY):
-        if ran >= _MAX_CALLBACKS_PER_COMMIT:
+        if ran >= budget:
             logger.warning("After-commit callbacks chained past %d: the rest are dropped",
                            _MAX_CALLBACKS_PER_COMMIT)
             break
@@ -73,8 +76,13 @@ def _drop_pending(session: Session, previous_transaction) -> None:
     pending = session.info.get(_PENDING_KEY)
     if not pending:
         return
-    if not previous_transaction.nested:
+    if previous_transaction.parent is None:
+        # The root rolled back: nothing queued in it will commit
         session.info.pop(_PENDING_KEY, None)
+        return
+    if not previous_transaction.nested:
+        # A subtransaction (e.g. a failed flush): its enclosing savepoint or root
+        # decides when it rolls back, and drops the callbacks then
         return
     pending[:] = [(callback, transaction) for callback, transaction in pending
                   if not _within(transaction, previous_transaction)]

@@ -229,8 +229,9 @@ export function getActiveOverride(): ActiveOverride | null {
  * The interceptor adds no headers when the feature isn't enabled or no persona
  * is selected, so it's safe to install unconditionally in production builds
  * (the backend would ignore the headers without `TEST_USER_TOKEN` anyway).
- * Until the persona probe settles it holds /api requests back (one round trip
- * at startup), so none of them runs as the real user (#1609).
+ * When a test token is stored, it holds /api requests back until the persona
+ * probe settles (one round trip at startup, at most PROBE_HOLD_MS), so none of
+ * them runs as the real user (#1609). Without a token nothing is held.
  */
 export function installTestPersonaFetchInterceptor(): void {
   if (typeof window === 'undefined') return;
@@ -258,18 +259,32 @@ export function installTestPersonaFetchInterceptor(): void {
     if (path === null) {
       return original(input, init);
     }
-    // The probe itself, and everything once it settled, go out right away.
-    if (initSettled || path.startsWith(PERSONAS_PATH)) {
+    // The probe itself, everything once it settled, and everything when no
+    // test token is stored (production: no persona can apply) go out right away.
+    if (initSettled || path.startsWith(PERSONAS_PATH) || !readToken()) {
       return withOverride(input, init);
     }
     // Hold the request until the probe settles, so it carries the restored
     // persona's headers (#1609). The first /api request starts the probe:
     // child components fetch before the App effect that calls initialize.
-    return useTestPersonaStore
-      .getState()
-      .initialize()
-      .then(() => withOverride(input, init));
+    // The hold ends after PROBE_HOLD_MS even if the probe hangs.
+    return probeHold().then(() => withOverride(input, init));
   };
+}
+
+/** Longest time an /api request waits for the persona probe. */
+export const PROBE_HOLD_MS = 4000;
+let holdPromise: Promise<void> | null = null;
+
+/** The probe, or PROBE_HOLD_MS, whichever ends first (one shared wait). */
+function probeHold(): Promise<void> {
+  if (!holdPromise) {
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(resolve, PROBE_HOLD_MS);
+    });
+    holdPromise = Promise.race([useTestPersonaStore.getState().initialize(), timeout]);
+  }
+  return holdPromise;
 }
 
 /** The `/api...` path of a same-origin API request, else null. */

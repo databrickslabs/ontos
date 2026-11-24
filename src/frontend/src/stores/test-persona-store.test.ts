@@ -112,6 +112,32 @@ describe('test persona fetch interceptor', () => {
     }
   });
 
+  it('holds nothing when no test token is stored (production)', async () => {
+    localStorage.removeItem('ucapp.testToken');
+    await install();
+    await window.fetch('/api/user/details');
+    // Sent at once, and no probe was started by the interceptor
+    expect(underlying.mock.calls.map((c) => String(c[0]))).toEqual(['/api/user/details']);
+  });
+
+  it('ends the hold after PROBE_HOLD_MS when the probe hangs', async () => {
+    vi.useFakeTimers();
+    try {
+      const mod = await install();
+      const early = window.fetch('/api/notifications');
+      await vi.advanceTimersByTimeAsync(mod.PROBE_HOLD_MS - 1);
+      expect(underlying.mock.calls.map((c) => String(c[0]))).toEqual(['/api/test/personas']);
+      await vi.advanceTimersByTimeAsync(1);
+      await early;
+      const call = underlying.mock.calls.find((c) => String(c[0]) === '/api/notifications');
+      expect(call).toBeDefined();
+      // No persona known yet: sent without headers rather than never
+      expect(headerOf(call![1], 'X-Test-Token')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not hold non-API requests', async () => {
     await install();
     await window.fetch('https://example.com/telemetry');

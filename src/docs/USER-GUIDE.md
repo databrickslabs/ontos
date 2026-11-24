@@ -2267,10 +2267,18 @@ Catalog see it. In the job's tag configuration, on the **Asset** tab, turn on th
 |----------|-------|
 | `{ASSET.MATURITY}` | name of the level, e.g. `2 stars` |
 | `{ASSET.MATURITY_ORDER}` | number of the level, e.g. `3` |
+| `{ASSET.MATURITY_AT_LEAST:<n>}` | `true` when the level number is at least `<n>` (`1` is the first level), `false` on a table or view below that level or with no level; no tag on other asset types |
 
-For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The two variables can
+For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The variables can
 also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
 `{ASSET.FQN}`.
+
+For a yes/no flag, use the threshold variable: key `ontos_agent_readable` and value
+`{ASSET.MATURITY_AT_LEAST:1}` publish `true` on the tables at or above the first level and
+`false` on the others. Asset types without maturity levels, such as metric views, get no
+tag from an entry that uses this variable (not `false`), and a tag written for them by an
+earlier run is removed. Change `<n>` to set another threshold. A malformed variable such as
+`{ASSET.MATURITY_AT_LEAST:x}` publishes no tag.
 
 - The job publishes the level of the latest stored evaluation: when an asset changes, or
   with re-evaluate. It doesn't evaluate assets itself.
@@ -2282,7 +2290,11 @@ also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
   hand under the same key, or one whose value was changed in Unity Catalog, is kept, also
   when the table has no level or the maturity card is off. Keep the key under the same
   prefix as the other enabled keys (`ontos_` by default): the job only reads tags with
-  that prefix.
+  that prefix. The prefix is the common prefix of all enabled keys: a key without it (for
+  example `agent_readable` next to `ontos_*` keys) empties that prefix, and the job then
+  falls back to `x_ontos_`, so it stops reading and removing the `ontos_` tags.
+- The threshold variable gives `false` to every asset the job reads without a level,
+  including the assets it skips for their type (for example metric views).
 
 ### Compliance Best Practices
 

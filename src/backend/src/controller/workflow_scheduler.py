@@ -65,7 +65,9 @@ doesn't run a slot that passed before it; other edits and restarts keep the slot
 The same thread delivers the delivery outbox's pending rows (#1688,
 ``delivery_outbox_manager.DeliveryOutboxWorker``): on the first pass, when a request
 notes a new sweep slot, and when the next pending row it knows of is due (a
-deadline in ``_sleep_seconds``); with no pending row it adds no deadline.
+deadline in ``_sleep_seconds``); with no pending row it adds no deadline. With
+``WORKFLOW_SCHEDULER_ENABLED`` off the thread still runs for the outbox only
+(``run_workflows=False``): no workflow is read or run.
 """
 import json
 import os
@@ -239,6 +241,7 @@ class WorkflowScheduler:
         session_factory: Optional[Callable[[], Session]] = None,
         *,
         deliver_outbox: bool = True,
+        run_workflows: bool = True,
         change_check_seconds: int = 60,
         idle_recheck_seconds: int = 0,
         clock: Optional[Callable[[], datetime]] = None,
@@ -290,6 +293,8 @@ class WorkflowScheduler:
         self._claimed_by = instance_id or f'{socket.gethostname()}:{os.getpid()}'
         # Delivers the delivery outbox's pending rows from this thread (#1688)
         self._outbox = DeliveryOutboxWorker(self._clock) if deliver_outbox else None
+        # False (WORKFLOW_SCHEDULER_ENABLED off): the thread only delivers the outbox
+        self._run_workflows = run_workflows
         self._schedules: Dict[str, _Schedule] = {}
         # None = unknown (read the database on the next tick); False = no active
         # scheduled workflow (no database access); True = ``_schedules`` is current.
@@ -439,9 +444,8 @@ class WorkflowScheduler:
         while not stop.is_set():
             # Cleared before the pass, so a wake-up during it isn't lost.
             self._wake.clear()
-            self.run_outbox()
             try:
-                delay = self.run_once()
+                delay = self._tick()
             except Exception as e:
                 logger.error(f"Workflow scheduler pass failed: {e}", exc_info=True)
                 delay = ERROR_RETRY_SECONDS
@@ -901,6 +905,14 @@ class WorkflowScheduler:
             return
         self._outbox.note_queued(when)
         self._wake.set()  # the sleep is recomputed with the new deadline
+
+    def _tick(self) -> Optional[float]:
+        """One pass of the thread: the outbox, then the scheduled workflows unless they
+        are off; the seconds until the next deadline (None: none)."""
+        self.run_outbox()
+        if not self._run_workflows:
+            return self._sleep_seconds(self._clock())
+        return self.run_once()
 
     def run_outbox(self, now: Optional[datetime] = None) -> int:
         """Deliver the due outbox rows when a pass is due; the rows tried."""

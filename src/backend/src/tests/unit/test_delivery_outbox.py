@@ -375,6 +375,30 @@ class TestWorkerSchedule:
         assert scheduler._wake.is_set()
         assert WorkflowScheduler(sessions, deliver_outbox=False).run_outbox(now) == 0
 
+    def test_with_the_workflow_scheduler_off_the_outbox_is_still_retried(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        _import(manager, 'P A')
+        service.failing = {}
+        clock = {'now': _now()}
+        scheduler = WorkflowScheduler(sessions, instance_id='a', run_workflows=False,
+                                      clock=lambda: clock['now'])
+
+        def no_workflows(*args, **kwargs):
+            raise AssertionError('no workflow is read or run')
+
+        monkeypatch.setattr(scheduler, 'run_once', no_workflows)
+        monkeypatch.setattr(scheduler, '_refresh', no_workflows)
+
+        delay = scheduler._tick()  # the first pass: the row isn't due yet
+        assert _rows(sessions)[0].status == 'pending'
+        assert 0 < delay <= 61
+        clock['now'] += timedelta(minutes=2)
+
+        assert scheduler._tick() is None  # delivered: nothing left to wake up for
+        assert _rows(sessions)[0].status == 'delivered'
+
     def test_delivered_rows_are_pruned_once_a_day(self, manager, sessions, service):
         _import(manager, 'P A', 'P B')
         service.failing = {'indirect': 'delivery_git_unavailable'}

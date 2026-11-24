@@ -382,15 +382,20 @@ def initialize_database():
         raise RuntimeError("Application cannot start due to database initialization error.") from e
 
 def start_workflow_scheduler(app: FastAPI, settings) -> None:
-    """Start the workflow scheduler (#941) with its settings, unless it is turned off.
+    """Start the workflow scheduler (#941) with its settings.
 
-    A failure is logged and doesn't stop the startup.
+    Turned off, its thread still delivers the delivery outbox's pending rows
+    (#1688), with no workflow read or run. A failure is logged and doesn't stop
+    the startup.
     """
     try:
-        if not settings.WORKFLOW_SCHEDULER_ENABLED:
-            return
         from src.controller.workflow_scheduler import WorkflowScheduler
 
+        if not settings.WORKFLOW_SCHEDULER_ENABLED:
+            app.state.workflow_scheduler = WorkflowScheduler(run_workflows=False, max_workers=1)
+            app.state.workflow_scheduler.start()
+            logger.info("Workflow scheduler turned off: its thread delivers the outbox only")
+            return
         app.state.workflow_scheduler = WorkflowScheduler(
             change_check_seconds=settings.WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS,
             idle_recheck_seconds=settings.WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS,

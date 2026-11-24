@@ -38,12 +38,15 @@ def test_the_scheduler_starts_with_its_settings():
     assert scheduler._change_check.total_seconds() == 45
 
 
-def test_a_turned_off_scheduler_is_not_created():
+def test_a_turned_off_scheduler_runs_for_the_delivery_outbox_only():
+    """No workflow is run, but pending deliveries are still retried (#1688)."""
     app = _app()
     with patch.object(WorkflowScheduler, 'start') as start:
         start_workflow_scheduler(app, _settings(WORKFLOW_SCHEDULER_ENABLED=False))
-    start.assert_not_called()
-    assert not hasattr(app.state, 'workflow_scheduler')
+    start.assert_called_once()
+    scheduler = app.state.workflow_scheduler
+    assert scheduler._run_workflows is False and scheduler._outbox is not None
+    assert scheduler._max_workers == 1
 
 
 def test_a_failing_start_does_not_stop_the_startup():

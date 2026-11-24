@@ -12,6 +12,7 @@ locally point ``DOMAIN_HIERARCHY_TEST_PG_URL`` (or one of the other
 ``*_TEST_PG_URL`` variables) at a throwaway database. Each test builds the
 app's tables in its own schema and drops it afterwards.
 """
+import asyncio
 import os
 import threading
 import time
@@ -29,6 +30,8 @@ from src.controller.data_domains_manager import DataDomainManager, DomainParentC
 from src.db_models.data_domains import DataDomain
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate
 from src.repositories.data_domain_repository import data_domain_repo
+from src.tools.base import ToolContext
+from src.tools.domains import UpdateDomainTool
 
 _PG_URL = (
     os.environ.get('DOMAIN_HIERARCHY_TEST_PG_URL')
@@ -182,6 +185,31 @@ def test_lock_is_released_by_rollback_and_covers_create_with_parent(pg):
     with Session(bind=pg) as db:
         child = db.query(DataDomain).filter(DataDomain.name == 'Child').one()
         assert child.parent_id == root_id
+
+
+def test_refused_move_through_the_tool_releases_the_lock(pg, lock_key):
+    """The chat/MCP tool shares its session across the request: a refused move must not
+    keep the hierarchy lock for the rest of it."""
+    a_id, b_id = _roots(pg, 'A', 'B')
+    with Session(bind=pg) as db:
+        db.query(DataDomain).filter(DataDomain.id == b_id).update({'parent_id': a_id})
+        db.commit()
+    tool_session, other = Session(bind=pg), Session(bind=pg)
+    try:
+        ctx = ToolContext(db=tool_session, settings=None)
+        result = asyncio.run(UpdateDomainTool().execute(ctx, domain_id=a_id, parent_id=b_id))
+        assert result.success is False
+
+        # The tool's session is still open (as for the rest of a chat request)
+        taken = other.execute(
+            text('SELECT pg_try_advisory_xact_lock(:key)'), {'key': lock_key}
+        ).scalar()
+        assert taken is True, 'the refused move still holds the hierarchy lock'
+        other.rollback()
+    finally:
+        tool_session.close()
+        other.close()
+    assert _parent_of(pg, a_id) is None
 
 
 def test_lock_is_a_noop_on_sqlite():

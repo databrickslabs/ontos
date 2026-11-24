@@ -224,6 +224,8 @@ class CreateDomainTool(BaseTool):
             )
             
         except Exception as e:
+            # End the failed transaction: it may hold the domain hierarchy lock
+            ctx.db.rollback()
             return ToolResult(success=False, **tool_failure("create_domain", e))
 
 
@@ -297,6 +299,7 @@ class UpdateDomainTool(BaseTool):
             )
             
             if not updated:
+                ctx.db.rollback()
                 return ToolResult(
                     success=False,
                     error=f"Domain '{domain_id}' not found"
@@ -317,6 +320,8 @@ class UpdateDomainTool(BaseTool):
             )
             
         except Exception as e:
+            # End the failed transaction: it may hold the domain hierarchy lock
+            ctx.db.rollback()
             return ToolResult(success=False, **tool_failure("update_domain", e))
 
 
@@ -357,6 +362,7 @@ class DeleteDomainTool(BaseTool):
             )
             
             if not deleted:
+                ctx.db.rollback()
                 return ToolResult(
                     success=False,
                     error=f"Domain '{domain_id}' not found or could not be deleted"
@@ -375,4 +381,6 @@ class DeleteDomainTool(BaseTool):
             )
             
         except Exception as e:
+            # End the failed transaction: it may hold the domain hierarchy lock
+            ctx.db.rollback()
             return ToolResult(success=False, **tool_failure("delete_domain", e))

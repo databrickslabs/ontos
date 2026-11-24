@@ -68,13 +68,14 @@ def world(db_session, monkeypatch):
 
     monkeypatch.setattr('src.common.database.get_session_factory', lambda: _session)
     reviewed = str(rows.reviewed_draft.id)
-    monkeypatch.setattr(
-        'src.common.review_access.caller_is_pending_reviewer',
-        lambda db, user, kind, entity_id, nm=None: (
-            kind == 'data_product' and entity_id == reviewed
-            and user.email == 'rex@example.com'
-        ),
-    )
+    batch_calls = []
+
+    def _pending(db, user, kind, entity_ids, nm=None):
+        batch_calls.append(sorted(entity_ids))
+        ok = kind == 'data_product' and user.email == 'rex@example.com'
+        return {i for i in entity_ids if ok and i == reviewed}
+
+    monkeypatch.setattr('src.common.review_access.pending_reviewer_ids', _pending)
     items = [
         _item(f'product::{r.id}', 'data-product', 'data-products')
         for r in (rows.published, rows.draft, rows.owned_draft, rows.reviewed_draft)
@@ -85,6 +86,7 @@ def world(db_session, monkeypatch):
     contracts = DataContractsManager.__new__(DataContractsManager)
     contracts.get_search_index_items = lambda: []
     search = SearchManager(searchable_managers=[_Index(items), contracts])
+    rows.batch_calls = batch_calls
     return search, rows
 
 
@@ -144,3 +146,43 @@ def test_rule_failure_leaves_products_out(world, monkeypatch):
     hits = _hits(world, 'carl@example.com', READER)
     assert not any(h.startswith('product::') for h in hits)
     assert _ids('contract', rows.published_contract) <= hits
+
+
+def test_reviewer_check_is_one_batch_for_the_drafts_not_owned(world):
+    _s, rows = world
+    _hits(world, 'carl@example.com', READER)
+    assert rows.batch_calls == [sorted([str(rows.draft.id), str(rows.reviewed_draft.id),
+                                        str(rows.owned_draft.id)])]
+
+
+def test_product_rule_statement_count_does_not_grow_with_drafts(db_session):
+    """40 unpublished drafts cost the same few queries as 5 (no per-row lookups)."""
+    from sqlalchemy import event
+
+    from src.common.search_entity_visibility import readable_product_ids
+
+    def make(n):
+        rows = [DataProductDb(id=str(uuid.uuid4()), name='d', version='1', status='draft')
+                for _ in range(n)]
+        db_session.add_all(rows)
+        db_session.flush()
+        return [str(r.id) for r in rows]
+
+    def count(ids):
+        seen = []
+        bind = db_session.get_bind()
+
+        def _on(*_args, **_kwargs):
+            seen.append(1)
+
+        event.listen(bind, 'before_cursor_execute', _on)
+        try:
+            user = SimpleNamespace(email='carl@example.com', groups=['users'])
+            assert readable_product_ids(db_session, ids, user, MagicMock()) == set()
+        finally:
+            event.remove(bind, 'before_cursor_execute', _on)
+        return len(seen)
+
+    few, many = count(make(5)), count(make(40))
+    assert many == few
+    assert many <= 25  # savepoints included

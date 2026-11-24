@@ -77,48 +77,73 @@ def _is_open_asset_reviewer(
     db: Session, user: Any, entity_type: str, entity_id: str,
 ) -> bool:
     """An open, workflow-created asset review of the entity names the caller."""
-    from sqlalchemy import func
+    return entity_id in _open_asset_reviewer_ids(db, user, entity_type, [entity_id])
 
+
+def _open_asset_reviewer_ids(
+    db: Session, user: Any, entity_type: str, entity_ids: Iterable[str],
+) -> Set[str]:
+    """The ids of ``entity_ids`` with an open, workflow-created asset review naming
+    the caller (one query for all of them)."""
+    from sqlalchemy import func
     from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 
     prefix = _FQN_PREFIXES.get(entity_type)
     identities = _identities(user)
-    if not prefix or not identities:
-        return False
-    reviews = db.query(DataAssetReviewRequestDb).join(
+    ids = [str(i) for i in entity_ids if i]
+    if not prefix or not identities or not ids:
+        return set()
+    rows = db.query(DataAssetReviewRequestDb, ReviewedAssetDb.asset_fqn).join(
         ReviewedAssetDb, ReviewedAssetDb.review_request_id == DataAssetReviewRequestDb.id,
     ).filter(
-        ReviewedAssetDb.asset_fqn == f"{prefix}{entity_id}",
+        ReviewedAssetDb.asset_fqn.in_([f"{prefix}{i}" for i in ids]),
         DataAssetReviewRequestDb.status.in_(_OPEN_REVIEW_STATUSES),
         func.lower(DataAssetReviewRequestDb.reviewer_email).in_(identities),
     ).all()
-    for review in reviews:
+    found: Set[str] = set()
+    for review, fqn in rows:
+        entity_id = fqn[len(prefix):]
+        if entity_id in found:
+            continue
         # A requester never reviews their own request (the workflow step
         # resolves someone else), so such a row can't come from it.
         if (review.requester_email or '').strip().lower() in identities:
             continue
         if _created_by_workflow(db, review.id):
-            return True
-    return False
+            found.add(entity_id)
+    return found
 
 
 def _can_decide_pending_approval(
     db: Session, notifications_manager: Any, user: Any, entity_type: str, entity_id: str,
 ) -> bool:
-    """The caller may decide a paused approval of a workflow run for the entity.
+    """The caller may decide a paused approval of a workflow run for the entity."""
+    return entity_id in _decidable_approval_ids(
+        db, notifications_manager, user, entity_type, [entity_id],
+    )
+
+
+def _decidable_approval_ids(
+    db: Session, notifications_manager: Any, user: Any, entity_type: str,
+    entity_ids: Iterable[str],
+) -> Set[str]:
+    """The ids of ``entity_ids`` with a paused approval the caller may decide.
 
     ``_assert_caller_authorized_for_execution`` (``for_read``) only considers
     the open approval notifications of the step the run waits at that have a
     recipient or a role, and checks them with the strict
-    ``can_user_access_notification``.
+    ``can_user_access_notification``. One query finds the paused runs of all
+    the ids; the check runs only for the runs of these entities.
     """
     from fastapi import HTTPException
+    from sqlalchemy import or_
 
     from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
     from src.routes.workflows_routes import _assert_caller_authorized_for_execution
 
-    if notifications_manager is None:
-        return False
+    ids = {str(i) for i in entity_ids if i}
+    if notifications_manager is None or not ids:
+        return set()
     # The text filter narrows the candidates in SQL; the JSON check is the exact one.
     paused = db.query(WorkflowExecutionDb).join(
         WorkflowStepDb,
@@ -127,8 +152,9 @@ def _can_decide_pending_approval(
     ).filter(
         WorkflowExecutionDb.status == 'paused',
         WorkflowStepDb.step_type == 'approval',
-        WorkflowExecutionDb.trigger_context.contains(json.dumps(entity_id)),
+        or_(*(WorkflowExecutionDb.trigger_context.contains(json.dumps(i)) for i in ids)),
     ).all()
+    found: Set[str] = set()
     for execution in paused:
         try:
             context = json.loads(execution.trigger_context or '{}')
@@ -136,7 +162,10 @@ def _can_decide_pending_approval(
             continue
         if not isinstance(context, dict):
             continue
-        if context.get('entity_type') != entity_type or context.get('entity_id') != entity_id:
+        entity_id = context.get('entity_id')
+        if context.get('entity_type') != entity_type or entity_id not in ids:
+            continue
+        if entity_id in found:
             continue
         try:
             _assert_caller_authorized_for_execution(
@@ -146,10 +175,37 @@ def _can_decide_pending_approval(
                 user_info=user,
                 for_read=True,
             )
-            return True
+            found.add(entity_id)
         except HTTPException:
             continue
-    return False
+    return found
+
+
+def pending_reviewer_ids(
+    db: Session,
+    user: Any,
+    entity_type: str,
+    entity_ids: Iterable[str],
+    notifications_manager: Any = None,
+) -> Set[str]:
+    """``caller_is_pending_reviewer`` for many entities: the ids the caller may
+    read as a pending reviewer. Two queries for all the ids, plus the checks of
+    the matching rows. Fails closed (empty set)."""
+    ids = [str(i) for i in entity_ids if i]
+    if not user or not ids:
+        return set()
+    try:
+        with db.begin_nested():
+            found = _open_asset_reviewer_ids(db, user, entity_type, ids)
+            rest = [i for i in ids if i not in found]
+            if rest:
+                found |= _decidable_approval_ids(
+                    db, notifications_manager, user, entity_type, rest,
+                )
+            return found
+    except Exception:
+        logger.exception("Batch reviewer access check failed for %s; denying", entity_type)
+        return set()
 
 
 def caller_is_pending_reviewer(

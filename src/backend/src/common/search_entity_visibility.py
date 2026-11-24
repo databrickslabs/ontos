@@ -7,7 +7,7 @@ caller may read it by id:
 
 * product: ``GET /api/data-products/{id}`` (``_caller_can_read_product``):
   published, data-products admin, owner (draft owner, owning team, project
-  member), or a pending reviewer of it (#1117). Same helpers.
+  member), or a pending reviewer of it (#1117). Same helpers, batched.
 * contract: ``GET /api/data-contracts/{id}`` (``readable_contract``):
   ``DataContractsManager.readable_contracts`` with data-contracts admin and the
   caller's teams.
@@ -55,36 +55,47 @@ def _team_ids(db, user) -> Set[str]:
 
 
 def readable_product_ids(db, ids: List[str], user, notifications_manager=None) -> Set[str]:
-    """The ids of ``ids`` a caller who is not a data-products admin may read."""
+    """The ids of ``ids`` a caller who is not a data-products admin may read.
+
+    One query for the products, one each for the caller's teams and projects
+    (only when an unpublished product is among them), and one batch reviewer
+    check (``pending_reviewer_ids``) for the unpublished ones they don't own.
+    """
     from src.common import product_read_rule as rule
-    from src.common.review_access import caller_is_pending_reviewer
+    from src.common import review_access
     from src.db_models.data_products import DataProductDb
 
     rows = db.query(DataProductDb).filter(DataProductDb.id.in_(ids)).all()
-    team_ids: Optional[Set[str]] = None
-    project_ids: Any = rule.LOOKUP
     readable: Set[str] = set()
+    unpublished = []
     for row in rows:
         if rule.is_published_product(row):
             readable.add(str(row.id))
-            continue
-        if team_ids is None:
-            team_ids = _team_ids(db, user)
-            try:
-                with db.begin_nested():
-                    project_ids = rule.lookup_member_project_ids(
-                        db, user.email, user.groups or [],
-                    )
-            except Exception:
-                logger.exception("Project lookup failed in search for %s", user.email)
-                project_ids = set()
+        else:
+            unpublished.append(row)
+    if not unpublished:
+        return readable
+
+    team_ids = _team_ids(db, user)
+    try:
+        with db.begin_nested():
+            project_ids: Any = rule.lookup_member_project_ids(db, user.email, user.groups or [])
+    except Exception:
+        logger.exception("Project lookup failed in search for %s", user.email)
+        project_ids = set()
+    not_owned = []
+    for row in unpublished:
         if rule.caller_owns_product(
             db, row, caller_email=user.email, caller_groups=user.groups or [],
             caller_team_ids=team_ids, caller_project_ids=project_ids,
-        ) or caller_is_pending_reviewer(
-            db, user, "data_product", str(row.id), notifications_manager,
         ):
             readable.add(str(row.id))
+        else:
+            not_owned.append(str(row.id))
+    if not_owned:
+        readable |= review_access.pending_reviewer_ids(
+            db, user, "data_product", not_owned, notifications_manager,
+        )
     return readable
 
 

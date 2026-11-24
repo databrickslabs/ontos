@@ -777,3 +777,42 @@ class TestOnePersonSeveralUserTargets:
 
         assert (result['outcome'], result['pending_approvers']) == ('pending', 1)
         assert [d['target'] for d in result['decisions']] == ['group:Team']
+
+
+class TestClarificationOfARequireAllStep:
+    """A step that needs every approver is not resumed by one clarification: the
+    pause record's ``require_all`` decides, even if the step's config lacks it."""
+
+    @staticmethod
+    def _execution(db_session):
+        execution = _paused(
+            db_session,
+            pause_data={'require_all': True, 'resolved_targets': _users(('a@x.com', None))},
+            config={'approvers': 'x', 'on_clarify': 'ok'},
+        )
+        return execution
+
+    def test_the_route_check_refuses_it(self, db_session):
+        execution = self._execution(db_session)
+
+        assert WorkflowExecutor(db_session).clarify_refusal(execution.id) == 'clarify_not_supported'
+
+    def test_resume_refuses_it_and_leaves_the_execution_paused(self, db_session):
+        from src.common.workflow_executor import ClarifyNotSupportedError
+        execution = self._execution(db_session)
+
+        with pytest.raises(ClarifyNotSupportedError):
+            WorkflowExecutor(db_session).resume_workflow(
+                execution.id, False, result_data={'message': 'Why?'}, clarify=True,
+            )
+
+        db_session.refresh(execution)
+        assert execution.status == 'paused'
+
+    def test_a_step_without_require_all_still_takes_it(self, db_session):
+        execution = _paused(
+            db_session, pause_data={'approvers': ['x']},
+            config={'approvers': 'x', 'on_clarify': 'ok'},
+        )
+
+        assert WorkflowExecutor(db_session).clarify_refusal(execution.id) is None

@@ -4390,7 +4390,7 @@ class WorkflowExecutor:
         step = next((s for s in workflow.steps if s.step_id == db_execution.current_step_id), None)
         if step is None or step.step_type != StepType.APPROVAL:
             return None
-        if not _step_clarify_target(step) or (step.config or {}).get('require_all'):
+        if not _step_clarify_target(step) or self.paused_at_required_approval(execution_id):
             return CLARIFY_NOT_SUPPORTED
         return None
 
@@ -4460,6 +4460,15 @@ class WorkflowExecutor:
             step_result = False
             if not _step_clarify_target(current_step):
                 raise ClarifyNotSupportedError("This approval step has no clarification branch")
+            # A step that needs every approver (its pause record decides, as for a
+            # decision) is not resumed by one approver's clarification
+            paused = self._paused_approval(execution_id, lock=True)
+            if paused is not None and paused[1] is not None and self._requires_every_approver(
+                paused[0], paused[2],
+            ):
+                raise ClarifyNotSupportedError(
+                    "A step that requires every approver takes no clarification"
+                )
         
         # Claim the paused step before anything commits: the commit below,
         # which releases the lock, already says the execution has left

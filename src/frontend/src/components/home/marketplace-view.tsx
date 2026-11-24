@@ -145,9 +145,10 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   }, [scopeFilter]);
 
   // Server-side search (#1599): the shared search index ranks and matches (tokens, tags,
-  // domains, owners, concept labels) and applies the caller's permissions. The result is
-  // intersected with the published list below, so it can never show more than the
-  // marketplace listing does.
+  // domains, owners, concept labels) and applies the caller's permissions and the product
+  // read rule, so /api/search never returns an unpublished product to this user. The hits are
+  // intersected with the published list below, which supplies the card data and the scope
+  // filter that a search hit does not carry.
   useEffect(() => {
     const query = searchQuery.trim();
     setSearchError(false);

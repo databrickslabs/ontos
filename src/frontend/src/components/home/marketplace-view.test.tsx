@@ -124,7 +124,7 @@ describe('MarketplaceView', () => {
       searchResponse = [
         { id: 'product::p2', type: 'data-product' },
         { id: 'glossary::x', type: 'glossary-term' },
-        { id: 'product::hidden', type: 'data-product' }, // not published: never shown
+        { id: 'product::hidden', type: 'data-product' }, // not in the listing: never shown
         { id: 'product::p1', type: 'data-product' },
       ];
       await renderMarketplace();

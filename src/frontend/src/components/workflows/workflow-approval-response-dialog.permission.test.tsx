@@ -112,3 +112,23 @@ describe('WorkflowApprovalResponseDialog failed access decision (#1687 review)',
     }));
   });
 });
+
+describe('WorkflowApprovalResponseDialog terms cut by an earlier step (#1687 review)', () => {
+  it('tells the approver what was granted instead', async () => {
+    const params = { sent_days: 30, sent_level: 'WRITE', granted_days: 7, granted_level: 'READ' };
+    api.post.mockResolvedValueOnce({
+      data: {
+        status: 'succeeded',
+        warning: { code: 'access_terms_narrowed_by_earlier_step', params },
+      },
+    });
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: /Approve/ }));
+    await waitFor(() => expect(api.toast).toHaveBeenCalledTimes(1));
+    expect(api.toast.mock.calls[0][0]).toEqual({
+      title: i18n.t('workflows:approvalResponse.accessDecision.narrowedTitle'),
+      description: i18n.t('workflows:approvalResponse.accessDecision.narrowed', params),
+    });
+    expect(api.toast.mock.calls[0][0].description).toContain('READ for 7 days');
+  });
+});

@@ -339,8 +339,21 @@ export default function WorkflowApprovalResponseDialog({
       // Only then is there a count: a step that moves on to another approval
       // step is 'paused' too, but this decision was the step's.
       const decision = response.data as {
-        status?: string; pending_approvers?: number; warning?: { code?: string };
+        status?: string; pending_approvers?: number;
+        warning?: { code?: string; params?: Record<string, string | number> };
       } | null;
+      if (decision?.warning?.code === 'access_terms_narrowed_by_earlier_step') {
+        // The decision is recorded; an earlier approval step had granted less
+        toast({
+          title: t('workflows:approvalResponse.accessDecision.narrowedTitle'),
+          description: t('workflows:approvalResponse.accessDecision.narrowed', {
+            ...decision.warning.params,
+          }),
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
+        return;
+      }
       if (decision?.warning?.code === 'access_decision_failed') {
         // The workflow has the decision; the access request gets it on a later pass
         toast({

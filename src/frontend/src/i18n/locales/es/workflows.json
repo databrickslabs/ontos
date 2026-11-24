@@ -387,7 +387,9 @@
     "accessDecision": {
       "adminHint": "Como administrador puede decidir su propia solicitud y conceder más de lo solicitado. El registro de auditoría lo registra como una anulación.",
       "failedTitle": "Decisión registrada, acceso aún no actualizado",
-      "failed": "El flujo de trabajo tiene su decisión, pero no se pudo actualizar la solicitud de acceso. Se reintentará automáticamente."
+      "failed": "El flujo de trabajo tiene su decisión, pero no se pudo actualizar la solicitud de acceso. Se reintentará automáticamente.",
+      "narrowedTitle": "Condiciones reducidas por un paso anterior",
+      "narrowed": "Un paso de aprobación anterior concedió menos de lo que elegiste: {{granted_level}} durante {{granted_days}} días (enviaste {{sent_level}}, {{sent_days}} días)."
     },
     "reasonLabel": "Motivo de la aprobación o el rechazo",
     "reasonPlaceholder": "Introduce tu motivo...",

@@ -387,7 +387,9 @@
     "accessDecision": {
       "adminHint": "Come amministratore puoi decidere la tua richiesta e concedere più di quanto richiesto. Il registro di audit lo registra come forzatura.",
       "failedTitle": "Decisione registrata, accesso non ancora aggiornato",
-      "failed": "Il workflow ha la tua decisione, ma non è stato possibile aggiornare la richiesta di accesso. Verrà riprovato automaticamente."
+      "failed": "Il workflow ha la tua decisione, ma non è stato possibile aggiornare la richiesta di accesso. Verrà riprovato automaticamente.",
+      "narrowedTitle": "Condizioni ridotte da un passaggio precedente",
+      "narrowed": "Un passaggio di approvazione precedente ha concesso meno di quanto hai scelto: {{granted_level}} per {{granted_days}} giorni (hai inviato {{sent_level}}, {{sent_days}} giorni)."
     },
     "reasonLabel": "Motivo dell'approvazione o del rifiuto",
     "reasonPlaceholder": "Inserisci il tuo motivo...",

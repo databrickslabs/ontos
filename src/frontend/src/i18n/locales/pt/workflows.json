@@ -387,7 +387,9 @@
     "accessDecision": {
       "adminHint": "Como administrador, você pode decidir sua própria solicitação e conceder mais do que foi solicitado. O log de auditoria registra isso como uma substituição.",
       "failedTitle": "Decisão registrada, acesso ainda não atualizado",
-      "failed": "O workflow tem sua decisão, mas a solicitação de acesso não pôde ser atualizada. Isso será tentado novamente de forma automática."
+      "failed": "O workflow tem sua decisão, mas a solicitação de acesso não pôde ser atualizada. Isso será tentado novamente de forma automática.",
+      "narrowedTitle": "Termos reduzidos por uma etapa anterior",
+      "narrowed": "Uma etapa de aprovação anterior concedeu menos do que você escolheu: {{granted_level}} por {{granted_days}} dias (você enviou {{sent_level}}, {{sent_days}} dias)."
     },
     "reasonLabel": "Motivo da aprovação ou rejeição",
     "reasonPlaceholder": "Digite seu motivo...",

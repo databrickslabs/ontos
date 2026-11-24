@@ -1787,6 +1787,7 @@ def _access_decision_record(
 
 
 ACCESS_DECISION_FAILED = 'access_decision_failed'
+ACCESS_TERMS_NARROWED = 'access_terms_narrowed_by_earlier_step'
 
 
 def _record_access_decision(
@@ -2243,6 +2244,7 @@ async def handle_workflow_approval(
         # workflow state changes
         access_manager = access_row = access_terms = None
         overridden: List[str] = []
+        narrowed_from: Optional[tuple] = None
         if access_request_id:
             from src.controller.access_grants_manager import (
                 ACCESS_DECISION_KEY, OVERRIDE_SELF_APPROVAL, OVERRIDE_TERMS,
@@ -2303,9 +2305,17 @@ async def handle_workflow_approval(
         if approved and access_row is not None:
             # An earlier approval step's narrowing holds (read before this step's own
             # result is stored; the reconciliation reads the last step's record)
+            sent_terms = access_terms
             access_terms = _narrowest_terms(
                 _earlier_step_terms(db, execution_id), access_terms,
             )
+            if access_terms != sent_terms:
+                narrowed_from = sent_terms
+            # The override is what is granted: terms an earlier step cut are no override
+            from src.controller.access_grants_manager import OVERRIDE_TERMS as _TERMS
+            overridden = [o for o in overridden if o != _TERMS]
+            if terms_exceed_request(access_row, access_terms):
+                overridden.append(_TERMS)
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
@@ -2372,6 +2382,7 @@ async def handle_workflow_approval(
                 'execution_id': execution_id, 'approved': approved,
                 **({'access_grant': access_decision} if access_decision else {}),
                 **({ACCESS_DECISION_FAILED: True} if access_failed else {}),
+                **({'narrowed_by_earlier_step': True} if narrowed_from else {}),
                 **_override_details(overridden),
             },
         )
@@ -2402,6 +2413,16 @@ async def handle_workflow_approval(
                 ),
                 'params': {'access_request': str(access_row.id)},
             }
+        if narrowed_from and access_terms:
+            # code: translated by the UI (workflows:approvalResponse.accessDecision.*)
+            response.setdefault('warning', {
+                'code': ACCESS_TERMS_NARROWED,
+                'message': "An earlier approval step granted less than you chose.",
+                'params': {
+                    'sent_days': narrowed_from[0], 'sent_level': narrowed_from[1],
+                    'granted_days': access_terms[0], 'granted_level': access_terms[1],
+                },
+            })
         return response
         
     except HTTPException:

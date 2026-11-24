@@ -686,8 +686,8 @@ class TestFailedDecisionRecord:
         assert _grants(db_session, request_id) == []
 
 
-def _two_step_workflow(client, as_user):
-    """An access workflow of two approval steps in a row: Ana's, then Ben's."""
+def _two_step_workflow(client, as_user, second=None):
+    """An access workflow of two approval steps in a row: Ana's, then Ben's (or ``second``)."""
     as_user(ADMIN)
     response = client.post('/api/workflows', json={
         'name': f'Two steps {uuid.uuid4().hex[:8]}',
@@ -697,7 +697,7 @@ def _two_step_workflow(client, as_user):
             {'step_id': 'first', 'name': 'First', 'step_type': 'approval',
              'config': {'approvers': ANA[0]}, 'on_pass': 'second', 'on_fail': 'no'},
             {'step_id': 'second', 'name': 'Second', 'step_type': 'approval',
-             'config': {'approvers': BEN[0]}, 'on_pass': 'ok', 'on_fail': 'no'},
+             'config': {'approvers': second or BEN[0]}, 'on_pass': 'ok', 'on_fail': 'no'},
             {'step_id': 'ok', 'name': 'Granted', 'step_type': 'pass'},
             {'step_id': 'no', 'name': 'Denied', 'step_type': 'fail'},
         ],
@@ -746,3 +746,73 @@ class TestSequentialApprovalSteps:
         assert grant.permission_level == 'READ'
         assert _days(grant) in (6, 7)
 
+
+
+class TestEarlierStepNarrowedTheTerms:
+    """Terms an earlier step cut: no override is audited for them, and the approver is told."""
+
+    def _narrowed_by_ana(self, client, as_user, db_session, second):
+        workflow_id = _two_step_workflow(client, as_user, second=second)
+        request_id = _request_access(client, as_user, permission='WRITE', days=30)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+        first = _decide(client, as_user, execution_id, True, identity=ANA,
+                        granted_duration_days=7, permission_level='READ')
+        assert first.status_code == 200, first.text
+        return request_id, execution_id
+
+    def test_an_admins_wider_terms_cut_by_an_earlier_step_are_no_override(
+        self, client, as_user, db_session,
+    ):
+        from src.controller.audit_manager import AuditManager
+
+        request_id, execution_id = self._narrowed_by_ana(
+            client, as_user, db_session, second=ADMIN[0])
+
+        with patch.object(AuditManager, 'log_action') as log_action:
+            response = _decide(client, as_user, execution_id, True, identity=ADMIN,
+                               permission_level='MANAGE', granted_duration_days=60)
+
+        assert response.status_code == 200, response.text
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'READ'
+        assert _days(grant) in (6, 7)
+        details = _approval_audit(log_action)
+        assert 'override' not in details and 'overridden' not in details
+        assert details['narrowed_by_earlier_step'] is True
+        assert response.json()['warning'] == {
+            'code': 'access_terms_narrowed_by_earlier_step',
+            'message': 'An earlier approval step granted less than you chose.',
+            'params': {'sent_days': 60, 'sent_level': 'MANAGE',
+                       'granted_days': 7, 'granted_level': 'READ'},
+        }
+
+    def test_an_approver_is_told_when_an_earlier_step_cut_their_terms(
+        self, client, as_user, db_session,
+    ):
+        from src.controller.audit_manager import AuditManager
+
+        request_id, execution_id = self._narrowed_by_ana(
+            client, as_user, db_session, second=BEN[0])
+
+        with patch.object(AuditManager, 'log_action') as log_action:
+            response = _decide(client, as_user, execution_id, True, identity=BEN,
+                               permission_level='WRITE', granted_duration_days=30)
+
+        assert response.status_code == 200, response.text
+        warning = response.json()['warning']
+        assert warning['code'] == 'access_terms_narrowed_by_earlier_step'
+        assert warning['params'] == {'sent_days': 30, 'sent_level': 'WRITE',
+                                     'granted_days': 7, 'granted_level': 'READ'}
+        assert _approval_audit(log_action)['narrowed_by_earlier_step'] is True
+        [grant] = _grants(db_session, request_id)
+        assert grant.permission_level == 'READ'
+
+    def test_no_warning_when_the_earlier_step_cut_nothing(self, client, as_user, db_session):
+        request_id, execution_id = self._narrowed_by_ana(
+            client, as_user, db_session, second=BEN[0])
+
+        response = _decide(client, as_user, execution_id, True, identity=BEN,
+                           permission_level='READ', granted_duration_days=7)
+
+        assert response.status_code == 200, response.text
+        assert 'warning' not in response.json()

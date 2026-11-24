@@ -387,7 +387,9 @@
     "accessDecision": {
       "adminHint": "As an admin you can decide your own request and grant more than was requested. The audit log records it as an override.",
       "failedTitle": "Decision recorded, access not updated yet",
-      "failed": "The workflow has your decision, but the access request could not be updated. It is retried automatically."
+      "failed": "The workflow has your decision, but the access request could not be updated. It is retried automatically.",
+      "narrowedTitle": "Terms reduced by an earlier step",
+      "narrowed": "An earlier approval step granted less than you chose: {{granted_level}} for {{granted_days}} days (you sent {{sent_level}}, {{sent_days}} days)."
     },
     "reasonLabel": "Reason for approval or rejection",
     "reasonPlaceholder": "Enter your reason...",

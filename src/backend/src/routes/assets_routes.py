@@ -33,8 +33,9 @@ from src.controller.asset_description_history import (
 )
 from src.controller.uc_description_drift_manager import UcDescriptionDriftManager
 from src.models.asset_description import (
-    DescriptionDrift, ResetSelectedRequest, ResetSelectedResult, DescriptionHistory, DescriptionHistoryEntry, DescriptionResetRequest, DescriptionResetResult,
-    DescriptionRestoreRequest, UcCommentPreview,
+    DescriptionDrift, DescriptionHistory, DescriptionHistoryEntry, DescriptionResetRequest,
+    DescriptionResetResult, DescriptionRestoreRequest, ResetSelectedRequest, ResetSelectedResult,
+    UcCommentPreview,
 )
 from src.db_models.assets import AssetDb
 from src.models.metric_views import MetricViewRead

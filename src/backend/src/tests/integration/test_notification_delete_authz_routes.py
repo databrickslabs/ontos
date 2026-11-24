@@ -199,3 +199,23 @@ def test_non_admin_is_not_offered_a_delete_on_a_non_deletable_notification(
     }
 
     assert listed[notification_id]["can_delete"] is False
+
+
+def test_role_named_admin_without_the_flag_cannot_delete_someone_elses_notification(
+    as_user, db_session
+):
+    """Only the Ontos admin check (is_admin) overrides; the role's name does not."""
+    role = db_session.query(AppRoleDb).filter_by(name="Admin").one()
+    role.is_admin = False
+    role.assigned_groups = json.dumps(["named-admins"])
+    role.feature_permissions = json.dumps({"notifications": "Admin"})
+    db_session.flush()
+    notification_id = _notification(db_session, recipient=OTHER_EMAIL)
+
+    response = as_user("named@example.com", ["named-admins"]).delete(
+        f"/api/notifications/{notification_id}"
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "notification_access_denied"
+    assert _exists(db_session, notification_id)

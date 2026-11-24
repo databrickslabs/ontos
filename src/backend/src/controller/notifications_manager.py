@@ -249,7 +249,7 @@ class NotificationsManager:
 
     def can_user_access_notification(
         self, db: Session, notification: Notification, user_info: UserInfo,
-        *, strict: bool = False,
+        *, strict: bool = False, admin_fallback: bool = True,
     ) -> bool:
         """Check if a user can access/modify a specific notification.
         
@@ -266,6 +266,9 @@ class NotificationsManager:
                 business role, or a deleted role) only the user the
                 notification names, not the admins. The default (the bell)
                 treats an unresolvable role as a broadcast.
+            admin_fallback: Members of the role named Admin access any notification
+                (the default). The delete route turns it off and decides admins itself,
+                by the Ontos admin check (a role flagged ``is_admin``).
             
         Returns:
             True if user can access the notification, False otherwise
@@ -288,7 +291,7 @@ class NotificationsManager:
         if membership.is_recipient(recipient, role_id):
             return True
         # Admins can access any notification
-        return membership.is_admin
+        return admin_fallback and membership.is_admin
 
     def _membership(self, user_info: UserInfo, purpose: str) -> _RecipientMembership:
         """The user's recipient membership, with the roles loaded once."""

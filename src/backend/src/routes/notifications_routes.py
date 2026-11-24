@@ -130,7 +130,7 @@ async def delete_notification(
 
         is_admin = auth_manager.is_user_ontos_admin(current_user.groups if current_user else None)
         if not is_admin and not manager.can_user_access_notification(
-            db=db, notification=notification, user_info=current_user
+            db=db, notification=notification, user_info=current_user, admin_fallback=False
         ):
             raise NotificationAccessDeniedError(
                 "You can only delete your own notifications.", notification_id=notification_id

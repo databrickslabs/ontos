@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -183,13 +183,15 @@ const DataDomainMiniGraphInner: React.FC<DataDomainMiniGraphProps> = ({ currentD
   const navigate = useNavigate();
   const { fitView } = useReactFlow();
 
-  const handleNodeClick = (domainId: string) => {
+  // Stable reference: `nodes` below depends on it, and every new `nodes` array re-runs
+  // fitView (so each re-render of the host page restarted the fit animation, #1592).
+  const handleNodeClick = useCallback((domainId: string) => {
     if (onNodeClick) {
       onNodeClick(domainId);
     } else {
       navigate(`/settings/data-domains/${domainId}`);
     }
-  };
+  }, [onNodeClick, navigate]);
 
   // Compute nodes and edges from domain data
   const { nodes, edges } = useMemo(

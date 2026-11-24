@@ -2386,6 +2386,7 @@ async def handle_workflow_approval(
 
         _mark_step_notifications_handled(
             db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+            decision='clarify' if clarify else None,
         )
         if required is not None:
             # A decision that ends a require_all step: the shared rows of its round too
@@ -2409,7 +2410,7 @@ async def handle_workflow_approval(
             action='HANDLE_APPROVAL',
             success=True,
             details={
-                'execution_id': execution_id, 'approved': approved,
+                'execution_id': execution_id, 'approved': approved, 'clarify': clarify,
                 **({'access_grant': access_decision} if access_decision else {}),
                 **({ACCESS_DECISION_FAILED: True} if access_failed else {}),
                 **({'narrowed_by_earlier_step': True} if narrowed_from else {}),
@@ -2425,12 +2426,16 @@ async def handle_workflow_approval(
                 logger.warning("Could not mark the access request's notifications handled",
                                exc_info=True)
 
-        logger.info(f"Workflow approval handled for execution {execution_id}: {'approved' if approved else 'rejected'}")
+        outcome = 'clarification requested' if clarify else ('approved' if approved else 'rejected')
+        logger.info(f"Workflow approval handled for execution {execution_id}: {outcome}")
         
         response = {
             'execution_id': result.id,
             'status': result.status.value,
-            'message': f"Request {'approved' if approved else 'rejected'} successfully",
+            'message': (
+                'Clarification requested successfully' if clarify
+                else f"Request {'approved' if approved else 'rejected'} successfully"
+            ),
         }
         if access_failed:
             # The workflow has the decision; the request gets it on a later pass

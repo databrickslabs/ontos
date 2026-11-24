@@ -6,12 +6,14 @@ request clarification). The requester gets exactly one decision notification
 naming the product, the target status, the decision, the approver and the
 approver's message; the product keeps or takes its status accordingly.
 """
+import json
 import uuid
 
 import pytest
 
 from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.data_products import DataProductDb
+from src.db_models.notifications import NotificationDb
 
 REQUESTER = ('requester@example.com', ['data-producers'])
 ADMIN = ('test@example.com', ['test_admins'])
@@ -146,3 +148,19 @@ def test_clarify_needs_the_message_for_the_requester(
     assert response.status_code == 400
     assert response.json()['detail']['code'] == 'clarification_message_required'
     assert _decision_notices(client, as_user) == []
+
+
+def test_a_clarification_marks_the_approvers_notification_as_clarified(
+    client, as_user, db_session, product, default_workflow,
+):
+    execution_id = _request(client, as_user, product.id)
+
+    response = _decide(client, as_user, execution_id, message='Which region?', clarify=True)
+
+    assert response.status_code == 200, response.text
+    assert 'larification' in response.json()['message']
+    handled = [
+        json.loads(n.action_payload) for n in db_session.query(NotificationDb).all()
+        if n.action_payload and execution_id in str(n.action_payload)
+    ]
+    assert handled and {p['decision'] for p in handled if p.get('handled')} == {'clarify'}

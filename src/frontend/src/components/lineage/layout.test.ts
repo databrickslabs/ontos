@@ -144,6 +144,33 @@ describe('layoutLineageGraph (System nodes)', () => {
     });
   }
 
+  for (const infraFirst of [true, false]) {
+    it(`keeps the real flow edge over a System edge (${infraFirst ? 'infra' : 'flow'} first)`, () => {
+      const infra = edge('Table:u', 'System:s', 'belongsToSystem', true);
+      const feeds = edge('Table:u', 'System:s', 'feeds', true);
+      const l = layoutLineageGraph({
+        center_entity_type: 'Table',
+        center_entity_id: 'u',
+        nodes: [node('Table:u', 'physical'), node('System:s', 'physical')],
+        edges: infraFirst ? [infra, feeds] : [feeds, infra],
+      });
+      expect(l.edges).toHaveLength(1);
+      expect(l.edges[0].edge.relationship_type).toBe('feeds');
+      expect(l.edges[0].memberKeys).toHaveLength(2);
+    });
+  }
+
+  it('draws a non-reversed System edge with the System as a sink', () => {
+    const l = layoutLineageGraph({
+      center_entity_type: 'Table',
+      center_entity_id: 'u',
+      nodes: [node('Table:u', 'physical'), node('System:s', 'physical')],
+      edges: [edge('Table:u', 'System:s', 'deployedOnSystem')],
+    });
+    const x = (id: string) => l.groups.find((g) => g.id === id)!.x;
+    expect(x('System:s')).toBeGreaterThan(x('Table:u'));
+  });
+
   it('still nests assets inside a System that is the center', () => {
     const l = layoutLineageGraph({
       center_entity_type: 'System',

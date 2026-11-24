@@ -581,6 +581,12 @@ export function layoutLineageGraph(
     const existing = renderedByKey.get(key);
     if (existing) {
       existing.memberKeys.push(e.key);
+      // A real flow edge wins over an infrastructure edge, whatever the API order
+      if (isInfrastructure(existing.edge.relationship_type)
+        && !isInfrastructure(e.original.relationship_type)) {
+        existing.edge = e.original;
+        existing.reversed = !!e.original.reversed;
+      }
       continue;
     }
 

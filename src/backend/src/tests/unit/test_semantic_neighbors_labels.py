@@ -34,15 +34,21 @@ def test_neighbors_carry_labels_for_target_and_predicate(manager):
     by_pred = {i["predicate"]: i for i in items}
     sub = by_pred[str(RDFS.subClassOf)]
     assert sub["display"] == EX + "Child"
-    # prefLabel wins over rdfs:label for the same language
-    assert sub["displayLabels"] == {"pt": "Filho", "en": "Child rdfs en"}
-    assert sub["predicateLabels"] == {}
+    # prefLabel and rdfs:label are kept in separate maps
+    assert sub["displayLabels"] == {
+        "prefLabel": {"pt": "Filho"},
+        "rdfsLabel": {"pt": "Child rdfs", "en": "Child rdfs en"},
+    }
+    assert sub["predicateLabels"] == {"prefLabel": {}, "rdfsLabel": {}}
     rel = by_pred[EX + "contains"]
-    assert rel["predicateLabels"] == {"en": "contains substance"}
+    assert rel["predicateLabels"] == {
+        "prefLabel": {},
+        "rdfsLabel": {"en": "contains substance"},
+    }
 
 
 def test_neighbors_literal_has_no_labels(manager):
     manager._graph.add((URIRef(EX + "Root"), SKOS.definition, Literal("text")))
     items = manager.neighbors(EX + "Root")
     lit = next(i for i in items if i["predicate"] == str(SKOS.definition))
-    assert lit["displayLabels"] == {}
+    assert lit["displayLabels"] == {"prefLabel": {}, "rdfsLabel": {}}

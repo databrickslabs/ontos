@@ -9,23 +9,64 @@ export function iriLocalName(iri: string): string {
   return path || iri;
 }
 
+/** Language-keyed label maps of a resource, skos:prefLabel kept apart from rdfs:label. */
+export interface LabelMaps {
+  prefLabel?: Record<string, string> | null;
+  rdfsLabel?: Record<string, string> | null;
+}
+
+// Pick a label by language, including regional variants (en-US, en-GB, etc.).
+function pickByLang(map: Record<string, string>, lang: string): string | undefined {
+  if (map[lang]) return map[lang];
+  const prefix = lang + '-';
+  for (const [key, value] of Object.entries(map)) {
+    if (value && key.startsWith(prefix)) return value;
+  }
+  return undefined;
+}
+
+// UI language, then English, then untagged, then any other language.
+function pickLabel(map: Record<string, string>, preferredLang: string): string | undefined {
+  return (
+    pickByLang(map, preferredLang) ||
+    pickByLang(map, 'en') ||
+    map[''] ||
+    Object.values(map).find(Boolean)
+  );
+}
+
 /**
- * Resolve the display label for a resource from its language-keyed labels.
+ * Resolve the display label for a resource.
  *
- * The map is built by the backend with skos:prefLabel taking precedence over
- * rdfs:label for the same language, so the precedence applied here is:
- * 1. Preferred language (UI language, regional variants included)
- * 2. English ('en')
- * 3. No language tag ('')
- * 4. Any other language
- * 5. Legacy single `label` (when it is not just the IRI)
- * 6. IRI local name (after last # or /)
- * 7. The IRI itself
+ * Precedence:
+ * 1. skos:prefLabel: UI language, English, untagged, any other language
+ * 2. rdfs:label: UI language, English, untagged, any other language
+ * 3. Legacy single `label` (when it is not just the IRI)
+ * 4. IRI local name (after last # or /)
+ * 5. The IRI itself
  *
- * @param labels Language-keyed labels ({"en": "Dataset", "pt": "Conjunto"}), may be empty
+ * @param maps prefLabel / rdfsLabel language-keyed maps ({"en": "Dataset", "pt": "Conjunto"})
  * @param iri The resource IRI
  * @param preferredLang The preferred language code (e.g., 'en', 'pt')
  * @param legacyLabel Optional single-valued label
+ */
+export function resolveLabelFromMaps(
+  maps: LabelMaps | null | undefined,
+  iri: string,
+  preferredLang: string = 'en',
+  legacyLabel?: string
+): string {
+  const found =
+    pickLabel(maps?.prefLabel || {}, preferredLang) ||
+    pickLabel(maps?.rdfsLabel || {}, preferredLang);
+  if (found) return found;
+  if (legacyLabel && legacyLabel !== iri) return legacyLabel;
+  return iriLocalName(iri) || iri;
+}
+
+/**
+ * Single-map variant for data that already merged both label kinds per language
+ * (concept `labels`, prefLabel first). Same fallbacks as {@link resolveLabelFromMaps}.
  */
 export function resolveLabelFromMap(
   labels: Record<string, string> | null | undefined,
@@ -33,32 +74,7 @@ export function resolveLabelFromMap(
   preferredLang: string = 'en',
   legacyLabel?: string
 ): string {
-  const map = labels || {};
-
-  // Helper to find label by language, including regional variants (en-US, en-GB, etc.)
-  const findByLang = (lang: string): string | undefined => {
-    if (map[lang]) return map[lang];
-    const prefix = lang + '-';
-    for (const [key, value] of Object.entries(map)) {
-      if (value && key.startsWith(prefix)) return value;
-    }
-    return undefined;
-  };
-
-  const preferred = findByLang(preferredLang);
-  if (preferred) return preferred;
-
-  const english = findByLang('en');
-  if (english) return english;
-
-  if (map['']) return map[''];
-
-  const anyLabel = Object.values(map).find(Boolean);
-  if (anyLabel) return anyLabel;
-
-  if (legacyLabel && legacyLabel !== iri) return legacyLabel;
-
-  return iriLocalName(iri) || iri;
+  return resolveLabelFromMaps({ prefLabel: labels }, iri, preferredLang, legacyLabel);
 }
 
 /**

@@ -15,15 +15,15 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { useApi } from '@/hooks/use-api'
-import { resolveLabelFromMap } from '@/lib/ontology-utils'
+import { resolveLabelFromMaps, type LabelMaps } from '@/lib/ontology-utils'
 
 interface NeighborItem {
   direction: 'outgoing' | 'incoming' | 'predicate'
   predicate: string
   display: string
   displayType: 'resource' | 'property' | 'literal'
-  displayLabels?: Record<string, string>
-  predicateLabels?: Record<string, string>
+  displayLabels?: LabelMaps
+  predicateLabels?: LabelMaps
   stepIri?: string | null
   stepIsResource?: boolean
 }
@@ -172,7 +172,7 @@ export default function ConceptRelationsPanel({
       const targetLabel =
         n.displayType === 'literal'
           ? n.display
-          : resolveLabelFromMap(n.displayLabels, n.display, lang)
+          : resolveLabelFromMaps(n.displayLabels, n.display, lang)
 
       const key = `${n.direction}|${n.predicate}|${n.display}`
       if (seen.has(key)) continue
@@ -181,7 +181,7 @@ export default function ConceptRelationsPanel({
         key,
         direction: n.direction,
         predicate: n.predicate,
-        predicateShort: resolveLabelFromMap(n.predicateLabels, n.predicate, lang),
+        predicateShort: resolveLabelFromMaps(n.predicateLabels, n.predicate, lang),
         targetLabel,
         targetIri,
         isResource: !!n.stepIsResource,

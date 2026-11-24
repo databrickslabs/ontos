@@ -3,6 +3,7 @@ import type { OntologyConcept } from '@/types/ontology';
 import {
   resolveLabel,
   resolveLabelFromMap,
+  resolveLabelFromMaps,
   iriLocalName,
   resolveComment,
   getAvailableLanguages,
@@ -91,6 +92,24 @@ describe('ontology-utils', () => {
     it('falls to the local name only when there is no label at all', () => {
       expect(resolveLabelFromMap({}, iri, 'pt')).toBe('BiogenicCarbon');
       expect(resolveLabelFromMap(undefined, iri, 'pt')).toBe('BiogenicCarbon');
+    });
+
+    it('prefLabel in any language beats rdfs:label in the UI language', () => {
+      const maps = { prefLabel: { en: 'Pref en' }, rdfsLabel: { pt: 'Rdfs pt' } };
+      expect(resolveLabelFromMaps(maps, iri, 'pt')).toBe('Pref en');
+    });
+
+    it('prefLabel: UI language, then en, then untagged, then any', () => {
+      expect(resolveLabelFromMaps({ prefLabel: { en: 'E', pt: 'P' } }, iri, 'pt')).toBe('P');
+      expect(resolveLabelFromMaps({ prefLabel: { en: 'E', de: 'D' } }, iri, 'pt')).toBe('E');
+      expect(resolveLabelFromMaps({ prefLabel: { '': 'U', de: 'D' } }, iri, 'pt')).toBe('U');
+      expect(resolveLabelFromMaps({ prefLabel: { de: 'D' } }, iri, 'pt')).toBe('D');
+    });
+
+    it('uses rdfs:label only when there is no prefLabel, then legacy, then local name', () => {
+      expect(resolveLabelFromMaps({ rdfsLabel: { de: 'R' } }, iri, 'pt')).toBe('R');
+      expect(resolveLabelFromMaps({}, iri, 'pt', 'Legacy')).toBe('Legacy');
+      expect(resolveLabelFromMaps(null, iri, 'pt')).toBe('BiogenicCarbon');
     });
 
     it('iriLocalName handles fragment, path and empty IRIs', () => {

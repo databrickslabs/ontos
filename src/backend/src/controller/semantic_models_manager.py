@@ -2686,20 +2686,21 @@ class SemanticModelsManager(SearchableAsset):
         seen: set[tuple[str, str, str]] = set()  # (direction, predicate, display)
         count = 0
         uri = URIRef(resource_iri)
-        label_cache: Dict[str, Dict[str, str]] = {}
+        label_cache: Dict[str, Dict[str, Dict[str, str]]] = {}
 
-        def label_map(node: any) -> Dict[str, str]:
-            """Language-keyed labels of a resource: skos:prefLabel wins over rdfs:label."""
+        def label_map(node: any) -> Dict[str, Dict[str, str]]:
+            """Language-keyed labels of a resource, skos:prefLabel kept apart from rdfs:label."""
             if not isinstance(node, URIRef):
-                return {}
+                return {'prefLabel': {}, 'rdfsLabel': {}}
             key = str(node)
             if key not in label_cache:
-                labels: Dict[str, str] = {}
-                for pred in (SKOS.prefLabel, RDFS.label):
+                maps: Dict[str, Dict[str, str]] = {}
+                for name, pred in (('prefLabel', SKOS.prefLabel), ('rdfsLabel', RDFS.label)):
+                    maps[name] = {}
                     for lit in self._graph.objects(node, pred):
                         lang = getattr(lit, 'language', None) or ''
-                        labels.setdefault(lang, str(lit))
-                label_cache[key] = labels
+                        maps[name].setdefault(lang, str(lit))
+                label_cache[key] = maps
             return label_cache[key]
 
         def detect_type(node: any) -> str:

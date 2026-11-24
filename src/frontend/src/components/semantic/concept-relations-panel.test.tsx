@@ -200,9 +200,9 @@ describe('ConceptRelationsPanel', () => {
         {
           direction: 'outgoing',
           predicate: 'http://example.org/onto#containsSubstance',
-          predicateLabels: { en: 'contains substance' },
+          predicateLabels: { rdfsLabel: { en: 'contains substance' } },
           display: 'http://example.org/onto#BiogenicCarbon',
-          displayLabels: { pt: 'Carbono biogenico' },
+          displayLabels: { prefLabel: { pt: 'Carbono biogenico' } },
           displayType: 'resource',
           stepIri: 'http://example.org/onto#BiogenicCarbon',
           stepIsResource: true,

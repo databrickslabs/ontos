@@ -15,15 +15,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useApi } from '@/hooks/use-api'
 import { OntologyConcept } from '@/types/ontology'
-import { resolveLabel, resolveLabelFromMap } from '@/lib/ontology-utils'
+import { resolveLabel, resolveLabelFromMaps, type LabelMaps } from '@/lib/ontology-utils'
 
 interface NeighborItem {
   direction: 'outgoing' | 'incoming' | 'predicate'
   predicate: string
   display: string
   displayType: 'resource' | 'property' | 'literal'
-  displayLabels?: Record<string, string>
-  predicateLabels?: Record<string, string>
+  displayLabels?: LabelMaps
+  predicateLabels?: LabelMaps
   stepIri?: string | null
   stepIsResource?: boolean
 }
@@ -321,7 +321,7 @@ function ConceptNeighborhoodGraphInner({
         seenParents.add(n.stepIri)
         parentsAll.push({
           iri: n.stepIri,
-          label: resolveLabelFromMap(n.displayLabels, n.display, lang),
+          label: resolveLabelFromMaps(n.displayLabels, n.display, lang),
           typeBadge: t('semantic-models:types.class', { defaultValue: 'Class' }),
         })
       } else if (
@@ -333,7 +333,7 @@ function ConceptNeighborhoodGraphInner({
         seenChildren.add(n.stepIri)
         childrenAll.push({
           iri: n.stepIri,
-          label: resolveLabelFromMap(n.displayLabels, n.display, lang),
+          label: resolveLabelFromMaps(n.displayLabels, n.display, lang),
           typeBadge: t('semantic-models:types.class', { defaultValue: 'Class' }),
         })
       }
@@ -415,7 +415,7 @@ function ConceptNeighborhoodGraphInner({
     const targetText = (n: NeighborItem) =>
       n.displayType === 'literal'
         ? n.display
-        : resolveLabelFromMap(n.displayLabels, n.display, lang)
+        : resolveLabelFromMaps(n.displayLabels, n.display, lang)
     return (
       <div
         className="max-h-[320px] overflow-auto divide-y"
@@ -429,7 +429,7 @@ function ConceptNeighborhoodGraphInner({
               className="flex items-center gap-3 px-3 py-2 text-sm"
             >
               <span className="text-xs font-mono text-muted-foreground shrink-0 w-40 truncate" title={n.predicate}>
-                {resolveLabelFromMap(n.predicateLabels, n.predicate, lang)}
+                {resolveLabelFromMaps(n.predicateLabels, n.predicate, lang)}
               </span>
               {clickable ? (
                 <button

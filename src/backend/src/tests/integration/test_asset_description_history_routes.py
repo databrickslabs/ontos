@@ -213,16 +213,16 @@ class TestRestore:
             self, client, writeback_on, table, user_ws):
         user_ws.tables.get.return_value.comment = 'v0'  # Unity Catalog still has the first text
         _put(client, table, 'v1')
-        user_ws.statement_execution.execute_statement.reset_mock()
+        calls = user_ws.statement_execution.execute_statement.call_args_list
+        written_by_the_edit = len(calls)
         entry = _history(client, table)['items'][0]  # v0 -> v1
 
         response = _restore(client, table, entry['id'], 'before')
 
         assert response.status_code == 200, response.text
         assert response.json()['warnings'] == []
-        statements = [c.kwargs['statement']
-                      for c in user_ws.statement_execution.execute_statement.call_args_list]
-        assert statements == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'v0'"]
+        assert [c.kwargs['statement'] for c in calls[written_by_the_edit:]] == [
+            "COMMENT ON TABLE `main`.`sales`.`orders` IS 'v0'"]
 
     def test_a_comment_someone_else_wrote_is_kept_and_the_restore_warns(
             self, client, writeback_on, table, user_ws):
@@ -231,14 +231,14 @@ class TestRestore:
         user_ws.tables.get.side_effect = None
         user_ws.tables.get.return_value = SimpleNamespace(
             table_type=None, comment='Written in Unity Catalog', columns=[])
-        user_ws.statement_execution.execute_statement.reset_mock()
+        written_before = len(user_ws.statement_execution.execute_statement.call_args_list)
 
         response = _restore(client, table, entry['id'], 'before')
 
         assert response.status_code == 200
         assert response.json()['description'] == 'v0'
         assert response.json()['warnings'][0]['code'] == 'uc_description_existing_comment'
-        user_ws.statement_execution.execute_statement.assert_not_called()
+        assert len(user_ws.statement_execution.execute_statement.call_args_list) == written_before
 
     def test_a_column_restore_updates_its_table_snapshot_once_in_unity_catalog(
             self, client, writeback_on, db_session, user_ws):

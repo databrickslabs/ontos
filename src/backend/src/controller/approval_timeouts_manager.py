@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.common.timestamps import utc_now
 from src.common.notification_i18n import notification_i18n_data
-from src.common.workflow_approvals import open_execution_approvals
 from src.db_models.process_workflows import WorkflowExecutionDb
 from src.models.notifications import Notification, NotificationType
 from src.repositories.notification_repository import notification_repo
@@ -29,6 +28,9 @@ logger = get_logger(__name__)
 
 # The approval step's default (``ApprovalStepHandler``)
 DEFAULT_TIMEOUT_DAYS = 7
+
+# Key in an approval notification's payload: the step was reminded (when, ISO time)
+OVERDUE_MARKER = 'overdue_since'
 
 APPROVER_TITLE = "Approval overdue"
 REQUESTER_TITLE = "Your request is still waiting"
@@ -50,26 +52,29 @@ def _utc(value: Optional[datetime]) -> Optional[datetime]:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def timeout_days_of(payload: Dict[str, Any]) -> Optional[int]:
-    """The step's ``timeout_days``; None when it has none (0, negative, not a number)."""
+def timeout_of(payload: Dict[str, Any]) -> Optional[timedelta]:
+    """The step's ``timeout_days`` as a period (0.5 = 12 hours); None when it has none.
+
+    A value that is 0 or less, or not a number, means no timeout: logged, never reminded.
+    """
     value = payload.get('timeout_days', DEFAULT_TIMEOUT_DAYS)
-    if isinstance(value, bool):
+    if value is None:
         return None
-    if isinstance(value, str) and value.strip().isdigit():
-        value = int(value.strip())
-    if isinstance(value, (int, float)) and value > 0:
-        return int(value)
-    return None
-
-
-def _step_round(db: Session, execution: WorkflowExecutionDb) -> List[Any]:
-    """The open approval notifications of the step the execution is paused at."""
-    step_id = execution.current_step_id
-    return [
-        n for n in open_execution_approvals(db, execution.id)
-        if _payload(n).get('execution_id') == execution.id
-        and _payload(n).get('step_id') in (None, step_id)
-    ]
+    if isinstance(value, str):
+        try:
+            value = float(value.strip())
+        except ValueError:
+            value = None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0 or (
+        value != value or value == float('inf')
+    ):
+        logger.warning(
+            f"Approval step {payload.get('step_id')} of execution "
+            f"{payload.get('execution_id')}: timeout_days {payload.get('timeout_days')!r} is "
+            "not a positive number; no reminder"
+        )
+        return None
+    return timedelta(days=float(value))
 
 
 def _targets(rows: Iterable[Any]) -> List[Tuple[Optional[str], Optional[str]]]:
@@ -82,7 +87,7 @@ def _targets(rows: Iterable[Any]) -> List[Tuple[Optional[str], Optional[str]]]:
     return seen
 
 
-def _i18n(title_key: str, description_key: str, name: str, days: int) -> Dict[str, Any]:
+def _i18n(title_key: str, description_key: str, name: str, days: float) -> Dict[str, Any]:
     """The reminder's i18n keys; ``count`` stays a number, so the texts can be plural."""
     data = notification_i18n_data(title_key, description_key, name=name)
     data['i18n']['params']['count'] = days
@@ -114,23 +119,37 @@ def _reminder(
 def remind_overdue_approvals(db: Session, now: Optional[datetime] = None) -> int:
     """Mark the approval steps past their ``timeout_days`` overdue and remind once.
 
-    Returns the number of steps reminded; commits when there is one.
+    Two reads, whatever the number of executions: the pending approval notifications not
+    marked overdue yet, then their paused executions. A reminded step's notifications carry
+    ``overdue_since`` and are not read again. Returns the number of steps reminded; commits
+    when there is one.
     """
     now = _utc(now) or datetime.now(timezone.utc)
+    by_execution: Dict[str, List[Any]] = {}
+    for row in notification_repo.pending_approvals_not_marked(db, OVERDUE_MARKER):
+        execution_id = _payload(row).get('execution_id')
+        if execution_id:
+            by_execution.setdefault(str(execution_id), []).append(row)
+    if not by_execution:
+        return 0
+    paused = db.query(WorkflowExecutionDb).filter(
+        WorkflowExecutionDb.id.in_(list(by_execution)),
+        WorkflowExecutionDb.status == 'paused',
+    ).all()
     reminded = 0
-    paused = db.query(WorkflowExecutionDb).filter(WorkflowExecutionDb.status == 'paused').all()
     for execution in paused:
-        rows = _step_round(db, execution)
+        rows = [
+            row for row in by_execution[execution.id]
+            if _payload(row).get('step_id') in (None, execution.current_step_id)
+        ]
         if not rows:
             continue
-        payloads = [_payload(row) for row in rows]
-        if any(p.get('overdue_since') for p in payloads):
-            continue  # reminded already
-        days = timeout_days_of(payloads[0])
+        payload = _payload(rows[0])
+        timeout = timeout_of(payload)
         asked_at = min((_utc(row.created_at) for row in rows if row.created_at), default=None)
-        if days is None or asked_at is None or now < asked_at + timedelta(days=days):
+        if timeout is None or asked_at is None or now < asked_at + timeout:
             continue
-        _remind(db, execution, rows, payloads[0], days, now)
+        _remind(db, execution, rows, payload, timeout, now)
         reminded += 1
     if reminded:
         db.commit()
@@ -140,11 +159,14 @@ def remind_overdue_approvals(db: Session, now: Optional[datetime] = None) -> int
 
 def _remind(
     db: Session, execution: WorkflowExecutionDb, rows: List[Any], payload: Dict[str, Any],
-    days: int, now: datetime,
+    timeout: timedelta, now: datetime,
 ) -> None:
     since = now.isoformat()
+    # The texts count days as configured: 3, or 0.5 for a 12-hour timeout
+    days_float = round(timeout.total_seconds() / 86400, 2)
+    days = int(days_float) if days_float.is_integer() else days_float
     for row in rows:
-        marked = {**_payload(row), 'overdue_since': since}
+        marked = {**_payload(row), OVERDUE_MARKER: since}
         row.action_payload = json.dumps(marked)
     workflow = payload.get('workflow_name') or ''
     # Approvers see the entity as the approval names it; the requester by the name the
@@ -153,9 +175,11 @@ def _remind(
         payload.get('underlying_entity_name') or payload.get('entity_name')
         or payload.get('underlying_entity_id') or payload.get('entity_id') or ''
     )
+    # The requester: the name they sent with the request (an access request), else the
+    # approval's entity name
     requester_name = (
-        payload.get('entity_name') or payload.get('underlying_entity_id')
-        or payload.get('entity_id') or ''
+        payload.get('requester_entity_name') or payload.get('entity_name')
+        or payload.get('underlying_entity_id') or payload.get('entity_id') or ''
     )
     unit = 'day' if days == 1 else 'days'
     approver_text = (
@@ -187,5 +211,5 @@ def _remind(
         ))
     logger.info(
         f"Approval step {payload.get('step_id')} of execution {execution.id} is overdue "
-        f"({days} day(s)); reminded its approvers and the requester"
+        f"({timeout}); reminded its approvers and the requester"
     )

@@ -11,9 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import sessionmaker
 
-from src.controller.approval_timeouts_manager import (
-    remind_overdue_approvals, timeout_days_of,
-)
+from src.controller.approval_timeouts_manager import remind_overdue_approvals, timeout_of
 from src.controller.workflow_scheduler import (
     APPROVAL_TIMEOUTS_TASK_KEY, WorkflowScheduler,
 )
@@ -145,13 +143,48 @@ class TestRemindOverdueApprovals:
         assert remind_overdue_approvals(db_session, ASKED + timedelta(days=6)) == 0
         assert remind_overdue_approvals(db_session, ASKED + timedelta(days=7)) == 1
 
-    def test_timeout_days_values(self):
-        assert timeout_days_of({}) == 7
-        assert timeout_days_of({'timeout_days': '2'}) == 2
-        assert timeout_days_of({'timeout_days': 0}) is None
-        assert timeout_days_of({'timeout_days': -1}) is None
-        assert timeout_days_of({'timeout_days': None}) is None
-        assert timeout_days_of({'timeout_days': True}) is None
+    def test_timeout_values(self):
+        assert timeout_of({}) == timedelta(days=7)
+        assert timeout_of({'timeout_days': '2'}) == timedelta(days=2)
+        assert timeout_of({'timeout_days': 0.5}) == timedelta(hours=12)
+        assert timeout_of({'timeout_days': '0.25'}) == timedelta(hours=6)
+        for value in (0, -1, None, True, 'soon', float('nan')):
+            assert timeout_of({'timeout_days': value}) is None, value
+
+    def test_a_fractional_timeout_counts_hours(self, db_session):
+        _paused(db_session, timeout_days=0.5)
+
+        assert remind_overdue_approvals(db_session, ASKED + timedelta(hours=11)) == 0
+        assert remind_overdue_approvals(db_session, ASKED + timedelta(hours=12)) == 1
+        params = {json.loads(r.data)['i18n']['params']['count'] for r in _reminders(db_session)}
+        assert params == {0.5}
+
+    def test_reads_a_fixed_number_of_statements(self, db_session):
+        """Not one query per execution, and reminded steps aren't read again."""
+        from sqlalchemy import event
+
+        for _ in range(5):
+            _paused(db_session)
+        engine = db_session.get_bind()
+        statements = []
+
+        def count(conn, cursor, statement, *args):
+            if statement.lstrip().upper().startswith('SELECT'):
+                statements.append(statement)
+
+        event.listen(engine, 'before_cursor_execute', count)
+        try:
+            assert remind_overdue_approvals(db_session, ASKED + timedelta(days=1)) == 0
+            not_due = len(statements)
+            statements.clear()
+            assert remind_overdue_approvals(db_session, ASKED + timedelta(days=3)) == 5
+            statements.clear()
+            assert remind_overdue_approvals(db_session, ASKED + timedelta(days=9)) == 0
+            after = len(statements)
+        finally:
+            event.remove(engine, 'before_cursor_execute', count)
+        assert not_due == 2  # the pending approvals, then their paused executions
+        assert after == 1  # every step reminded: nothing left to read but the one query
 
 
 class _Sessions:

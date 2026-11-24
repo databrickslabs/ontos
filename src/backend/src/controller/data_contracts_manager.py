@@ -170,7 +170,9 @@ from src.controller.lifecycle_fields import (
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
 from src.common.api_errors import CodedValueError
-from src.common.odcs_api_version import normalized_api_version
+from src.common.odcs_api_version import (
+    check_api_version_change, checked_api_version, normalized_api_version,
+)
 
 logger = get_logger(__name__)
 
@@ -780,8 +782,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         status = odcs.get('status') or 'draft'
         owner = odcs.get('owner') or (current_username or 'unknown')
         kind = odcs.get('kind') or 'DataContract'
-        # The ODCS spelling ('3.0.2' -> 'v3.0.2'), as the REST models store it
-        api_version = normalized_api_version(odcs.get('apiVersion')) or 'v3.0.1'
+        # The ODCS spelling ('3.0.2' -> 'v3.0.2'); refused outside the ODCS versions, as on
+        # every create path
+        api_version = checked_api_version(odcs.get('apiVersion') or 'v3.0.1')
         description = odcs.get('description') or {}
 
         # Try to resolve owner as team name
@@ -2755,7 +2758,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 draft_owner_id=draft_owner_id,
                 project_id=project_id,  # Add project_id
                 kind=data_dict.get('kind', 'DataContract'),
-                api_version=data_dict.get('apiVersion', 'v3.1.0'),
+                # A dict caller (assistant tools) skips the create model: same check
+                api_version=checked_api_version(data_dict.get('apiVersion', 'v3.1.0')),
                 tenant=data_dict.get('tenant'),
                 data_product=data_dict.get('dataProduct'),
                 description_usage=description.get('usage'),
@@ -2894,6 +2898,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # request-status-change, approve/reject), which runs the gates; an
             # update may only repeat it.
             check_status_unchanged(db_obj.status, data_dict.get('status'))
+            check_api_version_change(db_obj.api_version, data_dict.get('apiVersion'))
             
             # Validate required fields
             if data_dict.get('name') is not None and (not data_dict['name'] or not data_dict['name'].strip()):
@@ -3462,11 +3467,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
-            # The ODCS spelling ('3.0.2' -> 'v3.0.2'), as the REST models store it. A value
-            # outside ODCS is kept: the import only warns (ODCS validation above)
-            api_version_val = normalized_api_version(
-                parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version')
-            ) or 'v3.1.0'
+            # The ODCS spelling ('3.0.2' -> 'v3.0.2'). A value outside the ODCS versions is
+            # refused (a failed import item with its code), as on every create path
+            api_version_val = checked_api_version(
+                parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version') or 'v3.1.0'
+            )
             
             # Extract description fields
             description = parsed_odcs.get('description', {})

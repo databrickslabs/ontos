@@ -75,6 +75,7 @@ import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
+import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error'
 
 // Status-based editability constants
 // Only draft/proposed contracts can be edited in place
@@ -976,6 +977,8 @@ export default function DataContractDetails() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null)
+        const versionError = odcsApiVersionErrorText(body, t)
+        if (versionError) throw new Error(versionError)
         throw new Error(contractDomainErrorText(body, t) ?? statusChangeErrorText(
           apiErrorOf(body, t('data-contracts:detailsView.errors.updateFailed', 'Update failed')),
           t,

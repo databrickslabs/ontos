@@ -192,6 +192,9 @@ def test_a_table_placeholder_becomes_an_identifier_parameter(client, db_session,
     ('SELECT * FROM t WHERE name = "${entity_name}"', 'script_sql_placeholder_in_quotes'),
     ('SELECT * FROM main.${entity_name}', 'script_sql_placeholder_in_identifier'),
     ('SELECT * FROM t WHERE id IN (${entity.ids})', 'script_sql_placeholder_as_list'),
+    ("SELECT * FROM t WHERE d = DATE '${entity_name}'", 'script_sql_placeholder_typed_literal'),
+    ("SELECT INTERVAL '${entity_name}' DAY", 'script_sql_placeholder_typed_literal'),
+    ("SELECT X'${entity_name}'", 'script_sql_placeholder_typed_literal'),
 ])
 def test_a_placeholder_that_cannot_be_bound_is_refused_on_save(client, code, issue):
     response = client.post('/api/workflows', json=_body({'language': 'sql', 'code': code}))
@@ -216,6 +219,31 @@ def test_a_stored_placeholder_in_quotes_fails_at_run_time_without_running(
     assert script['passed'] is False
     assert script['result_data']['error_code'] == 'script_sql_placeholder_in_quotes'
     assert script['result_data']['error_params'] == {'placeholder': '${entity_name}'}
+
+
+def test_a_stored_typed_literal_fails_at_run_time_without_running(
+    client, db_session, warehouse,
+):
+    wf_id = _stored(db_session, {
+        'language': 'sql', 'code': "SELECT * FROM t WHERE d = DATE '${entity_name}'",
+    }, active=True)
+
+    execution = _execute(client, wf_id, entity_name=EVIL_NAME)
+
+    warehouse.assert_not_called()
+    assert execution['status'] == 'failed'
+    script = _step(execution, 'script')
+    assert script['result_data']['error_code'] == 'script_sql_placeholder_typed_literal'
+    assert script['result_data']['error_params'] == {
+        'placeholder': '${entity_name}', 'keyword': 'DATE',
+    }
+
+
+def test_a_cast_of_a_quoted_placeholder_saves(client):
+    body = _body({'language': 'sql',
+                  'code': "SELECT CAST('${entity_name}' AS DATE) FROM t"})
+
+    assert client.post('/api/workflows', json=body).status_code == 200
 
 
 def test_a_valid_sql_step_saves_and_activates(client):

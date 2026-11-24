@@ -333,7 +333,7 @@
       }
     },
     "scriptStepSafety": {
-      "placeholderRules": "Un marcador no puede ir entre comillas o acentos graves ('%${entity_name}%'), formar parte de un nombre más largo (main.${entity_id}) ni ser la lista entera de un IN (...). Escribe concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) o array_contains(from_json(${variable}, 'array<string>'), columna).",
+      "placeholderRules": "Un marcador no puede ir entre comillas o acentos graves ('%${entity_name}%'), formar parte de un nombre más largo (main.${entity_id}) ni ser la lista entera de un IN (...). Escribe concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) o array_contains(from_json(${variable}, 'array<string>'), columna). Un literal tipado como DATE '${entity_name}' tampoco lo admite: escriba CAST('${entity_name}' AS DATE).",
       "errors": {
         "script_python_disabled": "Los pasos de script Python están desactivados: reescribe el paso en SQL o elimínalo.",
         "script_sql_placeholder_in_quotes": "El marcador {{placeholder}} está entre comillas o acentos graves, donde su valor no puede enviarse como parámetro. Escríbelo solo: name = {{placeholder}}, concat('%', {{placeholder}}, '%') o IDENTIFIER({{placeholder}}).",

@@ -15,6 +15,7 @@ from src.common.workflow_sql_params import (
     SQL_PLACEHOLDER_AS_LIST,
     SQL_PLACEHOLDER_IN_IDENTIFIER,
     SQL_PLACEHOLDER_IN_QUOTES,
+    SQL_PLACEHOLDER_TYPED_LITERAL,
     bind_sql_placeholders,
     check_sql_placeholders,
 )
@@ -77,6 +78,47 @@ def test_none_code_has_no_issue():
 ])
 def test_a_placeholder_that_cannot_be_bound_is_reported(code, expected):
     assert _issues(code) == expected
+
+
+@pytest.mark.parametrize('code, keyword', [
+    ("SELECT * FROM t WHERE d = DATE '${d}'", 'DATE'),
+    ("SELECT * FROM t WHERE d > timestamp '${t}'", 'timestamp'),
+    ("SELECT TIMESTAMP_NTZ\n'${t}'", 'TIMESTAMP_NTZ'),
+    ("SELECT INTERVAL '${n}' DAY", 'INTERVAL'),
+    ("SELECT X'${h}'", 'X'),
+    ("SELECT DATE'${d}'", 'DATE'),
+    ("SELECT r'${s}'", 'r'),
+    ("SELECT b'${s}'", 'b'),
+])
+def test_a_typed_or_prefixed_literal_is_refused_with_its_keyword(code, keyword):
+    [issue] = check_sql_placeholders(code)
+
+    assert issue['code'] == SQL_PLACEHOLDER_TYPED_LITERAL
+    assert issue['params']['keyword'] == keyword
+    assert issue['params']['placeholder'].startswith('${')
+    assert 'CAST(' in issue['message']
+
+
+@pytest.mark.parametrize('code', [
+    "SELECT CAST('${d}' AS DATE)",
+    "SELECT * FROM t WHERE d = CAST('{{d}}' AS TIMESTAMP)",
+    "SELECT * FROM t WHERE name = '${n}'",
+    "SELECT * FROM t WHERE name LIKE '${n}'",
+    "SELECT '${n}' AS date",
+    "-- date\nSELECT '${n}'",
+    "SELECT 'a date', '${n}'",
+])
+def test_a_plain_literal_after_other_words_is_still_bound(code):
+    assert check_sql_placeholders(code) == []
+
+
+def test_cast_of_a_quoted_placeholder_binds_cleanly():
+    statement, params = bind_sql_placeholders(
+        "SELECT CAST('${d}' AS DATE)", _resolver({'d': '2025-01-31'}),
+    )
+
+    assert statement == 'SELECT CAST(:p0 AS DATE)'
+    assert params == [('p0', '2025-01-31')]
 
 
 def test_an_issue_carries_the_placeholder_and_an_english_message():

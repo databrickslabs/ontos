@@ -10,12 +10,15 @@ written decides how:
 - anywhere else (``= ${name}``, ``IDENTIFIER(${name})``, ``concat('%', ${name})``)
   it is a value: ``:pN``.
 
-Three places can't hold a parameter, so a step that uses them is refused on save
+Four places can't hold a parameter, so a step that uses them is refused on save
 and at run time (``check_sql_placeholders``):
 
 - inside a longer quoted text, double quotes or backticks (``'%${name}%'``):
   the parameter would be part of the text, not its value;
 - glued to other identifier text (``cat.${schema}.t``, ``t_${name}``);
+- as a typed or prefixed literal (``DATE '${d}'``, ``INTERVAL '${n}' DAY``,
+  ``X'${h}'``): the parameter would replace only the text. ``CAST('${d}' AS DATE)``
+  binds cleanly;
 - as the whole list of an ``IN (...)``: the value is one string, so
   ``IN (${ids})`` would compare with that one string. A list stored in the
   entity is JSON: ``array_contains(from_json(${ids}, 'array<string>'), col)``.
@@ -34,10 +37,16 @@ PLACEHOLDER_RE = re.compile(r'\$\{([^}]+)\}|\{\{([^}]+)\}\}')
 SQL_PLACEHOLDER_IN_QUOTES = 'script_sql_placeholder_in_quotes'
 SQL_PLACEHOLDER_IN_IDENTIFIER = 'script_sql_placeholder_in_identifier'
 SQL_PLACEHOLDER_AS_LIST = 'script_sql_placeholder_as_list'
+SQL_PLACEHOLDER_TYPED_LITERAL = 'script_sql_placeholder_typed_literal'
 
 # Keywords after which a placeholder names a table.
 _TABLE_KEYWORDS = ('FROM', 'JOIN', 'INTO', 'UPDATE', 'TABLE')
 _TABLE_KEYWORD_BEFORE = re.compile(r'\b(?:' + '|'.join(_TABLE_KEYWORDS) + r')\s*$', re.IGNORECASE)
+# Words that turn the quoted text after them into a typed literal.
+_TYPED_LITERAL_WORDS = frozenset((
+    'DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMP_NTZ', 'TIMESTAMP_LTZ', 'INTERVAL', 'X', 'BINARY',
+))
+_WORD_BEFORE = re.compile(r'([A-Za-z0-9_]+)(\s*)$')
 _IN_LIST_BEFORE = re.compile(r'\bIN\s*\(\s*$', re.IGNORECASE)
 _LIST_END_AFTER = re.compile(r'^\s*\)')
 _IDENTIFIER_CHAR = re.compile(r'[A-Za-z0-9_.]')
@@ -51,6 +60,10 @@ _ISSUE_TEXT = {
     SQL_PLACEHOLDER_IN_IDENTIFIER: (
         "Placeholder {placeholder} is part of a longer name. Build the name in "
         "IDENTIFIER(...), for example IDENTIFIER(concat('main.', {placeholder}))"
+    ),
+    SQL_PLACEHOLDER_TYPED_LITERAL: (
+        "Placeholder {placeholder} is the text of a typed literal ({keyword} '...'), which "
+        "can't take a parameter. Use CAST('{placeholder}' AS DATE) (or the type you need)"
     ),
     SQL_PLACEHOLDER_AS_LIST: (
         "Placeholder {placeholder} is the whole list of an IN (...): its value is one "
@@ -67,14 +80,27 @@ class _Placeholder:
     text: str  # the placeholder as written, e.g. "${entity_name}"
     name: str
     kind: str  # 'value' | 'table' | one of the issue codes
+    keyword: str = ''  # the type keyword or prefix of a typed literal
 
 
-def _issue(code: str, placeholder: str) -> Dict[str, Any]:
+def _issue(code: str, placeholder: str, keyword: str = '') -> Dict[str, Any]:
+    params = {'placeholder': placeholder}
+    if code == SQL_PLACEHOLDER_TYPED_LITERAL:
+        params['keyword'] = keyword
     return {
         'code': code,
-        'params': {'placeholder': placeholder},
-        'message': _ISSUE_TEXT[code].format(placeholder=placeholder),
+        'params': params,
+        'message': _ISSUE_TEXT[code].format(placeholder=placeholder, keyword=keyword),
     }
+
+
+def _literal_prefix(plain: List[str], start: int) -> str:
+    """The type keyword or glued prefix written before the literal at ``start``, if any."""
+    found = _WORD_BEFORE.search(''.join(plain[max(0, start - 40):start]))
+    if not found:
+        return ''
+    word, gap = found.groups()
+    return word if not gap or word.upper() in _TYPED_LITERAL_WORDS else ''
 
 
 def _string_end(code: str, start: int, quote: str) -> int:
@@ -112,7 +138,11 @@ def _scan(code: str) -> List[_Placeholder]:
             inner = code[i + 1:end - 1]
             whole = PLACEHOLDER_RE.fullmatch(inner)
             if ch == "'" and whole:
-                found.append(_Placeholder(i, end, whole.group(0), _name(whole), 'value'))
+                prefix = _literal_prefix(plain, i)
+                found.append(_Placeholder(
+                    i, end, whole.group(0), _name(whole),
+                    SQL_PLACEHOLDER_TYPED_LITERAL if prefix else 'value', prefix,
+                ))
                 plain[i:end] = ['x'] * (end - i)
             else:
                 for match in PLACEHOLDER_RE.finditer(inner):
@@ -168,7 +198,7 @@ def check_sql_placeholders(code: str) -> List[Dict[str, Any]]:
         if p.kind in ('value', 'table') or (p.kind, p.text) in seen:
             continue
         seen.add((p.kind, p.text))
-        issues.append(_issue(p.kind, p.text))
+        issues.append(_issue(p.kind, p.text, p.keyword))
     return issues
 
 

@@ -56,6 +56,7 @@ const SCRIPT_SAFETY_CODES = new Set([
   'script_sql_placeholder_in_quotes',
   'script_sql_placeholder_in_identifier',
   'script_sql_placeholder_as_list',
+  'script_sql_placeholder_typed_literal',
 ]);
 
 /** The translated text of a step config issue (English text from the backend as fallback). */

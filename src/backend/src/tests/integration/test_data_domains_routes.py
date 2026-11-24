@@ -393,6 +393,39 @@ class TestDataDomainsRoutes:
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "domain_parent_cycle"
 
+    @staticmethod
+    def _seed_stored_loop(db_session):
+        """A -> B -> A, written directly as older versions could store it (no check)."""
+        a = seed_domain(db_session, "Loop A")
+        b = seed_domain(db_session, "Loop B", parent=a)
+        a.parent_id = b.id
+        db_session.flush()
+        return a, b
+
+    def test_update_domain_parent_under_stored_loop_is_refused(self, client, db_session):
+        """A parent whose ancestors already loop is refused with a code, not walked forever."""
+        a, _ = self._seed_stored_loop(db_session)
+        other = seed_domain(db_session, "Outside")
+
+        response = client.put(f"/api/data-domains/{other.id}", json={"parent_id": a.id})
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["code"] == "domain_hierarchy_cycle"
+        assert detail["params"]["parentId"] == a.id
+
+    def test_update_domain_under_stored_loop_keeps_unchanged_parent(self, client, db_session):
+        """Editing a domain whose parent is in a stored loop still works if the parent stays."""
+        a, _ = self._seed_stored_loop(db_session)
+        child = seed_domain(db_session, "Child", parent=a)
+
+        response = client.put(
+            f"/api/data-domains/{child.id}", json={"name": "Child 2", "parent_id": a.id}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["name"] == "Child 2"
+
     def test_update_domain_with_nonexistent_parent_is_404(self, client, sample_domain_data):
         domain_id = client.post("/api/data-domains", json=sample_domain_data).json()["id"]
 

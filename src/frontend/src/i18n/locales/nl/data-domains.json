@@ -69,7 +69,8 @@
     "discardChanges": "Wijzigingen verwerpen",
     "parentErrors": {
       "notFound": "Het geselecteerde bovenliggende domein bestaat niet meer.",
-      "cycle": "Een domein kan niet zijn eigen bovenliggende domein zijn, of dat van een van zijn voorouders."
+      "cycle": "Een domein kan niet zijn eigen bovenliggende domein zijn, of dat van een van zijn voorouders.",
+      "existingCycle": "De domeinen boven het geselecteerde bovenliggende domein vormen al een lus. Verplaats eerst een ervan naar een ander bovenliggend domein."
     },
     "toasts": {
       "updated": "Domein Bijgewerkt",

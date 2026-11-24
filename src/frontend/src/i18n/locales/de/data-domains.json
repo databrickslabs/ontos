@@ -69,7 +69,8 @@
     "discardChanges": "Änderungen verwerfen",
     "parentErrors": {
       "notFound": "Die gewählte übergeordnete Domäne existiert nicht mehr.",
-      "cycle": "Eine Domäne kann nicht ihre eigene übergeordnete Domäne oder die übergeordnete Domäne eines ihrer Vorfahren sein."
+      "cycle": "Eine Domäne kann nicht ihre eigene übergeordnete Domäne oder die übergeordnete Domäne eines ihrer Vorfahren sein.",
+      "existingCycle": "Die Domänen oberhalb der gewählten übergeordneten Domäne bilden bereits eine Schleife. Verschieben Sie zuerst eine davon unter eine andere übergeordnete Domäne."
     },
     "toasts": {
       "updated": "Bereich aktualisiert",

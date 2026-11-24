@@ -40,6 +40,12 @@ class DomainParentCycleError(CodedValueError):
     code = 'domain_parent_cycle'
 
 
+class DomainHierarchyCycleError(CodedValueError):
+    """The ancestors of the new parent already loop (stored data; answered 409)."""
+
+    code = 'domain_hierarchy_cycle'
+
+
 @searchable_asset
 class DataDomainManager(DeliveryMixin, SearchableAsset):
     """Manager for Data Domains.
@@ -118,6 +124,7 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         logger.debug(f"Attempting to create data domain: {domain_in.name}")
         
         if domain_in.parent_id:
+            self.repository.lock_hierarchy(db)
             parent_domain = self.repository.get(db, domain_in.parent_id)
             if not parent_domain:
                 raise DomainParentNotFoundError(
@@ -155,7 +162,8 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
                     entity_type="data_domain",
                     entity_id=str(db_domain.id),
                     action="CREATE",
-                    username=current_user_id
+                    username=current_user_id,
+                    commit=False,
                 )
             except Exception as log_error:
                 logger.warning(f"Failed to log change for domain creation: {log_error}")
@@ -220,24 +228,34 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         db_domains = self.repository.get_multi_with_details(db, skip=skip, limit=limit) # Assume repo method loads details
         return [self._convert_db_to_read_model(domain, db) for domain in db_domains]
 
-    def _ensure_no_parent_cycle(self, db: Session, domain_id: UUID, new_parent: DataDomain) -> None:
+    def _ensure_no_parent_cycle(self, db: Session, domain_id: UUID, new_parent_id: Any) -> None:
         """Refuse a parent that is the domain itself or any of its descendants.
 
         Walks up from the new parent: if the chain reaches the domain, the move
-        would close a loop.
+        would close a loop. A chain that comes back to a domain already passed
+        without reaching it is a loop stored before this check existed: the move
+        is refused with its own code instead of walking forever.
         """
         target = str(domain_id)
+        parent = str(new_parent_id)
         seen = set()
-        node: Optional[DataDomain] = new_parent
-        while node is not None and str(node.id) not in seen:
-            if str(node.id) == target:
+        node_id: Optional[str] = parent
+        while node_id:
+            if node_id == target:
                 raise DomainParentCycleError(
                     "A domain cannot be its own parent or the parent of one of its ancestors.",
                     domainId=target,
-                    parentId=str(new_parent.id),
+                    parentId=parent,
                 )
-            seen.add(str(node.id))
-            node = self.repository.get(db, node.parent_id) if node.parent_id else None
+            if node_id in seen:
+                raise DomainHierarchyCycleError(
+                    "The ancestors of the new parent domain already form a loop.",
+                    domainId=target,
+                    parentId=parent,
+                    loopDomainId=node_id,
+                )
+            seen.add(node_id)
+            node_id = self.repository.get_parent_id(db, node_id)
 
     def update_domain(
         self,
@@ -259,6 +277,9 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         from src.controller.delivery_service import DeliveryChangeType
         
         logger.debug(f"Attempting to update data domain with id: {domain_id}")
+        if domain_in.parent_id:
+            # Before any read: the parent check must see the links committed before it
+            self.repository.lock_hierarchy(db)
         db_domain = self.repository.get(db, domain_id) # Get the raw domain first
         if not db_domain:
             logger.warning(f"Data domain with id {domain_id} not found for update.")
@@ -271,7 +292,9 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
                     f"Parent domain with id '{domain_in.parent_id}' not found.",
                     parentId=str(domain_in.parent_id),
                 )
-            self._ensure_no_parent_cycle(db, domain_id, parent_domain)
+            # An unchanged parent adds no link (and keeps a domain under a stored loop editable)
+            if str(domain_in.parent_id) != str(self.repository.get_parent_id(db, domain_id)):
+                self._ensure_no_parent_cycle(db, domain_id, domain_in.parent_id)
         
         # obj_in here is Pydantic model, repository.update expects a dict or Pydantic model
         update_data = domain_in.model_dump(exclude_unset=True)
@@ -296,7 +319,8 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
                     entity_type="data_domain",
                     entity_id=str(domain_id),
                     action="UPDATE",
-                    username=current_user_id
+                    username=current_user_id,
+                    commit=False,
                 )
             except Exception as log_error:
                 logger.warning(f"Failed to log change for domain update: {log_error}")
@@ -462,6 +486,7 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
     def create_domain_internal(self, db: Session, domain_in: DataDomainCreate, current_user_id: str, perform_commit: bool = True, log_change: bool = False) -> DataDomain:
         """Internal method to create domain."""
         if domain_in.parent_id:
+            self.repository.lock_hierarchy(db)
             parent_domain = self.repository.get(db, domain_in.parent_id)
             if not parent_domain:
                 raise DomainParentNotFoundError(

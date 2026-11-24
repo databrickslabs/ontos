@@ -15,6 +15,11 @@ describe('domainParentErrorText', () => {
       .toBe('T(data-domains:form.parentErrors.cycle)');
   });
 
+  it('translates a loop already stored above the parent', () => {
+    expect(domainParentErrorText({ error: 'x', errorCode: 'domain_hierarchy_cycle' }, t))
+      .toBe('T(data-domains:form.parentErrors.existingCycle)');
+  });
+
   it('shows any other error as the API sent it', () => {
     expect(domainParentErrorText({ error: 'boom', errorCode: 'other' }, t)).toBe('boom');
     expect(domainParentErrorText({ error: 'boom' }, t)).toBe('boom');

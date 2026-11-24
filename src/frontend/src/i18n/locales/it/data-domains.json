@@ -69,7 +69,8 @@
     "discardChanges": "Annulla le modifiche",
     "parentErrors": {
       "notFound": "Il dominio padre selezionato non esiste più.",
-      "cycle": "Un dominio non può essere il proprio padre né il padre di uno dei suoi antenati."
+      "cycle": "Un dominio non può essere il proprio padre né il padre di uno dei suoi antenati.",
+      "existingCycle": "I domini sopra il dominio padre selezionato formano già un ciclo. Sposta prima uno di essi sotto un altro dominio padre."
     },
     "toasts": {
       "updated": "Dominio aggiornato",

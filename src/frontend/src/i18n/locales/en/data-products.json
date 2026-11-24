@@ -1183,5 +1183,9 @@
     "colSubscriber": "Subscriber",
     "colSubscribed": "Subscribed",
     "colReason": "Reason"
+  },
+  "productAccess": {
+    "notOwnerTitle": "Not an owner",
+    "notOwnerMessage": "You can view this product but not edit it. Only its owning team, members of its project, its draft owner or a data products admin can edit it."
   }
 }

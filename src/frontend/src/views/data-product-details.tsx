@@ -203,16 +203,25 @@ export function isProductReadOnly(args: {
 /**
  * Final "can the user modify this product" gate combining role + status flags.
  * Admins can always modify; write-class users can modify when the product is
- * editable-in-place or a personal draft.
+ * editable-in-place or a personal draft, unless the backend said they can't
+ * write this product (`productWritable === false`: not an owner, e.g. a
+ * reviewer of a product under review, #1613). `null`/`undefined` = not known.
  */
 export function canUserModifyProduct(args: {
   canAdmin: boolean;
   canWrite: boolean;
   canEditInPlace: boolean;
   isPersonalDraft: boolean;
+  productWritable?: boolean | null;
 }): boolean {
   if (args.canAdmin) return true;
+  if (args.productWritable === false) return false;
   return args.canWrite && (args.canEditInPlace || args.isPersonalDraft);
+}
+
+/** Path of the caller's access to a product (`{ can_write }`, #1613). */
+export function productAccessPath(productId: string): string {
+  return `/api/data-products/${encodeURIComponent(productId)}/my-access`;
 }
 
 /** Path of a product's active business owners (query-param form, #1612). */
@@ -585,7 +594,15 @@ export default function DataProductDetails() {
   const isReadOnly = isProductReadOnly({ canAdmin, canEditInPlace, isPersonalDraft });
 
   // Combined permission check: admin can always edit; others need write + editable status
-  const canModify = canUserModifyProduct({ canAdmin, canWrite, canEditInPlace, isPersonalDraft });
+  // Whether the backend lets this caller write this product (owner or data-products
+  // admin); null until known (#1613).
+  const [productWritable, setProductWritable] = useState<boolean | null>(null);
+  const canModify = canUserModifyProduct({
+    canAdmin, canWrite, canEditInPlace, isPersonalDraft, productWritable,
+  });
+  // A writer who doesn't own this editable product: say why Edit is missing.
+  const showNotOwnerHint =
+    !canAdmin && canWrite && productWritable === false && (canEditInPlace || isPersonalDraft);
 
   // View mode state for filtering sections - initialize from localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(
@@ -748,6 +765,23 @@ export default function DataProductDetails() {
       setDynamicTitle(null);
     };
   }, [productId, canRead, permissionsLoading]);
+
+  useEffect(() => {
+    setProductWritable(null);
+    if (!productId || !product?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await get<{ can_write?: boolean }>(productAccessPath(productId));
+        if (!cancelled && !res.error && typeof res.data?.can_write === 'boolean') {
+          setProductWritable(res.data.can_write);
+        }
+      } catch { /* unknown: the write routes still check */ }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, product?.id, get]);
 
   useEffect(() => {
     if (!productId) return;
@@ -1564,6 +1598,18 @@ export default function DataProductDetails() {
           <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           <AlertDescription className="text-blue-800 dark:text-blue-200">
             <strong>{t('data-products:details.banners.personalDraftTitle')}</strong> - {t('data-products:details.banners.personalDraftMessage')}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Not an owner: can read, can't edit (#1613) */}
+      {showNotOwnerHint && (
+        <Alert data-testid="product-not-owner-hint">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>{t('data-products:productAccess.notOwnerTitle')}</strong>
+            {' - '}
+            {t('data-products:productAccess.notOwnerMessage')}
           </AlertDescription>
         </Alert>
       )}

@@ -1183,5 +1183,9 @@
     "colSubscriber": "購読者",
     "colSubscribed": "購読日",
     "colReason": "理由"
+  },
+  "productAccess": {
+    "notOwnerTitle": "所有者ではありません",
+    "notOwnerMessage": "この製品は閲覧できますが、編集はできません。編集できるのは、所有チーム、そのプロジェクトのメンバー、ドラフトの所有者、またはデータ製品の管理者のみです。"
   }
 }

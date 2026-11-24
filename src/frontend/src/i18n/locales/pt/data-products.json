@@ -1183,5 +1183,9 @@
     "colSubscriber": "Assinante",
     "colSubscribed": "Assinado em",
     "colReason": "Motivo"
+  },
+  "productAccess": {
+    "notOwnerTitle": "Não é proprietário",
+    "notOwnerMessage": "Você pode ver este produto, mas não editá-lo. Só a equipe proprietária, os membros do projeto, o dono do rascunho ou um administrador de produtos de dados podem editá-lo."
   }
 }

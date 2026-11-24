@@ -1183,5 +1183,9 @@
     "colSubscriber": "Abonnent",
     "colSubscribed": "Abonniert",
     "colReason": "Grund"
+  },
+  "productAccess": {
+    "notOwnerTitle": "Kein Eigentümer",
+    "notOwnerMessage": "Sie können dieses Produkt ansehen, aber nicht bearbeiten. Nur das zuständige Team, Mitglieder seines Projekts, der Eigentümer des Entwurfs oder ein Datenprodukt-Administrator können es bearbeiten."
   }
 }

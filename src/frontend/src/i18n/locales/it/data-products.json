@@ -1183,5 +1183,9 @@
     "colSubscriber": "Sottoscrittore",
     "colSubscribed": "Sottoscritto",
     "colReason": "Motivo"
+  },
+  "productAccess": {
+    "notOwnerTitle": "Non proprietario",
+    "notOwnerMessage": "Puoi visualizzare questo prodotto ma non modificarlo. Solo il team proprietario, i membri del suo progetto, il proprietario della bozza o un amministratore dei prodotti dati possono modificarlo."
   }
 }

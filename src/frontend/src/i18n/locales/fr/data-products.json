@@ -1183,5 +1183,9 @@
     "colSubscriber": "Abonné",
     "colSubscribed": "Abonné",
     "colReason": "Raison"
+  },
+  "productAccess": {
+    "notOwnerTitle": "Pas propriétaire",
+    "notOwnerMessage": "Vous pouvez consulter ce produit, mais pas le modifier. Seuls l'équipe propriétaire, les membres de son projet, le propriétaire du brouillon ou un administrateur des produits de données peuvent le modifier."
   }
 }

@@ -227,7 +227,14 @@ class DomainSyncManager:
         nodes: List[DomainSyncNode] = []
         warnings: List[str] = []
 
+        # Each domain once: a loop stored by an older version ends the walk
+        # instead of recursing until the stack runs out.
+        visited = set()
+
         def flatten(dom: DataDomain, level: int):
+            if dom.id in visited:
+                return
+            visited.add(dom.id)
             yield dom, level
             for child in children_of.get(dom.id, []):
                 yield from flatten(child, level + 1)

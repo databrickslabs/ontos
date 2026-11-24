@@ -100,3 +100,23 @@ class TestDeleteBlock:
             manager.delete_domain(db_session, parent, current_user_id="tester")
         assert exc.value.detail["code"] == "domain_primary_in_use"
         assert {"entity_type": "team", "entity_id": "t1"} in exc.value.detail["primary_assignments"]
+
+
+class TestStoredLoop:
+    def test_deletion_impact_ends_on_a_stored_loop(self, db_session, manager):
+        """A -> B -> A, stored by an older version: each domain is walked once (#1667)."""
+        a = _make_domain(db_session, "Loop A")
+        b = _make_domain(db_session, "Loop B", parent_id=a)
+        data_domain_repo.get(db_session, a).parent_id = b
+        db_session.commit()
+        _assign(db_session, "team", "t1", [b], primary=b)
+
+        impact = manager.get_domain_deletion_impact(db_session, a)
+
+        assert impact["deletable"] is False
+        assert impact["primary_assignments"] == [{"entity_type": "team", "entity_id": "t1"}]
+        db_session.expire_all()
+        ids = DataDomainManager._collect_domain_and_descendant_ids(
+            data_domain_repo.get(db_session, a)
+        )
+        assert ids == [a, b]

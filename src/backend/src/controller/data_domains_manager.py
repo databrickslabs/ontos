@@ -354,10 +354,22 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
 
     @staticmethod
     def _collect_domain_and_descendant_ids(domain: DataDomain) -> List[str]:
-        """Return the domain's id plus every descendant id (children cascade-delete)."""
-        ids = [str(domain.id)]
-        for child in (domain.children or []):
-            ids.extend(DataDomainManager._collect_domain_and_descendant_ids(child))
+        """Return the domain's id plus every descendant id (children cascade-delete).
+
+        Each domain is listed once: a loop stored by an older version (A -> B -> A)
+        ends the walk instead of recursing until the stack runs out.
+        """
+        ids: List[str] = []
+        seen = set()
+        stack = [domain]
+        while stack:
+            node = stack.pop()
+            node_id = str(node.id)
+            if node_id in seen:
+                continue
+            seen.add(node_id)
+            ids.append(node_id)
+            stack.extend(reversed(node.children or []))
         return ids
 
     def get_domain_deletion_impact(self, db: Session, domain_id: UUID) -> Dict[str, Any]:

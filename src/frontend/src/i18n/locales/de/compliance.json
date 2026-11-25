@@ -198,6 +198,10 @@
       "query_failed": "die Abfrage ist fehlgeschlagen",
       "timed_out": "die Abfrage lief beim Zeitlimit noch",
       "budget_exceeded": "der Lauf hat sein Limit an Abfragen auf dem SQL-Warehouse erreicht",
+      "table_no_access": "kein Zugriff auf die Tabelle",
+      "table_not_found": "die Tabelle wurde nicht gefunden",
+      "table_read_failed": "die Tabelle konnte nicht gelesen werden",
+      "table_read_limit": "der Lauf hat sein Limit an Tabellenlesevorgängen erreicht",
       "transient": "das SQL-Warehouse war vorübergehend nicht verfügbar, auch nach erneuten Versuchen",
       "not_found": "die Systemtabelle wurde nicht gefunden (ist das Systemschema aktiviert?)",
       "not_loaded": "Tags werden für diesen Objekttyp noch nicht gelesen"

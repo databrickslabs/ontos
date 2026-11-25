@@ -198,6 +198,10 @@
       "query_failed": "la requête a échoué",
       "timed_out": "la requête était encore en cours à la limite de temps",
       "budget_exceeded": "l'exécution a atteint sa limite de requêtes sur le SQL warehouse",
+      "table_no_access": "pas d'accès à la table",
+      "table_not_found": "la table est introuvable",
+      "table_read_failed": "la table n'a pas pu être lue",
+      "table_read_limit": "l'exécution a atteint sa limite de lectures de tables",
       "transient": "le SQL warehouse était temporairement indisponible, même après de nouvelles tentatives",
       "not_found": "la table système est introuvable (le schéma système est-il activé ?)",
       "not_loaded": "les tags de ce type d'objet ne sont pas encore lus"

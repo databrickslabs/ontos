@@ -9,7 +9,13 @@ lineage. This module adds, for the tables of one catalog at a time:
   ``system.access.table_lineage`` over the last ``LINEAGE_WINDOW_DAYS`` days,
   in one statement per catalog.
 
-Both statements run on the SQL warehouse and are filtered by the catalog and
+- the key column fields (``primary_key_columns`` ...), from one ``tables.get`` per
+  table: ``tables.list`` does not return ``table_constraints``, so a listed table
+  can't tell a table without keys from a table whose keys weren't read. Only the
+  tables a rule selects are read, up to ``MAX_TABLE_READS_PER_RUN`` reads and
+  ``MAX_TABLE_READ_SECONDS`` per policy run.
+
+The two statements run on the SQL warehouse and are filtered by the catalog and
 the schemas in scope, so a run reads only what its rule can see. A source that
 can't be read (no warehouse, no grant, a query error) leaves its fields out and
 records why in ``entity[UNAVAILABLE_KEY]``; the caller decides what a rule that
@@ -25,6 +31,7 @@ from src.common.compliance_dsl import (
     BinaryOp, CaseExpression, FunctionCall, ListLiteral, PropertyAccess, TokenType, UnaryOp,
 )
 from src.common.logging import get_logger
+from src.common.uc_table_columns import KEY_FIELDS, key_column_fields
 
 logger = get_logger(__name__)
 
@@ -39,13 +46,17 @@ LINEAGE_WINDOW_DAYS = 90
 # Field groups, each read by one statement, and the entity fields they give
 TAGS = 'tags'
 LINEAGE = 'lineage'
+KEYS = 'keys'
 GROUP_FIELDS = {
     TAGS: ('tags',),
     LINEAGE: ('upstream_count', 'downstream_count'),
+    KEYS: KEY_FIELDS,
 }
+TABLE_GET_SOURCE = 'unity_catalog.tables.get'
 GROUP_SOURCE = {
     TAGS: TABLE_TAGS_SOURCE,
     LINEAGE: LINEAGE_SOURCE,
+    KEYS: TABLE_GET_SOURCE,
 }
 FIELD_GROUP = {field: group for group, fields in GROUP_FIELDS.items() for field in fields}
 
@@ -75,6 +86,11 @@ REASON_NOT_FOUND = 'not_found'
 REASON_BUDGET_EXCEEDED = 'budget_exceeded'
 # Not read for this object type (catalogs, schemas, functions, volumes have no tags yet)
 REASON_NOT_LOADED = 'not_loaded'
+# Why a table's constraints could not be read with ``tables.get``
+REASON_TABLE_NO_ACCESS = 'table_no_access'
+REASON_TABLE_NOT_FOUND = 'table_not_found'
+REASON_TABLE_READ_FAILED = 'table_read_failed'
+REASON_TABLE_READ_LIMIT = 'table_read_limit'
 NOT_LOADED_SOURCE = 'unity_catalog'
 
 # Statements one policy run may send. The policies of a compliance-checks job
@@ -85,6 +101,9 @@ MAX_STATEMENTS_PER_RUN = 100
 # awaited by their HTTP request; past this, statements still to send and the one
 # running are not waited for (reason ``timed_out``).
 MAX_RUN_SECONDS = 900
+# ``tables.get`` calls one policy run may make for key columns, and the time it may spend on them
+MAX_TABLE_READS_PER_RUN = 2000
+MAX_TABLE_READ_SECONDS = 600
 # Rows kept for reuse by later rules of the same run; past this, rows are not kept
 MAX_CACHED_ROWS = 200_000
 # Tables enriched together: the loader yields a catalog's tables in chunks of
@@ -156,7 +175,7 @@ def conditions_without(node: Any, fields: Iterable[str]) -> List[Any]:
 
 
 def groups_for_fields(fields: Iterable[str]) -> Set[str]:
-    """Field groups (TAGS / LINEAGE) to load for the given fields."""
+    """Field groups (TAGS / LINEAGE / KEYS) to load for the given fields."""
     return {FIELD_GROUP[f] for f in fields if f in FIELD_GROUP}
 
 
@@ -384,7 +403,8 @@ def table_entity(
 
     The one builder for every caller that evaluates DSL rules on a UC table:
     the compliance loader and, for an asset that points to a table, its
-    maturity gates. Add tags and lineage with ``enrich_tables``.
+    maturity gates. Add tags, lineage and the key columns with ``enrich_tables``:
+    the listing has no ``table_constraints``, so the key fields are left out here.
 
     Tag keys are the governed tags' keys as Unity Catalog stores them
     (``tag_name``), with no namespace: unlike app tags (``namespace/name`` or
@@ -411,12 +431,13 @@ def table_entity(
         'created_at': getattr(table, 'created_at', None),
         'updated_at': getattr(table, 'updated_at', None),
         'storage_location': getattr(table, 'storage_location', None),
-        **table_column_fields(table),
+        **{k: v for k, v in table_column_fields(table).items() if k not in KEY_FIELDS},
     }
 
 
 def enrich_tables(
     entities: List[Dict[str, Any]], groups: Set[str], runner: Optional[SqlRunner],
+    table_reader: Optional['TableConstraintsReader'] = None,
 ) -> None:
     """``enrich_catalog_tables`` for table entities of any catalogs (one table or many).
 
@@ -428,25 +449,91 @@ def enrich_tables(
     for entity in entities:
         by_catalog.setdefault(str(entity.get('catalog') or ''), []).append(entity)
     for catalog, members in by_catalog.items():
-        enrich_catalog_tables(catalog, members, groups, runner)
+        enrich_catalog_tables(catalog, members, groups, runner, table_reader)
 
 
 # --- loading -------------------------------------------------------------------------
+
+class TableConstraintsReader:
+    """Reads the key column fields of tables with ``tables.get``.
+
+    ``tables.list`` doesn't return ``table_constraints``. One reader serves one
+    policy run: past ``max_reads`` calls or ``max_seconds`` since it was created,
+    ``fields`` raises ``SourceUnavailable`` (``table_read_limit``) without a call.
+    """
+
+    def __init__(
+        self, workspace_client: Any, max_reads: int = MAX_TABLE_READS_PER_RUN,
+        max_seconds: float = MAX_TABLE_READ_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ):
+        self.ws = workspace_client
+        self.max_reads = max_reads
+        self.reads = 0
+        self._clock = clock
+        self._deadline = clock() + max_seconds
+
+    def fields(self, full_name: str) -> Dict[str, Any]:
+        """``KEY_FIELDS`` of the table; raises ``SourceUnavailable`` when it can't be read."""
+        if self.reads >= self.max_reads or self._clock() >= self._deadline:
+            raise SourceUnavailable(REASON_TABLE_READ_LIMIT, 'run reached its table read limit')
+        self.reads += 1
+        try:
+            table = self.ws.tables.get(full_name=full_name)
+        except Exception as e:
+            from databricks.sdk.errors import NotFound, PermissionDenied
+            if isinstance(e, PermissionDenied):
+                reason = REASON_TABLE_NO_ACCESS
+            elif isinstance(e, NotFound):
+                reason = REASON_TABLE_NOT_FOUND
+            else:
+                reason = REASON_TABLE_READ_FAILED
+            raise SourceUnavailable(reason, type(e).__name__) from e
+        return key_column_fields(table)
+
+
+def enrich_key_columns(
+    entities: List[Dict[str, Any]], reader: Optional[TableConstraintsReader],
+) -> None:
+    """Set the key column fields of each table entity from ``reader``, in place.
+
+    A table whose constraints can't be read keeps none of them and is marked
+    unavailable with the reason, so a rule on them isn't passed or failed on
+    the empty lists a missing read would give.
+    """
+    if reader is None:
+        mark_unavailable(entities, KEYS, REASON_TABLE_READ_FAILED)
+        return
+    failures: Dict[str, int] = {}
+    for entity in entities:
+        try:
+            entity.update(reader.fields(str(entity.get('full_name') or '')))
+        except SourceUnavailable as e:
+            failures[e.reason] = failures.get(e.reason, 0) + 1
+            mark_unavailable([entity], KEYS, e.reason)
+    for reason, count in failures.items():
+        logger.warning("Could not read the key columns of %d tables (%s)", count, reason)
+
 
 def enrich_catalog_tables(
     catalog: str,
     entities: List[Dict[str, Any]],
     groups: Set[str],
     runner: Optional[SqlRunner],
+    table_reader: Optional[TableConstraintsReader] = None,
 ) -> None:
     """Add the fields of ``groups`` to the table entities of one catalog, in place.
 
-    One statement per group, scoped to the schemas of ``entities``. Without a
-    runner, or when a statement fails, the group's fields are left out and
-    marked unavailable with the reason.
+    One statement per SQL group (tags, lineage), scoped to the schemas of
+    ``entities``; without a runner, or when a statement fails, the group's
+    fields are left out and marked unavailable with the reason. The key
+    columns (KEYS) are read per table with ``table_reader`` (see
+    ``enrich_key_columns``).
     """
     if not entities or not groups:
         return
+    if KEYS in groups:
+        enrich_key_columns(entities, table_reader)
     schemas = {str(e.get('schema') or '') for e in entities}
     steps = (
         (TAGS, tags_statement, apply_tag_rows),

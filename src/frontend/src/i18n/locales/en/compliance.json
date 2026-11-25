@@ -198,6 +198,10 @@
       "query_failed": "the query failed",
       "timed_out": "the query was still running at the time limit",
       "budget_exceeded": "the run reached its limit of statements on the SQL warehouse",
+      "table_no_access": "no access to the table",
+      "table_not_found": "the table was not found",
+      "table_read_failed": "the table could not be read",
+      "table_read_limit": "the run reached its limit of table reads",
       "transient": "the SQL warehouse was temporarily unavailable, also after retries",
       "not_found": "the system table was not found (is the system schema enabled?)",
       "not_loaded": "tags are not read for this type of object yet"

@@ -1,4 +1,4 @@
-"""Test the tr1 migration (team member role overrides stored by role id) through Alembic."""
+"""Test the ap1 migration (team member role overrides stored by role id) through Alembic."""
 import importlib.util
 import logging
 from pathlib import Path
@@ -9,7 +9,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 
-_NAME = 'tr1_team_override_role_id'
+_NAME = 'ap1_team_override_role_id'
 
 
 @pytest.fixture
@@ -51,12 +51,12 @@ def _ids(conn):
 
 def test_revision_chains_onto_the_development_head(migration):
     assert migration.revision == _NAME
-    assert migration.down_revision == 'o2_step_execution_message'
+    assert migration.down_revision == 'o4_shared_library_documents'
     assert len(migration.revision) <= 32
 
 
 def test_upgrade_stores_role_ids_and_logs_names_that_match_no_role(tmp_path, migration, caplog):
-    engine = create_engine(f"sqlite:///{tmp_path / 'tr1.db'}")
+    engine = create_engine(f"sqlite:///{tmp_path / 'ap1.db'}")
     with engine.begin() as conn:
         _create_tables(conn)
 
@@ -81,7 +81,7 @@ def test_upgrade_stores_role_ids_and_logs_names_that_match_no_role(tmp_path, mig
 
 
 def test_renamed_role_keeps_its_overrides(tmp_path, migration):
-    engine = create_engine(f"sqlite:///{tmp_path / 'tr1-rename.db'}")
+    engine = create_engine(f"sqlite:///{tmp_path / 'ap1-rename.db'}")
     with engine.begin() as conn:
         _create_tables(conn)
         _apply(conn, migration.upgrade)
@@ -96,7 +96,7 @@ def test_renamed_role_keeps_its_overrides(tmp_path, migration):
 
 
 def test_downgrade_writes_the_current_role_names_back(tmp_path, migration):
-    engine = create_engine(f"sqlite:///{tmp_path / 'tr1-down.db'}")
+    engine = create_engine(f"sqlite:///{tmp_path / 'ap1-down.db'}")
     with engine.begin() as conn:
         _create_tables(conn)
         _apply(conn, migration.upgrade)

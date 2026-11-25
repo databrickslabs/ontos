@@ -218,7 +218,11 @@ def test_adding_a_member_trims_the_role_name_and_identifier(db_session, roles):
 
     TeamsManager().add_team_member(
         db_session, team.id,
-        TeamMemberCreate(member_type="user", member_identifier=" alice@example.com ", app_role_override=" Data Steward "),
+        TeamMemberCreate(
+            member_type="user",
+            member_identifier=" alice@example.com ",
+            app_role_override=" Data Steward ",
+        ),
         current_user_id="admin@example.com",
     )
 

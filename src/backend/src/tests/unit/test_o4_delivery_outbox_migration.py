@@ -40,7 +40,7 @@ def _state(conn):
 
 def test_it_revises_the_development_head(migration):
     assert migration.revision == _NAME
-    assert migration.down_revision == 'o3_canonical_cost_centers'
+    assert migration.down_revision == 'b12_product_type_from_props'
 
 
 def test_upgrade_twice_downgrade_and_upgrade_again(tmp_path, migration):

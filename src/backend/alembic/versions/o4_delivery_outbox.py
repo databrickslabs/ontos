@@ -5,7 +5,7 @@ One row per change and active delivery mode, written in the change's transaction
 retries; delivered rows are deleted after the retention period.
 
 Revision ID: o4_delivery_outbox
-Revises: o3_canonical_cost_centers
+Revises: b12_product_type_from_props
 Create Date: 2026-11-24 12:00:00.000000
 
 """
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'o4_delivery_outbox'
-down_revision: Union[str, None] = 'o3_canonical_cost_centers'
+down_revision: Union[str, None] = 'b12_product_type_from_props'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

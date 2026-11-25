@@ -10,7 +10,7 @@ from src.tools import read_access
 from src.tools import visibility as vis
 
 from src.common.logging import get_logger
-from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -227,10 +227,8 @@ class ListSemanticLinksTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id"]
     required_scope = "semantic:read"
-    # GET /semantic-links/entity/... and /semantic-links/by-iri have no
-    # PermissionChecker (the entity pages show the links to anyone who can read
-    # the entity): the tool keeps no feature level, only the read rules below.
-    required_permission = ANY_CALLER
+    # Same level as GET /semantic-links/entity/... and /by-iri.
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,
@@ -396,10 +394,8 @@ class FindEntitiesByConceptTool(BaseTool):
     }
     required_params = ["concept_iri"]
     required_scope = "semantic:read"
-    # GET /semantic-links/entity/... and /semantic-links/by-iri have no
-    # PermissionChecker (the entity pages show the links to anyone who can read
-    # the entity): the tool keeps no feature level, only the read rules below.
-    required_permission = ANY_CALLER
+    # Same level as GET /semantic-links/entity/... and /by-iri.
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,

@@ -41,8 +41,6 @@ ANY_CALLER_TOOLS = {
     # Organisation and tag reads.
     'search_domains', 'get_domain', 'search_teams', 'get_team', 'search_projects',
     'get_project', 'search_tags', 'get_tag', 'list_entity_tags',
-    # GET /semantic-links/entity/... and /semantic-links/by-iri have no PermissionChecker.
-    'list_semantic_links', 'find_entities_by_concept',
     # Cross-cutting.
     'global_search', 'search_ontos_handbook', 'get_app_state', 'get_current_user',
     # Unity Catalog and analytics reads.
@@ -50,11 +48,14 @@ ANY_CALLER_TOOLS = {
     'list_catalogs', 'get_catalog_details', 'list_schemas',
 }
 # The semantic reads whose REST routes require Read-only on 'semantic-models':
-# GET /semantic-models/search, /concepts/hierarchy, /neighbors.
+# GET /semantic-models/search, /concepts/hierarchy, /neighbors and
+# GET /semantic-links/entity/..., /by-iri.
 SEMANTIC_READS = {
     'search_glossary_terms': {'term': 'Customer'},
     'get_concept_hierarchy': {'concept_iri': 'http://example.com/onto#Customer'},
     'get_concept_neighbors': {'concept_iri': 'http://example.com/onto#Customer'},
+    'list_semantic_links': {'entity_type': 'data_product', 'entity_id': 'p1'},
+    'find_entities_by_concept': {'concept_iri': 'http://example.com/onto#Customer'},
 }
 
 
@@ -217,9 +218,10 @@ class TestSemanticReadsNeedReadOnlyOnSemanticModels:
         assert res.success is True
 
 
-class TestLinkReadsKeepTheirReadRulesOnly:
-    """list_semantic_links / find_entities_by_concept: their REST routes have no
-    PermissionChecker, so the tools keep only the product and contract read rules."""
+class TestLinkReadsKeepTheirReadRules:
+    """list_semantic_links / find_entities_by_concept: at Read-only on
+    semantic-models (the level of their REST routes) the product and contract read
+    rules still apply on top."""
 
     def _published_product_with_link(self, db_session):
         entity_id = str(uuid.uuid4())
@@ -231,9 +233,9 @@ class TestLinkReadsKeepTheirReadRulesOnly:
         db_session.commit()
         return entity_id, iri
 
-    def test_list_semantic_links_runs_without_a_level_on_semantic_models(self, db_session):
+    def test_list_semantic_links_runs_at_read_only_on_semantic_models(self, db_session):
         entity_id, iri = self._published_product_with_link(db_session)
-        ctx = _ctx(db_session, _caller({'data-products': RO}),
+        ctx = _ctx(db_session, _caller({'data-products': RO, 'semantic-models': RO}),
                    semantic_models_manager=MagicMock())
         res = _run(create_default_registry().execute(
             'list_semantic_links', ctx, {'entity_type': 'data_product', 'entity_id': entity_id,
@@ -241,11 +243,11 @@ class TestLinkReadsKeepTheirReadRulesOnly:
         assert res.success is True
         assert [link['iri'] for link in res.data['links']] == [iri]
 
-    def test_find_entities_by_concept_runs_without_a_level_on_semantic_models(
+    def test_find_entities_by_concept_runs_at_read_only_on_semantic_models(
         self, db_session
     ):
         entity_id, iri = self._published_product_with_link(db_session)
-        ctx = _ctx(db_session, _caller({'data-products': RO}),
+        ctx = _ctx(db_session, _caller({'data-products': RO, 'semantic-models': RO}),
                    semantic_models_manager=MagicMock())
         res = _run(create_default_registry().execute(
             'find_entities_by_concept', ctx, {'concept_iri': iri, 'visibility': 'readable'}))

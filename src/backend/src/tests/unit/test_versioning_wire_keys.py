@@ -9,10 +9,11 @@ banner) on ``draftOwnerId``, and family navigation on ``versionFamilyId`` /
 - Contracts: ``_build_contract_api_model`` never populated them, and
   ``DataContractRead`` serialized them under their snake_case alias.
 """
+
 import os
 
-os.environ['TESTING'] = 'true'
-os.environ['SKIP_STARTUP_TASKS'] = 'true'
+os.environ["TESTING"] = "true"
+os.environ["SKIP_STARTUP_TASKS"] = "true"
 
 import uuid
 from pathlib import Path
@@ -22,14 +23,26 @@ from src.db_models.data_contracts import DataContractDb
 from src.models.data_products import DataProduct
 from src.repositories.data_contracts_repository import data_contract_repo
 
-VERSIONING_KEYS = {"draftOwnerId", "parentProductId", "versionFamilyId", "baseName", "changeSummary"}
+VERSIONING_KEYS = {
+    "draftOwnerId",
+    "parentProductId",
+    "versionFamilyId",
+    "baseName",
+    "changeSummary",
+}
 
 
 def _product(**overrides):
     return DataProduct(
-        id="p2", name="Orders", version="1.0.0-draft", status="draft",
-        draft_owner_id="jane@example.com", parent_product_id="p1",
-        version_family_id="fam", base_name="Orders", change_summary="wip",
+        id="p2",
+        name="Orders",
+        version="1.0.0-draft",
+        status="draft",
+        draft_owner_id="jane@example.com",
+        parent_product_id="p1",
+        version_family_id="fam",
+        base_name="Orders",
+        change_summary="wip",
         inputPorts=[{"name": "in", "version": "1.0.0", "contractId": "c1"}],
         **overrides,
     )
@@ -70,9 +83,15 @@ class TestContractDetailVersioningFields:
     def test_personal_draft_fields_reach_the_wire(self, db_session):
         parent_id, family_id = str(uuid.uuid4()), str(uuid.uuid4())
         draft = DataContractDb(
-            id=str(uuid.uuid4()), name="c", version="1.0.0-draft", status="draft",
-            parent_contract_id=parent_id, version_family_id=family_id,
-            base_name="c", change_summary="wip", draft_owner_id="jane@example.com",
+            id=str(uuid.uuid4()),
+            name="c",
+            version="1.0.0-draft",
+            status="draft",
+            parent_contract_id=parent_id,
+            version_family_id=family_id,
+            base_name="c",
+            change_summary="wip",
+            draft_owner_id="jane@example.com",
         )
         db_session.add(draft)
         db_session.flush()

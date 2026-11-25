@@ -4377,9 +4377,11 @@ def diff_contract_versions(
         rows.append(contract)
 
     try:
-        return manager.diff_versions(db, base_id=base_id, target_id=target_id, base=rows[0], target=rows[1])
+        return manager.diff_versions(
+            db, base_id=base_id, target_id=target_id, base=rows[0], target=rows[1])
     except VersionFamilyMismatch:
-        raise HTTPException(status_code=400, detail="Contracts belong to different version families")
+        raise HTTPException(
+            status_code=400, detail="Contracts belong to different version families")
     except EntityNotFound:
         raise HTTPException(status_code=404, detail="Contract not found")
     except EntityTooLarge as e:

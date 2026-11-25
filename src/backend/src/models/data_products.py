@@ -947,7 +947,8 @@ class CommitDraftResponse(BaseModel):
 
 class DiffFromParentResponse(BaseModel):
     """Response containing diff analysis from parent version."""
-    parent_id: Optional[str] = Field(None, description="Parent version's product id (for the compare dialog)")
+    parent_id: Optional[str] = Field(
+        None, description="Parent version's product id (for the compare dialog)")
     parent_version: str = Field(..., description="Parent version string")
     suggested_bump: str = Field(..., description="Suggested semver bump: major, minor, or patch")
     suggested_version: str = Field(..., description="Suggested new version string")

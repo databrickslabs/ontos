@@ -32,8 +32,17 @@ _VOLATILE_TOP_LEVEL = {"id", "version", "contractCreatedTs"}
 
 # Quality-check fields that don't change what the check enforces.
 _QUALITY_COSMETIC = {
-    "id", "description", "dimension", "businessImpact", "schedule", "scheduler",
-    "severity", "tags", "authoritativeDefinitions", "customProperties", "name",
+    "id",
+    "description",
+    "dimension",
+    "businessImpact",
+    "schedule",
+    "scheduler",
+    "severity",
+    "tags",
+    "authoritativeDefinitions",
+    "customProperties",
+    "name",
 }
 
 
@@ -62,7 +71,9 @@ def _quality_identity(item: Dict[str, Any]) -> str:
     if item.get("name"):
         return item["name"]
     definition = {k: v for k, v in item.items() if k not in _QUALITY_COSMETIC}
-    digest = hashlib.sha1(json.dumps(definition, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:8]
+    digest = hashlib.sha1(
+        json.dumps(definition, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:8]
     return f"{item.get('type', 'check')}#{digest}"
 
 
@@ -105,12 +116,21 @@ _LOWER_BOUNDS = {"minLength", "minimum", "exclusiveMinimum", "minItems", "minPro
 _UPPER_BOUNDS = {"maxLength", "maximum", "exclusiveMaximum", "maxItems", "maxProperties"}
 
 # SLA properties by which direction is a stronger guarantee for consumers.
-_SLA_HIGHER_IS_STRONGER = {"availability", "generalAvailability", "retention", "endOfSupport", "endOfLife"}
+_SLA_HIGHER_IS_STRONGER = {
+    "availability",
+    "generalAvailability",
+    "retention",
+    "endOfSupport",
+    "endOfLife",
+}
 _SLA_LOWER_IS_STRONGER = {"latency", "frequency", "timeToDetect", "timeToNotify", "timeToRepair"}
 
 
 def _type_change_bump(change: FieldChange) -> Bump:
-    if change.op == "modified" and (str(change.old).lower(), str(change.new).lower()) in _WIDENING_TYPE_CHANGES:
+    if (
+        change.op == "modified"
+        and (str(change.old).lower(), str(change.new).lower()) in _WIDENING_TYPE_CHANGES
+    ):
         return Bump.MINOR
     return Bump.MAJOR
 
@@ -178,54 +198,91 @@ def _sla_value_bump(change: FieldChange) -> Bump:
 # Rules (first match wins; unmatched → PATCH)
 # ---------------------------------------------------------------------------
 
-ODCS_RULES = RuleSet(rules=[
-    # Lifecycle / format bookkeeping
-    Rule("status", "status", Bump.NONE, "Status changed (lifecycle, not content)"),
-    Rule("api-version", "apiVersion", Bump.NONE, "Format version changed"),
-
-    # Schema objects
-    Rule("schema-removed", "schema[]", Bump.MAJOR, "Schema object removed", ops=("removed",)),
-    Rule("schema-added", "schema[]", Bump.MINOR, "Schema object added", ops=("added",)),
-
-    # Properties (any nesting depth, including array `items`)
-    Rule("property-removed", "*.properties[]", Bump.MAJOR, "Property removed", ops=("removed",)),
-    Rule("property-added", "*.properties[]", _added_property_bump, "Property added", ops=("added",)),
-    Rule("property-logical-type", "*.logicalType", _type_change_bump, "Logical type changed"),
-    Rule("property-physical-type", "*.physicalType", Bump.MAJOR, "Physical type changed"),
-    Rule("property-physical-name", "*.physicalName", Bump.MAJOR, "Physical name changed"),
-    Rule("property-required", "*.required", _became_true, "Required flag changed"),
-    Rule("property-unique", "*.unique", _became_true, "Unique flag changed"),
-    Rule("property-primary-key", "*.primaryKey", Bump.MAJOR, "Primary key changed"),
-    Rule("property-primary-key-position", "*.primaryKeyPosition", Bump.MAJOR, "Primary key position changed"),
-    Rule("property-type-options", "*.logicalTypeOptions.*", _bound_bump, "Type constraint changed"),
-
-    # Quality checks (contract-, schema- or property-level)
-    Rule("quality-added", "*quality[]", Bump.MAJOR, "Quality check added", ops=("added",)),
-    Rule("quality-removed", "*quality[]", Bump.MAJOR, "Quality check removed", ops=("removed",)),
-    Rule("quality-metadata", "*quality[].*", Bump.PATCH, "Quality check metadata changed", when=_quality_is_cosmetic),
-    Rule("quality-changed", "*quality[].*", Bump.MAJOR, "Quality check definition changed"),
-
-    # Servers
-    Rule("server-removed", "servers[]", Bump.MAJOR, "Server removed", ops=("removed",)),
-    Rule("server-added", "servers[]", Bump.MINOR, "Server added", ops=("added",)),
-    Rule("server-description", "servers[].description", Bump.PATCH, "Server description changed"),
-    Rule("server-changed", "servers[].*", Bump.MAJOR, "Server connection details changed"),
-
-    # Access & service levels
-    Rule("role-removed", "roles[]", Bump.MAJOR, "Role removed", ops=("removed",)),
-    Rule("role-added", "roles[]", Bump.MINOR, "Role added", ops=("added",)),
-    Rule("sla-removed", "slaProperties[]", Bump.MAJOR, "Service level removed", ops=("removed",)),
-    Rule("sla-added", "slaProperties[]", Bump.MINOR, "Service level added", ops=("added",)),
-    Rule("sla-value", "slaProperties[].value", _sla_value_bump, "Service level value changed", ops=("modified",)),
-    Rule("sla-changed", "slaProperties[].*", Bump.MAJOR, "Service level definition changed"),
-
-    # Documentation & governance metadata (PATCH; named for readable messages)
-    Rule("description", "*description*", Bump.PATCH, "Description changed"),
-    Rule("team-member-added", "team*[]", Bump.PATCH, "Team member added", ops=("added",)),
-    Rule("team-member-removed", "team*[]", Bump.PATCH, "Team member removed", ops=("removed",)),
-    Rule("team-changed", "team*", Bump.PATCH, "Team changed"),
-    Rule("support", "support*", Bump.PATCH, "Support channel changed"),
-    Rule("tags", "*tags*", Bump.PATCH, "Tags changed"),
-    Rule("custom-properties", "*customProperties*", Bump.PATCH, "Custom properties changed"),
-    Rule("authoritative-definitions", "*authoritativeDefinitions*", Bump.PATCH, "Authoritative definitions changed"),
-])
+ODCS_RULES = RuleSet(
+    rules=[
+        # Lifecycle / format bookkeeping
+        Rule("status", "status", Bump.NONE, "Status changed (lifecycle, not content)"),
+        Rule("api-version", "apiVersion", Bump.NONE, "Format version changed"),
+        # Schema objects
+        Rule("schema-removed", "schema[]", Bump.MAJOR, "Schema object removed", ops=("removed",)),
+        Rule("schema-added", "schema[]", Bump.MINOR, "Schema object added", ops=("added",)),
+        # Properties (any nesting depth, including array `items`)
+        Rule(
+            "property-removed", "*.properties[]", Bump.MAJOR, "Property removed", ops=("removed",)
+        ),
+        Rule(
+            "property-added",
+            "*.properties[]",
+            _added_property_bump,
+            "Property added",
+            ops=("added",),
+        ),
+        Rule("property-logical-type", "*.logicalType", _type_change_bump, "Logical type changed"),
+        Rule("property-physical-type", "*.physicalType", Bump.MAJOR, "Physical type changed"),
+        Rule("property-physical-name", "*.physicalName", Bump.MAJOR, "Physical name changed"),
+        Rule("property-required", "*.required", _became_true, "Required flag changed"),
+        Rule("property-unique", "*.unique", _became_true, "Unique flag changed"),
+        Rule("property-primary-key", "*.primaryKey", Bump.MAJOR, "Primary key changed"),
+        Rule(
+            "property-primary-key-position",
+            "*.primaryKeyPosition",
+            Bump.MAJOR,
+            "Primary key position changed",
+        ),
+        Rule(
+            "property-type-options",
+            "*.logicalTypeOptions.*",
+            _bound_bump,
+            "Type constraint changed",
+        ),
+        # Quality checks (contract-, schema- or property-level)
+        Rule("quality-added", "*quality[]", Bump.MAJOR, "Quality check added", ops=("added",)),
+        Rule(
+            "quality-removed", "*quality[]", Bump.MAJOR, "Quality check removed", ops=("removed",)
+        ),
+        Rule(
+            "quality-metadata",
+            "*quality[].*",
+            Bump.PATCH,
+            "Quality check metadata changed",
+            when=_quality_is_cosmetic,
+        ),
+        Rule("quality-changed", "*quality[].*", Bump.MAJOR, "Quality check definition changed"),
+        # Servers
+        Rule("server-removed", "servers[]", Bump.MAJOR, "Server removed", ops=("removed",)),
+        Rule("server-added", "servers[]", Bump.MINOR, "Server added", ops=("added",)),
+        Rule(
+            "server-description", "servers[].description", Bump.PATCH, "Server description changed"
+        ),
+        Rule("server-changed", "servers[].*", Bump.MAJOR, "Server connection details changed"),
+        # Access & service levels
+        Rule("role-removed", "roles[]", Bump.MAJOR, "Role removed", ops=("removed",)),
+        Rule("role-added", "roles[]", Bump.MINOR, "Role added", ops=("added",)),
+        Rule(
+            "sla-removed", "slaProperties[]", Bump.MAJOR, "Service level removed", ops=("removed",)
+        ),
+        Rule("sla-added", "slaProperties[]", Bump.MINOR, "Service level added", ops=("added",)),
+        Rule(
+            "sla-value",
+            "slaProperties[].value",
+            _sla_value_bump,
+            "Service level value changed",
+            ops=("modified",),
+        ),
+        Rule("sla-changed", "slaProperties[].*", Bump.MAJOR, "Service level definition changed"),
+        # Documentation & governance metadata (PATCH; named for readable messages)
+        Rule("description", "*description*", Bump.PATCH, "Description changed"),
+        Rule("team-member-added", "team*[]", Bump.PATCH, "Team member added", ops=("added",)),
+        Rule("team-member-removed", "team*[]", Bump.PATCH, "Team member removed", ops=("removed",)),
+        Rule("team-changed", "team*", Bump.PATCH, "Team changed"),
+        Rule("support", "support*", Bump.PATCH, "Support channel changed"),
+        Rule("tags", "*tags*", Bump.PATCH, "Tags changed"),
+        Rule("custom-properties", "*customProperties*", Bump.PATCH, "Custom properties changed"),
+        Rule(
+            "authoritative-definitions",
+            "*authoritativeDefinitions*",
+            Bump.PATCH,
+            "Authoritative definitions changed",
+        ),
+    ]
+)

@@ -34,6 +34,7 @@ IgnoreFn = Callable[[str], bool]
 @dataclass(frozen=True)
 class FieldChange:
     """One leaf- or subtree-level difference between two documents."""
+
     path: str
     shape: str
     op: str  # "added" | "removed" | "modified"
@@ -44,6 +45,7 @@ class FieldChange:
 @dataclass
 class DiffProfile:
     """Entity-specific knobs for the generic diff."""
+
     identity: IdentityFn
     strip: StripFn = field(default=lambda shape, value: False)
     ignore: IgnoreFn = field(default=lambda shape: False)
@@ -92,7 +94,9 @@ def _repeated(keys: List[str]) -> set:
     return repeated
 
 
-def _keyed(items: List[Any], base_keys: List[str], qualify: set) -> Tuple[Dict[str, Any], Dict[str, str]]:
+def _keyed(
+    items: List[Any], base_keys: List[str], qualify: set
+) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """Map list items to identity keys.
 
     Keys in ``qualify`` (repeated on either side — e.g. two ODPS output ports
@@ -115,8 +119,12 @@ def _keyed(items: List[Any], base_keys: List[str], qualify: set) -> Tuple[Dict[s
     return keyed, bases
 
 
-def _pair_lone_leftovers(old_map: Dict[str, Any], old_bases: Dict[str, str],
-                         new_map: Dict[str, Any], new_bases: Dict[str, str]) -> None:
+def _pair_lone_leftovers(
+    old_map: Dict[str, Any],
+    old_bases: Dict[str, str],
+    new_map: Dict[str, Any],
+    new_bases: Dict[str, str],
+) -> None:
     """After version-qualifying repeated keys, an item whose version changed no
     longer matches (orders@2.0.0 vs orders@2.1.0). When exactly one unmatched
     item per base key is left on each side, and no kept item of that key lies
@@ -124,6 +132,7 @@ def _pair_lone_leftovers(old_map: Dict[str, Any], old_bases: Dict[str, str],
     as a modification. Otherwise (e.g. v1 retired while v2.1 added next to a
     kept v2.0) it stays a removal + addition."""
     from .semver import parse_version  # local: semver imports this module
+
     def leftovers(mapping, bases, other):
         grouped: Dict[str, List[str]] = {}
         for key in mapping:
@@ -151,8 +160,9 @@ def _is_scalar_list(items: List[Any]) -> bool:
     return all(not isinstance(v, (dict, list)) for v in items)
 
 
-def _walk(old: Any, new: Any, path: str, shape: str, profile: DiffProfile,
-          out: List[FieldChange]) -> None:
+def _walk(
+    old: Any, new: Any, path: str, shape: str, profile: DiffProfile, out: List[FieldChange]
+) -> None:
     if isinstance(old, dict) and isinstance(new, dict):
         for key in list(old.keys()) + [k for k in new.keys() if k not in old]:
             child_path = f"{path}.{key}" if path else key
@@ -232,8 +242,9 @@ def _exceeds_nodes(doc: Any, limit: int) -> bool:
     return False
 
 
-def diff_documents(old: Dict[str, Any], new: Dict[str, Any],
-                   profile: DiffProfile) -> Tuple[List[FieldChange], Dict[str, Any], Dict[str, Any]]:
+def diff_documents(
+    old: Dict[str, Any], new: Dict[str, Any], profile: DiffProfile
+) -> Tuple[List[FieldChange], Dict[str, Any], Dict[str, Any]]:
     """Diff two documents.
 
     Returns the changes plus both normalized documents (callers render the

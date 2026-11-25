@@ -4945,7 +4945,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         ]
         for keys in child_entity_fields:
             proposed = ProductChangeAnalyzer._get(proposed_changes, *keys)
-            if proposed is not None and proposed != ProductChangeAnalyzer._get(current_product_dict, *keys):
+            if proposed is not None and proposed != ProductChangeAnalyzer._get(
+                current_product_dict, *keys
+            ):
                 child_entity_changes.append(keys[0])
         
         # Determine if versioning is required

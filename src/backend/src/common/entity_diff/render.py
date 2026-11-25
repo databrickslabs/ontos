@@ -32,10 +32,15 @@ MAX_UNIFIED_DIFF_LINES = 5000
 MAX_YAML_INPUT_LINES = 4000
 
 
-def bounded_unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, Any],
-                              base_label: str, target_label: str, context: int = 3,
-                              max_lines: Optional[int] = None,
-                              max_input_lines: Optional[int] = None) -> Tuple[str, bool]:
+def bounded_unified_yaml_diff(
+    base_doc: Dict[str, Any],
+    target_doc: Dict[str, Any],
+    base_label: str,
+    target_label: str,
+    context: int = 3,
+    max_lines: Optional[int] = None,
+    max_input_lines: Optional[int] = None,
+) -> Tuple[str, bool]:
     """Unified diff of two documents rendered as YAML, cut after ``max_lines``.
 
     Returns the text and whether it was cut (or skipped, when a side has more
@@ -44,7 +49,10 @@ def bounded_unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, An
     changes.
     """
     base_yaml, target_yaml = to_yaml(base_doc), to_yaml(target_doc)
-    if max_input_lines is not None and max(base_yaml.count("\n"), target_yaml.count("\n")) > max_input_lines:
+    if (
+        max_input_lines is not None
+        and max(base_yaml.count("\n"), target_yaml.count("\n")) > max_input_lines
+    ):
         return "", True
     lines = difflib.unified_diff(
         base_yaml.splitlines(keepends=True),
@@ -61,20 +69,35 @@ def bounded_unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, An
     return "".join(head), False
 
 
-def unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, Any],
-                      base_label: str, target_label: str, context: int = 3) -> str:
+def unified_yaml_diff(
+    base_doc: Dict[str, Any],
+    target_doc: Dict[str, Any],
+    base_label: str,
+    target_label: str,
+    context: int = 3,
+) -> str:
     """Unified diff of two documents rendered as YAML (no line cap)."""
     return bounded_unified_yaml_diff(base_doc, target_doc, base_label, target_label, context)[0]
 
 
 def _ref(meta: Dict[str, Any]) -> Dict[str, Any]:
-    return {"id": meta.get("id"), "name": meta.get("name"), "version": meta.get("version"),
-            "status": meta.get("status")}
+    return {
+        "id": meta.get("id"),
+        "name": meta.get("name"),
+        "version": meta.get("version"),
+        "status": meta.get("status"),
+    }
 
 
-def build_diff_response(entity_type: str, base_meta: Dict[str, Any], target_meta: Dict[str, Any],
-                        base_doc: Dict[str, Any], target_doc: Dict[str, Any],
-                        profile: DiffProfile, rule_set: RuleSet) -> Dict[str, Any]:
+def build_diff_response(
+    entity_type: str,
+    base_meta: Dict[str, Any],
+    target_meta: Dict[str, Any],
+    base_doc: Dict[str, Any],
+    target_doc: Dict[str, Any],
+    profile: DiffProfile,
+    rule_set: RuleSet,
+) -> Dict[str, Any]:
     """Compare two file-model documents and shape the response.
 
     ``*_meta`` carry the rows' id/name/version/status (the documents' own
@@ -84,7 +107,8 @@ def build_diff_response(entity_type: str, base_meta: Dict[str, Any], target_meta
     result.base_version = base_meta.get("version")
     result.target_version = target_meta.get("version")
     unified, unified_cut = bounded_unified_yaml_diff(
-        without_ignored(result.base_document, profile), without_ignored(result.target_document, profile),
+        without_ignored(result.base_document, profile),
+        without_ignored(result.target_document, profile),
         f"{base_meta.get('name') or 'base'} {base_meta.get('version') or ''}".strip(),
         f"{target_meta.get('name') or 'target'} {target_meta.get('version') or ''}".strip(),
         max_lines=MAX_UNIFIED_DIFF_LINES,
@@ -121,16 +145,23 @@ def legacy_parent_diff(diff: Dict[str, Any]) -> Dict[str, Any]:
     patch bump (the dialogs' radio group has no "none").
     """
     changes = diff["changes"]
-    by_bump = {b: [_legacy_line(c) for c in changes if c["bump"] == b] for b in ("major", "minor", "patch")}
+    by_bump = {
+        b: [_legacy_line(c) for c in changes if c["bump"] == b] for b in ("major", "minor", "patch")
+    }
     bump = diff["suggested_bump"]
     sections = [
         (f"Breaking changes ({len(by_bump['major'])})", by_bump["major"]),
         (f"New features ({len(by_bump['minor'])})", by_bump["minor"]),
         (f"Improvements ({len(by_bump['patch'])})", by_bump["patch"]),
     ]
-    summary = "\n\n".join(
-        title + ":\n" + "\n".join(f"- {line}" for line in lines) for title, lines in sections if lines
-    ) or "No significant changes detected"
+    summary = (
+        "\n\n".join(
+            title + ":\n" + "\n".join(f"- {line}" for line in lines)
+            for title, lines in sections
+            if lines
+        )
+        or "No significant changes detected"
+    )
     suggested_bump = bump if bump != "none" else "patch"
     return {
         "parent_id": diff["base"]["id"],

@@ -1,8 +1,9 @@
 """Version-diff service: manager ``diff_versions`` + response rendering (PRD #1086 slice 4)."""
+
 import os
 
-os.environ['TESTING'] = 'true'
-os.environ['SKIP_STARTUP_TASKS'] = 'true'
+os.environ["TESTING"] = "true"
+os.environ["SKIP_STARTUP_TASKS"] = "true"
 
 import uuid
 from datetime import datetime
@@ -24,18 +25,30 @@ from src.models.entity_diff import EntityDiffResponse
 
 def _contract(db, family_id, version, props, parent_id=None):
     contract = DataContractDb(
-        id=str(uuid.uuid4()), name="orders", version=version, status="active",
-        version_family_id=family_id, parent_contract_id=parent_id,
+        id=str(uuid.uuid4()),
+        name="orders",
+        version=version,
+        status="active",
+        version_family_id=family_id,
+        parent_contract_id=parent_id,
     )
     db.add(contract)
     db.flush()
-    obj = SchemaObjectDb(id=str(uuid.uuid4()), contract_id=contract.id, name="orders",
-                         logical_type="object")
+    obj = SchemaObjectDb(
+        id=str(uuid.uuid4()), contract_id=contract.id, name="orders", logical_type="object"
+    )
     db.add(obj)
     db.flush()
     for name, logical_type, required in props:
-        db.add(SchemaPropertyDb(id=str(uuid.uuid4()), object_id=obj.id, name=name,
-                                logical_type=logical_type, required=required))
+        db.add(
+            SchemaPropertyDb(
+                id=str(uuid.uuid4()),
+                object_id=obj.id,
+                name=name,
+                logical_type=logical_type,
+                required=required,
+            )
+        )
     db.flush()
     return contract
 
@@ -47,7 +60,9 @@ def _manager():
 class TestContractDiffVersions:
     def test_classifies_changes_between_two_versions(self, db_session):
         family = str(uuid.uuid4())
-        v1 = _contract(db_session, family, "1.0.0", [("id", "string", True), ("note", "string", False)])
+        v1 = _contract(
+            db_session, family, "1.0.0", [("id", "string", True), ("note", "string", False)]
+        )
         v2 = _contract(db_session, family, "1.0.1", [("id", "integer", True)], parent_id=v1.id)
 
         result = _manager().diff_versions(db_session, base_id=v1.id, target_id=v2.id)
@@ -61,8 +76,16 @@ class TestContractDiffVersions:
         assert result["suggested_bump"] == "major"
         assert result["suggested_version"] == "2.0.0"
         assert result["version_consistent"] is False  # 1.0.1 is only a patch bump
-        removed = [ln for ln in result["unified_diff"].splitlines() if ln.startswith("-") and not ln.startswith("---")]
-        added = [ln for ln in result["unified_diff"].splitlines() if ln.startswith("+") and not ln.startswith("+++")]
+        removed = [
+            ln
+            for ln in result["unified_diff"].splitlines()
+            if ln.startswith("-") and not ln.startswith("---")
+        ]
+        added = [
+            ln
+            for ln in result["unified_diff"].splitlines()
+            if ln.startswith("+") and not ln.startswith("+++")
+        ]
         assert any("logicalType: string" in ln for ln in removed)
         assert any("logicalType: integer" in ln for ln in added)
 
@@ -110,7 +133,8 @@ class TestRender:
             {"id": "b", "name": "c", "version": "2.0.0", "status": "draft"},
             {"version": "ignored", "schema": [{"name": "s"}]},
             {"version": "ignored", "schema": []},
-            ODCS_PROFILE, ODCS_RULES,
+            ODCS_PROFILE,
+            ODCS_RULES,
         )
         assert response["suggested_version"] == "2.0.0"
         assert response["version_consistent"] is True
@@ -123,6 +147,7 @@ def _product_manager(db):
     from databricks.sdk import WorkspaceClient
 
     from src.controller.data_products_manager import DataProductsManager
+
     return DataProductsManager(db=db, ws_client=MagicMock(spec=WorkspaceClient))
 
 
@@ -130,37 +155,58 @@ def _product(db, family_id, version, output_port, parent_id=None):
     from src.models.data_products import DataProductCreate
     from src.repositories.data_products_repository import data_product_repo
 
-    product = data_product_repo.create(db=db, obj_in=DataProductCreate(
-        id=str(uuid.uuid4()), apiVersion="v1.0.0", kind="DataProduct", name="orders",
-        version=version, status="active", version_family_id=family_id, parent_product_id=parent_id,
-        outputPorts=[output_port] if output_port else [],
-    ))
+    product = data_product_repo.create(
+        db=db,
+        obj_in=DataProductCreate(
+            id=str(uuid.uuid4()),
+            apiVersion="v1.0.0",
+            kind="DataProduct",
+            name="orders",
+            version=version,
+            status="active",
+            version_family_id=family_id,
+            parent_product_id=parent_id,
+            outputPorts=[output_port] if output_port else [],
+        ),
+    )
     db.commit()
     return product
 
 
-PORT = {"name": "orders_table", "version": "1.0.0", "contractId": "c1", "type": "table",
-        "server": {"location": "s3://lake/orders/v1", "format": "delta"}, "containsPii": False}
+PORT = {
+    "name": "orders_table",
+    "version": "1.0.0",
+    "contractId": "c1",
+    "type": "table",
+    "server": {"location": "s3://lake/orders/v1", "format": "delta"},
+    "containsPii": False,
+}
 
 
 class TestProductDiffVersions:
     """Real DB round-trip: the ODPS export alone drops port server/type/PII,
     so these rules only fire if the diff document carries full ports."""
 
-    @pytest.mark.parametrize("mutate,rule_id", [
-        (lambda p: p["server"].update(location="s3://lake/orders/v2"), "output-port-server"),
-        (lambda p: p.update(containsPii=True), "output-port-pii"),
-        (lambda p: p.update(type="view"), "output-port-type"),
-    ])
+    @pytest.mark.parametrize(
+        "mutate,rule_id",
+        [
+            (lambda p: p["server"].update(location="s3://lake/orders/v2"), "output-port-server"),
+            (lambda p: p.update(containsPii=True), "output-port-pii"),
+            (lambda p: p.update(type="view"), "output-port-type"),
+        ],
+    )
     def test_port_details_are_classified_major(self, db_session, mutate, rule_id):
         import copy
+
         family = str(uuid.uuid4())
         v1 = _product(db_session, family, "1.0.0", PORT)
         changed = copy.deepcopy(PORT)
         mutate(changed)
         v2 = _product(db_session, family, "1.0.1", changed, parent_id=v1.id)
 
-        result = _product_manager(db_session).diff_versions(db_session, base_id=v1.id, target_id=v2.id)
+        result = _product_manager(db_session).diff_versions(
+            db_session, base_id=v1.id, target_id=v2.id
+        )
 
         EntityDiffResponse.model_validate(result)
         assert result["suggested_bump"] == "major", result["changes"]
@@ -176,8 +222,12 @@ class TestProductDiffVersions:
 
         assert legacy["suggested_bump"] == "major"
         assert legacy["suggested_version"] == "2.0.0"
-        assert legacy["analysis"]["breaking_changes"] == ["Output port removed: outputPorts[orders_table]"]
-        assert "**" not in legacy["analysis"]["summary"]  # plain text, rendered as-is by the dialogs
+        assert legacy["analysis"]["breaking_changes"] == [
+            "Output port removed: outputPorts[orders_table]"
+        ]
+        assert (
+            "**" not in legacy["analysis"]["summary"]
+        )  # plain text, rendered as-is by the dialogs
 
     def test_unchanged_draft_still_suggests_a_patch_commit(self, db_session):
         family = str(uuid.uuid4())
@@ -191,6 +241,7 @@ class TestProductDiffVersions:
 
     def test_rejects_different_families(self, db_session):
         from src.common.entity_diff import VersionFamilyMismatch
+
         a = _product(db_session, str(uuid.uuid4()), "1.0.0", PORT)
         b = _product(db_session, str(uuid.uuid4()), "1.0.0", PORT)
 
@@ -202,7 +253,13 @@ class TestReviewFindingsSlice4:
     def test_same_name_ports_are_told_apart_by_version(self):
         from src.common.entity_diff import compare
         from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
-        v1 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.0.0"}]}
+
+        v1 = {
+            "outputPorts": [
+                {"name": "orders", "version": "1.0.0"},
+                {"name": "orders", "version": "2.0.0"},
+            ]
+        }
         v2 = {"outputPorts": [{"name": "orders", "version": "2.0.0"}]}
 
         result = compare(v1, v2, ODPS_PROFILE, ODPS_RULES)
@@ -216,9 +273,12 @@ class TestReviewFindingsSlice4:
     def test_yaml_diff_hides_ignored_ids(self):
         response = build_diff_response(
             "data_contract",
-            {"id": "a", "version": "1.0.0"}, {"id": "b", "version": "1.0.1"},
-            {"schema": [{"name": "s", "id": "x1"}]}, {"schema": [{"name": "s", "id": "x2"}]},
-            ODCS_PROFILE, ODCS_RULES,
+            {"id": "a", "version": "1.0.0"},
+            {"id": "b", "version": "1.0.1"},
+            {"schema": [{"name": "s", "id": "x1"}]},
+            {"schema": [{"name": "s", "id": "x2"}]},
+            ODCS_PROFILE,
+            ODCS_RULES,
         )
         assert response["changes"] == []
         assert response["unified_diff"] == ""
@@ -228,8 +288,19 @@ class TestReviewFindingsSlice5:
     def test_version_bump_of_a_same_name_port_is_a_modification(self):
         from src.common.entity_diff import compare
         from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
-        v1 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.0.0"}]}
-        v2 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.1.0"}]}
+
+        v1 = {
+            "outputPorts": [
+                {"name": "orders", "version": "1.0.0"},
+                {"name": "orders", "version": "2.0.0"},
+            ]
+        }
+        v2 = {
+            "outputPorts": [
+                {"name": "orders", "version": "1.0.0"},
+                {"name": "orders", "version": "2.1.0"},
+            ]
+        }
 
         result = compare(v1, v2, ODPS_PROFILE, ODPS_RULES)
 
@@ -242,37 +313,64 @@ class TestReviewFindingsSlice7:
     def test_retired_version_next_to_kept_one_is_removal_plus_addition(self):
         from src.common.entity_diff import compare
         from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
-        v1 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.0.0"}]}
-        v2 = {"outputPorts": [{"name": "orders", "version": "2.0.0"}, {"name": "orders", "version": "2.1.0"}]}
+
+        v1 = {
+            "outputPorts": [
+                {"name": "orders", "version": "1.0.0"},
+                {"name": "orders", "version": "2.0.0"},
+            ]
+        }
+        v2 = {
+            "outputPorts": [
+                {"name": "orders", "version": "2.0.0"},
+                {"name": "orders", "version": "2.1.0"},
+            ]
+        }
 
         result = compare(v1, v2, ODPS_PROFILE, ODPS_RULES)
 
         assert sorted((c.op, c.rule_id) for c in result.changes) == [
-            ("added", "output-port-added"), ("removed", "output-port-removed"),
+            ("added", "output-port-added"),
+            ("removed", "output-port-removed"),
         ]
         assert result.suggested_bump == Bump.MAJOR
 
     def test_auto_approve_toggle_is_reported(self, db_session):
         import copy
+
         family = str(uuid.uuid4())
         v1 = _product(db_session, family, "1.0.0", {**PORT, "autoApprove": False})
-        v2 = _product(db_session, family, "1.0.1", {**copy.deepcopy(PORT), "autoApprove": True}, parent_id=v1.id)
+        v2 = _product(
+            db_session,
+            family,
+            "1.0.1",
+            {**copy.deepcopy(PORT), "autoApprove": True},
+            parent_id=v1.id,
+        )
 
-        result = _product_manager(db_session).diff_versions(db_session, base_id=v1.id, target_id=v2.id)
+        result = _product_manager(db_session).diff_versions(
+            db_session, base_id=v1.id, target_id=v2.id
+        )
 
         assert [c["path"] for c in result["changes"]] == ["outputPorts[orders_table].autoApprove"]
 
     def test_unversioned_parent_suggests_from_raw_version(self):
         from src.common.entity_diff.render import legacy_parent_diff
-        legacy = legacy_parent_diff({
-            "base": {"id": "p", "version": None, "status": "active"},
-            "changes": [], "counts": {}, "suggested_bump": "none",
-        })
+
+        legacy = legacy_parent_diff(
+            {
+                "base": {"id": "p", "version": None, "status": "active"},
+                "changes": [],
+                "counts": {},
+                "suggested_bump": "none",
+            }
+        )
         assert legacy["parent_version"] == "0.0.0"
         assert legacy["suggested_version"] == "1.0.0"  # same as the engine's next_version(None, …)
 
     def test_not_found_is_a_dedicated_error(self, db_session):
         from src.common.entity_diff import EntityNotFound
+
         a = _contract(db_session, str(uuid.uuid4()), "1.0.0", [("id", "string", True)])
         with pytest.raises(EntityNotFound):
             _manager().diff_versions(db_session, base_id=a.id, target_id="missing")

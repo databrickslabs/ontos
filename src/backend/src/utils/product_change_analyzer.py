@@ -79,7 +79,9 @@ class ProductChangeAnalyzer:
         self.team_changes: List[Dict] = []
         self.support_changes: List[Dict] = []
 
-    def analyze(self, old_product: Dict, new_product: Dict, partial: bool = False) -> ChangeAnalysisResult:
+    def analyze(
+        self, old_product: Dict, new_product: Dict, partial: bool = False
+    ) -> ChangeAnalysisResult:
         """
         Analyze changes between two products.
 

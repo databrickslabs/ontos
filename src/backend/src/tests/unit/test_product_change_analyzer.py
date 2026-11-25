@@ -359,7 +359,10 @@ class TestProductChangeAnalyzerAliasedKeys:
 
     def test_support_channels_alias(self):
         old_product = {**_empty_product(), "support_channels": [{"channel": "slack"}]}
-        new_product = {**_empty_product(), "support_channels": [{"channel": "slack"}, {"channel": "email"}]}
+        new_product = {
+            **_empty_product(),
+            "support_channels": [{"channel": "slack"}, {"channel": "email"}],
+        }
 
         result = ProductChangeAnalyzer().analyze(old_product, new_product)
 

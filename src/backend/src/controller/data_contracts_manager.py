@@ -5961,7 +5961,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         return legacy_parent_diff(self.diff_versions(db, base_id=parent.id, target_id=contract.id,
                                                      base=parent, target=contract))
 
-    def diff_versions(self, db, base_id: str, target_id: str, *, base=None, target=None) -> Dict[str, Any]:
+    def diff_versions(
+        self, db, base_id: str, target_id: str, *, base=None, target=None
+    ) -> Dict[str, Any]:
         """Diff two versions of the same contract family on their ODCS documents.
 
         Classifies every change (major/minor/patch/none) and suggests the next

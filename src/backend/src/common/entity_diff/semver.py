@@ -33,7 +33,9 @@ def _compile_glob(pattern: str) -> "re.Pattern[str]":
     Not ``fnmatch``: its ``[...]`` character classes would turn the ``[]`` in
     shapes like ``schema[].properties[]`` into a class and never match.
     """
-    return re.compile("".join(".*" if ch == "*" else re.escape(ch) for ch in pattern) + r"\Z", re.DOTALL)
+    return re.compile(
+        "".join(".*" if ch == "*" else re.escape(ch) for ch in pattern) + r"\Z", re.DOTALL
+    )
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ class Rule:
     predicate over the change; ``bump`` may be a constant or a function of the
     change (for direction-dependent rules such as maxLength up vs. down).
     """
+
     rule_id: str
     shape: str
     bump: object  # Bump | Callable[[FieldChange], Bump]
@@ -92,10 +95,26 @@ class RuleSet:
     def classify_one(self, change: FieldChange) -> ClassifiedChange:
         for rule in self.rules:
             if rule.matches(change):
-                return ClassifiedChange(change.path, change.shape, change.op, change.old, change.new,
-                                        rule.bump_for(change), rule.rule_id, rule.message)
-        return ClassifiedChange(change.path, change.shape, change.op, change.old, change.new,
-                                self.default_bump, self.default_rule_id, change.op.capitalize())
+                return ClassifiedChange(
+                    change.path,
+                    change.shape,
+                    change.op,
+                    change.old,
+                    change.new,
+                    rule.bump_for(change),
+                    rule.rule_id,
+                    rule.message,
+                )
+        return ClassifiedChange(
+            change.path,
+            change.shape,
+            change.op,
+            change.old,
+            change.new,
+            self.default_bump,
+            self.default_rule_id,
+            change.op.capitalize(),
+        )
 
 
 @dataclass

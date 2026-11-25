@@ -32,14 +32,28 @@ class TestDiffDocuments:
         assert changes == []
 
     def test_added_removed_modified_paths(self):
-        old = {"schema": [{"name": "orders", "properties": [
-            {"name": "id", "logicalType": "string"},
-            {"name": "gone"},
-        ]}]}
-        new = {"schema": [{"name": "orders", "properties": [
-            {"name": "id", "logicalType": "integer"},
-            {"name": "fresh"},
-        ]}]}
+        old = {
+            "schema": [
+                {
+                    "name": "orders",
+                    "properties": [
+                        {"name": "id", "logicalType": "string"},
+                        {"name": "gone"},
+                    ],
+                }
+            ]
+        }
+        new = {
+            "schema": [
+                {
+                    "name": "orders",
+                    "properties": [
+                        {"name": "id", "logicalType": "integer"},
+                        {"name": "fresh"},
+                    ],
+                }
+            ]
+        }
         changes, _, _ = diff_documents(old, new, BY_NAME)
         assert _ops(changes) == {
             ("schema[orders].properties[id].logicalType", "modified"),
@@ -59,7 +73,9 @@ class TestDiffDocuments:
     def test_emptied_list_reports_per_item_removals(self):
         """Emptying a list normalizes the key away; the diff must still report
         each removed item (so item-level rules apply), not one opaque field."""
-        changes, _, _ = diff_documents({"roles": [{"name": "a"}, {"name": "b"}]}, {"roles": []}, BY_NAME)
+        changes, _, _ = diff_documents(
+            {"roles": [{"name": "a"}, {"name": "b"}]}, {"roles": []}, BY_NAME
+        )
         assert _ops(changes) == {("roles[a]", "removed"), ("roles[b]", "removed")}
         assert {c.shape for c in changes} == {"roles[]"}
 
@@ -84,8 +100,10 @@ class TestDiffDocuments:
     def test_strip_drops_fields_and_list_items(self):
         profile = DiffProfile(
             identity=lambda item, shape: item.get("property"),
-            strip=lambda shape, value: shape == "id" or (
-                shape == "customProperties[]" and value.get("property") == "volatile"),
+            strip=lambda shape, value: (
+                shape == "id"
+                or (shape == "customProperties[]" and value.get("property") == "volatile")
+            ),
         )
         old = {"id": "1", "customProperties": [{"property": "volatile", "value": "a"}]}
         new = {"id": "2", "customProperties": [{"property": "volatile", "value": "b"}]}
@@ -95,11 +113,13 @@ class TestDiffDocuments:
 
 
 class TestClassification:
-    RULES = RuleSet(rules=[
-        Rule("removed", "schema[]", Bump.MAJOR, "removed", ops=("removed",)),
-        Rule("doc", "description", Bump.PATCH, "doc"),
-        Rule("lifecycle", "status", Bump.NONE, "status"),
-    ])
+    RULES = RuleSet(
+        rules=[
+            Rule("removed", "schema[]", Bump.MAJOR, "removed", ops=("removed",)),
+            Rule("doc", "description", Bump.PATCH, "doc"),
+            Rule("lifecycle", "status", Bump.NONE, "status"),
+        ]
+    )
 
     def _classify(self, old, new):
         changes, _, _ = diff_documents(old, new, BY_NAME)
@@ -126,53 +146,65 @@ class TestClassification:
 
     def test_glob_brackets_are_literal(self):
         """`[` must not start a character class (fnmatch would never match this)."""
-        rules = RuleSet(rules=[Rule("two-brackets", "schema[].properties[].logicalType", Bump.MAJOR, "t")])
+        rules = RuleSet(
+            rules=[Rule("two-brackets", "schema[].properties[].logicalType", Bump.MAJOR, "t")]
+        )
         old = {"schema": [{"name": "s", "properties": [{"name": "p", "logicalType": "string"}]}]}
         new = {"schema": [{"name": "s", "properties": [{"name": "p", "logicalType": "integer"}]}]}
         changes, _, _ = diff_documents(old, new, BY_NAME)
         assert classify(changes, rules).changes[0].rule_id == "two-brackets"
 
     def test_ignored_fields_are_not_reported_but_still_match(self):
-        profile = DiffProfile(identity=lambda item, shape: item.get("id"), ignore=lambda shape: shape.endswith(".id"))
+        profile = DiffProfile(
+            identity=lambda item, shape: item.get("id"), ignore=lambda shape: shape.endswith(".id")
+        )
         old = {"items": [{"id": "a", "name": "old"}]}
         new = {"items": [{"id": "a", "name": "new"}]}
         changes, _, _ = diff_documents(old, new, profile)
         assert _ops(changes) == {("items[a].name", "modified")}
 
     def test_first_matching_rule_wins(self):
-        rules = RuleSet(rules=[
-            Rule("first", "a", Bump.MINOR, "first"),
-            Rule("second", "a", Bump.MAJOR, "second"),
-        ])
+        rules = RuleSet(
+            rules=[
+                Rule("first", "a", Bump.MINOR, "first"),
+                Rule("second", "a", Bump.MAJOR, "second"),
+            ]
+        )
         changes, _, _ = diff_documents({"a": 1}, {"a": 2}, BY_NAME)
         assert classify(changes, rules).changes[0].rule_id == "first"
 
 
 class TestVersionHelpers:
-    @pytest.mark.parametrize("current,bump,expected", [
-        ("1.2.3", Bump.MAJOR, "2.0.0"),
-        ("1.2.3", Bump.MINOR, "1.3.0"),
-        ("1.2.3", Bump.PATCH, "1.2.4"),
-        ("1.2.3", Bump.NONE, "1.2.3"),
-        ("v1.2.3", Bump.PATCH, "1.2.4"),
-        ("1.0.0-draft", Bump.MINOR, "1.1.0"),
-        ("2.1", Bump.MAJOR, "3.0.0"),
-        ("2", Bump.PATCH, "2.0.1"),
-        (1.0, Bump.MINOR, "1.1.0"),
-        ("not-a-version", Bump.PATCH, "1.0.0"),
-        (None, Bump.MAJOR, "1.0.0"),
-    ])
+    @pytest.mark.parametrize(
+        "current,bump,expected",
+        [
+            ("1.2.3", Bump.MAJOR, "2.0.0"),
+            ("1.2.3", Bump.MINOR, "1.3.0"),
+            ("1.2.3", Bump.PATCH, "1.2.4"),
+            ("1.2.3", Bump.NONE, "1.2.3"),
+            ("v1.2.3", Bump.PATCH, "1.2.4"),
+            ("1.0.0-draft", Bump.MINOR, "1.1.0"),
+            ("2.1", Bump.MAJOR, "3.0.0"),
+            ("2", Bump.PATCH, "2.0.1"),
+            (1.0, Bump.MINOR, "1.1.0"),
+            ("not-a-version", Bump.PATCH, "1.0.0"),
+            (None, Bump.MAJOR, "1.0.0"),
+        ],
+    )
     def test_next_version(self, current, bump, expected):
         assert next_version(current, bump) == expected
 
-    @pytest.mark.parametrize("base,target,expected", [
-        ("1.0.0", "2.0.0", Bump.MAJOR),
-        ("1.0.0", "1.1.0", Bump.MINOR),
-        ("1.0.0", "1.0.1", Bump.PATCH),
-        ("1.0.0", "1.0.0", None),
-        ("2.0.0", "1.0.0", None),
-        ("x", "1.0.0", None),
-    ])
+    @pytest.mark.parametrize(
+        "base,target,expected",
+        [
+            ("1.0.0", "2.0.0", Bump.MAJOR),
+            ("1.0.0", "1.1.0", Bump.MINOR),
+            ("1.0.0", "1.0.1", Bump.PATCH),
+            ("1.0.0", "1.0.0", None),
+            ("2.0.0", "1.0.0", None),
+            ("x", "1.0.0", None),
+        ],
+    )
     def test_version_bump_between(self, base, target, expected):
         assert version_bump_between(base, target) == expected
 
@@ -209,12 +241,31 @@ class TestSizeCaps:
         from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
 
         monkeypatch.setattr(render, "MAX_RESPONSE_CHANGES", 3)
-        old = {"schema": [{"name": "t", "properties": [{"name": f"p{n}", "logicalType": "string"} for n in range(10)]}]}
-        new = {"schema": [{"name": "t", "properties": [{"name": f"p{n}", "logicalType": "integer"} for n in range(10)]}]}
+        old = {
+            "schema": [
+                {
+                    "name": "t",
+                    "properties": [{"name": f"p{n}", "logicalType": "string"} for n in range(10)],
+                }
+            ]
+        }
+        new = {
+            "schema": [
+                {
+                    "name": "t",
+                    "properties": [{"name": f"p{n}", "logicalType": "integer"} for n in range(10)],
+                }
+            ]
+        }
 
         out = render.build_diff_response(
-            "data_contract", {"id": "a", "version": "1.0.0"}, {"id": "b", "version": "2.0.0"},
-            old, new, ODCS_PROFILE, ODCS_RULES,
+            "data_contract",
+            {"id": "a", "version": "1.0.0"},
+            {"id": "b", "version": "2.0.0"},
+            old,
+            new,
+            ODCS_PROFILE,
+            ODCS_RULES,
         )
 
         assert len(out["changes"]) == 3

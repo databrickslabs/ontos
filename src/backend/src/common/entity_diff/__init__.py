@@ -59,8 +59,9 @@ class ComparisonResult:
         return is_version_consistent(self.base_version, self.target_version, self.suggested_bump)
 
 
-def compare(base: Dict[str, Any], target: Dict[str, Any], profile: DiffProfile,
-            rule_set: RuleSet) -> ComparisonResult:
+def compare(
+    base: Dict[str, Any], target: Dict[str, Any], profile: DiffProfile, rule_set: RuleSet
+) -> ComparisonResult:
     """Diff two file-model documents and classify every change."""
     changes, base_n, target_n = diff_documents(base, target, profile)
     return ComparisonResult(

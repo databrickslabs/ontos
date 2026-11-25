@@ -65,7 +65,7 @@ def diff_routes(db_session):
     app.dependency_overrides[request_db] = request_session
     permission_keys = []
     for route in app.routes:
-        if "/diff/" not in getattr(route, "path", ""):
+        if "/diff" not in getattr(route, "path", ""):
             continue
         for dep in route.dependant.dependencies:
             if isinstance(dep.call, PermissionChecker):
@@ -249,3 +249,38 @@ class TestDiffSizeCap:
         resp = client.get(f"/api/data-contracts/{v1.id}/diff/{v2.id}")
 
         assert resp.status_code == 413
+
+    def test_an_oversized_contract_version_answers_413_on_diff_from_parent(
+        self, client, db_session, diff_routes, monkeypatch
+    ):
+        from src.common.entity_diff import engine
+
+        monkeypatch.setattr(engine, "MAX_DIFF_NODES", 5)
+        family = str(uuid.uuid4())
+        parent = _contract(db_session, family, "1.0.0")
+        child = _contract(db_session, family, "1.0.1")
+        child.parent_contract_id = parent.id
+        db_session.flush()
+        _as_caller(_scope())
+
+        resp = client.get(f"/api/data-contracts/{child.id}/diff-from-parent")
+
+        assert resp.status_code == 413, resp.text
+        assert "Too many fields" in resp.json()["detail"]
+
+    def test_an_oversized_product_version_answers_413_on_diff_from_parent(
+        self, client, db_session, diff_routes, product_manager, monkeypatch
+    ):
+        from src.common.entity_diff import engine
+
+        monkeypatch.setattr(engine, "MAX_DIFF_NODES", 5)
+        family = str(uuid.uuid4())
+        parent = _product(db_session, family, "1.0.0")
+        child = _product(db_session, family, "1.0.1")
+        child.parent_product_id = parent.id
+        db_session.flush()
+
+        resp = client.get(f"/api/data-products/{child.id}/diff-from-parent")
+
+        assert resp.status_code == 413, resp.text
+        assert "Too many fields" in resp.json()["detail"]

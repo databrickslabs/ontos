@@ -4340,10 +4340,14 @@ async def get_diff_from_parent(
     Returns the diff analysis and a suggested version bump based on
     the changes detected between the contract and its parent.
     """
+    from src.common.entity_diff import EntityTooLarge
+
     try:
         result = manager.get_diff_from_parent(db=db, contract_id=contract_id)
         return result
         
+    except EntityTooLarge as e:
+        raise HTTPException(status_code=413, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

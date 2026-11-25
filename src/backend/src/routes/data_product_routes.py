@@ -2605,10 +2605,14 @@ async def get_diff_from_parent(
     
     Returns diff analysis with suggested semantic version bump.
     """
+    from src.common.entity_diff import EntityTooLarge
+
     try:
         diff_data = manager.get_diff_from_parent(db=db, product_id=product_id)
         return diff_data
         
+    except EntityTooLarge as e:
+        raise HTTPException(status_code=413, detail=str(e))
     except ValueError as e:
         logger.error(f"Error getting diff for product {product_id}: {e}")
         raise HTTPException(status_code=400, detail=str(e))

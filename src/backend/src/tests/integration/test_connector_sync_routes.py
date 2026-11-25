@@ -1,11 +1,18 @@
 """Connector sync routes: CRUD, the scheduled job is installed once and started on demand."""
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
+from src.common import authorization
+from src.common.features import FeatureAccessLevel
+from src.connectors.base import ConnectorAuthenticationError
 from src.db_models.connections import ConnectionDb
 from src.routes import connector_sync_routes as routes
+
+# Kept before the autouse fixture below stubs it out, for the tests that exercise it
+_real_require_secret_access = routes._require_secret_access
 
 
 class FakeJobs:
@@ -118,3 +125,47 @@ def test_only_tableau_connections_can_be_synced(client: TestClient, db_session, 
     assert response.status_code == 400, response.text
     assert response.json()["detail"]["code"] == "connector_sync_unsupported"
     assert jobs.installed == []
+
+
+def test_the_secret_check_runs_on_the_callers_client(client: TestClient, connection, jobs, monkeypatch, test_settings):
+    monkeypatch.setattr(routes, "_require_secret_access", _real_require_secret_access)
+    monkeypatch.setattr(routes, "get_settings", lambda: test_settings)
+    # No OBO token on the request: the check cannot run, so the sync is refused
+    assert _create(client, connection).status_code == 403
+    assert jobs.installed == []
+
+
+def test_a_caller_without_read_secret_is_refused(client: TestClient, connection, jobs, monkeypatch, test_settings):
+    monkeypatch.setattr(routes, "_require_secret_access", _real_require_secret_access)
+    monkeypatch.setattr(routes, "get_settings", lambda: test_settings)
+    monkeypatch.setattr(routes, "get_obo_workspace_client", lambda request, settings: MagicMock())
+
+    def denied(workspace_client, secret_name):
+        raise ConnectorAuthenticationError("no READ_SECRET")
+
+    monkeypatch.setattr(routes, "check_secret_access", denied)
+    response = _create(client, connection)
+    assert response.status_code == 403, response.text
+    assert jobs.installed == []
+
+
+def test_a_caller_who_reads_the_secret_can_create_the_sync(client: TestClient, connection, jobs, monkeypatch, test_settings):
+    monkeypatch.setattr(routes, "_require_secret_access", _real_require_secret_access)
+    monkeypatch.setattr(routes, "get_settings", lambda: test_settings)
+    monkeypatch.setattr(routes, "get_obo_workspace_client", lambda request, settings: MagicMock())
+    monkeypatch.setattr(routes, "check_secret_access", lambda workspace_client, secret_name: None)
+    response = _create(client, connection)
+    assert response.status_code == 201, response.text
+
+
+def test_a_user_without_write_access_cannot_change_a_tableau_sync(client: TestClient, connection, jobs, monkeypatch):
+    sync_id = _create(client, connection).json()["id"]
+
+    async def read_only(*_args, **_kwargs):
+        return {"schema-importer": FeatureAccessLevel.READ_ONLY}
+
+    monkeypatch.setattr(authorization, "resolve_effective_permissions", read_only)
+
+    response = client.put(f"/api/connector-syncs/{sync_id}", json={"enabled": False})
+
+    assert response.status_code == 403, response.text

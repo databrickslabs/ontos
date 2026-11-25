@@ -99,7 +99,8 @@ class TestDataProductResponseFormat:
         assert body["version"] == self._get(client, body["id"])["version"] == "2.0.0"
 
     def test_new_version_versioning_keys_match_get(self, client):
-        """The versioning fields (camelCase ``serialization_alias``) use the GET keys too."""
+        """The versioning fields get both spellings on GET (snake_case and the camelCase
+        ``serialization_alias`` the frontend types use). Write responses keep snake_case only."""
         payload = self._payload()
         assert client.post("/api/data-products", json=payload).status_code == 201
         resp = client.post(
@@ -108,13 +109,17 @@ class TestDataProductResponseFormat:
         assert resp.status_code == 201, resp.text
         body = resp.json()
         got = self._get(client, body["id"])
-        # snake_case fields whose serialization_alias is camelCase (parentProductId, ...)
-        camel = {
-            info.serialization_alias for name, info in DataProduct.model_fields.items()
-            if '_' in name and info.serialization_alias and info.serialization_alias != name
-        }
+        versioning = ("draft_owner_id", "parent_product_id", "version_family_id",
+                      "base_name", "change_summary", "version_count")
+        camel = {DataProduct.model_fields[name].serialization_alias for name in versioning}
         assert "parentProductId" in camel
-        assert not camel & set(got), "GET is expected to use the field names"
+        # GET: each set versioning field under both spellings, with the same value
+        sent = [name for name in versioning if name in got]
+        assert {"draft_owner_id", "parent_product_id", "version_family_id"} <= set(sent)
+        for name in sent:
+            alias = DataProduct.model_fields[name].serialization_alias
+            assert got[alias] == got[name], name
+        # Write response: snake_case only
         assert not camel & set(body), f"write response uses {sorted(camel & set(body))}"
         assert body["parent_product_id"] == got["parent_product_id"] == payload["id"]
 

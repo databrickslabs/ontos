@@ -404,6 +404,11 @@
     "errorAssigning": "Fehler beim Zuweisen des Owners",
     "ownerUserAria": "Owner-Benutzer"
   },
+  "assignOwnerRole": {
+    "noRoles": "Es sind keine Geschäftsrollen konfiguriert. Bitten Sie einen Administrator, eine anzulegen.",
+    "ownerBadge": "Eigentümer",
+    "notOwnerHint": "Eigentümer mit dieser Rolle erhalten keine Eigentümer-Genehmigungen oder -Benachrichtigungen. Wählen Sie dafür Data Owner oder Owner."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} Version",
     "countBadge_other": "{{count}} Versionen"

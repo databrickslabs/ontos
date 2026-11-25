@@ -247,8 +247,10 @@ export default function RequestContractActionDialog({
         payload = {
           entity_type: 'data_contract',
           entity_id: contractId,
+          // The name the requester saw: My Requests and the notifications show it (#1615)
+          entity_name: contractName || undefined,
           reason: message.trim(),
-          requested_permission_level: 'READ',
+          permission_level: 'READ',
           requested_duration_days: selectedDuration,
         };
       } else if (requestType === 'review') {

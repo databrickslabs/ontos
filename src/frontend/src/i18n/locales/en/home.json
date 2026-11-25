@@ -123,6 +123,10 @@
     "title": "My Actions",
     "approvals": "Approvals"
   },
+  "approvalOverdue": {
+    "badge": "Overdue",
+    "hint": "Waiting past its time limit; the approvers and the requester were reminded."
+  },
   "quickActions": {
     "title": "Quick Actions",
     "loading": "Loading...",

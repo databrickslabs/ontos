@@ -41,6 +41,12 @@ class TriggerEvent:
     scope_id: Optional[str] = None
 
 
+# Entity types an asset's maturity change fires as; their payload has no levels
+_MATURITY_ASSET_ENTITY_TYPES = frozenset({
+    EntityType.TABLE, EntityType.VIEW, EntityType.METRIC_VIEW,
+})
+
+
 class TriggerRegistry:
     """Registry for workflow triggers.
     
@@ -346,6 +352,16 @@ class TriggerRegistry:
             
         Returns:
             Tuple of (all_passed, executions)
+
+        The gates' assign-tag and remove-tag steps only record their change
+        (``deferred_tag_writes``): the update writes them, once it passed, in
+        its own transaction (``apply_deferred_tag_writes``), so a blocked or
+        failed update leaves no tag change behind.
+
+        A gate whose evaluation raises has no execution. The error is logged
+        and audited; when the gate is ``on_error: fail_closed`` this raises
+        ``UpdateGateEvaluationError`` (the update is refused), otherwise the
+        gate is left out.
         """
         event = TriggerEvent(
             trigger_type=TriggerType.BEFORE_UPDATE,
@@ -357,13 +373,21 @@ class TriggerRegistry:
             scope_type=scope_type,
             scope_id=scope_id,
         )
-        executions = self.fire_trigger(event, blocking=True)
-        
+        gate_errors: List[Tuple[ProcessWorkflow, Exception]] = []
+        executions = self.fire_trigger(event, blocking=True, errors=gate_errors)
+        for workflow, error in gate_errors:
+            report_gate_error(event, error, workflow=workflow)
+        closed = [
+            wf.name for wf, _ in gate_errors if wf.trigger.on_error == GateErrorMode.FAIL_CLOSED
+        ]
+        if closed:
+            raise UpdateGateEvaluationError(closed)
+
         all_passed = all(
             exe.status == ExecutionStatus.SUCCEEDED 
             for exe in executions
         ) if executions else True
-        
+
         return all_passed, executions
 
     def before_status_change(
@@ -557,10 +581,20 @@ class TriggerRegistry:
         to_level: Optional[int] = None,
         blocking: bool = False,
     ) -> List[WorkflowExecution]:
-        """Fire when an entity's maturity level changes."""
+        """Fire when an entity's maturity level changes.
+
+        The payload carries ``from_maturity_level`` / ``to_maturity_level``, except
+        for an asset (table, view, metric view): its levels can come from another
+        user's Unity Catalog read, and the payload is stored on the execution and
+        shown to approvers. An asset's levels stay in its gated maturity history.
+        """
         data = dict(entity_data or {})
-        data["from_maturity_level"] = from_level
-        data["to_maturity_level"] = to_level
+        if entity_type in _MATURITY_ASSET_ENTITY_TYPES:
+            data.pop("from_maturity_level", None)
+            data.pop("to_maturity_level", None)
+        else:
+            data["from_maturity_level"] = from_level
+            data["to_maturity_level"] = to_level
         event = TriggerEvent(
             trigger_type=TriggerType.ON_MATURITY_CHANGE,
             entity_type=entity_type,
@@ -1186,6 +1220,24 @@ class GateEvaluationError(CodedValueError):
         )
 
 
+class UpdateGateEvaluationError(CodedValueError):
+    """A ``before_update`` gate marked ``fail_closed`` could not be evaluated.
+
+    ``str()`` is the English message; ``params`` has the names of the gates
+    that raised (empty when the gates couldn't be listed).
+    """
+
+    code = 'update_gate_error'
+
+    def __init__(self, workflows: List[str]):
+        names = f" ({', '.join(workflows)})" if workflows else ""
+        super().__init__(
+            f"Update refused: a workflow gate{names} could not be evaluated. "
+            f"Ask an administrator to check the workflow.",
+            workflows=workflows,
+        )
+
+
 def report_gate_error(
     event: TriggerEvent,
     error: Exception,
@@ -1199,9 +1251,13 @@ def report_gate_error(
     """
     mode = workflow.trigger.on_error.value if workflow else None
     name = workflow.name if workflow else None
+    statuses = (
+        f" ({event.from_status} -> {event.to_status})"
+        if event.trigger_type == TriggerType.BEFORE_STATUS_CHANGE else ""
+    )
     logger.error(
-        f"before_status_change gate error for {event.entity_type.value} '{event.entity_id}' "
-        f"({event.from_status} -> {event.to_status}), workflow {name or '(not listed)'}, "
+        f"{event.trigger_type.value} gate error for {event.entity_type.value} "
+        f"'{event.entity_id}'{statuses}, workflow {name or '(not listed)'}, "
         f"on_error={mode or 'unknown'}: {error}",
         exc_info=error,
     )
@@ -1213,6 +1269,7 @@ def report_gate_error(
             action='GATE_ERROR',
             success=False,
             details={
+                'trigger_type': event.trigger_type.value,
                 'entity_type': event.entity_type.value,
                 'entity_id': event.entity_id,
                 'from_status': event.from_status,
@@ -1431,12 +1488,16 @@ def _fail_closed_gate_names(db: Session, event: TriggerEvent) -> List[str]:
             trigger = json.loads(row.trigger_config) if row.trigger_config else {}
         except (TypeError, ValueError):
             continue
-        if trigger.get('type') != TriggerType.BEFORE_STATUS_CHANGE.value:
+        if trigger.get('type') != event.trigger_type.value:
             continue
         if trigger.get('on_error') != GateErrorMode.FAIL_CLOSED.value:
             continue
         entity_types = trigger.get('entity_types') or []
         if entity_types and event.entity_type.value not in entity_types:
+            continue
+        if event.trigger_type != TriggerType.BEFORE_STATUS_CHANGE:
+            # Statuses and exemptions are before_status_change settings
+            names.append(row.name)
             continue
         if trigger.get('from_status') and trigger['from_status'] != event.from_status:
             continue
@@ -1456,6 +1517,63 @@ def _fail_closed_gate_names(db: Session, event: TriggerEvent) -> List[str]:
     return names
 
 
+def run_update_gates(
+    db: Session,
+    *,
+    entity_type: EntityType,
+    entity_id: str,
+    entity_name: Optional[str] = None,
+    entity_data: Optional[Dict[str, Any]] = None,
+    user_email: Optional[str] = None,
+) -> Tuple[bool, List[WorkflowExecution]]:
+    """Run the ``before_update`` gates of an update; ``(passed, executions)``.
+
+    As ``run_status_gates`` for errors: a gate that raises while it is
+    evaluated is logged and audited, and a ``fail_closed`` one refuses the
+    update (``UpdateGateEvaluationError``); a ``fail_open`` one (the default)
+    is left out. When the gates can't even be listed, the ``fail_closed``
+    ones are read straight from the workflows table; if that fails too, the
+    mode is unknown and the update proceeds (``(True, [])``, the error is
+    still reported).
+
+    Pass the executions to the update (``update_contract_with_relations``):
+    it writes the tag changes of the gates' tag steps with its own fields.
+    """
+    try:
+        return get_trigger_registry(db).before_update(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=entity_data,
+            user_email=user_email,
+        )
+    except UpdateGateEvaluationError:
+        raise
+    except Exception as e:
+        event = TriggerEvent(
+            trigger_type=TriggerType.BEFORE_UPDATE,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=entity_data,
+            user_email=user_email,
+        )
+        report_gate_error(event, e)
+        _recover_session_after_gate_error(db)
+        try:
+            closed = _fail_closed_gate_names(db, event)
+        except Exception as lookup_err:
+            logger.error(
+                f"Could not read the gates' on_error mode after the gate error, "
+                f"so the update proceeds: {lookup_err}",
+                exc_info=True,
+            )
+            return True, []
+        if closed:
+            raise UpdateGateEvaluationError(closed) from e
+        return True, []
+
+
 def run_status_gates(
     db: Session,
     *,
@@ -1467,6 +1585,7 @@ def run_status_gates(
     entity_data: Optional[Dict[str, Any]] = None,
     user_email: Optional[str] = None,
     before_gates: Optional[Callable[[], None]] = None,
+    close_requests: bool = True,
 ) -> None:
     """Run the ``before_status_change`` gates of a transition; raise when it must not proceed.
 
@@ -1489,7 +1608,8 @@ def run_status_gates(
     asked for details, and an invalid change starts no gate approval either.
     When the transition may proceed, the entity's
     open status change requests are closed (``close_open_requests``), so none
-    can be approved after the entity left the status it was made from.
+    can be approved after the entity left the status it was made from;
+    ``close_requests=False`` leaves that to the caller's later status write.
     """
     event = TriggerEvent(
         trigger_type=TriggerType.BEFORE_STATUS_CHANGE,
@@ -1509,7 +1629,7 @@ def run_status_gates(
         before_gates()
 
     def proceed() -> None:
-        if entity_type in (EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT):
+        if close_requests and entity_type in (EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT):
             close_open_requests(db, entity_type.value, str(entity_id), to_status, user_email)
 
     try:

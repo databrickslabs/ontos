@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Não é proprietário",
+    "notOwnerMessage": "Você pode ver este produto, mas não editá-lo. Só a equipe proprietária, os membros do projeto, o dono do rascunho ou um administrador de produtos de dados podem editá-lo."
+  },
   "title": "Produtos de dados",
   "subtitle": "Gerencie seus produtos de dados",
   "newProduct": "Novo produto de dados",
@@ -1010,7 +1014,28 @@
     "required": "Obrigatório",
     "advisory": "Recomendado",
     "overTime": "Maturidade ao longo do tempo",
-    "retry": "Tentar novamente"
+    "retry": "Tentar novamente",
+    "currentLevel": "Nível atual",
+    "nextLevel": "Próximo nível",
+    "belowFirstLevel": "Abaixo do primeiro nível",
+    "topLevelReached": "Nível mais alto alcançado",
+    "noLevels": "Ainda não há níveis de maturidade definidos para este tipo.",
+    "gateStatus": {
+      "pass": "Aprovado",
+      "fail": "Reprovado",
+      "warn": "Não atendido"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Não foi possível acessar o Unity Catalog, então faltam os campos da tabela {{tableName}}.",
+    "maturity_uc_table_unreadable": "A tabela {{tableName}} não pode ser lida do Unity Catalog, por isso os campos dela estão ausentes.",
+    "maturity_uc_table_read_failed": "Não foi possível ler a tabela {{tableName}} do Unity Catalog, então faltam os campos dela.",
+    "maturity_gate_error": "Não foi possível avaliar o gate {{gateName}}. Os detalhes estão no log do servidor.",
+    "maturity_level_partial": "O nível conta apenas as verificações que não precisam da tabela {{tableName}}; o ativo pode atingir um nível mais alto."
+  },
+  "maturityResult": {
+    "notStored": "Calculado agora e não salvo: o histórico mostra as avaliações salvas. Reavalie para salvar este resultado.",
+    "notEvaluated": "Não avaliado"
   },
   "createDialog": {
     "editTitle": "Editar metadados do produto de dados",

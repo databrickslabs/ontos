@@ -179,7 +179,10 @@
       "updated": "Coût mis à jour",
       "deleted": "Coût supprimé",
       "deleteFailed": "Échec de la suppression",
-      "saveFailed": "Échec de l'enregistrement"
+      "saveFailed": "Échec de l'enregistrement",
+      "requestFailed": "Impossible de terminer la requête.",
+      "validationFailed": "Vérifiez les valeurs saisies et réessayez.",
+      "invalidResponse": "Le serveur a renvoyé une réponse non valide."
     }
   },
   "quality": {

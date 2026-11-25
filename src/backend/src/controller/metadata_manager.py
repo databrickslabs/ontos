@@ -268,12 +268,24 @@ class MetadataManager(SearchableAsset):
     # --- Document ---
     def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
         # DocumentCreate has base fields; other metadata supplied by upload logic
+        db_obj = self._add_document_row(
+            db, data=data, entity_id=data.entity_id, is_shared=False, filename=filename,
+            content_type=content_type, size_bytes=size_bytes, storage_path=storage_path, user_email=user_email,
+        )
+        self._log_change(db, entity_type=f"{data.entity_type}:document", entity_id=data.entity_id, action="CREATE", username=user_email)
+        return Document.from_orm(db_obj)
+
+    def _add_document_row(self, db: Session, *, data: DocumentCreate, entity_id: str, is_shared: bool, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]):
+        """Store a document record. Entity documents are never library rows (#1342)."""
         from src.db_models.metadata import DocumentMetadataDb
         db_obj = DocumentMetadataDb(
-            entity_id=data.entity_id,
+            entity_id=entity_id,
             entity_type=data.entity_type,
             title=data.title,
             short_description=data.short_description,
+            is_shared=is_shared,
+            level=data.level,
+            inheritable=data.inheritable,
             original_filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
@@ -284,8 +296,7 @@ class MetadataManager(SearchableAsset):
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
-        self._log_change(db, entity_type=f"{data.entity_type}:document", entity_id=data.entity_id, action="CREATE", username=user_email)
-        return Document.from_orm(db_obj)
+        return db_obj
 
     def list_documents(self, db: Session, *, entity_type: str, entity_id: str) -> List[Document]:
         rows = self._document_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
@@ -585,6 +596,15 @@ class MetadataManager(SearchableAsset):
         db.refresh(db_obj)
         self._log_change(db, entity_type="shared:link", entity_id=str(db_obj.id), action="CREATE", username=user_email)
         return Link.from_orm(db_obj)
+
+    def create_shared_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
+        """Create a shared document record for a file already stored in the shared folder."""
+        db_obj = self._add_document_row(
+            db, data=data, entity_id=SHARED_ENTITY_ID, is_shared=True, filename=filename,
+            content_type=content_type, size_bytes=size_bytes, storage_path=storage_path, user_email=user_email,
+        )
+        self._log_change(db, entity_type="shared:document", entity_id=str(db_obj.id), action="CREATE", username=user_email)
+        return Document.from_orm(db_obj)
 
     # =========================================================================
     # Metadata Attachments (attaching shared assets to entities)

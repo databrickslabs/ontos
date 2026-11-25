@@ -25,6 +25,7 @@ class RecipientKeys:
     """
     identities: FrozenSet[str] = frozenset()      # the user's email and username, lower-cased
     names: FrozenSet[str] = frozenset()           # groups and legacy role names the user is in
+    groups: FrozenSet[str] = frozenset()          # group names (bare and ``group:``), lower-cased
     role_ids: FrozenSet[str] = frozenset()        # app role ids the user is a member of
     known_role_ids: FrozenSet[str] = frozenset()  # every app role id that exists
 
@@ -98,6 +99,12 @@ def _addressed_to(keys: Optional[RecipientKeys]):
         )
     if keys.names:
         clauses.append(NotificationDb.recipient.in_(sorted(keys.names)))
+    if keys.groups:
+        # Group recipients are matched ignoring case and surrounding spaces
+        groups = sorted({without_whitespace(group) for group in keys.groups})
+        clauses.append(
+            func.lower(_without_json_whitespace(NotificationDb.recipient)).in_(groups)
+        )
     if keys.role_ids:
         clauses.append(NotificationDb.recipient_role_id.in_(sorted(keys.role_ids)))
     # Broadcast: no recipient and no app role it names (a role that no longer exists included)
@@ -151,6 +158,18 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
             visible, not_(_is_pending_actionable()),
         ).order_by(*newest_first).limit(history_limit).all()
         return pending + history
+
+    def pending_approvals_not_marked(self, db: Session, marker: str) -> List[NotificationDb]:
+        """The pending ``workflow_approval`` rows whose payload has no ``marker`` key yet.
+
+        One query, whatever the number of executions (the overdue reminders, #1119).
+        """
+        payload = _without_json_whitespace(func.coalesce(NotificationDb.action_payload, ''))
+        return db.query(NotificationDb).filter(
+            NotificationDb.action_type == 'workflow_approval',
+            _is_pending_actionable(),
+            not_(payload.contains(f'"{marker}":')),
+        ).all()
 
     def get_by_action_type(
         self, db: Session, action_type: str, *, unread_only: bool = False,

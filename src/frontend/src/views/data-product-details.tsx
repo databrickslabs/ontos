@@ -6,6 +6,7 @@ import DeprecationNotice from '@/components/common/deprecation-notice';
 import { useTranslation } from 'react-i18next';
 import { DataProduct, InputPort, OutputPort, ManagementPort, TeamMember, Support, SubscriptionResponse, SubscribersListResponse } from '@/types/data-product';
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
+import ProductDomainBadges from '@/components/data-products/product-domain-badges';
 import InputPortFormDialog from '@/components/data-products/input-port-form-dialog';
 import OutputPortFormDialog from '@/components/data-products/output-port-form-dialog';
 import ManagementPortFormDialog from '@/components/data-products/management-port-form-dialog';
@@ -43,7 +44,6 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 import AccessGrantsPanel from '@/components/access/access-grants-panel';
-import { useDomains } from '@/hooks/use-domains';
 import RequestProductActionDialog from '@/components/data-products/request-product-action-dialog';
 import CommitDraftDialog from '@/components/data-products/commit-draft-dialog';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
@@ -203,31 +203,31 @@ export function isProductReadOnly(args: {
 /**
  * Final "can the user modify this product" gate combining role + status flags.
  * Admins can always modify; write-class users can modify when the product is
- * editable-in-place or a personal draft.
+ * editable-in-place or a personal draft, unless the backend said they can't
+ * write this product (`productWritable === false`: not an owner, e.g. a
+ * reviewer of a product under review, #1613). `null`/`undefined` = not known.
  */
 export function canUserModifyProduct(args: {
   canAdmin: boolean;
   canWrite: boolean;
   canEditInPlace: boolean;
   isPersonalDraft: boolean;
+  productWritable?: boolean | null;
 }): boolean {
   if (args.canAdmin) return true;
+  if (args.productWritable === false) return false;
   return args.canWrite && (args.canEditInPlace || args.isPersonalDraft);
 }
 
-/**
- * Resolve the human-readable domain label for a product. Falls back to the
- * raw domain id when the lookup misses, and to a "not assigned" sentinel when
- * the product has no domain at all.
- */
-export function resolveDomainLabel(args: {
-  domain: string | undefined | null;
-  resolveName: (id: string) => string | undefined | null;
-  notAssignedLabel: string;
-}): string {
-  const { domain, resolveName, notAssignedLabel } = args;
-  if (!domain) return notAssignedLabel;
-  return resolveName(domain) || domain;
+/** Path of the caller's access to a product (`{ can_write }`, #1613). */
+export function productAccessPath(productId: string): string {
+  return `/api/data-products/${encodeURIComponent(productId)}/my-access`;
+}
+
+/** Path of a product's active business owners (query-param form, #1612). */
+export function productOwnersPath(productId: string): string {
+  const id = encodeURIComponent(productId);
+  return `/api/business-owners/by-object/data_product?object_id=${id}&active_only=true`;
 }
 
 /**
@@ -498,8 +498,6 @@ export default function DataProductDetails() {
   } = usePermissions();
   const { userInfo, fetchUserInfo } = useUserStore();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
-  const { getDomainName, getDomainIdByName } = useDomains();
-
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -579,7 +577,15 @@ export default function DataProductDetails() {
   const isReadOnly = isProductReadOnly({ canAdmin, canEditInPlace, isPersonalDraft });
 
   // Combined permission check: admin can always edit; others need write + editable status
-  const canModify = canUserModifyProduct({ canAdmin, canWrite, canEditInPlace, isPersonalDraft });
+  // Whether the backend lets this caller write this product (owner or data-products
+  // admin); null until known (#1613).
+  const [productWritable, setProductWritable] = useState<boolean | null>(null);
+  const canModify = canUserModifyProduct({
+    canAdmin, canWrite, canEditInPlace, isPersonalDraft, productWritable,
+  });
+  // A writer who doesn't own this editable product: say why Edit is missing.
+  const showNotOwnerHint =
+    !canAdmin && canWrite && productWritable === false && (canEditInPlace || isPersonalDraft);
 
   // View mode state for filtering sections - initialize from localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(
@@ -744,11 +750,28 @@ export default function DataProductDetails() {
   }, [productId, canRead, permissionsLoading]);
 
   useEffect(() => {
+    setProductWritable(null);
+    if (!productId || !product?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await get<{ can_write?: boolean }>(productAccessPath(productId));
+        if (!cancelled && !res.error && typeof res.data?.can_write === 'boolean') {
+          setProductWritable(res.data.can_write);
+        }
+      } catch { /* unknown: the write routes still check */ }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, product?.id, get]);
+
+  useEffect(() => {
     if (!productId) return;
     (async () => {
       try {
         const res = await get<Array<{ user_name?: string | null; user_email: string; role_name?: string | null; is_active: boolean }>>(
-          `/api/business-owners/by-object/data_product/${productId}?active_only=true`
+          productOwnersPath(productId),
         );
         if (!res.error && Array.isArray(res.data)) {
           setSidebarOwners(res.data.filter((o) => o.is_active));
@@ -1380,12 +1403,6 @@ export default function DataProductDetails() {
     );
   }
 
-  const domainLabel = resolveDomainLabel({
-    domain: product.domain,
-    resolveName: getDomainName,
-    notAssignedLabel: t('common:states.notAssigned'),
-  });
-
   return (
     <div className="py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -1562,6 +1579,18 @@ export default function DataProductDetails() {
         </Alert>
       )}
 
+      {/* Not an owner: can read, can't edit (#1613) */}
+      {showNotOwnerHint && (
+        <Alert data-testid="product-not-owner-hint">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>{t('data-products:productAccess.notOwnerTitle')}</strong>
+            {' - '}
+            {t('data-products:productAccess.notOwnerMessage')}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Read-Only Banner */}
       {isReadOnly && (
         <Alert className="bg-yellow-50 border-yellow-300 dark:bg-yellow-950 dark:border-yellow-800">
@@ -1635,21 +1664,10 @@ export default function DataProductDetails() {
                   <span className="text-xs text-muted-foreground">—</span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.domain')}:</Label>
-                {product.domain && getDomainIdByName(domainLabel) ? (
-                  <span
-                    className="text-xs cursor-pointer text-primary hover:underline truncate"
-                    onClick={() => navigate(`/settings/data-domains/${getDomainIdByName(domainLabel)}`)}
-                  >
-                    {domainLabel}
-                  </span>
-                ) : product.domain ? (
-                  <span className="text-xs text-muted-foreground truncate">{domainLabel}</span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
-              </div>
+              <ProductDomainBadges
+                product={product}
+                onDomainClick={(domainId) => navigate(`/settings/data-domains/${domainId}`)}
+              />
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.project')}:</Label>
                 {(product as any).project_id && product.project_name ? (

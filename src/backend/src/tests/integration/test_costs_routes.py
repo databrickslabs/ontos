@@ -1,6 +1,7 @@
 """
 Integration tests for costs API endpoints
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -82,6 +83,16 @@ class TestCostsRoutes:
         assert "id" in data
         assert data["amount_cents"] == 150000
         assert data["cost_center"] == "INFRASTRUCTURE"
+
+    def test_create_normalizes_lowercase_cost_center(self, client: TestClient, sample_cost_data):
+        sample_cost_data["cost_center"] = "infrastructure"
+
+        response = client.post(
+            _cost_items_url("data_product", "test-product-123"), json=sample_cost_data
+        )
+
+        assert response.status_code == 201, response.text
+        assert response.json()["cost_center"] == "INFRASTRUCTURE"
 
     def test_update_cost_item(self, client: TestClient, created_cost):
         """Test updating a cost item."""

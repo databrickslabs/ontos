@@ -12,6 +12,7 @@ import DomainMultiSelector, {
 import { Loader2 } from 'lucide-react';
 import { internalErrorText } from '@/lib/server-error-text';
 import { contractDomainErrorText } from '@/lib/contract-domain-error';
+import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error';
 
 type PrefillData = {
   domain?: string;
@@ -106,7 +107,8 @@ export default function CreateContractInlineDialog({
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
-          contractDomainErrorText(errorText, t) ?? internalErrorText(errorText) ??
+          contractDomainErrorText(errorText, t) ?? odcsApiVersionErrorText(errorText, t) ??
+            internalErrorText(errorText) ??
             (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
         );
       }

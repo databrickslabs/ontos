@@ -1035,6 +1035,24 @@
         "descriptionContract": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenvertrags, der sie verwendet. Bei einer Tabelle, die mehrere Verträge verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
         "valueLabel": "Tag-Wert:",
         "sharedKeyHint": "Sind die Status-Tags von Produkt und Vertrag beide mit demselben Schlüssel aktiviert, wird der Status des Produkts geschrieben."
+      },
+      "maturityThreshold": {
+        "variable": "true oder false: Die Levelnummer ist mindestens <order>",
+        "invalid": "Verwenden Sie {ASSET.MATURITY_AT_LEAST:<order>} mit einer Levelnummer, z. B. {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "Asset-UUID",
+        "assetType": "Name des Asset-Typs (Table, View, ...)",
+        "assetFqn": "Unity-Catalog-Name der Tabelle (catalog.schema.table)",
+        "assetMaturity": "Name der Reifestufe eines Tabellen- oder View-Assets (letzte Bewertung)",
+        "assetMaturityOrder": "Nummer der Reifestufe eines Tabellen- oder View-Assets (1 = erste Stufe)"
+      },
+      "maturity": {
+        "title": "Tag für die Reifestufe",
+        "description": "Versieht jedes Tabellen- oder View-Asset mit seiner Reifestufe (letzte Bewertung). Tabellen ohne Stufe erhalten kein Tag.",
+        "valueNeedsVariable": "Verwenden Sie {ASSET.MATURITY} oder {ASSET.MATURITY_ORDER} im Schlüssel oder im Wert.",
+        "tablesOnlyHint": "Nur Tabellen und Views mit einem Unity-Catalog-Namen werden getaggt, keine Schemas und Kataloge. Die Ausgabe des Laufs zählt die übersprungenen Assets und den Grund.",
+        "prefixHint": "Beginnen Sie den Schlüssel mit demselben Präfix wie die anderen aktiven Schlüssel (standardmäßig ontos_), damit der Job das Tag entfernen kann, wenn eine Tabelle ihre Stufe verliert."
       }
     },
     "entityPatterns": {
@@ -1252,11 +1270,44 @@
       "reorderFailed": "Neuanordnung fehlgeschlagen"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Alle Tabellen-, View- und Metric-View-Assets bewerten",
+    "description": "Bewertet jedes Tabellen-, View- und Metric-View-Asset im Umfang mit den aktuellen Asset-Levels. Ein seit Laufbeginn bewertetes Asset wird übersprungen; es läuft immer nur ein Lauf.",
+    "catalog": "Katalog (optional)",
+    "schema": "Schema (optional)",
+    "start": "Assets bewerten",
+    "running": "Bewertung: {{processed}} von {{total}} Assets",
+    "noAssetLevels": "Legen Sie zuerst Asset-Levels an: Ohne sie wird nichts bewertet.",
+    "lastRun": "Letzter Lauf",
+    "none": "Noch kein Lauf abgeschlossen.",
+    "scope": "Umfang: {{scope}}",
+    "allCatalogs": "Alle Kataloge",
+    "startedBy": "Gestartet von {{user}}",
+    "summary": "{{total}} Assets: {{evaluated}} bewertet, {{changed}} mit geändertem Level, {{errors}} Fehler.",
+    "skipped": "Übersprungen",
+    "errors": "Fehler",
+    "state": {
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Seit Laufbeginn bewertet",
+      "maturity_bulk_skipped_not_found": "Asset nicht gefunden",
+      "maturity_bulk_skipped_no_levels": "Keine Asset-Levels",
+      "maturity_bulk_skipped_asset_type": "Keine Tabelle, View oder Metric View",
+      "maturity_bulk_skipped_not_stored": "Nicht gespeichert: Die Tabelle konnte nicht gelesen werden",
+      "maturity_bulk_evaluation_failed": "Bewertung fehlgeschlagen (siehe Server-Log)",
+      "maturity_bulk_run_failed": "Der Lauf wurde gestoppt (siehe Server-Log)",
+      "maturity_bulk_run_in_progress": "Eine Massenbewertung läuft bereits.",
+      "maturity_bulk_scope_invalid": "Der Umfang ist ungültig."
+    }
+  },
   "maturityLevels": {
     "title": "Reifegradstufen",
     "description": "Definieren Sie die Reifegradleiter für Datenprodukte und Verträge. Jede Stufe ist durch Compliance-Richtlinien gesteuert.",
     "addLevel": "Stufe hinzufügen",
-    "allTypes": "Alle Typen",
+    "allTypes": "Produkte und Verträge",
     "gateCount_one": "{{count}} Gate",
     "gateCount_other": "{{count}} Gates",
     "complianceGates": "Compliance-Richtlinien-Gates",
@@ -1283,7 +1334,8 @@
       "levelNamePreview": "Stufenname"
     },
     "entityTypes": {
-      "all": "Alle Entity-Typen",
+      "all": "Datenprodukte und Datenverträge",
+      "Asset": "Assets (Tabellen, Views und Metric Views)",
       "DataProduct": "Datenprodukte",
       "DataContract": "Datenverträge"
     },
@@ -1299,6 +1351,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "Diese Richtlinie verwendet LLM_CHECK, das nur in Compliance-Läufen ausgewertet wird; ein Reifegrad-Gate würde daher jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Standardstufen für Assets laden",
+      "hint": "Fügt eine Standardleiter für Tabellen- und View-Assets hinzu (Prerequisite, 1 star, 2 stars, 3 stars) mit Beispiel-Gate-Richtlinien",
+      "loadedTitle": "Asset-Stufen geladen",
+      "loaded_one": "{{count}} Asset-Stufe erstellt",
+      "loaded_other": "{{count}} Asset-Stufen erstellt",
+      "alreadyLoaded": "Asset-Stufen sind bereits vorhanden: nichts wurde geändert",
+      "loadFailed": "Die Standardstufen für Assets konnten nicht geladen werden"
     }
   },
   "directory": {

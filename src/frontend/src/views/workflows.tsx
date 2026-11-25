@@ -529,10 +529,15 @@ export default function Workflows() {
   };
 
   // A refused force approve / reject: with require_all only the approvers decide
-  const forceDecisionErrorText = (errorCode: string | null | undefined, fallbackKey: string) =>
-    errorCode === 'approval_not_an_approver'
-      ? t('workflows:view.messages.forceDecisionRequireAll')
-      : t(fallbackKey);
+  const forceDecisionErrorText = (errorCode: string | null | undefined, fallbackKey: string) => {
+    if (errorCode === 'approval_not_an_approver') {
+      return t('workflows:view.messages.forceDecisionRequireAll');
+    }
+    if (errorCode === 'access_request_resume_refused') {
+      return t('workflows:view.messages.forceDecisionAccessRequest');
+    }
+    return t(fallbackKey);
+  };
 
   const handleRetryExecution = async (execution: WorkflowExecution) => {
     if (!canEdit) {

@@ -5,7 +5,11 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep
-from src.common.authorization import PermissionChecker, get_user_details_from_sdk
+from src.common.authorization import (
+    PermissionChecker,
+    get_user_details_from_sdk,
+    resolve_effective_permissions,
+)
 from src.common.features import FeatureAccessLevel
 from src.controller.approvals_manager import ApprovalsManager
 from src.controller.agreement_wizard_manager import AgreementWizardManager
@@ -81,21 +85,86 @@ def _resolve_entity_type_for_session(db, session_id: str) -> Optional[str]:
     return getattr(session, "entity_type", None)
 
 
+# Wizard sessions hold the requester's answers. Callers see their own
+# sessions; reading other users' sessions needs the same level as reading
+# their agreements (GET /approvals/agreements), aborting them needs admin.
+SESSIONS_FEATURE_ID = 'settings-workflows'
+
+
+async def _has_feature_level(
+    feature_id: str,
+    required_level: FeatureAccessLevel,
+    user_details: UserInfo,
+    request: Request,
+) -> bool:
+    """True when the user holds ``required_level`` on ``feature_id``.
+
+    Same resolution as ``enforce_feature_permission``, without raising or
+    logging a denial: here a missing level only narrows what the caller sees.
+    """
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    if not auth_manager or (not user_details.groups and not user_details.email):
+        return False
+    effective_permissions = await resolve_effective_permissions(
+        user_details.email, user_details.groups, request
+    )
+    return auth_manager.has_permission(effective_permissions, feature_id, required_level)
+
+
+def _is_session_owner(session: Any, current_user: Optional[UserInfo]) -> bool:
+    caller = (current_user.email if current_user else None) or ''
+    owner = getattr(session, 'created_by', None) or ''
+    return bool(caller) and caller.lower() == owner.lower()
+
+
+async def _ensure_session_access(
+    db,
+    session_id: str,
+    current_user: Optional[UserInfo],
+    user_details: UserInfo,
+    request: Request,
+    *,
+    others_level: Optional[FeatureAccessLevel],
+) -> None:
+    """404 unless the caller owns the session or holds ``others_level``.
+
+    ``others_level=None`` restricts the action to the owner. A missing session
+    passes through so the handler keeps its own not-found response. Non-owners
+    get the same 404 as a missing session, so session ids can't be probed.
+    """
+    session = agreement_wizard_sessions_repo.get(db, session_id)
+    if not session or _is_session_owner(session, current_user):
+        return
+    if others_level is not None and await _has_feature_level(
+        SESSIONS_FEATURE_ID, others_level, user_details, request
+    ):
+        return
+    raise HTTPException(status_code=404, detail="Session not found or not in progress")
+
+
 @router.get('/approvals/sessions')
 async def list_approval_sessions(
+    request: Request,
+    current_user: CurrentUserDep,
     limit: int = Query(50, ge=1, le=100),
     wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
 ):
     """List recent approval wizard sessions.
 
-    Returns sessions; callers see only what the underlying manager exposes
-    (caller-scoped at the manager layer). Kept accessible to any
-    authenticated user — reading the list of sessions you created should
-    not require a separate feature permission, matching the per-trigger
-    dispatch design for the rest of the wizard endpoints.
+    Open to any authenticated user — reading the list of sessions you created
+    should not require a separate feature permission. Callers with read access
+    to workflow settings (``settings-workflows`` READ_ONLY, the level that
+    reads agreements) see everyone's sessions; everyone else sees their own.
     """
-    return wizard_manager.list_sessions(limit=limit)
+    if await _has_feature_level(
+        SESSIONS_FEATURE_ID, FeatureAccessLevel.READ_ONLY, user_details, request
+    ):
+        return wizard_manager.list_sessions(limit=limit)
+    caller = current_user.email if current_user else None
+    if not caller:
+        return {"sessions": [], "total": 0}
+    return wizard_manager.list_sessions(limit=limit, created_by=caller)
 
 
 @router.get('/approvals/queue')
@@ -226,17 +295,23 @@ async def create_approval_session(
 
 @router.get('/approvals/sessions/{session_id}')
 async def get_approval_session(
+    request: Request,
     session_id: str,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
 ) -> Dict[str, Any]:
     """Get current step and step_results (for Back/refresh).
 
-    Open to any authenticated user — reading a session you created should
-    not require a separate feature permission. Matches the loose gate on
-    the sibling list endpoint.
+    Reading a session you created needs no separate feature permission.
+    Other users' sessions need ``settings-workflows`` READ_ONLY (same as the
+    sibling list endpoint); otherwise they answer 404.
     """
+    await _ensure_session_access(
+        db, session_id, current_user, user_details, request,
+        others_level=FeatureAccessLevel.READ_ONLY,
+    )
     data = wizard_manager.get_session(session_id)
     if not data:
         raise HTTPException(status_code=404, detail="Session not found or not in progress")
@@ -256,8 +331,13 @@ async def submit_approval_step(
     """Submit step payload; returns next step or { complete: true, agreement_id, pdf_storage_path? }.
 
     Permission gate is per-trigger via the dispatch table (same lookup as
-    session creation, resolved here from the persisted session row).
+    session creation, resolved here from the persisted session row). Only
+    the user who started the session may submit its steps: the answers and
+    the completion action (e.g. subscribe) are theirs.
     """
+    await _ensure_session_access(
+        db, session_id, current_user, user_details, request, others_level=None,
+    )
     trigger_type = _resolve_trigger_type_for_session(db, session_id)
     if trigger_type:
         entity_type = _resolve_entity_type_for_session(db, session_id)
@@ -282,14 +362,20 @@ async def abort_approval_session(
     request: Request,
     session_id: str,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
 ) -> Dict[str, Any]:
     """Mark session as abandoned.
 
     Permission gate is per-trigger via the dispatch table — a user who was
-    allowed to start the session is allowed to abort it.
+    allowed to start the session is allowed to abort it. Other users'
+    sessions can only be aborted with ``settings-workflows`` ADMIN.
     """
+    await _ensure_session_access(
+        db, session_id, current_user, user_details, request,
+        others_level=FeatureAccessLevel.ADMIN,
+    )
     trigger_type = _resolve_trigger_type_for_session(db, session_id)
     if trigger_type:
         entity_type = _resolve_entity_type_for_session(db, session_id)

@@ -1161,84 +1161,23 @@ async def get_product_linked_assets(
     current_user: CurrentUserDep,
     skip: int = 0,
     limit: int = 200,
-    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    product: Any = Depends(readable_product),
 ):
     """Return the assets linked to this Data Product via entity relationships.
 
     Issue #347 — gated by ``data-products`` only (NOT ``assets``), so Data
     Consumers can see Linked Assets in the DP detail view even when the
     ``assets`` feature is not granted to them. The caller's access to the
-    Data Product itself is the implicit authorization here.
+    Data Product itself is the authorization: the read rule of the product
+    page (``readable_product``: published, admin, owner or pending reviewer),
+    a product the caller can't read answering 404 like a missing one. It
+    used the owned-products listing, which answered 403 to a consumer on a
+    published product.
     """
     from src.routes.assets_routes import get_assets_manager
 
-    # The PermissionChecker decorator above already verifies the caller has
-    # data-products:READ_ONLY at minimum. To prevent a Consumer from peeking
-    # at a DP they have no listing access to, additionally check that the
-    # DP is in the user's accessible set — unless they have admin-level
-    # data-products access (admins / data-product admins see all).
-    auth_manager = getattr(request.app.state, "authorization_manager", None)
-    is_dp_admin = False
-    try:
-        if auth_manager and current_user:
-            eff = effective_permissions_for_request(
-                request, current_user.email, current_user.groups or [], auth_manager,
-            )
-            is_dp_admin = auth_manager.has_permission(
-                eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
-            )
-    except Exception:
-        logger.exception("Failed to determine data-products admin level for DP-assets scoping")
-        is_dp_admin = False
-
-    if not is_dp_admin:
-        dpm = getattr(request.app.state, "data_products_manager", None)
-        if dpm is None:
-            raise HTTPException(status_code=503, detail="Data Products service unavailable")
-        # Compute caller's ownership scope so list_products returns the
-        # accessible set (instead of empty, which would 403 every DP for
-        # non-admins after the repository scoping change).
-        caller_email = current_user.email if current_user else None
-        user_groups = current_user.groups if current_user else []
-        caller_team_ids: list = []
-        caller_project_ids: list = []
-        try:
-            from src.controller.teams_manager import teams_manager
-            from src.controller.projects_manager import projects_manager
-
-            user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-            caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
-            from src.common.authorization import is_user_admin
-            from src.common.config import get_settings
-
-            user_projects = projects_manager.get_user_projects(
-                db, caller_email, user_groups,
-                is_admin=is_user_admin(user_groups, get_settings()),
-            )
-            caller_project_ids = [
-                p.id for p in user_projects.projects if getattr(p, "id", None)
-            ]
-        except Exception:
-            logger.exception(
-                f"Failed to resolve ownership scope for {caller_email} in DP-asset access; "
-                f"will fall back to draft-owner branch only"
-            )
-
-        try:
-            accessible = dpm.list_products(
-                is_admin=False,
-                caller_email=caller_email,
-                caller_team_ids=caller_team_ids,
-                caller_project_ids=caller_project_ids,
-            )
-            accessible_ids = {str(p.id) for p in accessible if getattr(p, "id", None)}
-        except Exception:
-            logger.exception("Failed to list products for DP-asset scoping")
-            raise HTTPException(status_code=500, detail="Failed to authorize DP access")
-        if product_id not in accessible_ids:
-            raise HTTPException(status_code=403, detail="Data Product not accessible")
-
-    # The DP membership check above is the authorization here, not the assets
+    # The product read rule above is the authorization here, not the assets
     # feature — so we ask the data-products manager for the asset linkage and
     # then list via AssetsManager with an explicit restriction.
     dpm = getattr(request.app.state, "data_products_manager", None)
@@ -2310,6 +2249,46 @@ async def delete_data_product(
             success=success,
             details=details_for_audit,
         )
+
+@router.get('/data-products/{product_id}/my-access')
+async def get_my_product_access(
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    # The feature check first: without data-products the answer is 403 whether
+    # the id exists or not (no existence probe through the 404 of readable_product)
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    product: Any = Depends(readable_product),
+) -> Dict[str, bool]:
+    """What the caller may do with a product they can read (#1613).
+
+    ``can_write``: data-products READ_WRITE plus the ownership rule of
+    ``PUT /data-products/{id}`` (an app admin, a data-products admin, the draft
+    owner, a member of the owning team or of the product's project). A reviewer who reads a
+    product under review without owning it gets ``false``. A UI hint only: the
+    write routes still check. Fails closed. A product the caller can't read
+    answers 404, like the product page.
+    """
+    can_write = False
+    try:
+        if user_has_feature_level(
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID,
+            FeatureAccessLevel.READ_WRITE, request=request,
+        ):
+            # As update_product_with_auth: configured app admins pass the ownership rule
+            from src.common.authorization import is_user_admin
+            from src.common.config import get_settings
+
+            can_write = is_user_admin(current_user.groups or [], get_settings()) or (
+                _caller_owns_product_or_denies(request, db, current_user, product)
+            )
+    except Exception:
+        logger.exception(
+            "Access check failed for product %s; denying", getattr(product, "id", None),
+        )
+    return {"can_write": bool(can_write)}
+
 
 @router.get('/data-products/{product_id}', response_model=Any)
 async def get_data_product(

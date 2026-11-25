@@ -179,7 +179,10 @@
       "updated": "Cost updated",
       "deleted": "Cost deleted",
       "deleteFailed": "Delete failed",
-      "saveFailed": "Save failed"
+      "saveFailed": "Save failed",
+      "requestFailed": "Could not complete the request.",
+      "validationFailed": "Check the entered values and try again.",
+      "invalidResponse": "The server returned an invalid response."
     }
   },
   "quality": {

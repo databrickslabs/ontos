@@ -179,7 +179,10 @@
       "updated": "Custo atualizado",
       "deleted": "Custo excluído",
       "deleteFailed": "Falha ao excluir",
-      "saveFailed": "Falha ao salvar"
+      "saveFailed": "Falha ao salvar",
+      "requestFailed": "Não foi possível concluir a solicitação.",
+      "validationFailed": "Verifique os valores inseridos e tente novamente.",
+      "invalidResponse": "O servidor retornou uma resposta inválida."
     }
   },
   "quality": {

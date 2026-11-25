@@ -123,6 +123,10 @@
     "title": "Mijn Acties",
     "approvals": "Goedkeuringen"
   },
+  "approvalOverdue": {
+    "badge": "Te laat",
+    "hint": "Wacht langer dan de termijn; de goedkeurders en de aanvrager zijn herinnerd."
+  },
   "quickActions": {
     "title": "Snelle Acties",
     "loading": "Laden...",

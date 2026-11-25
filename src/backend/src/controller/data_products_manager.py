@@ -222,8 +222,102 @@ from src.common import genie_client
 from src.common.delivery_mixin import DeliveryMixin
 from src.repositories.entity_relationships_repository import entity_relationship_repo
 from src.repositories.assets_repository import asset_repo
+from src.repositories.data_product_types_repository import (
+    data_product_types_repo,
+    normalize_type_key,
+    type_label_for,
+)
 
 logger = get_logger(__name__)
+
+
+class UnknownDataProductTypeError(CodedValueError):
+    """A product type key that doesn't exist or has been deactivated."""
+
+    code = 'unknown_data_product_type'
+
+    def __init__(self, key: str):
+        super().__init__(f"Unknown or inactive data product type: '{key}'", key=key)
+
+
+# The product type lives on data_products.product_type_id. Payloads and ODPS
+# files carry it as this custom property (or a root `productType`, as early
+# ODPS drafts did); it's moved onto the FK on write and added back on read.
+PRODUCT_TYPE_PROPERTY = 'productType'
+
+
+def _pop_product_type(data: dict[str, Any]) -> tuple[bool, Any]:
+    """Remove the product type from a create/update payload.
+
+    Returns ``(sent, value)``: ``sent`` is True when the payload says anything
+    about the type (a ``productType`` root field, or a ``customProperties``
+    list or dict, which replaces the stored properties). A ``customProperties``
+    without a ``productType`` therefore clears the type. ``value`` is the first
+    non-empty value found, or None.
+    """
+    values = []
+    sent = False
+    if PRODUCT_TYPE_PROPERTY in data:
+        sent = True
+        values.append(data.pop(PRODUCT_TYPE_PROPERTY))
+    cprops = data.get('customProperties')
+    if isinstance(cprops, list):
+        sent = True
+        kept = []
+        for cp in cprops:
+            if isinstance(cp, dict) and cp.get('property') == PRODUCT_TYPE_PROPERTY:
+                values.append(cp.get('value'))
+            elif isinstance(cp, CustomProperty) and cp.property == PRODUCT_TYPE_PROPERTY:
+                values.append(cp.value)
+            else:
+                kept.append(cp)
+        data['customProperties'] = kept
+    elif isinstance(cprops, dict):
+        sent = True
+        if PRODUCT_TYPE_PROPERTY in cprops:
+            values.append(cprops.pop(PRODUCT_TYPE_PROPERTY))
+    value = next((v for v in values if v not in (None, '')), None)
+    return sent, value
+
+
+def _apply_product_type(product_api: DataProductApi, db_obj: Any) -> DataProductApi:
+    """Add the product's type (from the FK) to its customProperties."""
+    product_type = getattr(db_obj, 'product_type', None)
+    props = [
+        cp for cp in (product_api.customProperties or [])
+        if cp.property != PRODUCT_TYPE_PROPERTY
+    ]
+    if product_type is not None:
+        props.append(CustomProperty(property=PRODUCT_TYPE_PROPERTY, value=product_type.key))
+    product_api.customProperties = props or None
+    return product_api
+
+
+def _set_product_type(db: Session, db_obj: Any, value: Any, *, create_missing: bool = False) -> None:
+    """Point ``db_obj`` at the type ``value`` names; an empty value clears it.
+
+    Only an import (``create_missing``) adds a type that doesn't exist yet,
+    flagged ``is_imported``. Otherwise the type must be active, or be the one
+    the product already has, so that writing a product doesn't create or reuse
+    reference data the ``settings-data-product-types`` feature manages.
+
+    Raises:
+        UnknownDataProductTypeError: Without ``create_missing``, for a type that
+            doesn't exist, or is deactivated and isn't the product's current one.
+    """
+    if create_missing:
+        product_type = data_product_types_repo.resolve_or_create_imported(db, value)
+    else:
+        key = normalize_type_key(value)
+        product_type = data_product_types_repo.get_by_key(db, key) if key is not None else None
+        if key is not None and (
+            product_type is None
+            or (not product_type.is_active and product_type.id != db_obj.product_type_id)
+        ):
+            raise UnknownDataProductTypeError(type_label_for(value) or key)
+    db_obj.product_type_id = product_type.id if product_type is not None else None
+    db_obj.product_type = product_type
+    db.flush()
 
 
 @searchable_asset
@@ -359,6 +453,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         adopt_ids: bool = True,
         import_links: Optional[ImportLinks] = None,
         workflow_user: Optional[str] = None,
+        create_missing_type: bool = False,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
 
@@ -387,6 +482,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 those columns only change through a status transition.
             workflow_user: Who the ``on_create`` workflows run for; defaults to ``user``
                 (the REST routes stamp the username and fire for the email).
+            create_missing_type: Set by the imports (batch upload, ODPS files): an
+                unknown productType becomes a new imported type. Otherwise the type
+                must exist and be active (UnknownDataProductTypeError).
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -487,6 +585,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     links=import_links, source_id=incoming_id,
                 )
 
+            # The product type goes onto product_type_id, not into customProperties
+            _, product_type_value = _pop_product_type(product_data)
+
             # Validate
             try:
                 product_api_model = DataProductCreate(**product_data)
@@ -502,6 +603,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if lifecycle_columns:
                 set_lifecycle_columns(created_db_obj, lifecycle_columns)
                 db_session.flush()
+            if product_type_value is not None:
+                _set_product_type(
+                    db_session, created_db_obj, product_type_value, create_missing=create_missing_type,
+                )
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -836,6 +941,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # VALIDATE FIRST - before acquiring any database locks
             # Extract tags (handled separately)
             tags_data = product_data_dict.pop('tags', None)
+            # The product type goes onto product_type_id, not into customProperties
+            product_type_sent, product_type_value = _pop_product_type(product_data_dict)
 
             # Prepare update payload
             update_payload = product_data_dict.copy()
@@ -883,6 +990,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
+            if product_type_sent:
+                _set_product_type(db_session, updated_db_obj, product_type_value)
 
             # Replace domain assignments when the caller supplied any domain field.
             if any(k in product_data_dict for k in ('domain_ids', 'primary_domain_id', 'domain')):
@@ -2341,7 +2450,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 # create_product() always generates a UUID; preserve_source_id=True
                 # stores any non-UUID original id as a sourceId custom property
-                created_product = self.create_product(product_data, preserve_source_id=True)
+                created_product = self.create_product(
+                    product_data, preserve_source_id=True, create_missing_type=True,
+                )
                 created_products.append(created_product)
                 logger.info(f"Successfully created product {created_product.id} from batch upload")
 
@@ -2637,6 +2748,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         new_product_data['status'] = initial_key
         logger.info(f"Resetting status to DRAFT for new version {new_product_data['id']}")
 
+        # The type is carried over on product_type_id, not as a custom property
+        _, product_type_value = _pop_product_type(new_product_data)
+
         try:
             # Validate and create
             new_product_api_model = DataProductCreate(**new_product_data)
@@ -2646,6 +2760,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # on the manager's startup session, not the request's, so nothing else
             # commits them. Any failure from the product flush on rolls all of them back.
             try:
+                if product_type_value is not None:
+                    # The source product's type: it exists, and the new version keeps
+                    # it even when it's been deactivated since.
+                    _set_product_type(self._db, created_db_obj, product_type_value, create_missing=True)
+
                 # Carry the source product's domain assignments onto the new version.
                 d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
                 if d_ids:
@@ -2665,7 +2784,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise
 
             logger.info(f"Successfully created new version {request.new_version} (ID: {created_db_obj.id})")
-            result = self._attach_domains(DataProductApi.model_validate(created_db_obj))
+            result = _apply_product_type(
+                self._attach_domains(DataProductApi.model_validate(created_db_obj)), created_db_obj
+            )
             self._update_search_index(result)
             return result
 
@@ -2798,6 +2919,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 version_family_id=family_id,
                 base_name=base_name,
                 change_summary=change_summary,
+                product_type_id=source_product.product_type_id,
             )
             db.add(new_product)
             db.flush()
@@ -3017,7 +3139,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(new_product)
             
             logger.info(f"Successfully cloned product {product_id} to new version {new_version} (ID: {new_id})")
-            return self._attach_domains(DataProductApi.model_validate(new_product), db=db)
+            return _apply_product_type(
+                self._attach_domains(DataProductApi.model_validate(new_product), db=db), new_product
+            )
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -3121,7 +3245,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(draft)
             
             logger.info(f"Committed personal draft {draft_id} as version {new_version}")
-            return self._attach_domains(DataProductApi.model_validate(draft), db=db)
+            return _apply_product_type(
+                self._attach_domains(DataProductApi.model_validate(draft), db=db), draft
+            )
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -3666,7 +3792,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         savepoint = self._db.begin_nested()
         try:
-            created = self.create_product(product_data, **kwargs)
+            created = self.create_product(product_data, create_missing_type=True, **kwargs)
             if savepoint.is_active:
                 savepoint.commit()
             else:
@@ -3796,6 +3922,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_api = self._attach_domains(
                 DataProductApi.model_validate(db_obj), db=db, preloaded_domains=preloaded_domains
             )
+            _apply_product_type(product_api, db_obj)
 
             if self._tags_manager:
                 try:
@@ -3866,7 +3993,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         except Exception as e:
             logger.error(f"Failed to load ODPS product with tags: {e}")
-            return self._attach_domains(DataProductApi.model_validate(db_obj))
+            return _apply_product_type(
+                self._attach_domains(DataProductApi.model_validate(db_obj)), db_obj
+            )
 
     def assign_tag_to_product(self, product_id: str, tag_id: str, assigned_value: Optional[str] = None,
                               assigned_by: str = "system") -> bool:
@@ -3959,6 +4088,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         version: str,
         output_port_name: Optional[str] = None,
         user_email: Optional[str] = None,
+        product_type: Optional[str] = None,
     ) -> DataProductApi:
         """
         Creates a new ODPS v1.0.0 Data Product from an existing Data Contract.
@@ -3972,14 +4102,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             version: Version string for the product
             output_port_name: Optional name for the output port
             user_email: Who the ``on_create`` workflows run for (``create_product``)
+            product_type: Optional product type key. Must be an active type;
+                when omitted, the default type is used (if one is set). Stored
+                on ``product_type_id``.
 
         Returns:
             Created DataProduct API model
 
         Raises:
+            UnknownDataProductTypeError: If product_type is unknown or inactive
             ValueError: If contract doesn't exist or is not in valid status
         """
-        logger.info(f"Creating ODPS Data Product '{product_name}' from contract {contract_id}")
+        logger.info("Creating ODPS Data Product '%s' from contract %s", product_name, contract_id)
+
+        if product_type:
+            type_db = data_product_types_repo.get_by_key(self._db, product_type)
+            if type_db is None or not type_db.is_active:
+                raise UnknownDataProductTypeError(product_type)
+        else:
+            type_db = data_product_types_repo.get_default(self._db)
 
         from src.repositories.data_contracts_repository import data_contract_repo
 
@@ -4038,9 +4179,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 (d.domain_id for d in contract_domains if d.is_primary), None
             )
 
+        # create_product moves it onto product_type_id
+        if type_db is not None:
+            product_data[PRODUCT_TYPE_PROPERTY] = type_db.key
+
         # Create the product
         created_product = self.create_product(product_data, workflow_user=user_email)
-        logger.info(f"Successfully created ODPS Data Product {product_id} from contract {contract_id}")
+
+        logger.info("Created ODPS Data Product %s from contract %s", created_product.id, contract_id)
         return created_product
 
     def get_products_by_contract(self, contract_id: str) -> List[DataProductApi]:

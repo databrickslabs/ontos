@@ -24,6 +24,7 @@ import {
   BoxSelect,
   Truck,
   ShieldCheck,
+  Boxes,
   Activity,
   type LucideIcon,
 } from 'lucide-react';
@@ -53,6 +54,7 @@ const settingsNavGroups: SettingsNavGroup[] = [
       { path: '/settings/asset-types', labelKey: 'settings:tabs.assetTypes', defaultLabel: 'Asset Types', icon: Shapes, permissionId: 'settings-asset-types' },
       { path: '/settings/teams', labelKey: 'settings:tabs.teams', defaultLabel: 'Teams', icon: UserCheck, permissionId: 'teams' },
       { path: '/settings/projects', labelKey: 'settings:tabs.projects', defaultLabel: 'Projects', icon: FolderOpen, permissionId: 'projects' },
+      { path: '/settings/data-product-types', labelKey: 'settings:tabs.dataProductTypes', defaultLabel: 'Data Product Types', icon: Boxes, permissionId: 'settings-data-product-types' },
       { path: '/settings/certification-levels', labelKey: 'settings:tabs.certificationLevels', defaultLabel: 'Certification Levels', icon: ShieldCheck, permissionId: 'settings-certification-levels' },
       { path: '/settings/maturity-levels', labelKey: 'settings:tabs.maturityLevels', defaultLabel: 'Maturity Levels', icon: Activity, permissionId: 'settings-maturity-levels' },
     ],

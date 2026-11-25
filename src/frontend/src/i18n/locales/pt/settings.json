@@ -111,6 +111,7 @@
     "uiCustomization": "Personalização da interface",
     "connectors": "Conectores",
     "schemaImporter": "Importador de esquemas",
+    "dataProductTypes": "Tipos de produto de dados",
     "certificationLevels": "Níveis de certificação",
     "maturityLevels": "Níveis de maturidade"
   },
@@ -1253,6 +1254,71 @@
     },
     "saveButton": "Configurações de entrega salvas com sucesso",
     "title": "Modos de entrega"
+  },
+  "dataProductTypes": {
+    "title": "Tipos de produto de dados",
+    "description": "Defina os tipos que um produto de dados pode ter. Os tipos integrados podem ser renomeados ou desativados, mas não excluídos.",
+    "addType": "Adicionar tipo",
+    "table": {
+      "label": "Rótulo",
+      "key": "Chave",
+      "products": "Produtos",
+      "active": "Ativo"
+    },
+    "badges": {
+      "default": "Padrão",
+      "builtIn": "Integrado",
+      "imported": "Importado"
+    },
+    "actions": {
+      "moveUp": "Mover {{name}} para cima",
+      "moveDown": "Mover {{name}} para baixo",
+      "toggleActive": "Ativo: {{name}}",
+      "makeDefault": "Tornar padrão",
+      "makeDefaultFor": "Tornar {{name}} o padrão",
+      "edit": "Editar {{name}}",
+      "delete": "Excluir {{name}}"
+    },
+    "emptyState": "Ainda não há tipos de produto de dados. Clique em \"Adicionar tipo\" para criar um.",
+    "defaultCannotBeInactive": "O tipo padrão não pode ser desativado. Torne outro tipo o padrão primeiro.",
+    "dialog": {
+      "editTitle": "Editar tipo de produto de dados",
+      "createTitle": "Adicionar tipo de produto de dados",
+      "editDescription": "Altere como este tipo é exibido. A chave continua a mesma.",
+      "createDescription": "Crie um tipo que os produtores possam escolher para seus produtos de dados."
+    },
+    "form": {
+      "label": "Rótulo",
+      "labelPlaceholder": "ex.: Golden Record",
+      "seededLabelHint": "Os tipos integrados são exibidos traduzidos até você alterar o rótulo.",
+      "key": "Chave",
+      "keyHint": "Palavras em minúsculas unidas por hifens, ex.: golden-record. Não pode ser alterada depois e é o valor usado nos arquivos ODPS.",
+      "keyImmutable": "A chave não pode ser alterada.",
+      "color": "Cor"
+    },
+    "delete": {
+      "title": "Excluir o tipo de produto de dados?",
+      "description": "Tem certeza de que deseja excluir \"{{name}}\"? Esta ação não pode ser desfeita."
+    },
+    "deleteBlocked": {
+      "seeded": "Os tipos integrados não podem ser excluídos. Desative-o em vez disso.",
+      "inUse_one": "Usado por {{count}} produto de dados. Desative-o em vez disso.",
+      "inUse_other": "Usado por {{count}} produtos de dados. Desative-o em vez disso."
+    },
+    "messages": {
+      "updated": "Tipo de produto de dados \"{{name}}\" atualizado.",
+      "created": "Tipo de produto de dados \"{{name}}\" criado.",
+      "deleted": "Tipo de produto de dados \"{{name}}\" excluído.",
+      "reorderFailed": "Falha ao reordenar"
+    },
+    "errors": {
+      "data_product_type_not_found": "Este tipo de produto de dados não existe mais.",
+      "data_product_type_key_exists": "Já existe um tipo de produto de dados com a chave \"{{key}}\".",
+      "data_product_type_in_use_one": "\"{{key}}\" é usado por {{count}} produto de dados. Desative-o em vez de excluí-lo.",
+      "data_product_type_in_use_other": "\"{{key}}\" é usado por {{count}} produtos de dados. Desative-o em vez de excluí-lo.",
+      "data_product_type_seeded": "\"{{key}}\" é um tipo integrado e não pode ser excluído. Desative-o em vez disso.",
+      "data_product_type_default_inactive": "\"{{key}}\" não pode ser padrão e inativo ao mesmo tempo. Torne outro tipo o padrão primeiro."
+    }
   },
   "certificationLevels": {
     "title": "Níveis de certificação",

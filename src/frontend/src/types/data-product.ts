@@ -378,7 +378,6 @@ export interface NewVersionRequest {
 
 export type DataProductArchetype = string;
 export type DataProductOwner = string;
-export type DataProductType = string;
 
 // ============================================================================
 // Helper Types

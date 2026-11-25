@@ -198,6 +198,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_SETTINGS,
     },
+    'settings-data-product-types': {
+        'name': 'Data Product Types',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
     'settings-certification-levels': {
         'name': 'Certification Levels',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,

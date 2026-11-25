@@ -4,8 +4,8 @@ A saved selection of a connection that the connector_sync job imports again on
 a schedule, retiring assets the source no longer has (#1312). Import runs record
 the sync that started them.
 
-Revision ID: c7_connector_syncs
-Revises: c6_metric_view_baselines
+Revision ID: o5_connector_syncs
+Revises: o4_shared_library_documents
 Create Date: 2026-11-06 12:00:00.000000
 
 """
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = 'c7_connector_syncs'
-down_revision: Union[str, None] = 'c6_metric_view_baselines'
+revision: str = 'o5_connector_syncs'
+down_revision: Union[str, None] = 'o4_shared_library_documents'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

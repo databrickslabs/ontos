@@ -50,7 +50,7 @@ def _assignments(conn):
 
 
 def test_upgrade_assigns_the_odcs_tags(tmp_path, migration):
-    assert migration.down_revision == 'o4_shared_library_documents'
+    assert migration.down_revision == 'b12_product_type_from_props'
     assert len(migration.revision) <= 32  # alembic_version.version_num is varchar(32) on Postgres
     engine = create_engine(f"sqlite:///{tmp_path / 't1.db'}")
     with engine.begin() as conn:

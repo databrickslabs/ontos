@@ -52,6 +52,67 @@ class TestMetadataRoutes:
         assert data["links"] == []
         assert data["documents"] == []
 
+    @pytest.fixture
+    def product_with_shallow_inheritance(self, db_session: Session):
+        """A product (max_level_inheritance=20) whose contract has a level-10 and a level-50 note."""
+        from uuid import uuid4
+
+        from src.db_models.data_contracts import DataContractDb
+        from src.db_models.data_products import DataProductDb, OutputPortDb
+        from src.db_models.metadata import RichTextMetadataDb
+
+        product = DataProductDb(
+            id=str(uuid4()), name="Shallow Product", status="draft", max_level_inheritance=20,
+        )
+        contract = DataContractDb(
+            id=str(uuid4()), name="shallow-contract", version="1.0.0", status="active",
+            version_family_id=str(uuid4()),
+        )
+        db_session.add_all([product, contract])
+        db_session.flush()
+        db_session.add(OutputPortDb(
+            id=str(uuid4()), product_id=product.id, name="port", version="1.0.0",
+            contract_id=contract.id,
+        ))
+        db_session.add_all([
+            RichTextMetadataDb(
+                id=uuid4(), entity_type="data_contract", entity_id=contract.id, title=title,
+                content_markdown=f"# {title}", level=level, inheritable=True,
+            )
+            for title, level in (("Shallow", 10), ("Deep", 50))
+        ])
+        db_session.flush()
+        return product
+
+    def test_merged_metadata_defaults_to_the_products_max_level_inheritance(
+        self, client: TestClient, product_with_shallow_inheritance,
+    ):
+        """No max_level: the product's own max_level_inheritance bounds inherited items."""
+        response = client.get(
+            "/api/entities/data_product/metadata/merged",
+            params={"entity_id": product_with_shallow_inheritance.id},
+        )
+        assert response.status_code == 200, response.text
+        assert [rt["title"] for rt in response.json()["rich_texts"]] == ["Shallow"]
+
+    def test_merged_metadata_explicit_max_level_overrides_the_product_default(
+        self, client: TestClient, product_with_shallow_inheritance,
+    ):
+        """An explicit max_level query param still wins over the product's value."""
+        product_id = product_with_shallow_inheritance.id
+        deeper = client.get(
+            "/api/entities/data_product/metadata/merged",
+            params={"entity_id": product_id, "max_level": 99},
+        )
+        assert deeper.status_code == 200, deeper.text
+        assert [rt["title"] for rt in deeper.json()["rich_texts"]] == ["Shallow", "Deep"]
+        shallower = client.get(
+            "/api/entities/data_product/metadata/merged",
+            params={"entity_id": product_id, "max_level": 5},
+        )
+        assert shallower.status_code == 200, shallower.text
+        assert shallower.json()["rich_texts"] == []
+
     def test_create_rich_text(self, client: TestClient, db_session: Session, sample_rich_text_data):
         """Test creating rich text metadata."""
         response = client.post(

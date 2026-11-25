@@ -52,6 +52,67 @@ class TestMetadataRoutes:
         assert data["links"] == []
         assert data["documents"] == []
 
+    @pytest.fixture
+    def product_with_shallow_inheritance(self, db_session: Session):
+        """A product (max_level_inheritance=20) whose contract has level-10 and level-50 notes."""
+        from uuid import uuid4
+
+        from src.db_models.data_contracts import DataContractDb
+        from src.db_models.data_products import DataProductDb, OutputPortDb
+        from src.db_models.metadata import RichTextMetadataDb
+
+        product = DataProductDb(
+            id=str(uuid4()), name="Shallow Product", status="draft", max_level_inheritance=20,
+        )
+        contract = DataContractDb(
+            id=str(uuid4()), name="shallow-contract", version="1.0.0", status="active",
+            version_family_id=str(uuid4()),
+        )
+        db_session.add_all([product, contract])
+        db_session.flush()
+        db_session.add(OutputPortDb(
+            id=str(uuid4()), product_id=product.id, name="port", version="1.0.0",
+            contract_id=contract.id,
+        ))
+        db_session.add_all([
+            RichTextMetadataDb(
+                id=uuid4(), entity_type="data_contract", entity_id=contract.id, title=title,
+                content_markdown=f"# {title}", level=level, inheritable=True,
+            )
+            for title, level in (("Shallow", 10), ("Deep", 50))
+        ])
+        db_session.flush()
+        return product
+
+    def test_merged_metadata_defaults_to_the_products_max_level_inheritance(
+        self, client: TestClient, product_with_shallow_inheritance,
+    ):
+        """No max_level: the product's own max_level_inheritance bounds inherited items."""
+        response = client.get(
+            "/api/entities/data_product/metadata/merged",
+            params={"entity_id": product_with_shallow_inheritance.id},
+        )
+        assert response.status_code == 200, response.text
+        assert [rt["title"] for rt in response.json()["rich_texts"]] == ["Shallow"]
+
+    def test_merged_metadata_explicit_max_level_overrides_the_product_default(
+        self, client: TestClient, product_with_shallow_inheritance,
+    ):
+        """An explicit max_level query param still wins over the product's value."""
+        product_id = product_with_shallow_inheritance.id
+        deeper = client.get(
+            "/api/entities/data_product/metadata/merged",
+            params={"entity_id": product_id, "max_level": 99},
+        )
+        assert deeper.status_code == 200, deeper.text
+        assert [rt["title"] for rt in deeper.json()["rich_texts"]] == ["Shallow", "Deep"]
+        shallower = client.get(
+            "/api/entities/data_product/metadata/merged",
+            params={"entity_id": product_id, "max_level": 5},
+        )
+        assert shallower.status_code == 200, shallower.text
+        assert shallower.json()["rich_texts"] == []
+
     def test_create_rich_text(self, client: TestClient, db_session: Session, sample_rich_text_data):
         """Test creating rich text metadata."""
         response = client.post(
@@ -201,6 +262,88 @@ class TestAssetMetadataRoutes:
         assert shared.status_code == 200, shared.text
         assert created["id"] in [d["id"] for d in shared.json()["documents"]]
 
+    def _assert_own_files(self, documents, mock_ws, base_dir, filename):
+        """Each document has a file of its own at ``<base_dir>/<uuid>/<filename>``.
+
+        It keeps the uploaded file name, and its directory is the one created.
+        """
+        import re
+
+        paths = [d["storage_path"] for d in documents]
+        assert len(set(paths)) == len(paths), paths
+        uploads = mock_ws.files.upload.call_args_list
+        assert [c.args[0] for c in uploads] == paths
+        assert all(c.kwargs.get("overwrite") is False for c in uploads)
+        created = [c.args[0] for c in mock_ws.files.create_directory.call_args_list]
+        own_file = re.compile(rf"/Volumes/c/s/v/{re.escape(base_dir)}/[0-9a-f]{{32}}/{re.escape(filename)}")
+        for document, path in zip(documents, paths, strict=True):
+            assert own_file.fullmatch(path), path
+            assert path.rsplit("/", 1)[0] in created
+            assert document["original_filename"] == filename
+
+    def test_same_file_name_on_one_entity_keeps_both_files(self, client: TestClient, mock_ws, asset_id):
+        """#1691: a second upload with the same file name doesn't overwrite the first one's file."""
+        documents = []
+        for title in ("Snapshot Monday", "Snapshot Tuesday"):
+            response = client.post(
+                "/api/entities/asset/documents",
+                params={"entity_id": asset_id},
+                data={"title": title},
+                files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
+            )
+            assert response.status_code == 201, response.text
+            documents.append(response.json())
+
+        self._assert_own_files(documents, mock_ws, f"uploads/asset/{asset_id}", "snapshot.png")
+
+    def test_same_file_name_in_the_shared_library_keeps_both_files(self, client: TestClient, mock_ws):
+        """#1691: two library documents with the same file name keep their own files."""
+        documents = []
+        for title in ("Handbook 2025", "Handbook 2026"):
+            response = client.post(
+                "/api/metadata/shared/documents",
+                data={"title": title},
+                files={"file": ("handbook.pdf", b"%PDF", "application/pdf")},
+            )
+            assert response.status_code == 201, response.text
+            documents.append(response.json())
+
+        self._assert_own_files(documents, mock_ws, "uploads/__shared__", "handbook.pdf")
+
+    def test_shared_upload_rejects_an_invalid_request_before_writing(self, client: TestClient, mock_ws):
+        response = client.post(
+            "/api/metadata/shared/documents",
+            data={"title": "Handbook", "level": "1000"},
+            files={"file": ("handbook.pdf", b"%PDF", "application/pdf")},
+        )
+        assert response.status_code == 422, response.text
+        mock_ws.files.upload.assert_not_called()
+
+    @pytest.mark.parametrize("url, record", [
+        ("/api/entities/asset/documents", "create_document_record"),
+        ("/api/metadata/shared/documents", "create_shared_document_record"),
+    ])
+    def test_a_file_whose_row_isnt_stored_is_deleted(
+        self, client: TestClient, mock_ws, asset_id, monkeypatch, url, record,
+    ):
+        from src.controller.metadata_manager import MetadataManager
+
+        def _fail(*_args, **_kwargs):
+            raise RuntimeError("database down")
+
+        monkeypatch.setattr(MetadataManager, record, _fail)
+        response = client.post(
+            url,
+            params={"entity_id": asset_id} if "entities" in url else None,
+            data={"title": "Snapshot"},
+            files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
+        )
+        assert response.status_code == 500, response.text
+        uploaded = mock_ws.files.upload.call_args.args[0]
+        mock_ws.files.delete.assert_called_once_with(uploaded)
+        mock_ws.files.delete_directory.assert_called_once_with(uploaded.rsplit("/", 1)[0])
+
+
     def test_upload_document_rejects_unknown_entity_type_before_writing(self, client: TestClient, mock_ws):
         response = client.post(
             "/api/entities/not_an_entity/documents",
@@ -210,6 +353,61 @@ class TestAssetMetadataRoutes:
         )
         assert response.status_code == 422, response.text
         mock_ws.files.upload.assert_not_called()
+
+
+class TestDocumentDeleteRemovesItsFile:
+    """Deleting one document deletes its uploaded file once the delete commits (#1691)."""
+
+    @pytest.fixture
+    def files(self, mock_workspace_client):
+        mock_workspace_client.files.reset_mock()
+        mock_workspace_client.files.delete.side_effect = None
+        return mock_workspace_client.files
+
+    def _document(self, db_session: Session, storage_path: str, **kwargs) -> str:
+        from src.db_models.metadata import DocumentMetadataDb
+
+        row = DocumentMetadataDb(
+            entity_type="data_domain", entity_id="__shared__", is_shared=True, title="Handbook",
+            original_filename="handbook.pdf", storage_path=storage_path, **kwargs,
+        )
+        db_session.add(row)
+        db_session.flush()
+        return str(row.id)
+
+    def test_the_file_and_its_upload_directory_go(self, client: TestClient, db_session: Session, files):
+        upload_dir = f"/Volumes/c/s/v/uploads/__shared__/{'a' * 32}"
+        doc_id = self._document(db_session, f"{upload_dir}/handbook.pdf")
+
+        response = client.delete(f"/api/documents/{doc_id}")
+
+        assert response.status_code == 204, response.text
+        files.delete.assert_called_once_with(f"{upload_dir}/handbook.pdf")
+        files.delete_directory.assert_called_once_with(upload_dir)
+
+    def test_a_file_two_older_documents_share_stays_until_the_last_one_goes(
+        self, client: TestClient, db_session: Session, files,
+    ):
+        """Before #1691, same-named uploads shared one file in the base directory."""
+        shared_path = "/Volumes/c/s/v/uploads/__shared__/handbook.pdf"
+        first = self._document(db_session, shared_path)
+        second = self._document(db_session, shared_path)
+
+        assert client.delete(f"/api/documents/{first}").status_code == 204
+        files.delete.assert_not_called()
+
+        assert client.delete(f"/api/documents/{second}").status_code == 204
+        files.delete.assert_called_once_with(shared_path)
+        files.delete_directory.assert_not_called()  # the base directory isn't the upload's own
+
+    def test_an_imported_documents_source_file_is_never_deleted(
+        self, client: TestClient, db_session: Session, files,
+    ):
+        source = "/Volumes/main/docs/context/glossary.md"
+        doc_id = self._document(db_session, source, source_path=source, content_hash="h")
+
+        assert client.delete(f"/api/documents/{doc_id}").status_code == 204
+        files.delete.assert_not_called()
 
 
 class TestDocumentUploadInvalidVolume:

@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 from src.controller.data_products_manager import DataProductsManager
 from src.models.data_products import ONTOS_PORT_STATUS_PROPERTY, OutputPort
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "odps-json-schema-v1.0.0.json"
 
 

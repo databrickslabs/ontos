@@ -21,6 +21,9 @@ from src.models.data_domains import DataDomainCreate
 from src.repositories.data_domain_repository import data_domain_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 def _contract_manager() -> DataContractsManager:
     mgr = DataContractsManager(data_dir=Path("/tmp"))

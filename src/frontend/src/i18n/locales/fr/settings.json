@@ -111,6 +111,7 @@
     "uiCustomization": "Personnalisation UI",
     "connectors": "Connecteurs",
     "schemaImporter": "Importateur de schémas",
+    "dataProductTypes": "Types de produit de données",
     "certificationLevels": "Niveaux de certification",
     "maturityLevels": "Niveaux de maturité"
   },
@@ -1235,6 +1236,71 @@
     },
     "saveButton": "Paramètres de livraison enregistrés avec succès",
     "title": "Modes de livraison"
+  },
+  "dataProductTypes": {
+    "title": "Types de produit de données",
+    "description": "Définissez les types qu'un produit de données peut avoir. Les types intégrés peuvent être renommés ou désactivés, mais pas supprimés.",
+    "addType": "Ajouter un type",
+    "table": {
+      "label": "Libellé",
+      "key": "Clé",
+      "products": "Produits",
+      "active": "Actif"
+    },
+    "badges": {
+      "default": "Par défaut",
+      "builtIn": "Intégré",
+      "imported": "Importé"
+    },
+    "actions": {
+      "moveUp": "Monter {{name}}",
+      "moveDown": "Descendre {{name}}",
+      "toggleActive": "Actif : {{name}}",
+      "makeDefault": "Définir par défaut",
+      "makeDefaultFor": "Définir {{name}} par défaut",
+      "edit": "Modifier {{name}}",
+      "delete": "Supprimer {{name}}"
+    },
+    "emptyState": "Aucun type de produit de données pour l'instant. Cliquez sur « Ajouter un type » pour en créer un.",
+    "defaultCannotBeInactive": "Le type par défaut ne peut pas être désactivé. Définissez d'abord un autre type par défaut.",
+    "dialog": {
+      "editTitle": "Modifier le type de produit de données",
+      "createTitle": "Ajouter un type de produit de données",
+      "editDescription": "Modifiez l'affichage de ce type. La clé ne change pas.",
+      "createDescription": "Créez un type que les producteurs pourront choisir pour leurs produits de données."
+    },
+    "form": {
+      "label": "Libellé",
+      "labelPlaceholder": "p. ex. Golden Record",
+      "seededLabelHint": "Les types intégrés s'affichent traduits tant que vous ne modifiez pas le libellé.",
+      "key": "Clé",
+      "keyHint": "Mots en minuscules reliés par des tirets, p. ex. golden-record. Elle ne peut pas être modifiée ensuite et sert de valeur dans les fichiers ODPS.",
+      "keyImmutable": "La clé ne peut pas être modifiée.",
+      "color": "Couleur"
+    },
+    "delete": {
+      "title": "Supprimer le type de produit de données ?",
+      "description": "Voulez-vous vraiment supprimer « {{name}} » ? Cette action est irréversible."
+    },
+    "deleteBlocked": {
+      "seeded": "Les types intégrés ne peuvent pas être supprimés. Désactivez-le plutôt.",
+      "inUse_one": "Utilisé par {{count}} produit de données. Désactivez-le plutôt.",
+      "inUse_other": "Utilisé par {{count}} produits de données. Désactivez-le plutôt."
+    },
+    "messages": {
+      "updated": "Type de produit de données « {{name}} » mis à jour.",
+      "created": "Type de produit de données « {{name}} » créé.",
+      "deleted": "Type de produit de données « {{name}} » supprimé.",
+      "reorderFailed": "Échec de la réorganisation"
+    },
+    "errors": {
+      "data_product_type_not_found": "Ce type de produit de données n'existe plus.",
+      "data_product_type_key_exists": "Un type de produit de données avec la clé « {{key}} » existe déjà.",
+      "data_product_type_in_use_one": "« {{key}} » est utilisé par {{count}} produit de données. Désactivez-le au lieu de le supprimer.",
+      "data_product_type_in_use_other": "« {{key}} » est utilisé par {{count}} produits de données. Désactivez-le au lieu de le supprimer.",
+      "data_product_type_seeded": "« {{key}} » est un type intégré et ne peut pas être supprimé. Désactivez-le plutôt.",
+      "data_product_type_default_inactive": "« {{key}} » ne peut pas être à la fois par défaut et inactif. Définissez d'abord un autre type par défaut."
+    }
   },
   "certificationLevels": {
     "title": "Niveaux de certification",

@@ -147,9 +147,8 @@ const LineageEntityCard = memo(({ id, data }: NodeProps<GroupCardData>) => {
             const depth = childDepths?.[index] ?? 0;
             const indentPx = depth * 16; // 16px per nesting level
 
-            // Y position of this row's center relative to node top
-            const systemBarH = system ? 20 : 0;
-            const rowCenterY = headerH + systemBarH + (index * rowH) + (rowH / 2);
+            // Row handles sit inside the (relative) row, so centre them on it;
+            // an offset from the node top would count the rows above twice
             const rowDimmed = !!highlight && !highlight.has(child.id);
             const rowSelected = selectedId === child.id;
 
@@ -180,7 +179,7 @@ const LineageEntityCard = memo(({ id, data }: NodeProps<GroupCardData>) => {
                   position={Position.Left}
                   id={`child-${index}`}
                   className="!w-2 !h-2 !rounded-full !border !border-border !-left-[5px]"
-                  style={{ background: childHex, top: rowCenterY }}
+                  style={{ background: childHex, top: '50%' }}
                 />
 
                 <ChildIcon
@@ -200,7 +199,7 @@ const LineageEntityCard = memo(({ id, data }: NodeProps<GroupCardData>) => {
                   position={Position.Right}
                   id={`child-${index}`}
                   className="!w-2 !h-2 !rounded-full !border !border-border !-right-[5px]"
-                  style={{ background: childHex, top: rowCenterY }}
+                  style={{ background: childHex, top: '50%' }}
                 />
               </div>
             );

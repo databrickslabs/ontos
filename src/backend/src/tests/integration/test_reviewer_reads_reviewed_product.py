@@ -13,6 +13,9 @@ import uuid
 
 import pytest
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 PRODUCER = ('producer@example.com', ['data-producers'])
 # Data Producer too (data-products read/write), but doesn't own the product
 OTHER_PRODUCER = ('other.producer@example.com', ['data-producers'])

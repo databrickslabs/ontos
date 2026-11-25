@@ -1,7 +1,10 @@
+import posixpath
+import re
 import urllib.parse
+from io import BytesIO
 from typing import List, Optional, Dict, Any, Tuple
 from collections.abc import Callable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
@@ -35,6 +38,8 @@ logger = get_logger(__name__)
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"
 _PENDING_FILES_LISTENING = "ontos_pending_document_files_listening"
+# Name of the directory each uploaded file gets of its own: <base_dir>/<uuid hex>/<filename> (#1691).
+_UPLOAD_DIR_NAME = re.compile(r"[0-9a-f]{32}")
 # Session.info keys of the imported documents to drop from search once it commits.
 _PENDING_UNINDEX_KEY = "ontos_pending_document_unindex"
 _PENDING_UNINDEX_LISTENING = "ontos_pending_document_unindex_listening"
@@ -266,6 +271,26 @@ class MetadataManager(SearchableAsset):
         return False
 
     # --- Document ---
+    def store_document_file(
+        self, ws: WorkspaceClient, *, volume_fs_base: str, base_dir: str, filename: str,
+        content: bytes,
+    ) -> str:
+        """Write an uploaded file to a directory of its own; returns its volume path.
+
+        ``ws.files.upload`` overwrites by default, so two documents with the same
+        file name in one ``base_dir`` used to share one file (#1691). Each file
+        now goes to ``<base_dir>/<uuid>/<filename>``, and ``overwrite=False``
+        makes a reused path fail instead of replacing another document's file.
+        """
+        upload_dir = f"{volume_fs_base}/{base_dir}/{uuid4().hex}"
+        try:
+            ws.files.create_directory(upload_dir)
+        except Exception:
+            logger.debug("Could not create %s before the upload", upload_dir, exc_info=True)
+        dest_path = f"{upload_dir}/{filename}"
+        ws.files.upload(dest_path, BytesIO(content), overwrite=False)
+        return dest_path
+
     def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
         # DocumentCreate has base fields; other metadata supplied by upload logic
         db_obj = self._add_document_row(
@@ -307,19 +332,30 @@ class MetadataManager(SearchableAsset):
         if not db_obj:
             return False
         entity_type, entity_id = db_obj.entity_type, db_obj.entity_id
-        source_path = db_obj.source_path
+        source_path, storage_path = db_obj.source_path, db_obj.storage_path
         removed = self._document_repo.remove(db, id=id)
         if removed:
             imported = source_path is not None
             if imported:
                 self._document_repo.remove_unreferenced_imported_files(
                     db, source_paths=[source_path])
+            elif storage_path and not self._storage_path_in_use(db, storage_path):
+                # An upload's file goes with its document. Documents uploaded
+                # before #1691 may share one file; it stays while another uses it.
+                self.delete_document_files_after_commit(db, [storage_path])
             db.commit()
             if imported:
                 self.remove_document_from_index(id)
             self._log_change(db, entity_type=f"{entity_type}:document", entity_id=entity_id, action="DELETE", username=user_email)
             return True
         return False
+
+    @staticmethod
+    def _storage_path_in_use(db: Session, storage_path: str) -> bool:
+        """Whether a document row still points to the uploaded file at ``storage_path``."""
+        return db.query(DocumentMetadataDb.id).filter(
+            DocumentMetadataDb.storage_path == storage_path,
+        ).first() is not None
 
     def get_row_owner(self, db: Session, *, kind: str, id: str) -> Optional[Tuple[str, str]]:
         """``(entity_type, entity_id)`` of a note, link or document, from the stored row.
@@ -511,8 +547,10 @@ class MetadataManager(SearchableAsset):
         """Delete document files from the volume, best effort: a failure is logged, not raised.
 
         Without ``ws``, the app's workspace client is used. Returns (deleted, failed).
+        A path listed twice is deleted once: documents uploaded before #1691 may
+        share one file.
         """
-        paths = [path for path in paths if path]
+        paths = list(dict.fromkeys(path for path in paths if path))
         if paths and ws is None:
             try:
                 ws = get_workspace_client()
@@ -529,7 +567,24 @@ class MetadataManager(SearchableAsset):
                 logger.warning("Failed to delete document file %s from the volume", path,
                                exc_info=True)
                 failed += 1
+                continue
+            self._remove_upload_dir(ws, path)
         return deleted, failed
+
+    @staticmethod
+    def _remove_upload_dir(ws: WorkspaceClient, path: str) -> None:
+        """Remove the directory of its own a deleted file was uploaded to, best effort.
+
+        Only ``<base_dir>/<uuid>/`` directories (``store_document_file``) are
+        removed; the Files API removes only empty directories in any case.
+        """
+        upload_dir = posixpath.dirname(path)
+        if not _UPLOAD_DIR_NAME.fullmatch(posixpath.basename(upload_dir)):
+            return
+        try:
+            ws.files.delete_directory(upload_dir)
+        except Exception:
+            logger.debug("Could not remove the upload directory %s", upload_dir, exc_info=True)
 
     def delete_document_files_after_commit(
         self, db: Session, paths: List[str], ws: Optional[WorkspaceClient] = None,

@@ -1,7 +1,7 @@
 """add data_product_types table and data_products.product_type_id
 
 Revision ID: b11_data_product_types
-Revises: o3_canonical_cost_centers
+Revises: o4_shared_library_documents
 Create Date: 2026-10-26 12:00:00.000000
 
 """
@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 # revision identifiers, used by Alembic.
 revision: str = "b11_data_product_types"
-down_revision: str | None = "o3_canonical_cost_centers"
+down_revision: str | None = "o4_shared_library_documents"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

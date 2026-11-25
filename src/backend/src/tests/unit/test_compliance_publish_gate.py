@@ -23,6 +23,11 @@ def mock_product_db():
     product.id = "prod-123"
     product.name = "Test Product"
     product.output_ports = []
+    # A product without a lifecycle group: a bare MagicMock attribute is truthy and
+    # would be looked up as a stored group id, which the lifecycle service rejects.
+    product.lifecycle_stage_group_id = None
+    # Publish goes approved -> active; the lifecycle check reads a real status string.
+    product.status = "approved"
     return product
 
 

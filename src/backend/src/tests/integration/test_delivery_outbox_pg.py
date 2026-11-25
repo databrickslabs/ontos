@@ -131,6 +131,32 @@ def test_a_row_another_session_holds_is_skipped(database):
         other.close()
 
 
+def test_redeliver_leaves_a_row_an_attempt_holds_untouched(database, monkeypatch):
+    from src.controller import delivery_outbox_manager as outbox
+
+    _, sessions = database
+    row_id = _rows(sessions, 1)[0]
+    monkeypatch.setattr(outbox, '_delivery_service', lambda: _SlowService())
+    holder, request = sessions(), sessions()
+    try:
+        row = delivery_outbox_repo.claim(holder, row_id)  # an attempt under way
+        row.attempts = 3  # its outcome, not yet committed
+        entity_id = row.entity_id
+        started = time.monotonic()
+
+        queued = outbox.delivery_outbox_manager.redeliver(
+            request, 'DataProduct', entity_id, user='admin')
+
+        assert time.monotonic() - started < 5  # didn't wait for the attempt
+        assert (queued.row_ids, queued.in_progress) == ([], [row_id])
+        holder.commit()
+        holder.expire_all()
+        assert delivery_outbox_repo.get(holder, row_id).attempts == 3  # not reset
+    finally:
+        holder.close()
+        request.close()
+
+
 def test_two_instances_deliver_each_row_once(database, monkeypatch):
     schema, sessions = database
     row_ids = _rows(sessions, 8)

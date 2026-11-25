@@ -62,6 +62,7 @@ ERROR_RETRY_CAP = timedelta(hours=1)
 NOT_APPLICABLE = 'delivery_not_applicable'
 MODE_INACTIVE = 'delivery_mode_inactive'
 PENDING_CODE = 'delivery_pending'
+IN_PROGRESS_CODE = 'delivery_in_progress'
 
 
 class DeliveryEntityTypeUnsupportedError(CodedValueError):
@@ -333,6 +334,15 @@ def deliver_after_commit(
 
 # --- Settings > Delivery Modes ---------------------------------------------------------
 
+@dataclass(frozen=True)
+class Redelivery:
+    """What ``redeliver`` queued: the rows to try, and the open rows another session
+    holds (an attempt under way), which it left alone."""
+
+    row_ids: List[str]
+    in_progress: List[str]
+
+
 class DeliveryOutboxManager:
     """The outbox rows an admin sees on Settings > Delivery Modes, and re-delivery."""
 
@@ -362,11 +372,12 @@ class DeliveryOutboxManager:
     def redeliver(
         self, db: Session, entity_type: str, entity_id: str, user: Optional[str],
         now: Optional[datetime] = None,
-    ) -> List[str]:
+    ) -> Redelivery:
         """Queue the entity again and commit; the ids of the rows to try.
 
         Its open rows (pending or failed) start over; without one, a row per active
-        mode is added for its current state.
+        mode is added for its current state. A row another session holds (an attempt
+        under way) is left alone and reported in ``in_progress``.
         """
         kind = ENTITY_KINDS.get(entity_type)
         if kind is None:
@@ -379,17 +390,21 @@ class DeliveryOutboxManager:
         if not _active_modes(_delivery_service()):
             raise DeliveryNoActiveModeError("No delivery mode is active")
         now = _utc(now) or _now()
-        rows = delivery_outbox_repo.for_entity(db, entity_type, entity_id)
+        rows = delivery_outbox_repo.for_entity(db, entity_type, entity_id, lock=True)
+        held = {row.id for row in delivery_outbox_repo.for_entity(db, entity_type, entity_id)}
+        held -= {row.id for row in rows}
         for row in rows:
             row.status, row.attempts, row.code, row.params = PENDING, 0, None, None
             row.next_attempt_at, row.delivered_at = now + FIRST_ATTEMPT_GRACE, None
             row.queued_by, row.updated_at = user, now
-        ids = [row.id for row in rows] or queue(
-            db, entity_type=entity_type, entity_id=entity_id,
-            change_type=kind.redeliver_change, user=user, now=now,
-        )
+        ids = [row.id for row in rows]
+        if not ids and not held:
+            ids = queue(
+                db, entity_type=entity_type, entity_id=entity_id,
+                change_type=kind.redeliver_change, user=user, now=now,
+            )
         db.commit()
-        return ids
+        return Redelivery(ids, sorted(held))
 
     def rows_of(self, db: Session, row_ids: Iterable[str]) -> List[DeliveryOutboxDb]:
         return delivery_outbox_repo.by_ids(db, row_ids)
@@ -487,20 +502,44 @@ class DeliveryOutboxWorker:
         tried = 0
         while tried < MAX_ROWS_PER_PASS:
             db = session_factory()
+            row_id = None
             try:
                 row = delivery_outbox_repo.claim_next_due(db, now)
                 if row is None:
                     db.rollback()
                     return tried, False
+                row_id = row.id
                 _deliver_claimed(db, row, now)
                 db.commit()
                 tried += 1
-            except Exception:
+            except Exception as e:
                 db.rollback()
-                raise
+                if row_id is None:
+                    raise
+                # One bad row (the entity load, the outcome, the commit) must not stall
+                # the rows behind it: count it as a failed attempt and go on.
+                logger.error("Delivery of outbox row %s broke before an outcome (%s)",
+                             row_id, type(e).__name__, exc_info=True)
+                DeliveryOutboxWorker._fail_row(session_factory, row_id, now)
+                tried += 1
             finally:
                 db.close()
         return tried, True
+
+    @staticmethod
+    def _fail_row(session_factory: Callable[[], Session], row_id: str, now: datetime) -> None:
+        """Record a failed attempt of a row in a session and transaction of its own."""
+        db = session_factory()
+        try:
+            delivery_outbox_repo.fail_attempt(
+                db, row_id, now=now, code='delivery_failed', max_attempts=MAX_ATTEMPTS,
+                retry_after=retry_delay)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     @staticmethod
     def _read_next_due(session_factory: Callable[[], Session]) -> Optional[datetime]:

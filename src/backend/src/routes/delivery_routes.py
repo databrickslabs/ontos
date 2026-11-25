@@ -16,6 +16,7 @@ from src.controller.delivery_outbox_manager import (
     delivery_outbox_manager,
 )
 from src.models.delivery_outbox import DeliveryOutboxList, RedeliverResult
+from src.models.import_results import ImportDeliveryResult
 
 logger = get_logger(__name__)
 
@@ -63,13 +64,18 @@ def redeliver_entity(
     success = False
     details = {"entity_type": entity_type, "entity_id": entity_id}
     try:
-        row_ids = delivery_outbox_manager.redeliver(
+        queued = delivery_outbox_manager.redeliver(
             db, entity_type, entity_id, user=current_user.username)
         bind = db.get_bind()
-        rows = outbox.attempt_all(lambda: Session(bind=bind, expire_on_commit=False), row_ids)
+        rows = outbox.attempt_all(
+            lambda: Session(bind=bind, expire_on_commit=False), queued.row_ids)
+        delivery = outbox.outcome_of(rows)
+        if delivery is None and queued.in_progress:
+            # Every open row is being delivered right now: nothing to start
+            delivery = ImportDeliveryResult(status='pending', code=outbox.IN_PROGRESS_CODE)
         result = RedeliverResult(
-            entity_type=entity_type, entity_id=entity_id,
-            delivery=outbox.outcome_of(rows), rows=rows,
+            entity_type=entity_type, entity_id=entity_id, delivery=delivery, rows=rows,
+            in_progress_row_ids=queued.in_progress,
         )
         success = True
         details["delivery"] = result.delivery.status if result.delivery else None

@@ -268,6 +268,68 @@ class TestAttempts:
         assert _rows(sessions)[0].status == 'delivered'
 
 
+class TestPoisonRow:
+    def _due_rows(self, manager, sessions, service, *names):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        _import(manager, *names)
+        service.failing = {}
+        return [r.id for r in _rows(sessions)]
+
+    def test_a_row_that_breaks_the_pass_is_a_failed_attempt_and_the_next_one_is_delivered(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        poison, good = self._due_rows(manager, sessions, service, 'P A', 'P B')
+        real = outbox._deliver_claimed
+
+        def deliver(db, row, now):
+            if row.id == poison:
+                raise RuntimeError('secret-payload-contents')
+            return real(db, row, now)
+
+        monkeypatch.setattr(outbox, '_deliver_claimed', deliver)
+        later = _now() + timedelta(minutes=2)
+
+        tried = DeliveryOutboxWorker().run(sessions, later)
+
+        assert tried == 2
+        bad, ok = _row(sessions, poison), _row(sessions, good)
+        assert (bad.status, bad.attempts, bad.code) == ('pending', 2, 'delivery_failed')
+        assert _utc(bad.next_attempt_at) > later  # backed off: it is no longer first
+        assert ok.status == 'delivered'
+
+    def test_a_row_that_keeps_breaking_ends_failed(self, manager, sessions, service,
+                                                    monkeypatch):
+        (poison,) = self._due_rows(manager, sessions, service, 'P A')
+        monkeypatch.setattr(outbox, '_deliver_claimed',
+                            lambda db, row, now: (_ for _ in ()).throw(ValueError('x')))
+        worker, now = DeliveryOutboxWorker(), _now() + timedelta(minutes=2)
+
+        for _ in range(MAX_ATTEMPTS):
+            worker.run(sessions, now)
+            now += timedelta(hours=7)
+
+        row = _row(sessions, poison)
+        assert (row.status, row.attempts, row.next_attempt_at) == (
+            'failed', MAX_ATTEMPTS, None)
+
+    def test_a_failing_commit_is_handled_too(self, manager, sessions, service, monkeypatch):
+        poison, good = self._due_rows(manager, sessions, service, 'P A', 'P B')
+        real = outbox._deliver_claimed
+
+        def deliver(db, row, now):
+            real(db, row, now)
+            if row.id == poison:
+                row.params = {'bad': object()}  # not JSON-serializable: the flush raises
+                db.flush()
+
+        monkeypatch.setattr(outbox, '_deliver_claimed', deliver)
+
+        DeliveryOutboxWorker().run(sessions, _now() + timedelta(minutes=2))
+
+        assert _row(sessions, poison).code == 'delivery_failed'
+        assert _row(sessions, good).status == 'delivered'
+
+
 class TestOutcome:
     def _row(self, status, mode='indirect', code=None, attempts=1, params=None):
         return DeliveryOutboxDb(status=status, mode=mode, code=code, attempts=attempts,
@@ -297,7 +359,8 @@ class TestRedeliver:
         service.failing = {}
         db = sessions()
 
-        ids = delivery_outbox_manager.redeliver(db, 'DataProduct', product_id, user='admin')
+        queued = delivery_outbox_manager.redeliver(db, 'DataProduct', product_id, user='admin')
+        ids = queued.row_ids
         rows = outbox.attempt_all(sessions, ids)
 
         assert ids == [row_id]
@@ -310,11 +373,38 @@ class TestRedeliver:
         service.modes = ['indirect', 'manual']
         db = sessions()
 
-        ids = delivery_outbox_manager.redeliver(db, 'DataProduct', product_id, user='admin')
+        ids = delivery_outbox_manager.redeliver(
+            db, 'DataProduct', product_id, user='admin').row_ids
 
         rows = delivery_outbox_repo.by_ids(sessions(), ids)
         assert [(row.mode, row.change_type, row.status) for row in rows] == [
             ('indirect', 'product_update', 'pending'), ('manual', 'product_update', 'pending')]
+
+    def test_a_row_another_session_holds_is_left_alone_and_reported(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        """The rows are read with a lock that skips the held ones (SQLite has no row locks:
+        the Postgres race is in test_delivery_outbox_pg.py); the held one isn't reset."""
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        product_id = _import(manager, 'P A').created_ids[0]
+        row = _rows(sessions)[0]
+        held = row.id
+        real = delivery_outbox_repo.for_entity
+
+        def for_entity(db, entity_type, entity_id, statuses=outbox.OPEN_STATUSES, lock=False):
+            found = real(db, entity_type, entity_id, statuses)
+            return [r for r in found if r.id != held] if lock else found
+
+        monkeypatch.setattr(delivery_outbox_repo, 'for_entity', for_entity)
+
+        queued = delivery_outbox_manager.redeliver(sessions(), 'DataProduct', product_id,
+                                                   user='admin')
+
+        assert (queued.row_ids, queued.in_progress) == ([], [held])
+        untouched = _row(sessions, held)
+        assert (untouched.status, untouched.attempts, untouched.code) == (
+            'pending', 1, 'delivery_git_unavailable')
+        assert len(_rows(sessions)) == 1  # no second row for the held one's mode
 
     def test_refusals(self, manager, sessions, service):
         product_id = _import(manager, 'P A').created_ids[0]

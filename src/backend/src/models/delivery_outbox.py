@@ -46,3 +46,6 @@ class RedeliverResult(BaseModel):
     entity_id: str
     delivery: Optional[ImportDeliveryResult] = None
     rows: List[DeliveryOutboxRow] = Field(default_factory=list)
+    in_progress_row_ids: List[str] = Field(
+        default_factory=list,
+        description="Open rows left alone: another delivery attempt holds them")

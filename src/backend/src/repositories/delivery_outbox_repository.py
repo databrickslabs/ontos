@@ -66,13 +66,37 @@ class DeliveryOutboxRepository:
 
     def for_entity(
         self, db: Session, entity_type: str, entity_id: str,
-        statuses: Iterable[str] = OPEN_STATUSES,
+        statuses: Iterable[str] = OPEN_STATUSES, lock: bool = False,
     ) -> List[DeliveryOutboxDb]:
-        return db.query(DeliveryOutboxDb).filter(
+        """The entity's rows with one of ``statuses``. With ``lock`` they are locked
+        (``FOR UPDATE SKIP LOCKED`` on Postgres): the rows another session holds are left out."""
+        query = db.query(DeliveryOutboxDb).filter(
             DeliveryOutboxDb.entity_type == entity_type,
             DeliveryOutboxDb.entity_id == entity_id,
             DeliveryOutboxDb.status.in_(list(statuses)),
-        ).order_by(DeliveryOutboxDb.created_at, DeliveryOutboxDb.id).all()
+        ).order_by(DeliveryOutboxDb.created_at, DeliveryOutboxDb.id)
+        if lock:
+            query = query.with_for_update(skip_locked=True)
+        return query.all()
+
+    def fail_attempt(
+        self, db: Session, row_id: str, *, now: datetime, code: str, max_attempts: int,
+        retry_after: Any,
+    ) -> bool:
+        """Count a failed attempt on a row whose delivery broke before an outcome was
+        recorded: pending again after ``retry_after(attempts)``, or failed at
+        ``max_attempts``. False when the row is gone, no longer pending or held elsewhere."""
+        row = self.claim(db, row_id)
+        if row is None:
+            return False
+        attempts = (row.attempts or 0) + 1
+        if attempts >= max_attempts:
+            status, next_attempt = FAILED, None
+        else:
+            status, next_attempt = PENDING, now + retry_after(attempts)
+        self.record(row, status=status, now=now, code=code, params={'mode': row.mode},
+                    next_attempt_at=next_attempt)
+        return True
 
     def by_ids(self, db: Session, row_ids: Iterable[str]) -> List[DeliveryOutboxDb]:
         ids = list(row_ids)

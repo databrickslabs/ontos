@@ -38,6 +38,8 @@ export interface RedeliverResult {
   entity_id: string;
   delivery?: ImportDeliveryResult | null;
   rows: DeliveryOutboxRow[];
+  /** Open rows left alone: another delivery attempt holds them. */
+  in_progress_row_ids?: string[];
 }
 
 /** Where an entity of the outbox is shown in the app, if it has a page. */

@@ -105,3 +105,16 @@ def test_run_now_starts_the_job_for_this_sync(client: TestClient, connection, jo
 
 def test_unknown_sync_is_404(client: TestClient, jobs):
     assert client.post(f"/api/connector-syncs/{uuid4()}/run").status_code == 404
+
+
+@pytest.mark.parametrize("connector_type", ["databricks", "bigquery"])
+def test_only_tableau_connections_can_be_synced(client: TestClient, db_session, jobs, connector_type):
+    conn = ConnectionDb(id=uuid4(), name=f"{connector_type}-{uuid4().hex[:6]}", connector_type=connector_type, config={})
+    db_session.add(conn)
+    db_session.flush()
+
+    response = _create(client, conn)
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"]["code"] == "connector_sync_unsupported"
+    assert jobs.installed == []

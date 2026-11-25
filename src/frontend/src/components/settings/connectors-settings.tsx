@@ -189,9 +189,11 @@ export default function ConnectorsSettings() {
                 <DropdownMenuItem onClick={() => handleTest(conn.id)}>
                   {t('settings:connectors.testConnection', 'Test Connection')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSyncsConnection(conn); }}>
-                  {t('settings:connectors.syncs.menu')}
-                </DropdownMenuItem>
+                {conn.connector_type === 'tableau' && (
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSyncsConnection(conn); }}>
+                    {t('settings:connectors.syncs.menu')}
+                  </DropdownMenuItem>
+                )}
                 {!isSystem(conn) && (
                   <>
                     <DropdownMenuSeparator />

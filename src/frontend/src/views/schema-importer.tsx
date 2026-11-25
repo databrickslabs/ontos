@@ -279,6 +279,7 @@ export default function SchemaImporterView() {
           open={isPreviewOpen}
           onOpenChange={setIsPreviewOpen}
           connectionId={selectedConnectionId}
+          connectorType={selectedConnection?.connector_type}
           selectedPaths={Array.from(selectedPaths)}
           depth={importDepth}
         />

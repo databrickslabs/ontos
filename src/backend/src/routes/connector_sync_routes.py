@@ -33,6 +33,7 @@ router = APIRouter(prefix="/api/connector-syncs", tags=["Connector Syncs"])
 FEATURE_ID = "schema-importer"
 WORKFLOW_ID = "connector_sync"
 JOB_NAME = "Connector Sync"
+CONNECTOR_SYNC_UNSUPPORTED = "connector_sync_unsupported"
 
 
 def _read(sync: ConnectorSyncDb, job_warning: Optional[str] = None) -> ConnectorSyncRead:
@@ -71,6 +72,21 @@ def _job_warning(request: Request, db) -> Optional[str]:
         logger.warning(f"Could not install or start the {WORKFLOW_ID} job: {exc}", exc_info=True)
         return ("The sync was saved, but its scheduled job could not be installed or started. "
                 "An administrator can enable the 'Connector Sync' workflow in Settings → Jobs.")
+
+
+def _require_tableau_connection(connection: ConnectionDb) -> None:
+    """Only Tableau connections can be synced for now.
+
+    The job reads the source as the app's service principal. The Tableau check (the
+    caller must read the secret) is the only one that covers that, so other types wait
+    for their own check before they can be synced.
+    """
+    if connection.connector_type != "tableau":
+        raise HTTPException(status_code=400, detail={
+            "code": CONNECTOR_SYNC_UNSUPPORTED,
+            "message": "Syncs are available for Tableau connections only",
+            "params": {"connector_type": connection.connector_type},
+        })
 
 
 def _require_secret_access(request: Request, connection: ConnectionDb) -> None:
@@ -122,6 +138,7 @@ def create_sync(
     connection = db.get(ConnectionDb, payload.connection_id)
     if connection is None:
         raise HTTPException(status_code=404, detail="Connection not found")
+    _require_tableau_connection(connection)
     _require_secret_access(request, connection)
     sync = connector_sync_manager.create(
         db, name=payload.name, connection_id=payload.connection_id,
@@ -162,6 +179,7 @@ def update_sync(
         # Widening what a sync imports is an import: the caller must be able to read the source
         connection = db.get(ConnectionDb, sync.connection_id)
         if connection is not None:
+            _require_tableau_connection(connection)
             _require_secret_access(request, connection)
         changes["request"] = {**(sync.request or {}), **selection}
     was_enabled = sync.enabled
@@ -199,6 +217,7 @@ def run_sync_now(
     sync = _get(db, sync_id)
     connection = db.get(ConnectionDb, sync.connection_id)
     if connection is not None:
+        _require_tableau_connection(connection)
         _require_secret_access(request, connection)
     try:
         job_id = _ensure_job(request, db)

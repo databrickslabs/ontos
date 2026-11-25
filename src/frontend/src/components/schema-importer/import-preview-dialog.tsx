@@ -143,6 +143,8 @@ interface ImportPreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connectionId?: string;
+  // The connection's type: only Tableau connections can be kept in sync
+  connectorType?: string;
   selectedPaths?: string[];
   depth?: ImportDepth;
   // Result-only mode: when provided, the dialog opens straight into the result
@@ -155,6 +157,7 @@ export default function ImportPreviewDialog({
   open,
   onOpenChange,
   connectionId = '',
+  connectorType,
   selectedPaths = [],
   depth = 'full_recursive',
   initialResult = null,
@@ -712,7 +715,7 @@ export default function ImportPreviewDialog({
           <DialogFooter>
             {importResult ? (
               <div className="flex w-full flex-col gap-3">
-                {!initialResult && importResult.errors === 0 && (
+                {!initialResult && importResult.errors === 0 && connectorType === 'tableau' && (
                   <KeepInSyncPanel
                     connectionId={connectionId}
                     selectedPaths={selectedPaths}

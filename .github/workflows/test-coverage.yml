@@ -143,8 +143,8 @@ jobs:
             --coverage.thresholds.branches=0 \
             --coverage.thresholds.statements=0 \
             --shard=${{ matrix.shard }}/3 \
-            --reporter=blob \
-            --outputFile=blob-reports/blob-${{ matrix.shard }}.json
+            --reporter=default --reporter=blob \
+            --outputFile.blob=blob-reports/blob-${{ matrix.shard }}.json
 
       - name: Upload blob report
         if: always()

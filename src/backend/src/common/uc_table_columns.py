@@ -2,9 +2,9 @@
 
 Pure helper: it reads only what ``tables.list`` already returns on a ``TableInfo``
 (``columns`` with ``name``, ``type_text``/``type_name``, ``comment`` and
-``partition_index``) and ``table_constraints``, so it makes no API call. The compliance loader uses it for
-``MATCH (t:table)`` / ``MATCH (v:view)``; other entity dicts that point to a UC
-table can reuse it with the same object.
+``partition_index``) and ``table_constraints``, so it makes no API call. The
+compliance loader uses it for ``MATCH (t:table)`` / ``MATCH (v:view)``; other
+entity dicts that point to a UC table can reuse it with the same object.
 """
 
 from typing import Any, Dict, List, Optional

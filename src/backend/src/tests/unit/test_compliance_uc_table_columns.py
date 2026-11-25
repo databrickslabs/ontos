@@ -59,6 +59,10 @@ def test_no_columns_gives_zero_counts_and_no_ratio(columns):
         'column_comment_ratio': None,
         'partition_column_count': 0,
         'partition_columns_without_comment_count': 0,
+        'primary_key_columns': [],
+        'foreign_key_columns': [],
+        'primary_key_columns_without_comment_count': 0,
+        'foreign_key_columns_without_comment_count': 0,
     }
 
 
@@ -176,7 +180,7 @@ def test_loader_adds_column_fields_to_tables_and_views():
     assert by_name['v_orders']['columns_without_comment_count'] == 0
     assert by_name['mv_orders']['type'] == 'view'
     assert by_name['mv_orders']['columns_without_comment_count'] == 1
-    assert 'primary_key_columns' not in by_name['orders']
+    assert by_name['orders']['primary_key_columns'] == []
     assert all('tags' not in c for e in entities for c in e['columns'])
 
 

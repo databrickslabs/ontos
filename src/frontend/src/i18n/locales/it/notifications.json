@@ -9,6 +9,14 @@
     "refused": "La tua richiesta di cambiare lo stato in «{{toStatus}}» è stata approvata, ma non è stato possibile applicare la modifica: {{reason}}",
     "reviewNotApplied": "La revisione del prodotto dati è stata decisa, ma il passaggio a «{{toStatus}}» non è stato applicato: {{reason}}"
   },
+  "approvalOverdue": {
+    "approverTitle": "Approvazione scaduta",
+    "approverDescription_one": "L'approvazione di '{{name}}' è in attesa da più di {{count}} giorno. Decidila in Le mie azioni.",
+    "approverDescription_other": "L'approvazione di '{{name}}' è in attesa da più di {{count}} giorni. Decidila in Le mie azioni.",
+    "requesterTitle": "La tua richiesta è ancora in attesa",
+    "requesterDescription_one": "La tua richiesta per '{{name}}' attende una decisione da più di {{count}} giorno. Gli approvatori sono stati sollecitati.",
+    "requesterDescription_other": "La tua richiesta per '{{name}}' attende una decisione da più di {{count}} giorni. Gli approvatori sono stati sollecitati."
+  },
   "contractStatusNotChanged": {
     "title": "Stato del contratto non modificato",
     "notUnderReview": "La tua decisione di revisione è stata registrata, ma il contratto non è stato impostato su «{{toStatus}}»: il contratto non è in revisione (stato «{{currentStatus}}»)",

@@ -88,7 +88,10 @@ def _create_global_comment(db_session, groups, role_level):
     request.app.state.settings_manager.get_applied_role_override_for_user.return_value = None
     payload = CommentCreate(entity_type='data_product', entity_id='p-1', comment='Hello')
     settings = SimpleNamespace(APP_ADMIN_DEFAULT_GROUPS='["admins"]')
+    # No team roles: the permission resolution reads lookup_user_team_roles, the
+    # comment audience reads get_user_team_role_overrides.
     with patch.object(authorization, 'get_settings', return_value=settings), \
+            patch.object(authorization, 'lookup_user_team_roles', return_value=[]), \
             patch.object(authorization, 'get_user_team_role_overrides',
                          new=AsyncMock(return_value=None)):
         return asyncio.run(comments_routes.create_comment(

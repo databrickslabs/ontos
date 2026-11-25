@@ -9,6 +9,7 @@ import gc
 import weakref
 
 from src.app import app
+from src.common.app_state import set_app_state_manager
 from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 from src.utils import startup_tasks
 
@@ -22,6 +23,7 @@ def test_starting_the_managers_again_frees_the_previous_ones(client):
 
     startup_tasks.initialize_managers(app)  # the client fixture puts app.state back afterwards
     app.state.search_manager = None  # the fixture's index still lists the previous managers
+    set_app_state_manager('search_manager', None)  # and so does its app_state entry
     gc.collect()
 
     assert previous() is None

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,8 +31,10 @@ import {
   ListViewSkeleton,
   StatCardsSkeleton,
 } from '@/components/common/list-view-skeleton';
+import { complianceRunScoreText, complianceScoreColor } from '@/lib/compliance-run-warning';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { LlmCheckTester } from '@/components/compliance/llm-check-tester';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -40,7 +42,7 @@ interface CompliancePolicy {
   description: string;
   failure_message?: string;  // Human-readable message shown when policy fails
   rule: string;
-  compliance: number;
+  compliance: number | null; // null: no recent run has a score
   history: number[];
   created_at: string;
   updated_at: string;
@@ -51,7 +53,7 @@ interface CompliancePolicy {
 }
 
 interface ComplianceStats {
-  overall_compliance: number;
+  overall_compliance: number | null; // null: no policy has a score
   active_policies: number;
   critical_issues: number;
 }
@@ -78,6 +80,7 @@ export default function Compliance() {
   const [selectedPolicy, setSelectedPolicy] = useState<CompliancePolicy | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [componentError, setComponentError] = useState<string | null>(null);
+  const ruleRef = useRef<HTMLTextAreaElement>(null);
 
   const loadPolicies = useCallback(async () => {
     setComponentError(null);
@@ -227,11 +230,6 @@ export default function Compliance() {
     setIsDialogOpen(true);
   };
 
-  const getComplianceColor = (score: number) => {
-    if (score >= 90) return 'text-green-600 dark:text-green-400';
-    if (score >= 70) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-red-600 dark:text-red-400';
-  };
 
   const getSeverityBadge = (severity: string) => {
     const variants = {
@@ -271,8 +269,8 @@ export default function Compliance() {
       accessorKey: "compliance",
       header: t('common:labels.compliance'),
       cell: ({ row }) => (
-        <div className={`font-semibold ${getComplianceColor(row.getValue("compliance"))}`}>
-          {row.getValue("compliance")}%
+        <div className={`font-semibold ${complianceScoreColor(row.original.compliance)}`}>
+          {complianceRunScoreText(t, { score: row.original.compliance })}
         </div>
       ),
     },
@@ -352,8 +350,10 @@ export default function Compliance() {
                 <CardTitle className="text-lg">{t('compliance:stats.overallCompliance')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-3xl font-bold ${getComplianceColor(overallCompliance)}`}>
-                  {overallCompliance.toFixed(0)}%
+                <div className={`text-3xl font-bold ${complianceScoreColor(overallCompliance)}`}>
+                  {complianceRunScoreText(t, {
+                    score: overallCompliance === null ? null : Math.round(overallCompliance),
+                  })}
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">{t('compliance:stats.acrossAllRules')}</p>
               </CardContent>
@@ -452,6 +452,7 @@ export default function Compliance() {
                   <Label htmlFor="rule">{t('compliance:form.ruleCode')}</Label>
                   <Textarea
                     id="rule"
+                    ref={ruleRef}
                     defaultValue={selectedPolicy?.rule}
                     className="font-mono text-sm"
                     rows={8}
@@ -459,6 +460,7 @@ export default function Compliance() {
                     placeholder={t('compliance:form.rulePlaceholder')}
                   />
                 </div>
+                <LlmCheckTester getRule={() => ruleRef.current?.value ?? ''} />
                 <div className="space-y-2">
                   <Label htmlFor="failure_message">{t('compliance:form.failureMessage')}</Label>
                   <Textarea

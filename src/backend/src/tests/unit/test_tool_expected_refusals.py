@@ -32,7 +32,20 @@ from src.common.workflow_triggers import StatusChangeBlockedError
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_products import DataProductDb
 from src.models.data_products import ChangeStatusPayload
-from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
+
+# Frozen: development's DATA_PRODUCT_TRANSITIONS / DATA_CONTRACT_TRANSITIONS before
+# Lifecycle Stage Groups (#1213), targets in stage order (the order the lifecycle
+# service lists them). Not read from lifecycle_defaults, so drift there fails here.
+DATA_PRODUCT_TRANSITIONS = {
+    'draft': ['sandbox', 'proposed', 'deprecated'],
+    'sandbox': ['draft', 'proposed', 'deprecated'],
+    'proposed': ['draft', 'under_review', 'deprecated'],
+    'under_review': ['draft', 'approved', 'deprecated'],
+    'approved': ['draft', 'active', 'deprecated'],
+    'active': ['deprecated'],
+    'deprecated': ['active', 'retired'],
+    'retired': [],
+}
 from src.routes import data_product_routes
 from src.tests.unit.test_tool_error_text import DOMAIN_READER, SECRET, _assert_generic
 from src.tools.base import TOOL_FAILED_CODE, ToolContext, tool_failure

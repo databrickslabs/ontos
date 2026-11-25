@@ -529,6 +529,10 @@
     "personal": "Personnel",
     "requestAccess": "Demander l'accès ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} est vide : envoyez l'id d'un domaine ou omettez le champ pour conserver les domaines du contrat.",
+    "primaryDomainNotInDomains": "Le domaine {{primaryDomainId}} ne fait pas partie des domaines du contrat, il ne peut donc pas être le domaine principal."
+  },
   "createInline": {
     "title": "Créer un nouveau contrat",
     "description": "Créez un contrat de données minimal. Vous pourrez ajouter des schémas et des règles de qualité plus tard.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID de l'équipe propriétaire",
     "ownerTeamIdHint": "Facultatif : hérité du produit si disponible",
     "creating": "Création..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} n'est pas une version ODCS. Utilisez une des versions ODCS, par exemple v3.1.0."
   },
   "basicForm": {
     "editTitle": "Modifier les métadonnées du contrat",
@@ -1204,20 +1211,21 @@
     "responseMessageLabel": "Message de réponse (facultatif)",
     "responseMessagePlaceholder": "Ajoutez des notes sur votre décision...",
     "messageHint": "Ce message sera envoyé au demandeur avec votre décision.",
-    "executeLabel": "Exécuter le déploiement immédiatement après approbation",
-    "executeHint": "Si coché, le déploiement sera déclenché automatiquement lorsque vous approuverez cette demande.",
     "warningLabel": "Avertissement :",
     "warningText": "Le déploiement créera des actifs physiques dans Unity Catalog. Assurez-vous d'avoir examiné le schéma et la configuration du contrat.",
     "deny": "Refuser",
-    "approveAndDeploy": "Approuver et déployer",
     "toast": {
       "approvedTitle": "Déploiement approuvé",
       "deniedTitle": "Déploiement refusé",
       "approvedDescription": "La demande de déploiement a été approuvée.",
       "deniedDescription": "La demande de déploiement a été refusée.",
-      "deploymentInitiated": "Le déploiement a été lancé.",
       "failedTitle": "Échec",
       "couldNotSubmit": "Impossible de soumettre la décision"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Vous n'êtes pas approbateur de cette demande de déploiement : vous ne pouvez pas la décider.",
+      "deploy_request_already_decided": "Cette demande de déploiement a déjà été décidée.",
+      "deploy_request_own_request": "Vous ne pouvez pas décider votre propre demande de déploiement."
     }
   },
   "publishRequest": {

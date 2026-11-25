@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
@@ -18,12 +18,14 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
-import { AssetRead, AssetCreate, AssetUpdate } from '@/types/asset';
+import { AssetRead, AssetCreate, AssetUpdate, AssetUpdateResult } from '@/types/asset';
+import { descriptionSyncText } from '@/components/assets/description-sync-notice';
 import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { mergeEditedProperties, newAssetProperties } from './asset-form-properties';
 
 interface AssetFormDialogProps {
   isOpen: boolean;
@@ -90,6 +92,41 @@ export function AssetFormDialog({
   const form = useForm<Record<string, any>>({
     defaultValues: {},
   });
+  // The values the form opened with, to send only the properties the user edited
+  const openedWith = useRef<Record<string, any>>({});
+  // The asset's stored properties. A list row (Asset Explorer) carries none, so they
+  // are read from the asset; undefined until known (then the update leaves them out).
+  const [storedProperties, setStoredProperties] = useState<
+    Record<string, any> | null | undefined
+  >(undefined);
+  // 'loading' keeps the form closed (a late read would reset it); 'failed' blocks Save
+  const [propertiesRead, setPropertiesRead] = useState<'ready' | 'loading' | 'failed'>('ready');
+
+  useEffect(() => {
+    if (!isOpen || !asset) {
+      setStoredProperties(undefined);
+      setPropertiesRead('ready');
+      return;
+    }
+    if (asset.properties !== undefined) {
+      setStoredProperties(asset.properties);
+      setPropertiesRead('ready');
+      return;
+    }
+    let cancelled = false;
+    setStoredProperties(undefined);
+    setPropertiesRead('loading');
+    apiGet<AssetRead>(`/api/assets/${asset.id}`).then((response) => {
+      if (cancelled) return;
+      if (!response.error && response.data) {
+        setStoredProperties(response.data.properties ?? null);
+        setPropertiesRead('ready');
+      } else {
+        setPropertiesRead('failed');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, asset, apiGet]);
 
   const fetchSchema = useCallback(async () => {
     if (!assetTypeIri) return;
@@ -128,7 +165,7 @@ export function AssetFormDialog({
       defaults.primary_domain_id = asset.primary_domain_id
         ?? asset.domains?.find(d => d.is_primary)?.domain_id
         ?? asset.domain_id ?? null;
-      const props = asset.properties || {};
+      const props = storedProperties || {};
       if (schema?.fields) {
         for (const f of schema.fields) {
           if (TOP_LEVEL_FIELDS.has(f.name) || SYSTEM_FIELDS.has(f.name)) continue;
@@ -150,8 +187,9 @@ export function AssetFormDialog({
         }
       }
     }
+    openedWith.current = defaults;
     form.reset(defaults);
-  }, [isOpen, schema, isEdit, asset]);
+  }, [isOpen, schema, isEdit, asset, storedProperties]);
 
   const groupedFields = useMemo(() => {
     if (!schema?.fields) return [];
@@ -164,17 +202,11 @@ export function AssetFormDialog({
   const onSubmit = async (values: Record<string, any>) => {
     setIsSubmitting(true);
     try {
-      const properties: Record<string, any> = {};
-      for (const [key, val] of Object.entries(values)) {
-        if (key.startsWith('prop_')) {
-          const propName = key.slice(5);
-          if (val !== '' && val !== null && val !== undefined) {
-            properties[propName] = val;
-          }
-        }
-      }
-
+      // On edit, keep the stored properties: the form shows only the ontology fields
       if (isEdit && asset) {
+        const properties = storedProperties === undefined
+          ? undefined
+          : mergeEditedProperties(storedProperties, values, openedWith.current);
         const payload: AssetUpdate = {
           name: values.name || null,
           description: values.description || null,
@@ -183,13 +215,24 @@ export function AssetFormDialog({
           location: values.location || null,
           domain_ids: values.domain_ids || [],
           primary_domain_id: values.primary_domain_id ?? null,
-          properties: Object.keys(properties).length > 0 ? properties : null,
+          // {} clears the properties; left out (stored ones unknown), they are kept
+          ...(properties === undefined ? {} : { properties }),
         };
-        const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
+        const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
+        // Saved, but e.g. the description could not be written to Unity Catalog
+        const warnings = response.data?.warnings ?? [];
+        if (warnings.length > 0) {
+          toast({
+            title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
+            description: warnings.map((w) => descriptionSyncText(t, w)).join(' '),
+          });
+        } else {
+          toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
+        }
         onSuccess(response.data!);
       } else {
+        const properties = newAssetProperties(values);
         const payload: AssetCreate = {
           name: values.name,
           description: values.description || null,
@@ -201,9 +244,18 @@ export function AssetFormDialog({
           primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
-        const response = await apiPost<AssetRead>('/api/assets', payload);
+        const response = await apiPost<AssetUpdateResult>('/api/assets', payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
+        // Created, but e.g. the description could not be written to Unity Catalog
+        const warnings = response.data?.warnings ?? [];
+        if (warnings.length > 0) {
+          toast({
+            title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
+            description: warnings.map((w) => descriptionSyncText(t, w)).join(' '),
+          });
+        } else {
+          toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
+        }
         onSuccess(response.data!);
       }
       onOpenChange(false);
@@ -226,12 +278,17 @@ export function AssetFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {schemaLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">{t('common:assetForm.loadingSchema')}</span>
-          </div>
-        ) : (
+        <div role="status" aria-live="polite">
+          {(schemaLoading || propertiesRead === 'loading') && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+              <span className="ml-2 text-sm text-muted-foreground">
+                {t('common:assetForm.loadingSchema')}
+              </span>
+            </div>
+          )}
+        </div>
+        {schemaLoading || propertiesRead === 'loading' ? null : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Core fields always shown */}
@@ -357,11 +414,16 @@ export function AssetFormDialog({
                 </div>
               ))}
 
+              {propertiesRead === 'failed' && (
+                <p role="alert" className="text-sm text-destructive">
+                  {t('common:assetFormStoredProperties.loadError')}
+                </p>
+              )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   {t('common:actions.cancel')}
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || propertiesRead !== 'ready'}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isEdit ? t('common:actions.saveChanges') : t('common:assetForm.createTitle', { name: assetTypeName })}
                 </Button>
@@ -374,18 +436,34 @@ export function AssetFormDialog({
   );
 }
 
+/** Ontology properties that hold the same path as the asset's Location field */
+const LOCATION_PROPERTIES = new Set(['physicalPath']);
+
+const isBlank = (value: unknown) =>
+  value === undefined || value === null || String(value).trim() === '';
+
 function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; form: any }) {
   const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
   const fieldName = `prop_${f.name}`;
   const label = formatLabel(f.label);
+  const requiredMessage = t('common:assetForm.fieldRequired', { label });
+  // A required path property is satisfied by the Location field, which holds the same path
+  const requiredRules = !f.is_required
+    ? undefined
+    : LOCATION_PROPERTIES.has(f.name)
+      ? {
+          validate: (value: unknown) =>
+            !isBlank(value) || !isBlank(form.getValues('location')) || requiredMessage,
+        }
+      : { required: requiredMessage };
 
   if (f.field_type === 'select' && f.select_options) {
     return (
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+        rules={requiredRules}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
@@ -414,7 +492,7 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+        rules={requiredRules}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
@@ -465,7 +543,7 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
     <FormField
       control={form.control}
       name={fieldName}
-      rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+      rules={requiredRules}
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>

@@ -10,6 +10,7 @@ import ReactFlow, {
   Background,
   MiniMap,
   useNodesState,
+  useReactFlow,
   useEdgesState,
   MarkerType,
   Panel,
@@ -154,6 +155,9 @@ import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import { workflowIssueNodeIds, workflowWarningText } from './workflow-warnings';
 import { WorkflowWarningsPanel, type WorkflowIssueItem } from './workflow-warnings-panel';
 import {
+  DEFAULT_SCHEDULE_TIMEZONE, TriggerScheduleFields, isScheduleIssue,
+} from './trigger-schedule-fields';
+import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
 import {
@@ -168,6 +172,7 @@ import {
   joinRoleAndPrincipals,
   roleSelectValue,
   splitRoleAndPrincipals,
+  workflowPrincipalValue,
 } from '@/lib/workflow-principals';
 
 interface WorkflowActivationConflict {
@@ -728,6 +733,28 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
   { type: 'deliver', label: 'Deliver', icon: Send },
 ];
 
+// Fit options of the canvas: on first load and after Rearrange
+const FIT_VIEW_OPTIONS = { maxZoom: 1, padding: 0.2 };
+
+// Fits the view after a confirmed Rearrange, so a layout taller than the view isn't left
+// partly off-screen. Rendered inside ReactFlow (the hook needs its context). Deferred one
+// tick so the store has the new node positions first.
+export function FitAfterRearrange({ version }: { version: number }) {
+  const { fitView } = useReactFlow();
+  const handled = useRef(version);
+  useEffect(() => {
+    if (version === handled.current) return undefined;
+    // Marked handled when the fit runs, not when it is scheduled: if fitView's identity
+    // changes first, the cleanup cancels the timer and the re-run must schedule it again.
+    const timer = setTimeout(() => {
+      handled.current = version;
+      fitView(FIT_VIEW_OPTIONS);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [version, fitView]);
+  return null;
+}
+
 // Layout helper
 // Label and colour of a step's outgoing edge. A conditional's edges are its true and
 // false branches: a false condition is a branch, not a failure (#1418).
@@ -872,6 +899,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
+  // Step-config validation needs the schemas: an edited workflow isn't shown before they're in
+  const [stepTypesLoaded, setStepTypesLoaded] = useState(false);
   // Step whose config blocked the last save; its form shows the missing field.
   const [invalidStepId, setInvalidStepId] = useState<string | null>(null);
   // Errors and warnings of the last Check, with the draft (draftKey) it checked
@@ -889,14 +918,19 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     [compliancePolicies, compliancePoliciesLoaded],
   );
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
+  const [availableRolesLoaded, setAvailableRolesLoaded] = useState(false);
   // approverRoles is the approval-entity-filtered subset of availableRoles used
   // specifically in the Approvers (Role) picker. It is re-computed whenever
   // entityTypes changes so the dropdown tracks the trigger configuration.
   const [approverRoles, setApproverRoles] = useState<typeof availableRoles>([]);
-  const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
+  // null until the first webhook step is opened: most workflows have none and listing UC
+  // connections is slow, so they are fetched on demand, once per designer
+  const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[] | null>(null);
+  const httpConnectionsRequested = useRef(false);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
+  const [rearrangeVersion, setRearrangeVersion] = useState(0);
   const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
@@ -934,6 +968,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [triggerToStatus, setTriggerToStatus] = useState('');
   const [triggerOnError, setTriggerOnError] = useState<GateErrorMode>('fail_open');
   const [triggerDisabledFor, setTriggerDisabledFor] = useState<GateExemptions>(EMPTY_GATE_EXEMPTIONS);
+  // scheduled only: Quartz cron and IANA timezone, and the backend's error about them
+  const [triggerSchedule, setTriggerSchedule] = useState('');
+  const [triggerTimezone, setTriggerTimezone] = useState(DEFAULT_SCHEDULE_TIMEZONE);
+  const [scheduleIssue, setScheduleIssue] = useState<WorkflowValidationIssue | null>(null);
   // Selected exemptions whose entity was deleted: the backend refuses to save them
   const [missingExemptions, setMissingExemptions] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
@@ -1009,6 +1047,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     description: string;
     triggerType: TriggerType;
     entityTypes: EntityType[];
+    schedule?: string;
+    timezone?: string;
     isActive: boolean;
     steps: WorkflowStepCreate[];
   }
@@ -1077,6 +1117,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     if (name !== originalState.name) return true;
     if (description !== originalState.description) return true;
     if (triggerType !== originalState.triggerType) return true;
+    if (triggerType === 'scheduled' && (triggerSchedule !== (originalState.schedule ?? '')
+      || triggerTimezone !== (originalState.timezone ?? DEFAULT_SCHEDULE_TIMEZONE))) return true;
     if (isActive !== originalState.isActive) return true;
     
     // Compare entity types
@@ -1090,7 +1132,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return false;
   }, [
     originalState, name, description, triggerType, entityTypes, unknownEntityTypes,
-    storedUnknownTypes.length,
+    storedUnknownTypes.length, triggerSchedule, triggerTimezone,
     isActive, steps, isNew,
   ]);
 
@@ -1134,70 +1176,44 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     let cancelled = false;
     // A superseded edit load no longer clears it: a new workflow must not stay "loading"
     if (isNew) setIsLoading(false);
+    // The picker lookups depend neither on each other nor on the workflow: all start at once and
+    // each is applied when it arrives, so a slow one only holds up its own selector. A failed or
+    // non-list response is applied as `undefined`; a superseded run's results are dropped. HTTP
+    // connections are loaded only when a webhook step is opened (see below).
+    const loadLookup = <T extends unknown[]>(url: string, label: string, apply: (data: T | undefined) => void) => {
+      get<T>(url)
+        .then(response => { if (!cancelled) apply(Array.isArray(response.data) ? response.data : undefined); })
+        .catch(error => {
+          console.error(`Failed to load ${label}:`, error);
+          if (!cancelled) apply(undefined);
+        });
+    };
+
+    // Load step types
+    loadLookup<StepTypeSchema[]>('/api/workflows/step-types', 'step types', data => {
+      if (data) setStepTypes(data);
+      setStepTypesLoaded(true);
+    });
+
+    // Load trigger-type catalog (powers the grouped picker + entity-type
+    // multiselect — single source of truth, mirrors the backend enum).
+    loadLookup<TriggerTypeOption[]>('/api/workflows/trigger-types', 'trigger types', data => {
+      if (data) setTriggerTypeOptions(data);
+    });
+
+    // Load compliance policies for policy_check step selector
+    loadLookup<CompliancePolicyRef[]>('/api/workflows/compliance-policies', 'compliance policies', data => {
+      setCompliancePolicies(data ?? []);
+      if (data) setCompliancePoliciesLoaded(true);
+    });
+
+    // Load available roles for approval/notification step selectors
+    loadLookup<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles', 'roles', data => {
+      setAvailableRoles(data ?? []);
+      setAvailableRolesLoaded(true);
+    });
+
     const loadData = async () => {
-      // Load step types
-      try {
-        const typesResponse = await get<StepTypeSchema[]>('/api/workflows/step-types');
-        if (typesResponse.data) {
-          setStepTypes(typesResponse.data);
-        }
-      } catch (error) {
-        console.error('Failed to load step types:', error);
-      }
-
-      // Load trigger-type catalog (powers the grouped picker + entity-type
-      // multiselect — single source of truth, mirrors the backend enum).
-      try {
-        const triggerTypesResponse = await get<TriggerTypeOption[]>('/api/workflows/trigger-types');
-        if (triggerTypesResponse.data && Array.isArray(triggerTypesResponse.data)) {
-          setTriggerTypeOptions(triggerTypesResponse.data);
-        }
-      } catch (error) {
-        console.error('Failed to load trigger types:', error);
-      }
-      
-      // Load compliance policies for policy_check step selector
-      try {
-        const policiesResponse = await get<CompliancePolicyRef[]>('/api/workflows/compliance-policies');
-        if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
-          setCompliancePolicies(policiesResponse.data);
-          setCompliancePoliciesLoaded(true);
-        } else {
-          setCompliancePolicies([]);
-        }
-      } catch (error) {
-        console.error('Failed to load compliance policies:', error);
-        setCompliancePolicies([]);
-      }
-      
-      // Load available roles for approval/notification step selectors
-      try {
-        const rolesResponse = await get<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles');
-        if (rolesResponse.data && Array.isArray(rolesResponse.data)) {
-          setAvailableRoles(rolesResponse.data);
-        } else {
-          setAvailableRoles([]);
-        }
-      } catch (error) {
-        console.error('Failed to load roles:', error);
-        setAvailableRoles([]);
-      }
-      
-      // Load HTTP connections for webhook step selector
-      try {
-        const connectionsResponse = await get<HttpConnectionRef[]>('/api/workflows/http-connections');
-        if (connectionsResponse.data && Array.isArray(connectionsResponse.data)) {
-          setHttpConnections(connectionsResponse.data);
-        } else {
-          setHttpConnections([]);
-        }
-      } catch (error) {
-        console.error('Failed to load HTTP connections:', error);
-        setHttpConnections([]);
-      }
-
-      if (cancelled) return;
-
       // Load workflow if editing
       if (!isNew) {
         setIsLoading(true);
@@ -1216,6 +1232,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setTriggerToStatus(response.data.trigger.to_status || '');
             setTriggerOnError(response.data.trigger.on_error || 'fail_open');
             setTriggerDisabledFor({ ...EMPTY_GATE_EXEMPTIONS, ...(response.data.trigger.disabled_for || {}) });
+            // The stored timezone as is (empty = UTC): a save that leaves both unchanged
+            // isn't checked again by the backend
+            setTriggerSchedule(response.data.trigger.schedule || '');
+            setTriggerTimezone(response.data.trigger.timezone || '');
             setIsActive(response.data.is_active);
             setWorkflowType((response.data.workflow_type as WorkflowTypeValue) || 'process');
             const loadedSteps = response.data.steps.map(s => ({
@@ -1236,12 +1256,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               description: response.data.description || '',
               triggerType: response.data.trigger.type,
               entityTypes: [...response.data.trigger.entity_types],
+              schedule: response.data.trigger.schedule || '',
+              timezone: response.data.trigger.timezone || '',
               isActive: response.data.is_active,
               steps: loadedSteps.map(s => ({ ...s })),
             });
             
-            // Convert to flow elements - rolesMap will be empty initially, but nodes will be updated
-            // when availableRoles loads (via updateNodesWithRoles effect)
+            // Convert to flow elements - rolesMap is filled in by the rolesMap effect below, which
+            // also re-runs for a newly loaded workflow (roles may have arrived first)
             const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {}, t);
             setNodes(flowNodes);
             setEdges(flowEdges);
@@ -1307,6 +1329,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       return;
     }
 
+    // The base role list loads in parallel with the workflow: fetching before it has answered
+    // would repeat every per-entity request once it does. A failed list still counts as answered.
+    if (!availableRolesLoaded) return;
+
     let cancelled = false;
 
     const fetchIntersection = async () => {
@@ -1343,9 +1369,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
     fetchIntersection();
     return () => { cancelled = true; };
-  }, [entityTypes, availableRoles, get]);
+  }, [entityTypes, availableRoles, availableRolesLoaded, get]);
 
-  // Update node data when rolesMap changes
+  // Update node data when rolesMap changes, or when a loaded workflow replaces the nodes
   useEffect(() => {
     if (Object.keys(rolesMap).length > 0) {
       setNodes(prevNodes => prevNodes.map(node => {
@@ -1356,7 +1382,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         };
       }));
     }
-  }, [rolesMap, setNodes]);
+  }, [rolesMap, workflow, setNodes]);
 
   // Keep the canvas trigger node in sync with the trigger picker state.
   // Without this the node renders only the initial default (on_create / table)
@@ -1388,6 +1414,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setNodes(arranged);
     setSteps(prev => withNodePositions(prev, arranged));
     setShowRearrangeDialog(false);
+    setRearrangeVersion(v => v + 1);
   }, [nodes, edges, setNodes]);
 
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
@@ -1583,6 +1610,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
       ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
       ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
+      ...(triggerType === 'before_update' ? { on_error: triggerOnError } : {}),
+      // Both sent, even empty: an empty schedule gets the backend's schedule_required
+      ...(triggerType === 'scheduled'
+        ? { schedule: triggerSchedule.trim(), timezone: triggerTimezone.trim() || null }
+        : {}),
     },
     workflow_type: workflowType || 'process',
     is_active: isActive,
@@ -1635,12 +1667,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         text: workflowValidationIssueText(issue, t),
         nodeIds: workflowIssueNodeIds(issue, stepIds),
       })),
-      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])].map((issue, i) => ({
-        key: `warning-${i}`,
-        tone: 'warning' as const,
-        text: workflowWarningText(issue, t),
-        nodeIds: workflowIssueNodeIds(issue, stepIds),
-      })),
+      // An unknown stored entity type is shown, with a remove button, by the notice in the
+      // trigger settings; the trigger node still gets its amber ring below
+      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])]
+        .filter(issue => issue.code !== 'stored_entity_type_unknown')
+        .map((issue, i) => ({
+          key: `warning-${i}`,
+          tone: 'warning' as const,
+          text: workflowWarningText(issue, t),
+          nodeIds: workflowIssueNodeIds(issue, stepIds),
+        })),
     ];
   })();
 
@@ -1741,7 +1777,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         const failedStep = issues
           ?.map(issue => issue.params?.step)
           .find(step => steps.some(s => s.step_id === step));
-        if (typeof failedStep === 'string') {
+        const failedSchedule = issues?.find(issue => isScheduleIssue(issue.code)) ?? null;
+        setScheduleIssue(failedSchedule);
+        if (failedSchedule) {
+          setSelectedNodeId('trigger');  // the error shows at the schedule field
+        } else if (typeof failedStep === 'string') {
           setInvalidStepId(failedStep);
           setSelectedNodeId(failedStep);
         } else if (issues?.some(issue => issue.code.startsWith('trigger_entity_type_'))) {
@@ -1764,6 +1804,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           description,
           triggerType,
           entityTypes: [...entityTypes],
+          schedule: triggerSchedule,
+          timezone: triggerTimezone,
           isActive,
           steps: steps.map(s => ({ ...s })),
         });
@@ -1796,7 +1838,22 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return steps.find(s => s.step_id === selectedNodeId);
   }, [selectedNodeId, steps]);
 
-  if (isLoading) {
+  // Load HTTP connections for the webhook step selector the first time one is opened
+  const webhookStepOpen = selectedStep?.step_type === 'webhook';
+  useEffect(() => {
+    if (!webhookStepOpen || httpConnectionsRequested.current) return;
+    httpConnectionsRequested.current = true;
+    get<HttpConnectionRef[]>('/api/workflows/http-connections')
+      .then(response => setHttpConnections(Array.isArray(response.data) ? response.data : []))
+      .catch(error => {
+        console.error('Failed to load HTTP connections:', error);
+        setHttpConnections([]);
+        // Opening a webhook step again retries
+        httpConnectionsRequested.current = false;
+      });
+  }, [webhookStepOpen, get]);
+
+  if (isLoading || (!isNew && !stepTypesLoaded)) {
     return (
       <div className="py-6 space-y-4 h-[calc(100vh-120px)] flex flex-col">
         <WorkflowCanvasSkeleton showSidebar height="flex-1" />
@@ -1930,7 +1987,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             edgesUpdatable
             edgesFocusable
             fitView
-            fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
             minZoom={0.3}
             maxZoom={2}
             defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -1939,6 +1996,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Background />
             <Controls />
             <MiniMap />
+            <FitAfterRearrange version={rearrangeVersion} />
             
             {/* Step type toolbar */}
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">
@@ -2160,14 +2218,28 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     );
                   })()}
 
-                  {triggerType === 'before_status_change' && (
+                  {triggerType === 'scheduled' && (
+                    <TriggerScheduleFields
+                      schedule={triggerSchedule}
+                      timezone={triggerTimezone}
+                      onScheduleChange={(v) => { setTriggerSchedule(v); setScheduleIssue(null); }}
+                      onTimezoneChange={(v) => { setTriggerTimezone(v); setScheduleIssue(null); }}
+                      issue={scheduleIssue}
+                    />
+                  )}
+
+                  {(triggerType === 'before_status_change' || triggerType === 'before_update') && (
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
                         <Label htmlFor="trigger-on-error">
-                          {t('workflows:designer.triggerConfig.failClosed')}
+                          {triggerType === 'before_update'
+                            ? t('workflows:designer.triggerConfig.updateGate.failClosed')
+                            : t('workflows:designer.triggerConfig.failClosed')}
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          {t('workflows:designer.triggerConfig.failClosedHint')}
+                          {triggerType === 'before_update'
+                            ? t('workflows:designer.triggerConfig.updateGate.failClosedHint')
+                            : t('workflows:designer.triggerConfig.failClosedHint')}
                         </p>
                       </div>
                       <Switch
@@ -2590,6 +2662,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                   accepts={['user', 'group']}
                                   value={split.principals}
                                   onChange={setPrincipals}
+                                  pickValue={workflowPrincipalValue}
                                   placeholder={t('workflows:designer.customPrincipals.addPlaceholder')}
                                   aria-label={t('workflows:designer.notification.additionalRecipientsAria')}
                                 />
@@ -2741,6 +2814,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                   accepts={['user', 'group']}
                                   value={split.principals}
                                   onChange={setPrincipals}
+                                  pickValue={workflowPrincipalValue}
                                   placeholder={t('workflows:designer.customPrincipals.addPlaceholder')}
                                   aria-label={t('workflows:designer.approval.additionalApproversAria')}
                                 />
@@ -2910,7 +2984,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                 <SelectValue placeholder={t('workflows:designer.webhook.selectConnection')} />
                               </SelectTrigger>
                               <SelectContent>
-                                {httpConnections.length === 0 ? (
+                                {httpConnections === null ? (
+                                  <div className="px-2 py-3 text-sm text-muted-foreground">
+                                    {t('common:states.loading')}
+                                  </div>
+                                ) : httpConnections.length === 0 ? (
                                   <div className="px-2 py-3 text-sm text-muted-foreground">
                                     {t('workflows:designer.webhook.noConnections')}
                                   </div>

@@ -137,7 +137,18 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "«{{value}}» non indica un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o il nome di un volume; un nome semplice richiede un catalogo e uno schema senza punti, barre o spazi."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Descrizioni degli asset",
+      "adminOnly": "Solo un amministratore può attivarlo.",
+      "label": "Scrivi le descrizioni degli asset in Unity Catalog",
+      "help": "Il salvataggio della descrizione di una tabella, vista o colonna Databricks imposta anche il suo commento in Unity Catalog, come l'utente che la salva. Senza i permessi SELECT e MODIFY la descrizione viene salvata solo in Ontos e l'asset indica che non è sincronizzato.",
+      "importLimit": {
+        "label": "Massimo di righe tentate in Unity Catalog per importazione massiva",
+        "help": "Un'importazione CSV/XLSX tenta al massimo questo numero di descrizioni in Unity Catalog (1–10000), che le scriva, mantenga un altro commento o salti una vista di metriche; le righe oltre il limite vengono salvate in Ontos con un avviso."
       }
     },
     "instanceIdentity": {
@@ -190,6 +201,10 @@
     "messages": {
       "saveSuccess": "Impostazioni salvate con successo",
       "saveError": "Impossibile salvare le impostazioni"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Non è stato possibile aggiornare il job Compliance Checks con le impostazioni LLM (l'app potrebbe non avere i permessi sul job). Le regole LLM_CHECK pianificate usano le impostazioni precedenti finché il job non viene reinstallato.",
+      "compliance_job_shape_unexpected": "Il job Compliance Checks è stato modificato in Databricks, quindi sono stati aggiornati solo i suoi parametri. Se le regole LLM_CHECK pianificate non riescono con \"funzioni LLM disattivate\", reinstalla il job."
     }
   },
   "databricks": {
@@ -406,7 +421,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sezioni home",
-        "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo."
+        "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo.",
+        "labels": {
+          "JOURNEY": "Home per percorso"
+        },
+        "descriptions": {
+          "JOURNEY": "Sostituisce la home completa con Trova, Comprendi, Fidati, Pubblica e Mantieni. Non può essere combinata con altre sezioni."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegi di approvazione",
@@ -651,11 +672,14 @@
       "urlLabel": "URL del logo",
       "urlPlaceholder": "https://esempio.com/logo.svg",
       "help": "Inserisci l'URL del tuo logo personalizzato. Formati supportati: SVG, PNG, JPG.",
-      "invalidUrl": "Inserisci un URL HTTP o HTTPS valido",
       "preview": "Anteprima:",
       "loadError": "Impossibile caricare l'immagine",
       "openInNewTab": "Apri in nuova scheda",
-      "previewAlt": "Anteprima del logo"
+      "previewAlt": "Anteprima del logo",
+      "darkUrlLabel": "URL del logo per la modalità scura (facoltativo)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Usato in modalità scura. Lascia vuoto per usare il logo qui sopra in entrambe le modalità.",
+      "invalidUrlOrPath": "Inserisci un URL HTTP o HTTPS, oppure un percorso dell’app che inizia con /"
     },
     "about": {
       "title": "Contenuto personalizzato pagina Informazioni",
@@ -674,6 +698,13 @@
       "help": "Inserisci CSS personalizzato per sovrascrivere il tema predefinito."
     },
     "saveButton": "Salva impostazioni UI",
+    "errorCodes": {
+      "brandingPathTraversal": "Il percorso non può contenere segmenti \"..\""
+    },
+    "loadFailed": {
+      "title": "Impossibile caricare le impostazioni attuali",
+      "description": "Il branding salvato non è stato caricato, quindi il salvataggio è disattivato per non sovrascriverlo con i valori predefiniti. Ricarica la pagina per riprovare."
+    },
     "messages": {
       "saveSuccess": "Impostazioni di personalizzazione salvate",
       "saveError": "Impossibile salvare le impostazioni",
@@ -686,18 +717,38 @@
       "shortNameHelp": "Usato negli spazi ridotti (es. \"Chiedi a {{shortName}}\"). Se vuoto, viene usato il nome visualizzato. Massimo {{max}} caratteri.",
       "displayNameLabel": "Nome visualizzato",
       "shortNameLabel": "Nome breve (facoltativo)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Slogan (facoltativo)",
+      "taglineHelp": "Breve sottotitolo mostrato sotto il nome nella barra laterale e nella home page. Massimo {{max}} caratteri.",
+      "poweredByLabel": "Mostra \"Powered by {{name}}\" nella barra laterale",
+      "poweredByHelp": "Compare nel piè della barra laterale solo quando è impostato un nome visualizzato o un logo personalizzato."
     },
     "favicon": {
       "previewAlt": "Anteprima della favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Applicata in fase di esecuzione alla scheda del browser. Il tag statico <link rel=\"icon\"> nell'index.html distribuito e il manifest PWA non vengono aggiornati da questa impostazione.",
-      "invalidUrl": "Inserisci un URL HTTP o HTTPS valido",
       "loadError": "Impossibile caricare l'immagine",
       "openInNewTab": "Apri in una nuova scheda",
       "preview": "Anteprima:",
       "title": "Favicon del browser",
       "urlLabel": "URL della favicon"
+    },
+    "theme": {
+      "title": "Colori del tema",
+      "help": "Scegli il colore principale (pulsanti, link, anello di focus) e il colore di accento (sfondi al passaggio del mouse e degli elementi selezionati). I colori del testo vengono scelti automaticamente per il contrasto e un colore della modalità scura lasciato vuoto viene ricavato da quello chiaro.",
+      "primaryLight": "Colore principale",
+      "primaryDark": "Colore principale (modalità scura)",
+      "accentLight": "Colore di accento",
+      "accentDark": "Colore di accento (modalità scura)",
+      "pickerLabel": "{{field}}: selettore colore",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Inserisci un colore esadecimale come #2563eb",
+      "auto": "Automatico: {{color}} (ricavato dal colore chiaro)",
+      "contrast": "Testo {{text}}, contrasto {{ratio}}:1",
+      "textLight": "chiaro",
+      "textDark": "scuro",
+      "meetsAA": "AA",
+      "belowAA": "Sotto AA"
     }
   },
   "connectors": {
@@ -984,6 +1035,24 @@
         "descriptionContract": "Assegna a ogni tabella lo stato del ciclo di vita del contratto dati che la usa. Su una tabella usata da più contratti vince lo stato migliore (active per primo, retired per ultimo).",
         "valueLabel": "Valore del tag:",
         "sharedKeyHint": "Quando i tag di stato del prodotto e del contratto sono entrambi attivi con la stessa chiave, viene scritto lo stato del prodotto."
+      },
+      "maturityThreshold": {
+        "variable": "true o false: il numero del livello è almeno <order>",
+        "invalid": "Usa {ASSET.MATURITY_AT_LEAST:<ordine>} con un numero di livello, ad esempio {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "UUID dell'asset",
+        "assetType": "Nome del tipo di asset (Table, View, ...)",
+        "assetFqn": "Nome della tabella in Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nome del livello di maturità di un asset tabella o vista (ultima valutazione)",
+        "assetMaturityOrder": "Numero del livello di maturità di un asset tabella o vista (1 = primo livello)"
+      },
+      "maturity": {
+        "title": "Tag del livello di maturità",
+        "description": "Aggiunge a ogni asset tabella o vista il suo livello di maturità (ultima valutazione). Le tabelle senza livello non ricevono il tag.",
+        "valueNeedsVariable": "Usa {ASSET.MATURITY} o {ASSET.MATURITY_ORDER} nella chiave o nel valore.",
+        "tablesOnlyHint": "Ricevono il tag solo tabelle e viste con un nome in Unity Catalog, non schemi né cataloghi. L'output dell'esecuzione conta gli asset saltati e il motivo.",
+        "prefixHint": "Inizia la chiave con lo stesso prefisso delle altre chiavi attive (ontos_ per impostazione predefinita), così il job può rimuovere il tag quando una tabella perde il livello."
       }
     },
     "entityPatterns": {
@@ -1201,11 +1270,44 @@
       "reorderFailed": "Impossibile riordinare"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Valuta tutti gli asset di tabella, vista e vista di metriche",
+    "description": "Valuta ogni asset di tabella, vista e vista di metriche nell'ambito con i livelli Asset attuali. Un asset valutato dall'inizio dell'esecuzione viene saltato; una sola esecuzione alla volta.",
+    "catalog": "Catalogo (facoltativo)",
+    "schema": "Schema (facoltativo)",
+    "start": "Valuta gli asset",
+    "running": "Valutazione: {{processed}} di {{total}} asset",
+    "noAssetLevels": "Crea prima i livelli Asset: senza di essi non viene valutato nulla.",
+    "lastRun": "Ultima esecuzione",
+    "none": "Nessuna esecuzione completata finora.",
+    "scope": "Ambito: {{scope}}",
+    "allCatalogs": "Tutti i cataloghi",
+    "startedBy": "Avviata da {{user}}",
+    "summary": "{{total}} asset: {{evaluated}} valutati, {{changed}} con livello cambiato, {{errors}} errori.",
+    "skipped": "Saltati",
+    "errors": "Errori",
+    "state": {
+      "running": "In esecuzione",
+      "completed": "Completata",
+      "failed": "Non riuscita"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Valutato dall'inizio dell'esecuzione",
+      "maturity_bulk_skipped_not_found": "Asset non trovato",
+      "maturity_bulk_skipped_no_levels": "Nessun livello Asset",
+      "maturity_bulk_skipped_asset_type": "Non è né tabella, né vista, né vista di metriche",
+      "maturity_bulk_skipped_not_stored": "Non salvato: non è stato possibile leggere la tabella",
+      "maturity_bulk_evaluation_failed": "Valutazione non riuscita (vedi il log del server)",
+      "maturity_bulk_run_failed": "L'esecuzione si è interrotta (vedi il log del server)",
+      "maturity_bulk_run_in_progress": "Una valutazione in blocco è già in corso.",
+      "maturity_bulk_scope_invalid": "L'ambito non è valido."
+    }
+  },
   "maturityLevels": {
     "title": "Livelli di maturità",
     "description": "Definisci la scala di maturità per prodotti dati e contratti. Ogni livello è vincolato da criteri di conformità.",
     "addLevel": "Aggiungi livello",
-    "allTypes": "Tutti i tipi",
+    "allTypes": "Prodotti e contratti",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gate",
     "complianceGates": "Gate dei criteri di conformità",
@@ -1232,7 +1334,8 @@
       "levelNamePreview": "Nome livello"
     },
     "entityTypes": {
-      "all": "Tutti i tipi di entità",
+      "all": "Prodotti e contratti di dati",
+      "Asset": "Asset (tabelle, viste e viste di metriche)",
       "DataProduct": "Prodotti dati",
       "DataContract": "Contratti dati"
     },
@@ -1245,6 +1348,18 @@
       "created": "Livello di maturità \"{{name}}\" creato.",
       "deleted": "Livello di maturità \"{{name}}\" eliminato.",
       "cannotDeleteTitle": "Impossibile eliminare"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Questa policy usa LLM_CHECK, che viene valutato solo nelle esecuzioni di conformità, quindi un gate di maturità farebbe fallire ogni entità. Seleziona una policy senza LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Carica i livelli predefiniti degli asset",
+      "hint": "Aggiunge una scala predefinita per asset tabella e vista (Prerequisite, 1 star, 2 stars, 3 stars) con policy di gate di esempio",
+      "loadedTitle": "Livelli degli asset caricati",
+      "loaded_one": "{{count}} livello di asset creato",
+      "loaded_other": "{{count}} livelli di asset creati",
+      "alreadyLoaded": "Esistono già livelli di asset: non è stato modificato nulla",
+      "loadFailed": "Impossibile caricare i livelli predefiniti degli asset"
     }
   },
   "directory": {

@@ -210,6 +210,296 @@ class TestDataProductRoutes:
         # Verify audit log
         verify_audit_log("data-products", "UPDATE", success=True)
 
+    @staticmethod
+    def _active_product_with_ports(client, sample_product_data, names):
+        sample_product_data["status"] = "active"
+        sample_product_data["outputPorts"] = [
+            {"name": n, "version": "1.0.0", "contractId": f"contract-{n}"} for n in names
+        ]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        # Ports as stored (with their ids), as a client reading them back sends them
+        sample_product_data["outputPorts"] = response.json()["outputPorts"]
+        return response.json()["id"]
+
+    def test_update_active_product_removing_output_port_requires_new_version(
+        self, client, sample_product_data
+    ):
+        """Removing an output port is a breaking change: the edit needs a new version."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a", "b"])
+        kept = sample_product_data["outputPorts"][:1]
+        update = {**sample_product_data, "id": product_id, "outputPorts": kept}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["requires_versioning"] is True
+        assert any("b" in c for c in detail["change_analysis"]["breaking_changes"])
+
+    def test_update_active_product_removing_output_port_with_force_header_applies(
+        self, client, sample_product_data
+    ):
+        """X-Force-Update (the dialog's "update in place") applies the breaking edit."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a", "b"])
+        kept = sample_product_data["outputPorts"][:1]
+        update = {**sample_product_data, "id": product_id, "outputPorts": kept}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update,
+                              headers={"X-Force-Update": "true"})
+
+        assert response.status_code == 200, response.text
+        assert [p["name"] for p in response.json()["outputPorts"]] == ["a"]
+
+    def test_a_non_admin_owner_cannot_force_a_breaking_edit(
+        self, client, db_session, mock_test_user, sample_product_data
+    ):
+        """X-Force-Update is honoured for admins only: an owner with Read/Write gets 409."""
+        from src.db_models.data_products import DataProductDb
+        from src.db_models.settings import AppRoleDb
+
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a", "b"])
+        # The caller owns the product, so only the versioning check can refuse the edit
+        db_session.get(DataProductDb, product_id).draft_owner_id = mock_test_user.email
+        group = f"product-writer-{uuid.uuid4().hex[:6]}"
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()), name=f"Product writer {group}", description="test role",
+            feature_permissions=json.dumps({"data-products": "Read/Write"}),
+            assigned_groups=json.dumps([group]), home_sections="[]",
+            approval_privileges="{}", is_admin=False,
+        ))
+        db_session.commit()
+        mock_test_user.groups = [group]  # Read/Write on data-products, not an admin
+        kept = sample_product_data["outputPorts"][:1]
+        update = {**sample_product_data, "id": product_id, "outputPorts": kept}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update,
+                              headers={"X-Force-Update": "true"})
+
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["user_can_override"] is False
+
+    def test_update_active_product_adding_output_port_is_not_breaking(
+        self, client, sample_product_data
+    ):
+        """Adding an output port is not breaking: the edit applies in place."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a"])
+        ports = sample_product_data["outputPorts"] + [
+            {"name": "b", "version": "1.0.0", "contractId": "contract-b"}
+        ]
+        update = {**sample_product_data, "id": product_id, "outputPorts": ports}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert len(response.json()["outputPorts"]) == 2
+
+    def test_update_active_product_recreating_an_output_port_requires_new_version(
+        self, client, sample_product_data
+    ):
+        """A same-named port sent without its id is a new port: consumers lose the old one."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a"])
+        port = {k: v for k, v in sample_product_data["outputPorts"][0].items() if k != "id"}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [port]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["requires_versioning"] is True
+
+    @staticmethod
+    def _active_product_with_a_pointed_port(client, sample_product_data):
+        sample_product_data["status"] = "active"
+        sample_product_data["outputPorts"] = [{
+            "name": "a", "version": "1.0.0", "contractId": "contract-a",
+            "assetType": "table", "assetIdentifier": "main.sales.orders",
+            "server": {"host": "kafka-a"},
+        }]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        [port] = response.json()["outputPorts"]
+        assert port["assetIdentifier"] == "main.sales.orders"
+        return response.json()["id"], port
+
+    def test_update_active_product_keeps_port_fields_it_leaves_out(
+        self, client, sample_product_data
+    ):
+        """A port sent without its asset type, identifier or server keeps them."""
+        product_id, port = self._active_product_with_a_pointed_port(client, sample_product_data)
+        left_out = ("assetType", "assetIdentifier", "server")
+        partial = {k: v for k, v in port.items() if k not in left_out}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [partial]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        [stored] = client.get(f"/api/data-products/{product_id}").json()["outputPorts"]
+        assert (stored.get("assetType"), stored.get("assetIdentifier")) == (
+            "table", "main.sales.orders")
+        assert (stored.get("server") or {}).get("host") == "kafka-a"
+
+    @staticmethod
+    def _active_product_with_a_described_port(client, sample_product_data):
+        sample_product_data["status"] = "active"
+        sample_product_data["outputPorts"] = [{
+            "name": "a", "version": "1.0.0", "contractId": "contract-a",
+            "description": "Daily orders", "status": "active",
+            "containsPii": True, "autoApprove": True,
+            "sbom": [{"type": "external", "url": "https://example.com/sbom.json"}],
+            "inputContracts": [{"id": "contract-up", "version": "1.0.0"}],
+        }]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        [port] = response.json()["outputPorts"]
+        assert port.get("containsPii") is True and port.get("sbom")
+        return response.json()["id"], port
+
+    def test_update_active_product_keeps_other_port_fields_it_leaves_out(
+        self, client, sample_product_data
+    ):
+        """As the port dialog sends it: without SBOM, input contracts or flags it left alone."""
+        product_id, port = self._active_product_with_a_described_port(client, sample_product_data)
+        sent = {"id": port["id"], "name": "a", "version": "1.0.0", "contractId": "contract-a"}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [sent]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        [stored] = client.get(f"/api/data-products/{product_id}").json()["outputPorts"]
+        assert (stored.get("description"), stored.get("status")) == ("Daily orders", "active")
+        assert (stored.get("containsPii"), stored.get("autoApprove")) == (True, True)
+        assert [s["url"] for s in stored.get("sbom") or []] == ["https://example.com/sbom.json"]
+        assert [c["id"] for c in stored.get("inputContracts") or []] == ["contract-up"]
+
+    def test_update_active_product_explicit_port_values_still_override(
+        self, client, sample_product_data
+    ):
+        """A sent value, null or empty list replaces the stored one."""
+        product_id, port = self._active_product_with_a_described_port(client, sample_product_data)
+        sent = {"id": port["id"], "name": "a", "version": "1.0.0", "contractId": "contract-a",
+                "description": None, "status": None, "containsPii": False,
+                "autoApprove": False, "sbom": [], "inputContracts": []}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [sent]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        [stored] = client.get(f"/api/data-products/{product_id}").json()["outputPorts"]
+        assert (stored.get("description"), stored.get("status")) == (None, None)
+        assert not stored.get("containsPii") and not stored.get("autoApprove")
+        assert not stored.get("sbom") and not stored.get("inputContracts")
+
+    @staticmethod
+    def _product_with_input_ports(client, sample_product_data, status="active"):
+        sample_product_data["status"] = status
+        sample_product_data["inputPorts"] = [
+            {"name": "orders", "version": "1.0.0", "contractId": "contract-orders",
+             "assetType": "table", "assetIdentifier": "main.sales.orders"},
+            {"name": "clicks", "version": "1.0.0", "contractId": "contract-clicks",
+             "assetType": "table", "assetIdentifier": "main.web.clicks"},
+        ]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    @staticmethod
+    def _input_assets(client, product_id):
+        ports = client.get(f"/api/data-products/{product_id}").json().get("inputPorts") or []
+        return {p["name"]: (p.get("assetType"), p.get("assetIdentifier")) for p in ports}
+
+    def test_update_keeps_input_port_fields_it_leaves_out(self, client, sample_product_data):
+        """Input ports are rewritten on update; a port sent without its asset keeps it."""
+        product_id = self._product_with_input_ports(client, sample_product_data)
+        sent = [{"name": "orders", "version": "1.0.0", "contractId": "contract-orders"},
+                {"name": "clicks", "version": "1.0.0", "contractId": "contract-clicks",
+                 "assetType": "view", "assetIdentifier": None}]
+        update = {**sample_product_data, "id": product_id, "inputPorts": sent}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert self._input_assets(client, product_id) == {
+            "orders": ("table", "main.sales.orders"),  # left out: kept
+            "clicks": ("view", None),  # sent: replaced, null clears
+        }
+
+    def test_update_without_an_input_port_in_the_list_removes_it(
+        self, client, sample_product_data
+    ):
+        """Leaving a whole port out of the list is how the UI deletes it."""
+        product_id = self._product_with_input_ports(client, sample_product_data, "draft")
+        sent = [{"name": "orders", "version": "1.0.0", "contractId": "contract-orders"}]
+        update = {**sample_product_data, "id": product_id, "inputPorts": sent}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert self._input_assets(client, product_id) == {
+            "orders": ("table", "main.sales.orders")}
+
+    @staticmethod
+    def _product_with_management_ports(client, sample_product_data):
+        sample_product_data["managementPorts"] = [
+            {"name": "health", "content": "observability", "type": "topic",
+             "url": "https://example.com/health", "channel": "#ops", "description": "Probe"},
+            {"name": "docs", "content": "discoverability",
+             "url": "https://example.com/docs", "channel": "#docs", "description": "Docs"},
+            {"name": "control", "content": "control", "url": "https://example.com/ctl"},
+        ]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    @staticmethod
+    def _management_fields(client, product_id):
+        ports = client.get(f"/api/data-products/{product_id}").json().get("managementPorts") or []
+        return {p["name"]: (p.get("type"), p.get("url"), p.get("channel"), p.get("description"))
+                for p in ports}
+
+    def test_update_keeps_management_port_fields_it_leaves_out(
+        self, client, sample_product_data
+    ):
+        """As for input ports: a left-out field is kept, null clears, a left-out port goes."""
+        product_id = self._product_with_management_ports(client, sample_product_data)
+        sent = [{"name": "health", "content": "observability"},
+                {"name": "docs", "content": "discoverability", "url": None,
+                 "channel": "#docs-2"}]
+        update = {**sample_product_data, "id": product_id, "managementPorts": sent}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert self._management_fields(client, product_id) == {
+            "health": ("topic", "https://example.com/health", "#ops", "Probe"),
+            "docs": ("rest", None, "#docs-2", "Docs"),
+        }
+
+    def test_update_active_product_clearing_a_port_asset_requires_new_version(
+        self, client, sample_product_data
+    ):
+        """An explicit null still unpoints the port: that is breaking."""
+        product_id, port = self._active_product_with_a_pointed_port(client, sample_product_data)
+        update = {**sample_product_data, "id": product_id,
+                  "outputPorts": [{**port, "assetIdentifier": None}]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["requires_versioning"] is True
+
+    def test_update_active_product_without_ports_in_body_keeps_ports(
+        self, client, sample_product_data
+    ):
+        """A partial update that omits ports is not read as removing them."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a"])
+
+        body = {k: v for k, v in sample_product_data.items() if k != "outputPorts"}
+        body.update(id=product_id, name="Renamed")
+
+        response = client.put(f"/api/data-products/{product_id}", json=body)
+
+        assert response.status_code == 200, response.text
+
     def test_update_product_get_body_roundtrip_ignores_publication_fields(
         self, client, sample_product_data
     ):
@@ -419,7 +709,8 @@ class TestDataProductRoutes:
     def test_publish_product_without_contracts_fails(
         self, client, sample_product_data
     ):
-        """Test that publishing without contracts returns 400."""
+        """Publishing a product its lifecycle can't publish (proposed) is a 409,
+        as for the other lifecycle actions (#1213)."""
         # Arrange
         sample_product_data["status"] = "proposed"
         create_response = client.post("/api/data-products", json=sample_product_data)
@@ -429,7 +720,8 @@ class TestDataProductRoutes:
         response = client.post(f"/api/data-products/{product_id}/publish")
 
         # Assert
-        assert response.status_code == 400
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "invalid_status_transition"
 
     def test_deprecate_product_success(self, client, sample_product_data):
         """Test POST /api/data-products/{id}/deprecate."""
@@ -675,10 +967,10 @@ class TestDataProductRoutes:
         import src.routes.data_product_routes as route_mod
         original = route_mod.user_has_feature_level
 
-        def deny_data_domains_write(auth_manager, user, feature_id, required_level):
+        def deny_data_domains_write(auth_manager, user, feature_id, required_level, request):
             if feature_id == "data-domains":
                 return False
-            return original(auth_manager, user, feature_id, required_level)
+            return original(auth_manager, user, feature_id, required_level, request)
 
         monkeypatch.setattr(route_mod, "user_has_feature_level", deny_data_domains_write)
 

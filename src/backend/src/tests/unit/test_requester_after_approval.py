@@ -125,3 +125,79 @@ def test_no_fallback_log_when_the_trigger_context_has_the_requester(db_session, 
         _resolve_role_to_users(db_session, 'requester', _resumed_context())
 
     assert not _fallback_records(caplog)
+
+
+def _scheduled_resumed_context(entity_type='schedule', entity_id='wf-1', **overrides):
+    """A scheduled run after Alice approved: no requester, the approver is acting."""
+    trigger = TriggerContext(
+        entity_type='schedule', entity_id='wf-1', entity_name='W',
+        trigger_type=TriggerType.SCHEDULED, user_email=None,
+    )
+    return _resumed_context(
+        entity_type=entity_type, entity_id=entity_id, trigger_context=trigger,
+        user_email='alice@example.com', **overrides,
+    )
+
+
+@pytest.mark.parametrize('token', ['requester', 'trigger_user'])
+def test_in_a_scheduled_run_the_requester_is_nobody_after_an_approval(db_session, token):
+    assert _resolve_role_to_users(db_session, token, _scheduled_resumed_context()) == []
+
+
+def test_a_scheduled_run_grants_nothing_to_the_approver_as_requester():
+    handler = GrantPermissionsStepHandler(None, {
+        'permission_type': 'SELECT', 'target_source': 'from_entity',
+        'principal_source': 'requester',
+    })
+    context = _scheduled_resumed_context(
+        entity_type='table', entity_id='main.sales.orders',
+        entity={'full_name': 'main.sales.orders'},
+    )
+
+    with patch('src.common.workspace_client.get_workspace_client',
+               side_effect=RuntimeError('no workspace')):
+        result = handler.execute(context)
+
+    assert result.passed is False
+    assert 'principal' in (result.error or '')
+
+
+def test_a_scheduled_run_creates_no_asset_review_with_a_made_up_requester(db_session):
+    from src.common.workflow_executor import CreateAssetReviewStepHandler
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
+
+    handler = CreateAssetReviewStepHandler(db_session, {'reviewer_role': 'DataSteward'})
+    result = handler.execute(_scheduled_resumed_context())
+
+    assert result.passed is False
+    assert db_session.query(DataAssetReviewRequestDb).count() == 0
+
+
+def test_the_reviewer_resolver_accepts_no_requester(db_session):
+    from src.common.workflow_executor import CreateAssetReviewStepHandler
+
+    handler = CreateAssetReviewStepHandler(db_session, {'reviewer_role': 'DataSteward'})
+    context = _scheduled_resumed_context()
+    context.trigger_context.entity_data = {'reviewer_email': 'steward@example.com'}
+
+    assert handler._resolve_reviewer('DataSteward', context, None) == 'steward@example.com'
+
+
+@pytest.mark.parametrize('trigger_type', [TriggerType.MANUAL, TriggerType.ON_REQUEST_REVIEW])
+def test_no_asset_review_for_any_trigger_without_a_user(db_session, trigger_type):
+    from src.common.workflow_executor import CreateAssetReviewStepHandler
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
+
+    trigger = TriggerContext(
+        entity_type='data_product', entity_id='product-1', entity_name='E',
+        trigger_type=trigger_type, user_email=None,
+        entity_data={'reviewer_email': 'steward@example.com'},
+    )
+    context = _resumed_context(trigger_context=trigger, user_email=None)
+    handler = CreateAssetReviewStepHandler(db_session, {'reviewer_role': 'DataSteward'})
+
+    result = handler.execute(context)
+
+    assert result.passed is False
+    assert 'no requester' in (result.error or '')
+    assert db_session.query(DataAssetReviewRequestDb).count() == 0

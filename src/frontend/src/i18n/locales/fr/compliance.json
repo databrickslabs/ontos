@@ -96,6 +96,15 @@
       "filteredAll": "Filtré sur tout — dernière exécution {{date}}"
     }
   },
+  "runStatus": {
+    "running": "En cours",
+    "succeeded": "Réussie",
+    "failed": "Échouée"
+  },
+  "resultsPaging": {
+    "shownOfTotal": "{{shown}} résultats affichés sur {{total}}.",
+    "loadMore": "Charger plus"
+  },
   "runDetails": {
     "runTitle": "Exécution {{id}}",
     "viewPolicy": "Voir la politique",
@@ -174,15 +183,41 @@
   "runErrors": {
     "entities_load_failed": "Les entités {{entityType}} n'ont pas pu être chargées ; la règle n'a donc pas pu être évaluée.",
     "rule_parse_failed": "La règle n'a pas pu être analysée : {{detail}}",
+    "run_failed": "L'exécution a échoué. Les détails figurent dans le journal de l'app.",
+    "user_token_required": "Cette règle vérifie des objets Unity Catalog, lus avec votre connexion Databricks, et la requête n'en avait pas ; elle n'a donc pas pu s'exécuter.",
     "workspace_client_unavailable": "L'espace de travail Databricks n'est pas disponible et cette règle vérifie des objets Unity Catalog ; elle n'a donc pas pu s'exécuter.",
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
   },
+  "tableSources": {
+    "notEvaluatedStatus": "Non évalué",
+    "runWarning": "Objets non évalués : {{count}}. La règle lit des champs de {{sources}}, qui n'ont pas pu être lus ({{reasons}}). Ils ne comptent ni comme réussis ni comme échoués, ni dans le score.",
+    "notEvaluated": "Non évalué : impossible de lire {{fields}} depuis {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "aucun SQL warehouse n'est configuré",
+      "no_access": "pas d'accès à la table système",
+      "query_failed": "la requête a échoué",
+      "timed_out": "la requête était encore en cours à la limite de temps",
+      "budget_exceeded": "l'exécution a atteint sa limite de requêtes sur le SQL warehouse",
+      "transient": "le SQL warehouse était temporairement indisponible, même après de nouvelles tentatives",
+      "not_found": "la table système est introuvable (le schéma système est-il activé ?)",
+      "not_loaded": "les tags de ce type d'objet ne sont pas encore lus"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Aucun score",
+    "coverage": "{{evaluated}} objets évalués sur {{total}} ; les autres ne comptent pas dans le score.",
+    "hiddenResults": "{{count}} résultats portent sur des objets Unity Catalog que vous ne pouvez pas lire ; ils ne sont pas affichés."
+  },
   "saveErrors": {
-    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
+    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe.",
+    "llm_check_criterion_not_literal": "LLM_CHECK prend un texte et un critère écrit comme littéral de chaîne, par exemple LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger.",
-    "notifications_failed": "Les notifications de la politique (NOTIFY) n'ont pas pu être envoyées pour cette exécution. Les résultats sont complets."
+    "notifications_failed": "Les notifications de la politique (NOTIFY) n'ont pas pu être envoyées pour cette exécution. Les résultats sont complets.",
+    "llm_check_budget_exceeded": "{{count}} vérifications LLM n'ont pas été exécutées car l'exécution a atteint son budget de {{budget}} appels au modèle ; ces entités ont donc échoué. Relancez-la (les verdicts en cache ne comptent pas) ou augmentez COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} vérifications LLM n’ont pas été exécutées, car vous avez utilisé vos {{limit}} appels au modèle pour aujourd’hui ; ces entités ont donc échoué. Relancez-la demain (les verdicts en cache ne comptent pas) ou demandez à un administrateur d’augmenter COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.",
+    "no_entities_matched": "Aucune entité ne correspond à cette règle, donc rien n'a été vérifié. Si vous en attendiez, vérifiez le type MATCH et la condition WHERE."
   },
   "actionOutcomes": {
     "status": {
@@ -205,5 +240,54 @@
       "notify_unknown_recipient": "{{recipient}} n'est pas un destinataire connu : utilisez un e-mail, group:<nom>, un rôle de l'application ou un mot-clé de destinataire",
       "action_failed": "L'action a échoué"
     }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(en cache)",
+    "failedReason": "LLM_CHECK '{{criterion}}' : {{reason}}",
+    "test": {
+      "title": "Tester sur une entité d'exemple",
+      "hint": "Exécute l'ASSERT de la règle, critères LLM_CHECK compris, sur une entité à laquelle la règle s'applique. La règle n'est pas enregistrée.",
+      "entityPlaceholder": "Nom ou id de l'entité (vide : la première correspondance)",
+      "run": "Tester",
+      "running": "Test en cours...",
+      "noRule": "Saisissez d'abord une règle.",
+      "failed": "La règle n'a pas pu être testée.",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "Aucun LLM_CHECK n'a été évalué pour cette entité."
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK n'est évalué que dans les exécutions de conformité, dans l'ASSERT.",
+      "llm_check_disabled": "Les fonctions LLM sont désactivées, donc LLM_CHECK échoue.",
+      "llm_check_no_endpoint": "Aucun endpoint de serving n'est configuré, donc LLM_CHECK échoue.",
+      "llm_check_budget_exceeded": "Non vérifié : l'exécution a atteint son budget d'appels au modèle.",
+      "llm_check_text_too_long": "Non vérifié : le texte est trop long.",
+      "llm_check_call_failed": "L'endpoint de serving n'a pas pu être appelé.",
+      "llm_check_refused": "Le modèle a refusé de juger le texte.",
+      "llm_check_empty_reply": "Le modèle n'a renvoyé aucune réponse.",
+      "llm_check_truncated": "La réponse du modèle ne s'est pas terminée.",
+      "llm_check_invalid_reply": "La réponse du modèle n'était pas un verdict PASS ou FAIL.",
+      "llm_check_empty_text": "Le texte est vide.",
+      "llm_check_text_too_short": "Non vérifié : le texte est trop court pour être évalué.",
+      "rule_evaluation_failed": "La règle n'a pas pu être évaluée sur cette entité.",
+      "llm_check_text_rejected": "Non vérifié : le contrôle de sécurité a signalé le texte (par exemple, des instructions au modèle).",
+      "llm_check_daily_quota_exceeded": "Non vérifié : vous avez utilisé vos appels au modèle pour aujourd’hui.",
+      "llm_check_external_endpoint": "Non vérifié : LLM_BASE_URL pointe en dehors de cet espace de travail Databricks, et LLM_CHECK n’envoie le texte des entités qu’aux serving endpoints de l’espace de travail."
+    },
+    "errors": {
+      "sample_entity_not_found": "Aucune entité à laquelle la règle s'applique n'a été trouvée. Vérifiez le nom, ou laissez-le vide pour utiliser la première correspondance.",
+      "llm_check_test_rate_limited": "Trop de tests en peu de temps. Réessayez dans {{retryAfter}} secondes.",
+      "llm_check_entity_read_required": "Cette règle utilise LLM_CHECK sur des entités {{entityType}}. L’exécuter ou la tester nécessite un accès en lecture à celles-ci.",
+      "llm_check_admin_required": "Cette règle utilise LLM_CHECK. L’enregistrer, l’exécuter ou la tester nécessite un accès administrateur à la conformité.",
+      "llm_check_tag_action": "Une règle avec LLM_CHECK ne peut pas utiliser ASSIGN_TAG ni REMOVE_TAG ({{actions}}) : le verdict du modèle modifierait des tags. Utilisez NOTIFY, ou une règle distincte sans LLM_CHECK pour les actions sur les tags.",
+      "llm_check_daily_quota_exceeded": "Vous avez utilisé vos {{limit}} appels au modèle LLM_CHECK pour aujourd’hui. Réessayez dans {{retryAfter}} secondes (le décompte repart à minuit UTC).",
+      "llm_check_policy_in_use": "Cette politique est utilisée par {{workflowSteps}} vérifications de politique de workflow et {{maturityGates}} seuils de maturité. Ils ne peuvent pas évaluer LLM_CHECK, donc chaque entité y échouerait. Retirez-en d’abord la politique, ou utilisez LLM_CHECK dans une politique distincte.",
+      "llm_check_policy_in_self_service": "Cette politique figure dans le mappage de conformité du libre-service pour {{objectTypes}}. Le libre-service ne peut pas évaluer LLM_CHECK, il y refuserait donc chaque objet. Retirez d’abord la politique du mappage, ou utilisez LLM_CHECK dans une politique distincte.",
+      "llm_check_in_where": "LLM_CHECK n'est évalué que dans l'ASSERT. Dans le WHERE, il échoue, et la règle ignore donc toutes les entités. Déplacez-le dans l'ASSERT."
+    },
+    "usage": "LLM_CHECK : {{calls}} appels au modèle, {{cached}} verdicts issus du cache.",
+    "notEvaluated": "Non évalué",
+    "notEvaluatedCount": "Non évalués : {{count}} (un LLM_CHECK n’a pas pu s’exécuter ; ni comptés comme échecs ni dans le score)."
   }
 }

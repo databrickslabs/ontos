@@ -6,6 +6,7 @@ import DeprecationNotice from '@/components/common/deprecation-notice';
 import { useTranslation } from 'react-i18next';
 import { DataProduct, InputPort, OutputPort, ManagementPort, TeamMember, Support, SubscriptionResponse, SubscribersListResponse } from '@/types/data-product';
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
+import ProductDomainBadges from '@/components/data-products/product-domain-badges';
 import InputPortFormDialog from '@/components/data-products/input-port-form-dialog';
 import OutputPortFormDialog from '@/components/data-products/output-port-form-dialog';
 import ManagementPortFormDialog from '@/components/data-products/management-port-form-dialog';
@@ -43,7 +44,6 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 import AccessGrantsPanel from '@/components/access/access-grants-panel';
-import { useDomains } from '@/hooks/use-domains';
 import RequestProductActionDialog from '@/components/data-products/request-product-action-dialog';
 import CommitDraftDialog from '@/components/data-products/commit-draft-dialog';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
@@ -66,6 +66,7 @@ import PublicationScopeBadge from '@/components/common/publication-scope-badge';
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs';
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
+import { omitTags } from '@/lib/tag-payload';
 import { ApprovalEntity } from '@/types/settings';
 
 /**
@@ -202,31 +203,31 @@ export function isProductReadOnly(args: {
 /**
  * Final "can the user modify this product" gate combining role + status flags.
  * Admins can always modify; write-class users can modify when the product is
- * editable-in-place or a personal draft.
+ * editable-in-place or a personal draft, unless the backend said they can't
+ * write this product (`productWritable === false`: not an owner, e.g. a
+ * reviewer of a product under review, #1613). `null`/`undefined` = not known.
  */
 export function canUserModifyProduct(args: {
   canAdmin: boolean;
   canWrite: boolean;
   canEditInPlace: boolean;
   isPersonalDraft: boolean;
+  productWritable?: boolean | null;
 }): boolean {
   if (args.canAdmin) return true;
+  if (args.productWritable === false) return false;
   return args.canWrite && (args.canEditInPlace || args.isPersonalDraft);
 }
 
-/**
- * Resolve the human-readable domain label for a product. Falls back to the
- * raw domain id when the lookup misses, and to a "not assigned" sentinel when
- * the product has no domain at all.
- */
-export function resolveDomainLabel(args: {
-  domain: string | undefined | null;
-  resolveName: (id: string) => string | undefined | null;
-  notAssignedLabel: string;
-}): string {
-  const { domain, resolveName, notAssignedLabel } = args;
-  if (!domain) return notAssignedLabel;
-  return resolveName(domain) || domain;
+/** Path of the caller's access to a product (`{ can_write }`, #1613). */
+export function productAccessPath(productId: string): string {
+  return `/api/data-products/${encodeURIComponent(productId)}/my-access`;
+}
+
+/** Path of a product's active business owners (query-param form, #1612). */
+export function productOwnersPath(productId: string): string {
+  const id = encodeURIComponent(productId);
+  return `/api/business-owners/by-object/data_product?object_id=${id}&active_only=true`;
 }
 
 /**
@@ -447,6 +448,35 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
   );
 }
 
+/**
+ * PUT a product update. Resolves `{ status: 'versioning', detail }` when the
+ * backend answers 409 with `requires_versioning` (breaking change on a
+ * non-draft product), `{ status: 'applied' }` on success, and throws otherwise.
+ */
+export async function putProductUpdate(
+  productId: string,
+  body: unknown,
+  forceUpdate = false,
+  failureLabel = 'Update failed',
+  fetchFn: typeof fetch = fetch,
+): Promise<{ status: 'applied' } | { status: 'versioning'; detail: any }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (forceUpdate) headers['X-Force-Update'] = 'true';
+  const res = await fetchFn(`/api/data-products/${productId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (res.status === 409) {
+    const detail = (await res.json())?.detail;
+    if (detail && typeof detail === 'object' && detail.requires_versioning) {
+      return { status: 'versioning', detail };
+    }
+  }
+  if (!res.ok) throw new Error(`${failureLabel} (${res.status})`);
+  return { status: 'applied' };
+}
+
 export default function DataProductDetails() {
   const { t } = useTranslation(['data-products', 'common']);
   const { productId } = useParams<{ productId: string }>();
@@ -468,8 +498,6 @@ export default function DataProductDetails() {
   } = usePermissions();
   const { userInfo, fetchUserInfo } = useUserStore();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
-  const { getDomainName, getDomainIdByName } = useDomains();
-
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -549,7 +577,15 @@ export default function DataProductDetails() {
   const isReadOnly = isProductReadOnly({ canAdmin, canEditInPlace, isPersonalDraft });
 
   // Combined permission check: admin can always edit; others need write + editable status
-  const canModify = canUserModifyProduct({ canAdmin, canWrite, canEditInPlace, isPersonalDraft });
+  // Whether the backend lets this caller write this product (owner or data-products
+  // admin); null until known (#1613).
+  const [productWritable, setProductWritable] = useState<boolean | null>(null);
+  const canModify = canUserModifyProduct({
+    canAdmin, canWrite, canEditInPlace, isPersonalDraft, productWritable,
+  });
+  // A writer who doesn't own this editable product: say why Edit is missing.
+  const showNotOwnerHint =
+    !canAdmin && canWrite && productWritable === false && (canEditInPlace || isPersonalDraft);
 
   // View mode state for filtering sections - initialize from localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(
@@ -714,11 +750,28 @@ export default function DataProductDetails() {
   }, [productId, canRead, permissionsLoading]);
 
   useEffect(() => {
+    setProductWritable(null);
+    if (!productId || !product?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await get<{ can_write?: boolean }>(productAccessPath(productId));
+        if (!cancelled && !res.error && typeof res.data?.can_write === 'boolean') {
+          setProductWritable(res.data.can_write);
+        }
+      } catch { /* unknown: the write routes still check */ }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, product?.id, get]);
+
+  useEffect(() => {
     if (!productId) return;
     (async () => {
       try {
         const res = await get<Array<{ user_name?: string | null; user_email: string; role_name?: string | null; is_active: boolean }>>(
-          `/api/business-owners/by-object/data_product/${productId}?active_only=true`
+          productOwnersPath(productId),
         );
         if (!res.error && Array.isArray(res.data)) {
           setSidebarOwners(res.data.filter((o) => o.is_active));
@@ -887,38 +940,26 @@ export default function DataProductDetails() {
   // Check if product is subscribable (active or certified)
   const isSubscribable = product?.status && product.status.toLowerCase() === 'active';
 
-  // Helper function to update product with 409 handling
-  const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {
-    if (!productId) return;
-    
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
-    if (forceUpdate) {
-      headers['X-Force-Update'] = 'true';
+  // Helper function to update product with 409 handling. Resolves true when the
+  // update was applied, false when the versioning dialog took over.
+  const updateProduct = async (
+    updatedProduct: DataProduct,
+    forceUpdate: boolean = false,
+    failureLabel?: string,
+  ): Promise<boolean> => {
+    if (!productId) return false;
+
+    const result = await putProductUpdate(productId, updatedProduct, forceUpdate, failureLabel);
+    if (result.status === 'versioning') {
+      // Store the pending update and show versioning dialog
+      setPendingUpdate(updatedProduct);
+      setVersioningAnalysis(result.detail.change_analysis);
+      setVersioningUserCanOverride(result.detail.user_can_override);
+      setIsVersioningDialogOpen(true);
+      return false;
     }
-    
-    const res = await fetch(`/api/data-products/${productId}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(updatedProduct),
-    });
-    
-    // Handle 409 Conflict - versioning required
-    if (res.status === 409) {
-      const conflictData = await res.json();
-      const detail = conflictData.detail;
-      
-      if (detail && typeof detail === 'object' && detail.requires_versioning) {
-        // Store the pending update and show versioning dialog
-        setPendingUpdate(updatedProduct);
-        setVersioningAnalysis(detail.change_analysis);
-        setVersioningUserCanOverride(detail.user_can_override);
-        setIsVersioningDialogOpen(true);
-        return; // Don't throw, let the dialog handle it
-      }
-    }
-    
-    if (!res.ok) throw new Error(`Update failed (${res.status})`);
     await fetchProductDetails();
+    return true;
   };
 
   // Handlers for versioning dialog
@@ -952,13 +993,12 @@ export default function DataProductDetails() {
     if (!productId || !product) return;
     try {
       const updatedPorts = [...(product.inputPorts || []), port];
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to add consumable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), inputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to add consumable',
+      );
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add consumable');
     }
@@ -969,13 +1009,12 @@ export default function DataProductDetails() {
     try {
       const updatedPorts = [...(product.inputPorts || [])];
       updatedPorts[editingInputPortIndex] = port;
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to update consumable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), inputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to update consumable',
+      );
+      if (!applied) return false; // versioning dialog is open
       setEditingInputPortIndex(null);
       toast({ title: t('data-products:details.toasts.consumableUpdatedTitle'), description: t('data-products:details.toasts.consumableUpdatedMessage') });
     } catch (e: any) {
@@ -989,13 +1028,12 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteConsumable'))) return;
     try {
       const updatedPorts = (product.inputPorts || []).filter((_, i) => i !== index);
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete consumable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), inputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to delete consumable',
+      );
+      if (!applied) return; // versioning dialog is open
       toast({ title: t('data-products:details.toasts.consumableDeletedTitle'), description: t('data-products:details.toasts.consumableDeletedMessage') });
     } catch (e: any) {
       toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete consumable', variant: 'destructive' });
@@ -1006,13 +1044,12 @@ export default function DataProductDetails() {
     if (!productId || !product) return;
     try {
       const updatedPorts = [...(product.outputPorts || []), port];
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to add deliverable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), outputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to add deliverable',
+      );
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add deliverable');
     }
@@ -1023,13 +1060,12 @@ export default function DataProductDetails() {
     try {
       const updatedPorts = [...(product.outputPorts || [])];
       updatedPorts[editingOutputPortIndex] = port;
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to update deliverable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), outputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to update deliverable',
+      );
+      if (!applied) return false; // versioning dialog is open
       setEditingOutputPortIndex(null);
       toast({ title: t('data-products:details.toasts.deliverableUpdatedTitle'), description: t('data-products:details.toasts.deliverableUpdatedMessage') });
     } catch (e: any) {
@@ -1043,13 +1079,12 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteDeliverable'))) return;
     try {
       const updatedPorts = (product.outputPorts || []).filter((_, i) => i !== index);
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete deliverable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), outputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to delete deliverable',
+      );
+      if (!applied) return; // versioning dialog is open
       toast({ title: t('data-products:details.toasts.deliverableDeletedTitle'), description: t('data-products:details.toasts.deliverableDeletedMessage') });
     } catch (e: any) {
       toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete deliverable', variant: 'destructive' });
@@ -1060,13 +1095,12 @@ export default function DataProductDetails() {
     if (!productId || !product) return;
     try {
       const updatedPorts = [...(product.managementPorts || []), port];
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to add management port (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), managementPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to add management port',
+      );
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add management port');
     }
@@ -1077,13 +1111,12 @@ export default function DataProductDetails() {
     try {
       const updatedPorts = [...(product.managementPorts || [])];
       updatedPorts[editingManagementPortIndex] = port;
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to update management port (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), managementPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to update management port',
+      );
+      if (!applied) return false; // versioning dialog is open
       setEditingManagementPortIndex(null);
       toast({ title: t('data-products:details.toasts.managementPortUpdatedTitle'), description: t('data-products:details.toasts.managementPortUpdatedMessage') });
     } catch (e: any) {
@@ -1097,13 +1130,12 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteManagementPort'))) return;
     try {
       const updatedPorts = (product.managementPorts || []).filter((_, i) => i !== index);
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete management port (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...omitTags(product), managementPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to delete management port',
+      );
+      if (!applied) return; // versioning dialog is open
       toast({ title: t('data-products:details.toasts.managementPortDeletedTitle'), description: t('data-products:details.toasts.managementPortDeletedMessage') });
     } catch (e: any) {
       toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete management port', variant: 'destructive' });
@@ -1118,7 +1150,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam }),
+        body: JSON.stringify({ ...omitTags(product), team: updatedTeam }),
       });
       if (!res.ok) throw new Error(`Failed to add team member (${res.status})`);
       await fetchProductDetails();
@@ -1145,7 +1177,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam }),
+        body: JSON.stringify({ ...omitTags(product), team: updatedTeam }),
       });
       if (!res.ok) throw new Error(`Failed to update team member (${res.status})`);
       await fetchProductDetails();
@@ -1171,7 +1203,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, support: updatedChannels }),
+        body: JSON.stringify({ ...omitTags(product), support: updatedChannels }),
       });
       if (!res.ok) throw new Error(`Failed to add support channel (${res.status})`);
       await fetchProductDetails();
@@ -1188,7 +1220,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, support: updatedChannels }),
+        body: JSON.stringify({ ...omitTags(product), support: updatedChannels }),
       });
       if (!res.ok) throw new Error(`Failed to update support channel (${res.status})`);
       await fetchProductDetails();
@@ -1208,7 +1240,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, support: updatedChannels }),
+        body: JSON.stringify({ ...omitTags(product), support: updatedChannels }),
       });
       if (!res.ok) throw new Error(`Failed to delete support channel (${res.status})`);
       await fetchProductDetails();
@@ -1231,17 +1263,12 @@ export default function DataProductDetails() {
       const updatedPorts = [...(product.outputPorts || [])];
       updatedPorts[portIndex] = { ...updatedPorts[portIndex], contractId: undefined };
       
-      // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = product.tags?.map((tag: any) => 
-        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
-      );
-      
+      // Tags are left out: the stored set stays as it is (#1435).
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          ...product, 
-          tags: normalizedTags,
+          ...omitTags(product), 
           outputPorts: updatedPorts 
         }),
       });
@@ -1375,12 +1402,6 @@ export default function DataProductDetails() {
       </Alert>
     );
   }
-
-  const domainLabel = resolveDomainLabel({
-    domain: product.domain,
-    resolveName: getDomainName,
-    notAssignedLabel: t('common:states.notAssigned'),
-  });
 
   return (
     <div className="py-6 space-y-6">
@@ -1558,6 +1579,18 @@ export default function DataProductDetails() {
         </Alert>
       )}
 
+      {/* Not an owner: can read, can't edit (#1613) */}
+      {showNotOwnerHint && (
+        <Alert data-testid="product-not-owner-hint">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>{t('data-products:productAccess.notOwnerTitle')}</strong>
+            {' - '}
+            {t('data-products:productAccess.notOwnerMessage')}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Read-Only Banner */}
       {isReadOnly && (
         <Alert className="bg-yellow-50 border-yellow-300 dark:bg-yellow-950 dark:border-yellow-800">
@@ -1631,21 +1664,10 @@ export default function DataProductDetails() {
                   <span className="text-xs text-muted-foreground">—</span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.domain')}:</Label>
-                {product.domain && getDomainIdByName(domainLabel) ? (
-                  <span
-                    className="text-xs cursor-pointer text-primary hover:underline truncate"
-                    onClick={() => navigate(`/settings/data-domains/${getDomainIdByName(domainLabel)}`)}
-                  >
-                    {domainLabel}
-                  </span>
-                ) : product.domain ? (
-                  <span className="text-xs text-muted-foreground truncate">{domainLabel}</span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
-              </div>
+              <ProductDomainBadges
+                product={product}
+                onDomainClick={(domainId) => navigate(`/settings/data-domains/${domainId}`)}
+              />
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.project')}:</Label>
                 {(product as any).project_id && product.project_name ? (

@@ -1,0 +1,470 @@
+"""ODCS values keep their JSON type and their ids (#610).
+
+- An SLA property's `value` was stored with `str()`: `true` came back as the
+  string "True", and a string that looks like a number came back as a number.
+- A contract custom property did the same (`true` -> "True").
+- A role's `customProperties` went out as a `{property: value}` map (the ODCS
+  list is required: the export failed validation) with the values as text, and
+  without their ids; a re-import of that export dropped them.
+- `price.id` and a relationship's `id` (ODCS v3.2.0) were not stored.
+"""
+import copy
+import uuid
+from pathlib import Path
+
+import pytest
+from sqlalchemy.orm import Session
+
+from src.controller.data_contracts_manager import DataContractsManager
+from src.db_models.data_contracts import DataContractDb
+
+VALUES = ['text', '42', 42, 4.5, True, False, {'nested': [1, 'two']}, [1, 2]]
+SLA = [{'id': f'sla-{i}', 'property': f'p{i}', 'value': v}
+       for i, v in enumerate(VALUES[:6])] + [
+    {'id': 'sla-ext', 'property': 'latency', 'value': 4, 'valueExt': 'p99', 'unit': 'd'}]
+CUSTOM = [{'id': f'cp-{i}', 'property': f'cp{i}', 'value': v} for i, v in enumerate(VALUES)]
+ROLES = [{
+    'id': 'role-0', 'role': 'reader', 'access': 'read',
+    'customProperties': [{'id': f'role-cp-{i}', 'property': f'rcp{i}', 'value': v}
+                         for i, v in enumerate(VALUES)],
+}]
+PRICE = {'id': 'price-0', 'priceAmount': 9.95, 'priceCurrency': 'USD', 'priceUnit': 'megabyte'}
+
+
+def _manager():
+    return DataContractsManager(data_dir=Path("/tmp"))
+
+
+def _odcs(api_version='v3.1.0'):
+    return {
+        'apiVersion': api_version, 'kind': 'DataContract', 'id': str(uuid.uuid4()),
+        'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+        'slaProperties': copy.deepcopy(SLA), 'customProperties': copy.deepcopy(CUSTOM),
+        'roles': copy.deepcopy(ROLES), 'price': dict(PRICE),
+    }
+
+
+def _export(manager, db_session, contract_id):
+    db_session.expire_all()
+    return manager.build_odcs_from_db(db_session.get(DataContractDb, contract_id), db_session)
+
+
+def _upload(manager, db_session, document):
+    contract = manager.create_from_upload(db_session, document, current_user='alice')
+    db_session.commit()
+    return contract.id
+
+
+@pytest.fixture
+def imported(db_session: Session):
+    manager = _manager()
+    return manager, _upload(manager, db_session, _odcs())
+
+
+def _typed(value):
+    """The value with its type, so that 1 == True and '42' == 42 don't pass."""
+    return (type(value).__name__, value)
+
+
+def _by(items, key='property'):
+    return {i[key]: i for i in items}
+
+
+def test_sla_values_keep_their_type(db_session, imported):
+    manager, cid = imported
+
+    exported = _by(_export(manager, db_session, cid)['slaProperties'])
+
+    for item in SLA:
+        assert _typed(exported[item['property']]['value']) == _typed(item['value'])
+        assert exported[item['property']]['id'] == item['id']
+    assert exported['latency']['valueExt'] == 'p99'
+
+
+def test_contract_custom_properties_keep_their_type(db_session, imported):
+    manager, cid = imported
+
+    exported = _by(_export(manager, db_session, cid)['customProperties'])
+
+    for item in CUSTOM:
+        assert _typed(exported[item['property']]['value']) == _typed(item['value'])
+        assert exported[item['property']]['id'] == item['id']
+
+
+def test_role_custom_properties_go_out_as_the_odcs_list(db_session, imported):
+    manager, cid = imported
+
+    role = _export(manager, db_session, cid)['roles'][0]
+
+    assert role['customProperties'] == ROLES[0]['customProperties']
+    assert [_typed(cp['value']) for cp in role['customProperties']] == [_typed(v) for v in VALUES]
+
+
+def test_a_reimport_of_the_export_keeps_the_role_custom_properties(db_session, imported):
+    manager, cid = imported
+    exported = _export(manager, db_session, cid)
+
+    again = _export(manager, db_session, _upload(manager, db_session, copy.deepcopy(exported)))
+
+    assert again['roles'] == exported['roles'] == ROLES
+
+
+def test_the_price_id_is_kept(db_session, imported):
+    manager, cid = imported
+
+    assert _export(manager, db_session, cid)['price'] == PRICE
+
+
+def test_a_new_version_keeps_ids_types_and_roles(db_session, imported):
+    manager, cid = imported
+    before = _export(manager, db_session, cid)
+
+    new = manager.clone_contract_for_new_version(db_session, cid, '2.0.0', current_user='alice')
+
+    after = _export(manager, db_session, new.id)
+    assert after['price'] == before['price']
+    assert after['roles'] == before['roles']
+    assert after['slaProperties'] == before['slaProperties']
+    custom = lambda doc: [cp for cp in doc['customProperties']  # noqa: E731
+                          if cp['property'].startswith('cp')]
+    assert custom(after) == custom(before)
+
+
+def _with_relationship_ids():
+    doc = _odcs('v3.2.0')
+    doc['schema'] = [
+        {'name': 'customers', 'properties': [{'name': 'customer_id', 'logicalType': 'string'}]},
+        {'name': 'orders',
+         'relationships': [{'id': 'rel-orders-customer', 'type': 'foreignKey',
+                            'from': 'orders.customer_id', 'to': 'customers.customer_id'}],
+         'properties': [{'name': 'customer_id', 'logicalType': 'string',
+                         'relationships': [{'id': 'rel-prop-customer', 'type': 'foreignKey',
+                                            'to': 'customers.customer_id'}]}]},
+    ]
+    return doc
+
+
+def test_relationship_ids_are_kept(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _with_relationship_ids())
+
+    orders = _by(_export(manager, db_session, cid)['schema'], 'name')['orders']
+
+    assert orders['relationships'][0]['id'] == 'rel-orders-customer'
+    assert orders['properties'][0]['relationships'][0]['id'] == 'rel-prop-customer'
+
+
+def test_a_new_version_keeps_the_relationship_ids(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _with_relationship_ids())
+
+    new = manager.clone_contract_for_new_version(db_session, cid, '2.0.0', current_user='alice')
+
+    orders = _by(_export(manager, db_session, new.id)['schema'], 'name')['orders']
+    assert orders['relationships'][0]['id'] == 'rel-orders-customer'
+    assert orders['properties'][0]['relationships'][0]['id'] == 'rel-prop-customer'
+
+
+# --- read-modify-write through the contract API ---------------------------
+
+def _api(manager, db_session, contract_id):
+    db_session.expire_all()
+    contract = db_session.get(DataContractDb, contract_id)
+    return manager._build_contract_api_model(db_session, contract).model_dump(by_alias=True)
+
+
+def _save(manager, db_session, contract_id, body):
+    from src.models.data_contracts_api import DataContractUpdate
+
+    manager.update_contract_with_relations(
+        db_session, contract_id, DataContractUpdate.model_validate(body), current_user='alice')
+
+
+@pytest.mark.parametrize('saves', [1, 2])
+def test_saving_the_custom_properties_the_api_returns_changes_nothing(
+        db_session, imported, saves):
+    manager, cid = imported
+    before = _export(manager, db_session, cid)['customProperties']
+
+    for _ in range(saves):  # what the contract page sends after an edit
+        _save(manager, db_session, cid,
+              {'customProperties': _api(manager, db_session, cid)['customProperties']})
+
+    assert _export(manager, db_session, cid)['customProperties'] == before
+
+
+@pytest.mark.parametrize('saves', [1, 2])
+def test_saving_the_sla_properties_the_api_returns_changes_nothing(db_session, imported, saves):
+    manager, cid = imported
+    before = _export(manager, db_session, cid)['slaProperties']
+
+    for _ in range(saves):
+        _save(manager, db_session, cid,
+              {'slaProperties': _api(manager, db_session, cid)['slaProperties']})
+
+    assert _export(manager, db_session, cid)['slaProperties'] == before
+
+
+def test_the_api_returns_the_relationship_row_id_and_odcs_id(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _with_relationship_ids())
+
+    orders = _by(_api(manager, db_session, cid)['schema'], 'name')['orders']
+
+    relationship = orders['relationships'][0]
+    assert relationship['stableId'] == 'rel-orders-customer'
+    assert relationship['id'] and relationship['id'] != 'rel-orders-customer'
+
+
+def test_an_editor_save_keeps_the_relationship_ids(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _with_relationship_ids())
+    orders = _by(_api(manager, db_session, cid)['schema'], 'name')['orders']
+    form = {'name': 'orders', 'relationships': orders['relationships'],
+            'properties': [{'name': 'customer_id', 'logicalType': 'string'}]}
+
+    _save(manager, db_session, cid, {'schema': [form]})
+
+    orders = _by(_export(manager, db_session, cid)['schema'], 'name')['orders']
+    assert orders['relationships'][0]['id'] == 'rel-orders-customer'
+    assert orders['properties'][0]['relationships'][0]['id'] == 'rel-prop-customer'
+
+
+def test_role_custom_properties_written_as_a_map_by_older_exports_are_imported(db_session):
+    manager = _manager()
+    doc = _odcs()
+    doc['roles'] = [{'role': 'reader', 'customProperties': {'ttlDays': 30, 'owner': 'ops'}}]
+
+    role = _export(manager, db_session, _upload(manager, db_session, doc))['roles'][0]
+
+    assert role['customProperties'] == [{'property': 'ttlDays', 'value': 30},
+                                        {'property': 'owner', 'value': 'ops'}]
+
+
+def test_the_relationship_routes_return_the_odcs_id_apart_from_the_row_id(db_session):
+    from src.db_models.data_contracts import SchemaObjectRelationshipDb
+    from src.routes.data_contracts_routes import _relationship_db_to_dict
+
+    manager = _manager()
+    _upload(manager, db_session, _with_relationship_ids())
+    row = db_session.query(SchemaObjectRelationshipDb).one()
+
+    item = _relationship_db_to_dict(row)
+
+    assert (item['id'], item['stableId']) == (row.id, 'rel-orders-customer')
+
+
+# --- SLA values are never collections (ODCS AnyNonCollectionType) ------------
+
+@pytest.mark.parametrize('field,bad', [
+    ('valueExt', {'p99': 4}), ('valueExt', ['p99']), ('value', {'a': 1}), ('value', [1]),
+])
+def test_an_import_with_an_sla_collection_is_refused(db_session, field, bad):
+    from src.controller.data_contracts_manager import SlaValueCollectionError
+
+    document = _odcs()
+    document['slaProperties'] = [{'property': 'latency', 'value': 4, field: bad}]
+
+    with pytest.raises(SlaValueCollectionError) as err:
+        _upload(_manager(), db_session, document)
+
+    assert err.value.code == 'sla_value_collection'
+    assert err.value.params == {'property': 'latency', 'field': field}
+    db_session.rollback()
+    assert db_session.query(DataContractDb).filter_by(name=document['name']).count() == 0
+
+
+@pytest.mark.parametrize('field', ['value', 'valueExt'])
+def test_an_update_with_an_sla_collection_is_refused(db_session, imported, field):
+    from src.controller.data_contracts_manager import SlaValueCollectionError
+
+    manager, cid = imported
+    sla = _api(manager, db_session, cid)['slaProperties']
+    sla[0][field] = {'nested': True}
+
+    with pytest.raises(SlaValueCollectionError) as err:
+        _save(manager, db_session, cid, {'slaProperties': sla})
+
+    assert err.value.params == {'property': sla[0]['property'], 'field': field}
+
+
+@pytest.mark.parametrize('field,column', [('valueExt', 'value_ext'), ('value', 'value')])
+def test_a_collection_stored_before_goes_out_as_text_and_a_save_keeps_it(
+        db_session, imported, field, column):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    row = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='latency').one()
+    setattr(row, column, '{"p99": 4}')  # what development wrote with json.dumps
+    db_session.commit()
+
+    exported = _by(_export(manager, db_session, cid)['slaProperties'])['latency']
+    assert exported[field] == '{"p99": 4}'
+    # the contract page sends back what the API returns: not refused
+    _save(manager, db_session, cid,
+          {'slaProperties': _api(manager, db_session, cid)['slaProperties']})
+    assert _by(_export(manager, db_session, cid)['slaProperties'])['latency'][field] == \
+        '{"p99": 4}'
+
+
+# --- POST create stores the SLA (it dropped it) --------------------------------
+
+def test_a_created_contract_keeps_its_sla_properties(db_session):
+    from src.models.data_contracts_api import DataContractCreate
+
+    manager = _manager()
+    manager._queue_delivery = lambda *a, **k: None
+    manager._update_search_index = lambda *a, **k: None
+    body = {'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+            'slaProperties': copy.deepcopy(SLA)}
+    created = manager.create_contract_with_relations(
+        db_session, DataContractCreate.model_validate(body), current_user='alice')
+
+    exported = _by(_export(manager, db_session, created.id)['slaProperties'])
+    for item in SLA:
+        assert _typed(exported[item['property']]['value']) == _typed(item['value'])
+        assert exported[item['property']]['id'] == item['id']
+    assert exported['latency']['valueExt'] == 'p99'
+
+
+def test_a_create_with_an_sla_collection_is_refused(db_session):
+    from src.controller.data_contracts_manager import SlaValueCollectionError
+    from src.models.data_contracts_api import DataContractCreate
+
+    body = {'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+            'slaProperties': [{'property': 'latency', 'value': [1]}]}
+    with pytest.raises(SlaValueCollectionError):
+        _manager().create_contract_with_relations(
+            db_session, DataContractCreate.model_validate(body), current_user='alice')
+
+
+def test_a_create_with_sla_properties_and_the_sla_form_values_stores_each_once(db_session):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+    from src.models.data_contracts_api import DataContractCreate
+
+    manager = _manager()
+    manager._queue_delivery = lambda *a, **k: None
+    manager._update_search_index = lambda *a, **k: None
+    # a body copied from GET carries both shapes
+    body = {'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+            'slaProperties': [{'property': 'uptimeTarget', 'value': 99.5, 'unit': '%'}],
+            'sla': {'uptimeTarget': 99.9}}
+    created = manager.create_contract_with_relations(
+        db_session, DataContractCreate.model_validate(body), current_user='alice')
+    db_session.commit()
+
+    rows = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=created.id, property='uptimeTarget').all()
+    assert len(rows) == 1
+
+
+def test_an_update_with_sla_properties_and_the_sla_form_values_stores_each_once(
+        db_session, imported):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    # a body copied from GET carries both shapes
+    _save(manager, db_session, cid, {
+        'slaProperties': [{'property': 'uptimeTarget', 'value': 99.5, 'unit': '%'}],
+        'sla': {'uptimeTarget': 99.9}})
+    db_session.commit()
+
+    rows = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='uptimeTarget').all()
+    assert len(rows) == 1
+
+
+@pytest.mark.parametrize('sla', [None, {'uptimeTarget': None}])
+def test_an_empty_sla_form_keeps_the_sla_properties_sent_with_it(db_session, imported, sla):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    _save(manager, db_session, cid, {
+        'slaProperties': [{'property': 'uptimeTarget', 'value': 99.5, 'unit': '%'}],
+        'sla': sla})
+    db_session.commit()
+
+    rows = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='uptimeTarget').all()
+    assert [r.value for r in rows] == ['99.5']
+
+
+def test_an_sla_form_save_alone_still_clears_an_emptied_field(db_session, imported):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    _save(manager, db_session, cid, {'sla': {'uptimeTarget': 99.9}})
+    _save(manager, db_session, cid, {'sla': {'uptimeTarget': None}})
+    db_session.commit()
+
+    assert db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='uptimeTarget').count() == 0
+
+
+def test_a_read_modify_write_with_both_shapes_keeps_the_sent_sla_properties(
+        db_session, imported):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    sent = {'id': 'sla-up', 'property': 'uptimeTarget', 'value': 99.5, 'unit': '%',
+            'element': 'orders', 'driver': 'operational'}
+    # what GET returns: both the ODCS list and the form's values
+    _save(manager, db_session, cid, {
+        'slaProperties': [sent],
+        'sla': {'uptimeTarget': 99.5, 'maxDowntimeMinutes': 30}})
+    db_session.commit()
+
+    rows = {r.property: r for r in db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid)}
+    up = rows['uptimeTarget']
+    assert (up.stable_id, up.element, up.driver, up.value) == (
+        'sla-up', 'orders', 'operational', '99.5')
+    # a form field the ODCS list doesn't have is still added
+    assert rows['maxDowntimeMinutes'].value == '30'
+
+
+def test_the_update_route_answers_400_with_the_sla_collection_code(db_session, imported):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from fastapi import HTTPException
+
+    from src.common.api_errors import coded_http_exception_handler
+    from src.models.data_contracts_api import DataContractUpdate
+    from src.routes.data_contracts_routes import update_contract
+
+    manager, cid = imported
+    manager._queue_delivery = lambda *a, **k: None
+    manager._update_search_index = lambda *a, **k: None
+    body = DataContractUpdate.model_validate(
+        {'slaProperties': [{'property': 'latency', 'value': 4, 'valueExt': {'p99': 4}}]})
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(update_contract(
+            cid, SimpleNamespace(client=None), db_session, MagicMock(), MagicMock(),
+            SimpleNamespace(username='alice', email='alice@example.com'),
+            contract_data=body, manager=manager))
+
+    response = asyncio.run(coded_http_exception_handler(MagicMock(), raised.value))
+    assert response.status_code == 400
+    detail = json.loads(response.body)['detail']
+    assert detail['code'] == 'sla_value_collection'
+    assert detail['params'] == {'property': 'latency', 'field': 'valueExt'}
+
+
+def test_editing_a_text_custom_property_on_the_page_keeps_it_text(db_session, imported):
+    manager, cid = imported
+    page = _api(manager, db_session, cid)['customProperties']
+    # CUSTOM: cp1 is the text "42", cp2 the number 42
+    assert page['cp1'] == '42' and page['cp2'] == '42'
+    page['cp1'] = '43'
+    page['cp2'] = '43'
+
+    _save(manager, db_session, cid, {'customProperties': page})
+
+    exported = _by(_export(manager, db_session, cid)['customProperties'])
+    assert _typed(exported['cp1']['value']) == _typed('43')
+    assert _typed(exported['cp2']['value']) == _typed(43)

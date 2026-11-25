@@ -18,6 +18,12 @@
   "invalidStatus": "{{status}} is geen levenscyclusstatus. Gebruik een van: {{allowed}}.",
   "gateError": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: de workflowpoort {{workflows}} kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
   "gateErrorUnnamed": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: een workflowpoort kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+  "updateGate": {
+    "error": "De update is geweigerd: de workflow-gate {{workflows}} kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+    "errorUnnamed": "De update is geweigerd: een workflow-gate kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+    "tagWriteFailed": "De update is geweigerd: een tagwijziging van de workflow-gates kon niet worden opgeslagen. Vraag een beheerder het serverlogboek te controleren.",
+    "tagListWriteFailed": "De update is geweigerd: de tags ervan, die de workflow-gates controleerden, konden niet worden opgeslagen. Vraag een beheerder het serverlogboek te controleren."
+  },
   "certifiedDeprecationRequiresApproval": "{{name}} is gecertificeerd en kan daarom alleen via een goedgekeurde statuswijzigingsaanvraag worden uitgefaseerd. Vraag in plaats daarvan de statuswijziging aan.",
   "requestInstead": "Statuswijziging aanvragen",
   "certifiedGuard": {

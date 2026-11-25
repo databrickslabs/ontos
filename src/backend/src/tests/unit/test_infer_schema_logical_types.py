@@ -1,0 +1,210 @@
+"""The "Infer from Asset" action maps each column's physical type to its ODCS logical type.
+
+Before, every inferred column got ``logicalType: string`` unless the column
+asset stored a ``logical_type``.
+"""
+import uuid
+
+import pytest
+
+from src.common.odcs_logical_types import has_v31_logical_types, odcs_logical_type
+from src.controller.assets_manager import AssetsManager
+from src.db_models.assets import AssetDb, AssetRelationshipDb, AssetTypeDb
+
+
+@pytest.mark.parametrize(
+    "physical, logical",
+    [
+        ("DATE", "date"),
+        ("TIMESTAMP", "timestamp"),
+        ("timestamp_ntz", "timestamp"),
+        ("TIMESTAMP_LTZ", "timestamp"),
+        ("TIME", "time"),
+        ("TINYINT", "integer"),
+        ("SMALLINT", "integer"),
+        ("INT", "integer"),
+        ("BIGINT", "integer"),
+        ("long", "integer"),
+        ("FLOAT", "number"),
+        ("DOUBLE", "number"),
+        ("DECIMAL(10,2)", "number"),
+        ("decimal", "number"),
+        ("BOOLEAN", "boolean"),
+        ("STRING", "string"),
+        ("VARCHAR(255)", "string"),
+        ("CHAR(2)", "string"),
+        ("ARRAY<STRING>", "array"),
+        ("STRUCT<a: INT>", "object"),
+        ("MAP<STRING, INT>", "object"),
+        ("VARIANT", "object"),
+        ("INTERVAL DAY", "string"),
+        ("BINARY", "string"),
+        ("", "string"),
+        (None, "string"),
+    ],
+)
+def test_odcs_logical_type(physical, logical):
+    assert odcs_logical_type(physical) == logical
+
+
+@pytest.mark.parametrize(
+    "physical, logical",
+    [
+        # types the Catalog Commander's old substring mapper typed (it matched "int", "float", ...)
+        ("int8", "integer"), ("INT16", "integer"), ("INT32", "integer"), ("uint8", "integer"),
+        ("UINT64", "integer"), ("unsigned int", "integer"), ("MEDIUMINT", "integer"),
+        ("tinyint unsigned", "integer"), ("INT4", "integer"),
+        ("float32", "number"), ("FLOAT64", "number"), ("float8", "number"),
+        ("double precision", "number"),
+        ("datetime2", "timestamp"), ("datetime2(7)", "timestamp"),
+        ("smalldatetime", "timestamp"), ("datetimeoffset", "timestamp"),
+        ("timestamptz", "timestamp"), ("TIMESTAMP_NS", "timestamp"), ("timetz", "time"),
+    ],
+)
+def test_odcs_logical_type_aliases(physical, logical):
+    assert odcs_logical_type(physical) == logical
+
+
+def _type(db, name):
+    found = db.query(AssetTypeDb).filter(AssetTypeDb.name == name).first()
+    if found:
+        return found
+    created = AssetTypeDb(name=name)
+    db.add(created)
+    db.flush()
+    return created
+
+
+def _table_with_columns(db, columns):
+    table = AssetDb(name="orders", asset_type_id=_type(db, "Table").id, location="c.s.orders")
+    db.add(table)
+    db.flush()
+    for name, props in columns:
+        col = AssetDb(name=name, asset_type_id=_type(db, "Column").id, properties=props)
+        db.add(col)
+        db.flush()
+        db.add(AssetRelationshipDb(
+            source_asset_id=table.id, target_asset_id=col.id, relationship_type="hasColumn",
+        ))
+    db.flush()
+    db.expire_all()
+    return table
+
+
+def test_infer_schema_maps_column_types(db_session):
+    table = _table_with_columns(db_session, [
+        ("order_date", {"data_type": "DATE"}),
+        ("order_id", {"data_type": "BIGINT"}),
+        ("amount", {"data_type": "DECIMAL(12,2)"}),
+        ("city", {"data_type": "STRING"}),
+        # A stored logical type wins over the mapping
+        ("code", {"data_type": "INT", "logical_type": "string"}),
+    ])
+
+    [schema] = AssetsManager().infer_schema_from_asset(db_session, table.id)
+
+    types = {p["name"]: (p["physicalType"], p["logicalType"]) for p in schema["properties"]}
+    assert types == {
+        "order_date": ("DATE", "date"),
+        "order_id": ("BIGINT", "integer"),
+        "amount": ("DECIMAL(12,2)", "number"),
+        "city": ("STRING", "string"),
+        "code": ("INT", "string"),
+    }
+
+
+def test_infer_schema_maps_the_stored_schema_columns(db_session):
+    table = AssetDb(
+        name="events", asset_type_id=_type(db_session, "Table").id,
+        properties={"schema": {"columns": [
+            {"name": "ts", "data_type": "TIMESTAMP"},
+            {"name": "ok", "data_type": "BOOLEAN"},
+        ]}},
+    )
+    db_session.add(table)
+    db_session.flush()
+
+    [schema] = AssetsManager().infer_schema_from_asset(db_session, table.id)
+
+    assert [(p["name"], p["logicalType"]) for p in schema["properties"]] == [
+        ("ts", "timestamp"), ("ok", "boolean"),
+    ]
+
+
+def test_connector_logical_types_are_not_taken_as_odcs(db_session):
+    """The Databricks connector stores the UC type name (LONG, DECIMAL ...) as
+    ``logical_type`` and BigQuery the field mode (NULLABLE / REQUIRED): only an
+    ODCS logical type is kept as is, the rest is mapped."""
+    table = _table_with_columns(db_session, [
+        ("order_id", {"data_type": "bigint", "logical_type": "LONG"}),
+        ("amount", {"data_type": "decimal(12,2)", "logical_type": "DECIMAL"}),
+        ("ts", {"data_type": "timestamp", "logical_type": "TIMESTAMP"}),
+        ("city", {"data_type": "STRING", "logical_type": "NULLABLE"}),
+        ("qty", {"data_type": "INT64", "logical_type": "REQUIRED"}),
+        ("n", {"data_type": "unknown", "logical_type": "LONG"}),
+        ("code", {"data_type": "INT", "logical_type": "String"}),
+    ])
+
+    [schema] = AssetsManager().infer_schema_from_asset(db_session, table.id)
+
+    assert {p["name"]: p["logicalType"] for p in schema["properties"]} == {
+        "order_id": "integer", "amount": "number", "ts": "timestamp", "city": "string",
+        "qty": "integer", "n": "integer", "code": "string",
+    }
+
+
+@pytest.mark.parametrize("api_version, expected", [
+    (None, True), ("v3.1.0", True), ("3.1.0", True), ("v3.2.0", True), ("not-a-version", True),
+    ("v3.0.2", False), ("3.0.0", False), ("v2.2.2", False),
+])
+def test_has_v31_logical_types(api_version, expected):
+    assert has_v31_logical_types(api_version) is expected
+
+
+def _events_table(db):
+    return _table_with_columns(db, [
+        ("event_ts", {"data_type": "TIMESTAMP"}),
+        ("event_time", {"data_type": "TIME"}),
+        # A stored v3.1 type is not valid below v3.1 either
+        ("loaded_at", {"data_type": "STRING", "logical_type": "timestamp"}),
+        ("event_date", {"data_type": "DATE"}),
+    ])
+
+
+def _logical_types(db, table, api_version):
+    [schema] = AssetsManager().infer_schema_from_asset(db, table.id, api_version=api_version)
+    return {p["name"]: p["logicalType"] for p in schema["properties"]}
+
+
+@pytest.mark.parametrize("api_version", ["v3.0.2", "v2.2.2"])
+def test_infer_schema_below_v31_uses_the_types_of_that_version(db_session, api_version):
+    """ODCS v3.0.x and v2.2.x list no timestamp / time logical type."""
+    table = _events_table(db_session)
+
+    assert _logical_types(db_session, table, api_version) == {
+        "event_ts": "date", "event_time": "string", "loaded_at": "date", "event_date": "date",
+    }
+
+
+@pytest.mark.parametrize("api_version", [None, "v3.1.0"])
+def test_infer_schema_from_v31_keeps_timestamp_and_time(db_session, api_version):
+    table = _events_table(db_session)
+
+    assert _logical_types(db_session, table, api_version) == {
+        "event_ts": "timestamp", "event_time": "time", "loaded_at": "timestamp",
+        "event_date": "date",
+    }
+
+
+def test_infer_schema_route_passes_the_api_version():
+    from src.routes import assets_routes
+
+    class _Manager:
+        def infer_schema_from_asset(self, db, asset_id, api_version=None):
+            return [{"api_version": api_version}]
+
+    asset_id = uuid.uuid4()
+    result = assets_routes.infer_schema_from_asset(
+        asset_id=asset_id, db=None, manager=_Manager(), api_version="v3.0.2",
+    )
+    assert result == [{"api_version": "v3.0.2"}]

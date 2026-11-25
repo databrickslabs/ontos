@@ -8,6 +8,7 @@ from src.common.features import FeatureAccessLevel
 from src.common.authorization import (
     PermissionChecker, is_user_feature_admin, get_user_team_role_overrides,
 )
+from src.common.entity_metadata_access import asset_metadata_log_readable
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
 from src.common.manager_dependencies import get_comments_manager, get_settings_manager
@@ -183,6 +184,9 @@ async def _get_entity_timeline_count_impl(
     manager: CommentsManager,
 ):
     """Get count of timeline entries for an entity without fetching full data."""
+    if not asset_metadata_log_readable(request, db, current_user, entity_type, entity_id):
+        # The changes of an asset's metadata: answered as for an entity with no entries.
+        return {"total_count": 0, "filter_type": filter_type}
     try:
         total_count = 0
 
@@ -257,6 +261,9 @@ async def _get_entity_timeline_impl(
     manager: CommentsManager,
 ):
     """Get a unified timeline of comments and change log entries for an entity."""
+    if not asset_metadata_log_readable(request, db, current_user, entity_type, entity_id):
+        # The changes of an asset's metadata: answered as for an entity with no entries.
+        return {"timeline": [], "total_count": 0, "filter_type": filter_type}
     try:
         timeline_entries = []
 

@@ -81,18 +81,27 @@ def test_other_errors_keep_only_their_text(db_session):
 
 
 def test_a_successful_run_has_no_code(db_session):
-    run = _run(db_session, _policy(db_session, "MATCH (p:data_product) ASSERT p.name != ''"))
+    # With an entity: a run that matches none has the no_entities_matched warning
+    product = {'type': 'data_product', 'id': 'p1', 'name': 'Orders'}
+    iterator = MagicMock(**{'iterate.return_value': iter([product])})
+    policy = _policy(db_session, "MATCH (p:data_product) ASSERT p.name != ''")
+    run = _run(db_session, policy, iterator)
 
     assert run.status == 'succeeded'
     assert run.error_code is None and run.error_params is None
 
 
 def test_the_api_returns_the_code_and_parsed_params():
-    run = MagicMock(error_code='rule_parse_failed', error_params='{"detail": "x"}')
+    run = MagicMock(status='failed', error_code='rule_parse_failed',
+                    error_params='{"detail": "x"}')
     assert _run_error_code(run) == {'error_code': 'rule_parse_failed', 'error_params': {'detail': 'x'}}
 
-    plain = MagicMock(error_code=None, error_params=None)
-    assert _run_error_code(plain) == {'error_code': None, 'error_params': None}
+    # A failed run without a code of ours: the generic code, never the stored text
+    plain = MagicMock(status='failed', error_code=None, error_params=None)
+    assert _run_error_code(plain) == {'error_code': 'run_failed', 'error_params': None}
+
+    succeeded = MagicMock(status='succeeded', error_code=None, error_params=None)
+    assert _run_error_code(succeeded) == {'error_code': None, 'error_params': None}
 
 
 def test_errors_without_a_code_are_not_classified():

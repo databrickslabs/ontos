@@ -11,16 +11,19 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Card } from '@/components/ui/card'
-import { Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useApi } from '@/hooks/use-api'
 import { OntologyConcept } from '@/types/ontology'
+import { resolveLabel, resolveLabelFromMaps, type LabelMaps } from '@/lib/ontology-utils'
 
 interface NeighborItem {
   direction: 'outgoing' | 'incoming' | 'predicate'
   predicate: string
   display: string
   displayType: 'resource' | 'property' | 'literal'
+  displayLabels?: LabelMaps
+  predicateLabels?: LabelMaps
   stepIri?: string | null
   stepIsResource?: boolean
 }
@@ -50,13 +53,6 @@ const matchesPredicate = (predicate: string, fragments: string[]): boolean => {
   return fragments.some((f) => lower.endsWith(f.toLowerCase()))
 }
 
-const localName = (iri: string): string => {
-  if (!iri) return ''
-  const fragment = iri.split('#').pop()
-  if (fragment && fragment !== iri) return fragment
-  const path = iri.split('/').pop()
-  return path || iri
-}
 
 interface MiniNodeData {
   label: string
@@ -270,7 +266,8 @@ function ConceptNeighborhoodGraphInner({
   view = 'list',
 }: ConceptNeighborhoodGraphProps) {
   const { get } = useApi()
-  const { t } = useTranslation(['semantic-models'])
+  const { t, i18n } = useTranslation(['semantic-models'])
+  const lang = i18n?.language?.split('-')[0] || 'en'
   const { fitView } = useReactFlow()
   const [neighbors, setNeighbors] = useState<NeighborItem[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -324,7 +321,7 @@ function ConceptNeighborhoodGraphInner({
         seenParents.add(n.stepIri)
         parentsAll.push({
           iri: n.stepIri,
-          label: localName(n.display) || n.display,
+          label: resolveLabelFromMaps(n.displayLabels, n.display, lang),
           typeBadge: t('semantic-models:types.class', { defaultValue: 'Class' }),
         })
       } else if (
@@ -336,7 +333,7 @@ function ConceptNeighborhoodGraphInner({
         seenChildren.add(n.stepIri)
         childrenAll.push({
           iri: n.stepIri,
-          label: localName(n.display) || n.display,
+          label: resolveLabelFromMaps(n.displayLabels, n.display, lang),
           typeBadge: t('semantic-models:types.class', { defaultValue: 'Class' }),
         })
       }
@@ -347,7 +344,7 @@ function ConceptNeighborhoodGraphInner({
     return {
       current: {
         iri: concept.iri,
-        label: concept.label || localName(concept.iri) || concept.iri,
+        label: resolveLabel(concept, lang),
         typeBadge: typeBadgeFor(concept),
       },
       parents,
@@ -355,7 +352,7 @@ function ConceptNeighborhoodGraphInner({
       parentOverflow: parentsAll.length - parents.length,
       childOverflow: childrenAll.length - children.length,
     }
-  }, [neighbors, concept, t])
+  }, [neighbors, concept, t, lang])
 
   const parentMoreLabel = t('semantic-models:neighborhood.moreParents', {
     count: layout?.parentOverflow ?? 0,
@@ -379,13 +376,18 @@ function ConceptNeighborhoodGraphInner({
     return () => clearTimeout(timer)
   }, [nodes, fitView])
 
-  if (isLoading && !layout) {
+  if ((isLoading || (Boolean(concept?.iri) && neighbors === null)) && !layout) {
     return (
-      <div className="flex items-center justify-center text-sm text-muted-foreground py-3 gap-2">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        {t('semantic-models:neighborhood.loading', {
-          defaultValue: 'Loading neighbourhood...',
-        })}
+      <div
+        className="relative h-52 rounded-md border"
+        data-testid="concept-neighborhood-loading"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="sr-only">{t('semantic-models:neighborhood.loading')}</span>
+        <Skeleton className="absolute left-1/2 top-1/2 h-12 w-28 -translate-x-1/2 -translate-y-1/2 rounded-lg" />
+        <Skeleton className="absolute left-6 top-8 h-10 w-24 rounded-lg" />
+        <Skeleton className="absolute bottom-8 right-6 h-10 w-24 rounded-lg" />
       </div>
     )
   }
@@ -410,6 +412,10 @@ function ConceptNeighborhoodGraphInner({
   // neighbour data. Resource targets are clickable and navigate to that concept.
   if (view === 'list') {
     const items = neighbors ?? []
+    const targetText = (n: NeighborItem) =>
+      n.displayType === 'literal'
+        ? n.display
+        : resolveLabelFromMaps(n.displayLabels, n.display, lang)
     return (
       <div
         className="max-h-[320px] overflow-auto divide-y"
@@ -423,7 +429,7 @@ function ConceptNeighborhoodGraphInner({
               className="flex items-center gap-3 px-3 py-2 text-sm"
             >
               <span className="text-xs font-mono text-muted-foreground shrink-0 w-40 truncate" title={n.predicate}>
-                {localName(n.predicate)}
+                {resolveLabelFromMaps(n.predicateLabels, n.predicate, lang)}
               </span>
               {clickable ? (
                 <button
@@ -432,10 +438,10 @@ function ConceptNeighborhoodGraphInner({
                   onClick={() => n.stepIri && onNavigate(n.stepIri)}
                   title={n.stepIri || n.display}
                 >
-                  {n.display}
+                  {targetText(n)}
                 </button>
               ) : (
-                <span className="truncate" title={n.display}>{n.display}</span>
+                <span className="truncate" title={n.display}>{targetText(n)}</span>
               )}
             </div>
           )

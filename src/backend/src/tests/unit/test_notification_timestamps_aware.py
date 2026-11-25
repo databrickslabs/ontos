@@ -9,7 +9,7 @@ offset, so this guards the source instead: no ``Notification(...)`` takes its
 a local variable.
 """
 import ast
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.common.timestamps import utc_now
@@ -123,3 +123,126 @@ def test_postgres_sessions_run_in_utc():
 
     assert '-ctimezone=UTC' in url
     assert '-csearch_path=app_schema' in url
+
+
+def test_job_scripts_do_not_stamp_naive_utc_times():
+    """The job scripts write to timestamptz columns too: utcnow() is naive and
+    would shift by the server's UTC offset the same way (#1449)."""
+    offenders = [
+        f'{path.relative_to(SRC)}:{node.lineno}'
+        for path in (SRC / 'workflows').rglob('*.py')
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8')))
+        if _is_utcnow(node)
+    ]
+
+    assert offenders == []
+
+
+def _is_naive_now(node) -> bool:
+    """``datetime.now()`` with no time zone argument (local time, naive)."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == 'now'
+        and not node.args
+        and not node.keywords
+    )
+
+
+def test_job_scripts_do_not_compare_against_local_time():
+    """``check_table_freshness`` subtracted a UTC table time from local ``now()``:
+    on a server east of UTC a stale table looked fresher by the offset."""
+    offenders = [
+        f'{path.relative_to(SRC)}:{node.lineno}'
+        for path in (SRC / 'workflows').rglob('*.py')
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8')))
+        if _is_naive_now(node)
+    ]
+
+    assert offenders == []
+
+
+def test_the_naive_now_guard_finds_only_local_time_calls():
+    tree = ast.parse('a = datetime.now()\nb = datetime.now(timezone.utc)\n')
+
+    assert [n.lineno for n in ast.walk(tree) if _is_naive_now(n)] == [1]
+
+
+def test_workflow_executor_and_routes_do_not_stamp_naive_utc_times():
+    """The decision ``at``, the ``timestamp`` template variable and ``handled_at``
+    are ISO strings the UI parses: a naive one is read as local time."""
+    offenders = [
+        f'{name}:{node.lineno}'
+        for name in ('common/workflow_executor.py', 'routes/workflows_routes.py')
+        for node in ast.walk(ast.parse((SRC / name).read_text(encoding='utf-8')))
+        if _is_utcnow(node)
+    ]
+
+    assert offenders == []
+
+
+def test_timestamp_template_variable_carries_the_utc_offset():
+    from src.common.workflow_executor import AssignTagStepHandler
+
+    value = AssignTagStepHandler(None, {})._resolve_value_source('timestamp', None)
+
+    assert datetime.fromisoformat(value).utcoffset() == timedelta(0)
+
+
+def _freshness_module(monkeypatch):
+    """The job script, loaded without pyspark (not installed for the unit suite)."""
+    import importlib.util
+    import sys
+    from types import ModuleType
+
+    for name in ('pyspark', 'pyspark.sql'):
+        stub = ModuleType(name)
+        stub.SparkSession = object
+        monkeypatch.setitem(sys.modules, name, stub)
+    path = SRC / 'workflows' / 'data_contract_validation' / 'data_contract_validation.py'
+    spec = importlib.util.spec_from_file_location('dcv_under_test', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _Spark:
+    def __init__(self, last_modified):
+        self._row = type('Row', (), {'lastModified': last_modified})()
+
+    def sql(self, _query):
+        return self
+
+    def collect(self):
+        return [self._row]
+
+
+def test_freshness_reads_a_naive_driver_timestamp_in_the_local_zone(monkeypatch):
+    """pyspark's collect() gives a naive datetime in the driver's zone: on a driver
+    east of UTC a table modified 1h ago must not look 8h in the future."""
+    import os
+    import time
+
+    module = _freshness_module(monkeypatch)
+    monkeypatch.setenv('TZ', 'Asia/Tokyo')
+    time.tzset()
+    try:
+        local_hour_ago = datetime.now() - timedelta(hours=1)  # naive, driver-local
+        stale_local = datetime.now() - timedelta(hours=30)
+        fresh_ok, _ = module.check_table_freshness(_Spark(local_hour_ago), 't', 24)
+        stale_ok, message = module.check_table_freshness(_Spark(stale_local), 't', 24)
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+    assert fresh_ok is True
+    assert stale_ok is False and 'STALE' in message
+
+
+def test_freshness_reads_strings_without_an_offset_as_utc(monkeypatch):
+    module = _freshness_module(monkeypatch)
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
+
+    passed, _ = module.check_table_freshness(_Spark(hour_ago.isoformat()), 't', 24)
+
+    assert passed is True

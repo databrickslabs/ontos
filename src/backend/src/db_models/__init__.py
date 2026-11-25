@@ -30,6 +30,7 @@ from . import process_workflows
 from . import projects
 from . import quality
 from . import rdf_triples
+from . import scheduler_claims
 from . import semantic_links
 from . import semantic_models
 from . import settings
@@ -44,6 +45,7 @@ from . import entity_relationships
 from . import entity_subscriptions
 from . import estates
 from . import certification_levels
+from . import lifecycle_stage_groups
 from . import maturity
 from . import workflow_configurations
 from . import workflow_installations
@@ -54,4 +56,5 @@ from . import term_mappings
 from . import search_documents
 from . import metric_view_baselines
 from . import metric_view_change_requests
+from . import uc_bulk_import_sources
 

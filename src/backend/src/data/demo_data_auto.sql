@@ -136,7 +136,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- vehicle_signals table
 ('00600001-0004-4000-8000-000000000001', '00500001-0004-4000-8000-000000000001', 'vin', 'string', true, false, false, false, -1, -1, true, 'Vehicle Identification Number (ISO 3779)'),
 ('00600002-0004-4000-8000-000000000002', '00500001-0004-4000-8000-000000000001', 'trip_id', 'string', true, false, true, false, 1, -1, true, 'Unique trip session identifier'),
@@ -766,9 +766,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
-('01400101-0004-4000-8000-000000000001', 'data_product', '00700001-0004-4000-8000-000000000001', 'Telemetry Compute',     'Daily Databricks compute for CAN telemetry curation.',           'infrastructure', NULL, 7600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400102-0004-4000-8000-000000000002', 'data_product', '00700002-0004-4000-8000-000000000002', 'Sensor Storage',         'Petabyte-scale storage for ADAS sensor logs.',                  'infrastructure', NULL, 5300000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400103-0004-4000-8000-000000000003', 'data_product', '00700003-0004-4000-8000-000000000003', 'Supplier Portal License','Annual supplier collaboration portal license.',                  'tools',          NULL, 1100000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+('01400101-0004-4000-8000-000000000001', 'data_product', '00700001-0004-4000-8000-000000000001', 'Telemetry Compute',     'Daily Databricks compute for CAN telemetry curation.',           'INFRASTRUCTURE', NULL, 7600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0004-4000-8000-000000000002', 'data_product', '00700002-0004-4000-8000-000000000002', 'Sensor Storage',         'Petabyte-scale storage for ADAS sensor logs.',                  'INFRASTRUCTURE', NULL, 5300000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0004-4000-8000-000000000003', 'data_product', '00700003-0004-4000-8000-000000000003', 'Supplier Portal License','Annual supplier collaboration portal license.',                  'OTHER',          'Tools', 1100000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

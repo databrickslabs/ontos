@@ -4,10 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { FeatureAccessLevel } from '@/types/settings';
 
 let canWrite = true;
+let canAdmin = true;
 vi.mock('@/stores/permissions-store', () => ({
   usePermissions: () => ({
     hasPermission: (_feature: string, level: FeatureAccessLevel) =>
-      level === FeatureAccessLevel.READ_ONLY || canWrite,
+      level === FeatureAccessLevel.ADMIN
+        ? canAdmin
+        : level === FeatureAccessLevel.READ_ONLY || canWrite,
   }),
 }));
 
@@ -119,6 +122,39 @@ describe('GeneralSettings - instance identity', () => {
     );
   });
 
+  it('shows volume_invalid translated and keeps the form editable', async () => {
+    fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return {
+          ok: false,
+          json: async () => ({
+            detail: {
+              code: 'volume_invalid',
+              message: 'english fallback',
+              params: { value: 'a.b', catalog: 'c', schema: 's' },
+            },
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => baseResponse } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GeneralSettings />);
+    await screen.findByLabelText('Instance ID');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: 'destructive',
+        description: expect.stringContaining('a.b'),
+      })
+    );
+    expect(toastMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringContaining('english fallback') })
+    );
+    expect(screen.getByRole('button', { name: /save settings/i })).toBeEnabled();
+  });
+
   it('maps instance_name_invalid to the length and control-character message', async () => {
     fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {
@@ -151,5 +187,104 @@ describe('GeneralSettings - instance identity', () => {
     expect(await screen.findByLabelText('Instance ID')).toBeDisabled();
     expect(screen.getByLabelText('Instance Name')).toBeDisabled();
     expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('GeneralSettings - write asset descriptions to Unity Catalog', () => {
+  beforeEach(() => {
+    canWrite = true;
+    canAdmin = true;
+    toastMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lets only an admin turn the switch on', async () => {
+    canAdmin = false;
+    mockFetch();
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText('Only an admin can turn this on.')).toBeInTheDocument();
+  });
+
+  it('lets a non-admin turn an enabled switch off', async () => {
+    canAdmin = false;
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(false));
+  });
+
+  it('is off by default and saves the switch', async () => {
+    mockFetch();
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(true));
+  });
+
+  it('saves the bulk import write limit', async () => {
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true,
+      uc_description_import_write_limit: 100 });
+    render(<GeneralSettings />);
+    const limit = await screen.findByLabelText('Max rows tried in Unity Catalog per bulk import');
+    expect(limit).toHaveValue(100);
+    await userEvent.clear(limit);
+    await userEvent.type(limit, '25');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_import_write_limit).toBe(25));
+  });
+
+  it('shows the stored value', async () => {
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
+    render(<GeneralSettings />);
+    expect(
+      await screen.findByLabelText('Write asset descriptions to Unity Catalog')
+    ).toBeChecked();
+  });
+});
+
+describe('GeneralSettings - warnings of a saved update', () => {
+  beforeEach(() => {
+    canWrite = true;
+    canAdmin = true;
+    toastMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mockSaveWithWarnings(warnings: unknown[]) {
+    fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') return { ok: true, json: async () => ({ warnings }) } as Response;
+      return { ok: true, json: async () => baseResponse } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  it('shows that the compliance job could not be updated', async () => {
+    mockSaveWithWarnings([{ code: 'compliance_job_not_updated', params: {}, message: 'English' }]);
+    render(<GeneralSettings />);
+    await screen.findByLabelText('Instance ID');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    const shown = toastMock.mock.calls[toastMock.mock.calls.length - 1][0];
+    expect(shown.title).toBe('Settings saved successfully');
+    expect(shown.description).toMatch(/^The Compliance Checks job could not be updated/);
+    expect(shown.description).not.toBe('English');
+  });
+
+  it('saves without a description when there are no warnings', async () => {
+    mockSaveWithWarnings([]);
+    render(<GeneralSettings />);
+    await screen.findByLabelText('Instance ID');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock.mock.calls[toastMock.mock.calls.length - 1][0].description).toBeUndefined();
   });
 });

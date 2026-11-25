@@ -10,6 +10,7 @@
     "delete": "Eliminar",
     "deleteSelected": "Eliminar seleccionados ({{count}})",
     "edit": "Editar",
+    "rename": "Cambiar nombre",
     "add": "Añadir",
     "create": "Crear",
     "update": "Actualizar",
@@ -42,6 +43,7 @@
     "discard": "Descartar",
     "apply": "Aplicar",
     "select": "Seleccionar",
+    "done": "Listo",
     "remove": "Eliminar",
     "link": "Vincular",
     "unlink": "Desvincular",
@@ -358,7 +360,10 @@
       "job": "Job",
       "subscription": "Suscripción",
       "user": "Usuario",
-      "metric_view": "Metric View"
+      "metric_view": "Metric View",
+      "ontology_concept": "Concepto",
+      "ontology_collection": "Colección",
+      "concept_changeset": "Conjunto de cambios de conceptos"
     },
     "stepTypes": {
       "validation": "Validación",
@@ -398,6 +403,11 @@
     "assignedSuccess": "Propietario asignado correctamente.",
     "errorAssigning": "Error al asignar el propietario",
     "ownerUserAria": "Usuario propietario"
+  },
+  "assignOwnerRole": {
+    "noRoles": "No hay roles de negocio configurados. Pide a un administrador que cree uno.",
+    "ownerBadge": "Propietario",
+    "notOwnerHint": "Los propietarios con este rol no reciben aprobaciones ni notificaciones de propietario. Para ello, elige Data Owner u Owner."
   },
   "versionFamily": {
     "countBadge_one": "{{count}} versión",
@@ -479,6 +489,9 @@
     "conceptRelationshipHint": "«{{relationship}}» vincula este elemento a un concepto como relación: aparece en Relaciones y en el linaje. Para mostrar el concepto en los detalles de este elemento y en {{conceptSection}} de la página del concepto, use {{section}}.",
     "targetNotPickable": "{{type}} no se puede elegir aquí. Se gestiona en su propia página.",
     "noAccessToTarget": "No tiene acceso a {{type}}. Pida acceso de lectura a un administrador para vincularlo."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "No se pudieron cargar las propiedades guardadas del activo, así que no se puede guardar aquí. Cierre el diálogo e inténtelo de nuevo."
   },
   "assetForm": {
     "groups": {
@@ -565,16 +578,25 @@
     "removeConfirm": "¿Seguro que desea quitar esta relación? Esta acción no se puede deshacer."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Seleccione {{kind}}…",
     "latestSuffix": "{{name}} (más reciente)",
     "pinVersionTitle": "Fijar una versión específica",
     "pinVersion": "Fijar versión",
     "followLatestTitle": "Seguir siempre la versión visible más reciente de la familia",
     "followLatest": "Seguir la más reciente",
-    "searchPlaceholder": "Buscar {{kind}}s…",
     "loading": "Cargando…",
-    "noMatching": "No hay {{kind}}s coincidentes.",
     "unnamed": "(sin nombre)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Seleccione un contrato…",
+      "search": "Buscar contratos…",
+      "noMatching": "No hay contratos coincidentes."
+    },
+    "product": {
+      "select": "Seleccione un producto…",
+      "search": "Buscar productos…",
+      "noMatching": "No hay productos coincidentes."
+    }
   },
   "entityTree": {
     "title": "Entidades relacionadas",
@@ -638,6 +660,8 @@
   "edit": "Editar",
   "error": "Error",
   "home": "Inicio",
+  "loading": "Cargando…",
+  "optional": "(opcional)",
   "refresh": "Actualizar",
   "retry": "Reintentar",
   "save": "Guardar",

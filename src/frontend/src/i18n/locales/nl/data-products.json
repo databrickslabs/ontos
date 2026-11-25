@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Geen eigenaar",
+    "notOwnerMessage": "U kunt dit product bekijken, maar niet bewerken. Alleen het eigenaarsteam, leden van het project, de eigenaar van het concept of een beheerder van dataproducten kunnen het bewerken."
+  },
   "title": "Dataproducten",
   "subtitle": "Beheer je dataproducten",
   "newProduct": "Nieuw Dataproduct",
@@ -795,7 +799,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Hoe deze levering data aan consumenten aanbiedt (bijv. Tabeltoegang, Serving Endpoint)",
-      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde/gecertificeerde contracten",
+      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde contracten",
       "containsPiiHint": "Bevat deze levering persoonlijk identificeerbare informatie?",
       "autoApproveHint": "Toegangsverzoeken voor deze levering automatisch goedkeuren?",
       "afterCreation": "Na het aanmaken van deze levering kun je assets (tabellen, views, datasets, enz.) eraan koppelen vanaf de detailpagina."
@@ -1010,7 +1014,28 @@
     "required": "Vereist",
     "advisory": "Adviserend",
     "overTime": "Volwassenheid in de tijd",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "currentLevel": "Huidig niveau",
+    "nextLevel": "Volgend niveau",
+    "belowFirstLevel": "Onder het eerste niveau",
+    "topLevelReached": "Hoogste niveau bereikt",
+    "noLevels": "Er zijn nog geen volwassenheidsniveaus voor dit type gedefinieerd.",
+    "gateStatus": {
+      "pass": "Geslaagd",
+      "fail": "Niet geslaagd",
+      "warn": "Niet voldaan"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog is niet bereikbaar, dus de velden van tabel {{tableName}} ontbreken.",
+    "maturity_uc_table_unreadable": "Tabel {{tableName}} kan niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
+    "maturity_uc_table_read_failed": "Tabel {{tableName}} kon niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
+    "maturity_gate_error": "Gate {{gateName}} kon niet worden geëvalueerd. De details staan in het serverlogboek.",
+    "maturity_level_partial": "Het niveau telt alleen de controles die tabel {{tableName}} niet nodig hebben; het asset kan een hoger niveau halen."
+  },
+  "maturityResult": {
+    "notStored": "Nu berekend en niet opgeslagen: de geschiedenis toont de opgeslagen evaluaties. Evalueer opnieuw om dit resultaat op te slaan.",
+    "notEvaluated": "Niet geëvalueerd"
   },
   "createDialog": {
     "editTitle": "Dataproduct-metadata bewerken",
@@ -1127,8 +1152,8 @@
     "exportSuccessfulDesc": "{{filename}} gedownload",
     "exportFailed": "Export Mislukt",
     "exportFailedDesc": "Exporteren van dataproduct mislukt",
-    "exportDescription": "Door op \"Exporteren\" te klikken wordt dit product gedownload als een ODPS v1.0.0-conform JSON-bestand. Auditvelden (created_at, updated_at) worden uitgesloten voor overdraagbaarheid.",
-    "exportAsJson": "Exporteren als JSON",
+    "exportDescription": "Door op \"Exporteren\" te klikken wordt dit product gedownload als ODPS v1.0.0 YAML-bestand, opgebouwd uit het opgeslagen product zodat een nieuwe import het herstelt.",
+    "exportAsJson": "Exporteren als YAML",
     "currentProduct": "Huidig Product",
     "unnamed": "Naamloos",
     "noProductDesc": "Geen product geselecteerd. Open dit dialoogvenster vanaf een productdetailpagina om te exporteren."

@@ -1,6 +1,6 @@
 from __future__ import annotations # Ensure forward references work
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Iterable, Set, TYPE_CHECKING
 import re
 
 # Import Search Interfaces
@@ -26,6 +26,13 @@ from src.controller.search_backend import create_backend, PostgresBackend
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+# Assets follow their own read rule in search (``SearchManager._apply_asset_visibility``).
+ASSETS_FEATURE_ID = "assets"
+ASSET_ENTITY_TYPE = "asset"
+# Assets are indexed as ``asset::<id>``, typed ``asset-<asset type>``.
+ASSET_ITEM_PREFIX = "asset::"
+ASSET_TYPE_PREFIX = "asset-"
 
 
 @dataclass
@@ -177,7 +184,8 @@ class SearchManager:
         query: str, 
         auth_manager: AuthorizationManager, 
         user: UserInfo, 
-        team_role_override: Optional[str] = None
+        team_role_override: Optional[str] = None,
+        effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
     ) -> List[SearchIndexItem]:
         """
         Performs a configurable search on indexed items.
@@ -198,6 +206,9 @@ class SearchManager:
             auth_manager: AuthorizationManager for permission checking
             user: Current user info
             team_role_override: Optional team role override
+            effective_permissions: The user's resolved permissions
+                (``resolve_effective_permissions``). When given, they're used as
+                they are and ``team_role_override`` is ignored.
             
         Returns:
             List of matching SearchIndexItem, sorted by relevance
@@ -212,7 +223,9 @@ class SearchManager:
         # Postgres backend: candidates come from the DB (ranked), then the SAME
         # per-item permission check is applied in Python — no auth logic in SQL.
         if self._uses_postgres():
-            return self._search_postgres(query_stripped, auth_manager, user, team_role_override)
+            return self._search_postgres(
+                query_stripped, auth_manager, user, team_role_override, effective_permissions,
+            )
 
         config = self.config
         matches: List[SearchMatch] = []
@@ -233,14 +246,16 @@ class SearchManager:
                     match_quality=1.0,
                 ))
 
-        # Filter based on permissions using AuthorizationManager
-        if not user.groups:
+        # Filter based on permissions using AuthorizationManager. Resolved permissions
+        # also cover email and team roles, so only the group-based fallback needs groups.
+        if effective_permissions is None and not user.groups:
              logger.warning(f"User {user.username} has no groups, returning empty search results.")
              return []
              
         filtered_matches: List[SearchMatch] = []
         try:
-             effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_override)
+             if effective_permissions is None:
+                 effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_override)
              for match in matches:
                  if auth_manager.has_permission(effective_permissions, match.item.feature_id, FeatureAccessLevel.READ_ONLY):
                      filtered_matches.append(match)
@@ -257,7 +272,9 @@ class SearchManager:
         # Project search leaks names the list hides (same feature permission, but
         # the list filters by team-domain membership). Apply the same visibility
         # here so search isn't a side-channel (#919 review).
+        results = self._apply_entity_read_rules(results, auth_manager, effective_permissions, user)
         results = self._apply_project_visibility(results, user)
+        results = self._apply_asset_visibility(results, auth_manager, effective_permissions)
 
         logger.info(
             f"Search for '{query}' returned {len(results)} results "
@@ -271,19 +288,21 @@ class SearchManager:
         auth_manager: AuthorizationManager,
         user: UserInfo,
         team_role_override: Optional[str],
+        effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
     ) -> List[SearchIndexItem]:
         """REST search via the Postgres backend: DB-ranked candidates, then the
         existing per-item permission filter (reused verbatim — no SQL auth)."""
         REST_CANDIDATE_LIMIT = 200
         candidates = self._backend.search_items(query, limit=REST_CANDIDATE_LIMIT)
 
-        if not user.groups:
+        if effective_permissions is None and not user.groups:
             logger.warning(f"User {user.username} has no groups, returning empty search results.")
             return []
         try:
-            effective_permissions = auth_manager.get_user_effective_permissions(
-                user.groups, team_role_override
-            )
+            if effective_permissions is None:
+                effective_permissions = auth_manager.get_user_effective_permissions(
+                    user.groups, team_role_override
+                )
         except Exception as e:
             logger.error(f"Error checking permissions during search for user {user.username}: {e}", exc_info=True)
             return []
@@ -292,7 +311,9 @@ class SearchManager:
             item for item in candidates
             if auth_manager.has_permission(effective_permissions, item.feature_id, FeatureAccessLevel.READ_ONLY)
         ]
+        results = self._apply_entity_read_rules(results, auth_manager, effective_permissions, user)
         results = self._apply_project_visibility(results, user)
+        results = self._apply_asset_visibility(results, auth_manager, effective_permissions)
         logger.info(
             f"Postgres search for '{query}' returned {len(results)} results "
             f"after permission filtering for user {user.username}."
@@ -344,6 +365,90 @@ class SearchManager:
             item for item in results
             if getattr(item, 'type', '') != 'project'
             or ('::' in (item.id or '') and item.id.split('::', 1)[1] in visible)
+        ]
+
+    @staticmethod
+    def asset_of_item(item: SearchIndexItem) -> Optional[str]:
+        """The id of the asset whose read rule applies to an index item, or None.
+
+        An asset (``asset::<id>``), and an item stored on an asset, such as a
+        document imported for it (``extra_data.entity_type`` is ``asset``, in any
+        casing): its text is the asset's data.
+        """
+        item_id = getattr(item, 'id', '') or ''
+        if item_id.startswith(ASSET_ITEM_PREFIX):
+            return item_id[len(ASSET_ITEM_PREFIX):]
+        extra = getattr(item, 'extra_data', None) or {}
+        if str(extra.get('entity_type') or '').strip().lower() == ASSET_ENTITY_TYPE:
+            return str(extra.get('entity_id'))
+        return None
+
+    def _manager_of(self, cls):
+        return next((m for m in self.searchable_managers if isinstance(m, cls)), None)
+
+    def readable_asset_ids(self, db, *, data_products_manager=None) -> Set[str]:
+        """Ids of the assets a user without ``assets`` READ_WRITE may read.
+
+        The rule of ``GET /api/assets/{id}`` (``AssetsManager.resolve_accessible_asset_ids``):
+        the assets linked to a published Data Product or its output ports. One
+        lookup for all the assets of a result set. Fails closed: without the
+        managers, or when the lookup raises, no asset is readable.
+        """
+        from src.controller.assets_manager import AssetsManager
+        from src.controller.data_products_manager import DataProductsManager
+
+        assets_manager = self._manager_of(AssetsManager)
+        products = data_products_manager or self._manager_of(DataProductsManager)
+        if assets_manager is None or products is None:
+            logger.warning("Asset read rule unavailable in search; leaving out asset results")
+            return set()
+        try:
+            ids = assets_manager.resolve_accessible_asset_ids(
+                db, data_products_manager=products, is_admin=False,
+            )
+        except Exception:
+            logger.exception("Asset read rule failed in search; leaving out asset results")
+            return set()
+        return {str(i) for i in ids or []}
+
+    def _apply_asset_visibility(
+        self,
+        results: List[SearchIndexItem],
+        auth_manager: AuthorizationManager,
+        effective_permissions: Optional[Dict[str, FeatureAccessLevel]],
+    ) -> List[SearchIndexItem]:
+        """Leave out assets, and items stored on assets, the user may not read.
+
+        ``assets`` READ_WRITE reads every asset; others only the assets of the
+        asset read rule (``readable_asset_ids``), as ``GET /api/assets/{id}`` and
+        the asset's documents route. Otherwise the feature check alone would
+        hand the full text of an asset's imported documents to every ``assets``
+        reader. Fails closed.
+        """
+        if not any(self.asset_of_item(item) is not None for item in results):
+            return results
+        try:
+            reads_every_asset = effective_permissions is not None and auth_manager.has_permission(
+                effective_permissions, ASSETS_FEATURE_ID, FeatureAccessLevel.READ_WRITE,
+            )
+        except Exception:
+            logger.exception("Assets permission check failed in search; leaving out asset results")
+            reads_every_asset = False
+        if reads_every_asset:
+            return results
+        readable: Set[str] = set()
+        try:
+            from src.common.database import get_session_factory
+            session_factory = get_session_factory()
+            if session_factory:
+                with session_factory() as db:
+                    readable = self.readable_asset_ids(db)
+        except Exception:
+            logger.exception("Asset read rule failed in search; leaving out asset results")
+            readable = set()
+        return [
+            item for item in results
+            if (asset_id := self.asset_of_item(item)) is None or asset_id in readable
         ]
 
     def query_index(
@@ -552,3 +657,15 @@ class SearchManager:
     def get_config(self) -> SearchConfig:
         """Get the current search configuration."""
         return self.config
+
+    def _apply_entity_read_rules(self, results, auth_manager, effective_permissions, user):
+        """Leave out products and contracts the caller can't read by id (drafts...)."""
+        from src.common.app_state import get_app_state_manager
+        from src.common.search_entity_visibility import apply_entity_read_rules
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        return apply_entity_read_rules(
+            results, auth_manager, effective_permissions, user,
+            contracts_manager=self._manager_of(DataContractsManager),
+            notifications_manager=get_app_state_manager('notifications_manager'),
+        )

@@ -12,7 +12,7 @@ os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -106,3 +106,20 @@ def test_the_unavailable_client_error_carries_a_code_for_the_ui(client):
     assert e.value.error_code == 'workspace_client_unavailable'
     # The exception text is not a parameter: the UI never shows it
     assert e.value.error_params == {}
+
+
+def test_an_app_entity_rule_never_builds_a_workspace_client(db_session, product):
+    # Building an unused client waited on the SDK's retries where no workspace
+    # answers: 5 minutes per run in CI (#1387 review)
+    build = MagicMock(side_effect=AssertionError('built a workspace client'))
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name='p', rule="MATCH (p:data_product) ASSERT p.name != ''",
+        is_active=True,
+    )
+    db_session.add(policy)
+    db_session.flush()
+    with patch(NO_CLIENT, build):
+        run = ComplianceManager().run_policy_inline(db_session, policy=policy)
+
+    assert run.status == 'succeeded'
+    build.assert_not_called()

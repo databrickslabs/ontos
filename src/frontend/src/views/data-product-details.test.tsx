@@ -7,7 +7,7 @@
  * with the ontology (`portHas*` predicates in `ontos-ontology.ttl`) and with
  * the persona/permissions model.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   PORT_TO_ASSET_PREDICATE,
   selectPortAssetPredicate,
@@ -22,8 +22,10 @@ import {
   isPersonalDraftProduct,
   isProductReadOnly,
   canUserModifyProduct,
-  resolveDomainLabel,
   isProductActive,
+  putProductUpdate,
+  productOwnersPath,
+  productAccessPath,
 } from './data-product-details';
 import { FeatureAccessLevel } from '@/types/settings';
 
@@ -433,6 +435,32 @@ describe('canUserModifyProduct', () => {
     ).toBe(false);
   });
 
+  // #1613: a writer who reads a product they don't own (its reviewer) must not
+  // get Edit; the backend says so with can_write=false.
+  it('writer cannot modify an editable product the backend says they cannot write', () => {
+    expect(
+      canUserModifyProduct({
+        canAdmin: false,
+        canWrite: true,
+        canEditInPlace: true,
+        isPersonalDraft: false,
+        productWritable: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('unknown product access keeps the role and status gate', () => {
+    expect(
+      canUserModifyProduct({
+        canAdmin: false,
+        canWrite: true,
+        canEditInPlace: true,
+        isPersonalDraft: false,
+        productWritable: null,
+      }),
+    ).toBe(true);
+  });
+
   it('non-writer non-admin can never modify', () => {
     expect(
       canUserModifyProduct({
@@ -442,57 +470,6 @@ describe('canUserModifyProduct', () => {
         isPersonalDraft: true,
       }),
     ).toBe(false);
-  });
-});
-
-describe('resolveDomainLabel', () => {
-  const NOT_ASSIGNED = '— not assigned —';
-
-  it('returns the resolved name when the lookup succeeds', () => {
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-1',
-        resolveName: () => 'Sales',
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('Sales');
-  });
-
-  it('falls back to the raw domain id when the lookup misses', () => {
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-orphan',
-        resolveName: () => undefined,
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('dom-orphan');
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-orphan',
-        resolveName: () => null,
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('dom-orphan');
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-orphan',
-        resolveName: () => '',
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('dom-orphan');
-  });
-
-  it('returns the not-assigned label when the product has no domain', () => {
-    const resolveName = () => 'should-not-be-called';
-    expect(
-      resolveDomainLabel({ domain: undefined, resolveName, notAssignedLabel: NOT_ASSIGNED }),
-    ).toBe(NOT_ASSIGNED);
-    expect(
-      resolveDomainLabel({ domain: null, resolveName, notAssignedLabel: NOT_ASSIGNED }),
-    ).toBe(NOT_ASSIGNED);
-    expect(
-      resolveDomainLabel({ domain: '', resolveName, notAssignedLabel: NOT_ASSIGNED }),
-    ).toBe(NOT_ASSIGNED);
   });
 });
 
@@ -509,5 +486,69 @@ describe('isProductActive', () => {
     expect(isProductActive(undefined)).toBe(false);
     expect(isProductActive(null)).toBe(false);
     expect(isProductActive('')).toBe(false);
+  });
+});
+
+describe('putProductUpdate', () => {
+  const jsonResponse = (status: number, body: unknown) =>
+    ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
+
+  it('reports versioning when deleting a port is a breaking change (409)', async () => {
+    const detail = {
+      requires_versioning: true,
+      change_analysis: { breaking_changes: ["Removed output port 'b'"] },
+      user_can_override: false,
+    };
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail }));
+
+    const label = 'Failed to delete deliverable';
+    const result = await putProductUpdate('p1', { outputPorts: [] }, false, label, fetchFn);
+
+    expect(result).toEqual({ status: 'versioning', detail });
+    expect(fetchFn.mock.calls[0][1].headers['X-Force-Update']).toBeUndefined();
+  });
+
+  it('applies the update on 200', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+
+    const result = await putProductUpdate('p1', { outputPorts: [] }, false, 'x', fetchFn);
+
+    expect(result).toEqual({ status: 'applied' });
+  });
+
+  it('sends X-Force-Update when forced', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+
+    await putProductUpdate('p1', {}, true, 'x', fetchFn);
+
+    expect(fetchFn.mock.calls[0][1].headers['X-Force-Update']).toBe('true');
+  });
+
+  it('throws with the failure label on other errors (also a plain 409)', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'conflict' }));
+    const call = putProductUpdate('p1', {}, false, 'Failed to add deliverable', fetchFn);
+    await expect(call).rejects.toThrow('Failed to add deliverable (409)');
+  });
+});
+
+describe('productOwnersPath', () => {
+  // #1612: the owners route takes object_id as a query parameter (IRIs survive
+  // the Apps proxy); the old path form 404s.
+  it('passes the product id as the object_id query parameter', () => {
+    expect(productOwnersPath('p-1')).toBe(
+      '/api/business-owners/by-object/data_product?object_id=p-1&active_only=true',
+    );
+  });
+
+  it('encodes ids that are IRIs', () => {
+    expect(productOwnersPath('urn:x/y#z')).toBe(
+      '/api/business-owners/by-object/data_product?object_id=urn%3Ax%2Fy%23z&active_only=true',
+    );
+  });
+});
+
+describe('productAccessPath', () => {
+  it('builds the my-access path with an encoded id', () => {
+    expect(productAccessPath('urn:x/y')).toBe('/api/data-products/urn%3Ax%2Fy/my-access');
   });
 });

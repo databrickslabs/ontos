@@ -32,6 +32,7 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { t } = useTranslation(['navigation', 'common', 'search']);
   const shortName = useUICustomizationStore((s) => s.getShortName());
+  const isBrandingLoaded = useUICustomizationStore((s) => s.isLoaded);
   const isSidebarCollapsed = useLayoutStore((state) => state.isSidebarCollapsed);
   const { toggleSidebar } = useLayoutStore((state) => state.actions);
   const isCopilotOpen = useCopilotStore((s) => s.isOpen);
@@ -110,6 +111,12 @@ export default function Layout({ children }: LayoutProps) {
   const warningDetails = (health?.warning_details ?? []).filter(
     (w) => health?.ws_ok || w.code !== 'workspace_client_unavailable',
   );
+
+  // First paint waits for the branding settings, so the default logo and colors
+  // don't show for a moment before the configured ones replace them.
+  if (!isBrandingLoaded) {
+    return <div className="min-h-screen bg-background" data-testid="branding-pending" />;
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -2,7 +2,7 @@
 
 ``visibility``:
 
-- ``published``: status ``active`` and a publication scope other than ``none``,
+- ``published``: an active-category stage and a publication scope other than ``none``,
   within the read rule. (The marketplace route ``GET /api/data-products/published``
   checks the scope only; this also requires ``active``.) The MCP default.
 - ``readable``: everything the read rule lets the caller read
@@ -83,10 +83,12 @@ def invalid_visibility(visibility: Any, **data: Any) -> ToolResult:
 
 
 def is_published(row: Any) -> bool:
-    """Active and published to the marketplace (publication scope other than none)."""
-    status = (getattr(row, "status", "") or "").strip().lower()
+    """In an active-category stage and published to the marketplace (publication
+    scope other than none)."""
+    from src.controller.lifecycle_service import lifecycle_service
+
     scope = (getattr(row, "publication_scope", "") or "none").strip().lower()
-    return status == "active" and scope != "none"
+    return lifecycle_service.category_of_row(row) == "active" and scope != "none"
 
 
 def _candidate_rows(ctx: ToolContext, kind: str, *, visibility: str,
@@ -96,7 +98,7 @@ def _candidate_rows(ctx: ToolContext, kind: str, *, visibility: str,
 
     model = _model(kind)
     cols = (model.id, model.status, model.publication_scope, model.certification_level,
-            model.version_family_id, model.created_at)
+            model.version_family_id, model.created_at, model.lifecycle_stage_group_id)
     # Only the columns the selection reads, and none of the eager relationships.
     rows = ctx.db.query(model).options(load_only(*cols), lazyload("*")).all()
     readable = read_access.readable_ids(ctx, kind)
@@ -175,7 +177,8 @@ def entity_is_hidden(ctx: ToolContext, entity_type: str, entity_id: Any,
 
         model = _model(kind)
         rows = ctx.db.query(model).options(
-            load_only(model.id, model.status, model.publication_scope), lazyload("*")
+            load_only(model.id, model.status, model.publication_scope,
+                      model.lifecycle_stage_group_id), lazyload("*")
         ).all()
         ctx.cache[key] = {str(r.id) for r in rows if is_published(r)}
     return row_id not in ctx.cache[key]

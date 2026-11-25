@@ -9,6 +9,14 @@
     "refused": "Uw verzoek om de status te wijzigen naar '{{toStatus}}' is goedgekeurd, maar de wijziging kon niet worden toegepast: {{reason}}",
     "reviewNotApplied": "Over de review van het dataproduct is beslist, maar de wijziging naar '{{toStatus}}' kon niet worden toegepast: {{reason}}"
   },
+  "approvalOverdue": {
+    "approverTitle": "Goedkeuring te laat",
+    "approverDescription_one": "De goedkeuring van '{{name}}' wacht al meer dan {{count}} dag. Beslis erover in Mijn acties.",
+    "approverDescription_other": "De goedkeuring van '{{name}}' wacht al meer dan {{count}} dagen. Beslis erover in Mijn acties.",
+    "requesterTitle": "Uw aanvraag wacht nog",
+    "requesterDescription_one": "Uw aanvraag voor '{{name}}' wacht al meer dan {{count}} dag op een beslissing. De goedkeurders zijn herinnerd.",
+    "requesterDescription_other": "Uw aanvraag voor '{{name}}' wacht al meer dan {{count}} dagen op een beslissing. De goedkeurders zijn herinnerd."
+  },
   "contractStatusNotChanged": {
     "title": "Contractstatus niet gewijzigd",
     "notUnderReview": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: het contract is niet in review (status '{{currentStatus}}')",

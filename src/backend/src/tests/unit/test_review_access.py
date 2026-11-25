@@ -273,6 +273,28 @@ class TestPendingApproval:
         assert _reads(db_session, 'second@example.com', entity_type, _notifications()) is True
         assert _reads(db_session, 'approver@example.com', entity_type, _notifications()) is False
 
+    def test_a_shared_role_row_stops_granting_the_member_who_decided(
+        self, db_session, entity_type,
+    ):
+        """#1552: the approver filled their own target; the role's row, still open
+        for the other members, records that they decided the step."""
+        execution = _paused_approval(db_session, entity_type, handled=True)
+        db_session.add(NotificationDb(
+            id=str(uuid.uuid4()), type='action_required', title='Approval Required',
+            recipient=None, recipient_role_id=ROLE_ID, action_type='workflow_approval',
+            action_payload=json.dumps({
+                'execution_id': execution.id, 'step_id': 'approve',
+                'decided_by_users': ['approver@example.com'],
+            }),
+        ))
+        db_session.flush()
+        notifications = _notifications(
+            role_members={'approver@example.com', 'steward@example.com'},
+        )
+
+        assert _reads(db_session, 'approver@example.com', entity_type, notifications) is False
+        assert _reads(db_session, 'steward@example.com', entity_type, notifications) is True
+
     def test_a_member_of_a_known_role_reads(self, db_session, entity_type):
         _paused_approval(db_session, entity_type, recipient=None, role_id=ROLE_ID)
         steward = _user('steward@example.com', ['stewards'])

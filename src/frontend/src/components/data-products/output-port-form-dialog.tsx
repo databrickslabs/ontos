@@ -19,7 +19,8 @@ import CreateContractInlineDialog from '@/components/data-contracts/create-contr
 type OutputPortFormProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (port: OutputPort) => Promise<void>;
+  /** Resolve `false` when the change was not saved (e.g. the versioning dialog took over). */
+  onSubmit: (port: OutputPort) => Promise<void | boolean>;
   initial?: OutputPort;
   product?: DataProduct;
 };
@@ -151,17 +152,18 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
         id: initial?.id,
         name: name.trim(),
         version: version.trim(),
-        description: description.trim() || undefined,
+        description: description.trim() || null, // null clears: the backend keeps omitted fields
         type: type.trim() || undefined,
         contractId: contractId.trim() || undefined,
         deliveryMethodId: deliveryMethodId || undefined,
-        status: status.trim() || undefined,
+        status: status.trim() || null,
         containsPii,
         autoApprove,
       };
 
-      await onSubmit(port);
+      const saved = await onSubmit(port);
       onOpenChange(false);
+      if (saved === false) return;
       toast({
         title: 'Success',
         description: initial ? 'Deliverable updated' : 'Deliverable added',
@@ -322,7 +324,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                           <SelectContent>
                             {contracts.length === 0 ? (
                               <div className="p-2 text-sm text-muted-foreground text-center">
-                                No active/approved contracts available
+                                {t('data-products:outputPortForm.messages.noActiveContracts')}
                               </div>
                             ) : (
                               contracts.map((contract) => (
@@ -337,7 +339,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          Only showing active/approved/certified contracts
+                          {t('data-products:outputPortForm.hints.onlyActiveContracts')}
                         </p>
                       </>
                     )}

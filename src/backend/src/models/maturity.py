@@ -1,6 +1,6 @@
 """Pydantic models for maturity levels API."""
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,13 @@ class MaturityLevelBase(BaseModel):
     description: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=100)
     color: Optional[str] = Field(None, max_length=50)
-    entity_type: str = Field("all", description="DataProduct, DataContract, or all")
+    entity_type: str = Field(
+        "all",
+        description=(
+            "DataProduct, DataContract, Asset (table, view and metric view assets), or all "
+            "(data products and data contracts; not assets)"
+        ),
+    )
 
 
 class MaturityLevelCreate(MaturityLevelBase):
@@ -54,6 +60,12 @@ class MaturityLevelRead(MaturityLevelBase):
     model_config = {"from_attributes": True}
 
 
+class AssetDefaultsLoadResult(BaseModel):
+    """Result of loading the default asset ladder: levels created, and the asset levels."""
+    created: int = 0
+    levels: List[MaturityLevelRead] = Field(default_factory=list)
+
+
 class MaturityLevelReorder(BaseModel):
     """Bulk reorder: list of id -> new level_order mappings."""
     levels: list[dict] = Field(
@@ -85,6 +97,22 @@ class GateResult(BaseModel):
     required: bool
     passed: bool
     message: Optional[str] = None
+    # Set when the gate failed for a known reason the UI translates
+    # (e.g. the asset's Unity Catalog table couldn't be read)
+    message_code: Optional[str] = None
+    message_params: Optional[Dict[str, Any]] = None
+    # False when the gate's rule reads fields that couldn't be loaded (an asset's
+    # unreadable UC table): ``passed`` is then False and says nothing about the rule
+    evaluated: bool = True
+    # The gate policy's own failure text (ON_FAIL), set on a failed gate
+    failure_message: Optional[str] = None
+
+
+class MaturityNotice(BaseModel):
+    """Something that limited the evaluation, as a code the UI translates."""
+    code: str
+    message: str
+    params: Dict[str, Any] = Field(default_factory=dict)
 
 
 class LevelResult(BaseModel):
@@ -110,6 +138,10 @@ class MaturityReport(BaseModel):
     levels: List[LevelResult] = Field(default_factory=list)
     evaluated_at: datetime = Field(default_factory=datetime.utcnow)
     evaluated_by: Optional[str] = None
+    notices: List[MaturityNotice] = Field(default_factory=list)
+    # True when this result was stored as a snapshot (it is in the history); a GET
+    # of an asset's maturity computes it live and stores nothing
+    stored: bool = False
 
 
 class MaturitySnapshotRead(BaseModel):
@@ -127,3 +159,42 @@ class MaturitySnapshotRead(BaseModel):
     evaluated_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Bulk evaluation of table and view assets
+# ---------------------------------------------------------------------------
+
+class MaturityBulkEvaluationRequest(BaseModel):
+    """Scope and tuning of a bulk evaluation. Every field is optional."""
+    catalog: Optional[str] = None
+    schema_name: Optional[str] = None
+    asset_types: Optional[List[str]] = None
+    max_workers: Optional[int] = None
+    batch_size: Optional[int] = None
+
+
+class MaturityBulkEvaluationError(BaseModel):
+    """An asset whose evaluation failed; the message is a code, never exception text."""
+    asset_id: str
+    code: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MaturityBulkEvaluationRun(BaseModel):
+    """Progress and summary of a bulk evaluation run."""
+    id: str
+    state: str  # running | completed | failed
+    scope: Dict[str, Any]
+    started_by: Optional[str] = None
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    max_workers: int
+    batch_size: int
+    total: int = 0
+    processed: int = 0
+    evaluated: int = 0
+    changed: int = 0
+    skipped: Dict[str, int] = Field(default_factory=dict)
+    error_count: int = 0
+    errors: List[MaturityBulkEvaluationError] = Field(default_factory=list)

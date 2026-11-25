@@ -21,6 +21,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 
 interface CommentFormData {
   title: string;
@@ -80,6 +81,8 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
   const { currentProject } = useProjectContext();
 
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  // Until the first response, show a placeholder rather than the empty state
+  const [timelineLoaded, setTimelineLoaded] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [filterType, setFilterType] = useState<'all' | 'comments' | 'changes'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -128,6 +131,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
 
   const fetchTimeline = useCallback(async () => {
     if (!entityType || !entityId) {
+      setTimelineLoaded(true);
       return;
     }
 
@@ -136,6 +140,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
       `/api/entities/${entityType}/${entityId}/timeline?filter_type=${filterType}${projectParam}`
     );
 
+    setTimelineLoaded(true);
     if (response.error) {
       toast({
         title: t('common:toast.error'),
@@ -293,6 +298,8 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
   useEffect(() => {
     fetchTeams();
     fetchRoles();
+    // Another entity or filter: don't show the previous one's entries meanwhile
+    setTimelineLoaded(false);
     fetchTimeline();
   }, [fetchTeams, fetchRoles, fetchTimeline]);
 
@@ -683,7 +690,9 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
         <ScrollArea className="flex-1" ref={scrollAreaRef}>
           {isFormOpen && CommentForm}
 
-          {timeline.length > 0 ? (
+          {!timelineLoaded ? (
+            <ListItemSkeleton count={3} height="h-16" className="p-4 space-y-3" />
+          ) : timeline.length > 0 ? (
             <div className="p-4 space-y-3">
               {timeline.map(entry => (
                 <TimelineItem

@@ -138,7 +138,18 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "„{{value}}“ bezeichnet kein Unity-Catalog-Volume. Verwenden Sie /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> oder einen Volume-Namen; ein einfacher Name benötigt Katalog und Schema ohne Punkte, Schrägstriche oder Leerzeichen."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Asset-Beschreibungen",
+      "adminOnly": "Nur ein Admin kann dies aktivieren.",
+      "label": "Asset-Beschreibungen in Unity Catalog schreiben",
+      "help": "Beim Speichern der Beschreibung einer Databricks-Tabelle, -View oder -Spalte wird auch ihr Unity-Catalog-Kommentar gesetzt, als der speichernde Benutzer. Ohne die Berechtigungen SELECT und MODIFY wird die Beschreibung nur in Ontos gespeichert, und das Asset zeigt an, dass es nicht synchron ist.",
+      "importLimit": {
+        "label": "Max. in Unity Catalog versuchte Zeilen pro Massenimport",
+        "help": "Ein CSV/XLSX-Import versucht höchstens so viele Beschreibungen in Unity Catalog (1–10000), ob er sie schreibt, einen anderen Kommentar behält oder eine Metrikansicht überspringt; die Zeilen über dem Limit werden mit einer Warnung in Ontos gespeichert."
       }
     },
     "instanceIdentity": {
@@ -191,6 +202,10 @@
     "messages": {
       "saveSuccess": "Einstellungen erfolgreich gespeichert",
       "saveError": "Einstellungen konnten nicht gespeichert werden"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Der Job „Compliance Checks“ konnte nicht mit den LLM-Einstellungen aktualisiert werden (der App fehlt möglicherweise die Berechtigung für den Job). Geplante LLM_CHECK-Regeln verwenden die alten Einstellungen, bis der Job neu installiert wird.",
+      "compliance_job_shape_unexpected": "Der Job „Compliance Checks“ wurde in Databricks geändert, daher wurden nur seine Parameter aktualisiert. Wenn geplante LLM_CHECK-Regeln mit „LLM-Funktionen ausgeschaltet“ fehlschlagen, installieren Sie den Job neu."
     }
   },
   "databricks": {
@@ -407,7 +422,13 @@
     "privileges": {
       "homeSections": {
         "title": "Startseiten-Bereiche",
-        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden."
+        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden.",
+        "labels": {
+          "JOURNEY": "Journey-Startseite"
+        },
+        "descriptions": {
+          "JOURNEY": "Ersetzt die vollständige Startseite durch Finden, Verstehen, Vertrauen, Veröffentlichen und Pflegen. Es lässt sich nicht mit anderen Bereichen kombinieren."
+        }
       },
       "approvalPrivileges": {
         "title": "Genehmigungsrechte",
@@ -652,11 +673,14 @@
       "urlLabel": "Logo-URL",
       "urlPlaceholder": "https://beispiel.de/logo.svg",
       "help": "Geben Sie die URL Ihres benutzerdefinierten Logos ein. Unterstützt SVG, PNG oder JPG. Empfohlene Größe: 40x40 Pixel.",
-      "invalidUrl": "Bitte geben Sie eine gültige HTTP- oder HTTPS-URL ein",
       "preview": "Vorschau:",
       "loadError": "Bild konnte nicht geladen werden",
       "openInNewTab": "In neuem Tab öffnen",
-      "previewAlt": "Logo-Vorschau"
+      "previewAlt": "Logo-Vorschau",
+      "darkUrlLabel": "Logo-URL für den dunklen Modus (optional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Wird im dunklen Modus verwendet. Leer lassen, um das obige Logo in beiden Modi zu verwenden.",
+      "invalidUrlOrPath": "Geben Sie eine HTTP- oder HTTPS-URL oder einen App-Pfad ein, der mit / beginnt"
     },
     "about": {
       "title": "Benutzerdefinierter Über-Seiten-Inhalt",
@@ -675,6 +699,13 @@
       "help": "Geben Sie benutzerdefiniertes CSS ein, um das Standarddesign zu überschreiben. Sie können CSS-Variablen in :root ändern."
     },
     "saveButton": "UI-Einstellungen speichern",
+    "errorCodes": {
+      "brandingPathTraversal": "Der Pfad darf keine \"..\"-Segmente enthalten"
+    },
+    "loadFailed": {
+      "title": "Aktuelle Einstellungen konnten nicht geladen werden",
+      "description": "Das gespeicherte Branding wurde nicht geladen. Speichern ist deaktiviert, damit es nicht mit Standardwerten überschrieben wird. Laden Sie die Seite neu und versuchen Sie es erneut."
+    },
     "messages": {
       "saveSuccess": "UI-Anpassungseinstellungen gespeichert",
       "saveError": "UI-Anpassungseinstellungen konnten nicht gespeichert werden",
@@ -687,18 +718,38 @@
       "shortNameHelp": "Wird in beengten Bereichen verwendet (z. B. \"{{shortName}} fragen\"). Fällt bei leerem Feld auf den Anzeigenamen zurück. Maximal {{max}} Zeichen.",
       "displayNameLabel": "Anzeigename",
       "shortNameLabel": "Kurzname (optional)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Slogan (optional)",
+      "taglineHelp": "Kurzer Untertitel unter dem Namen in der Seitenleiste und auf der Startseite. Höchstens {{max}} Zeichen.",
+      "poweredByLabel": "„Powered by {{name}}“ in der Seitenleiste anzeigen",
+      "poweredByHelp": "Erscheint in der Fußzeile der Seitenleiste nur, solange ein eigener Anzeigename oder ein eigenes Logo festgelegt ist."
     },
     "favicon": {
       "previewAlt": "Favicon-Vorschau",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Wird zur Laufzeit auf den Browser-Tab angewendet. Der statische <link rel=\"icon\"> in der ausgelieferten index.html und das PWA-Manifest werden durch diese Einstellung nicht aktualisiert.",
-      "invalidUrl": "Bitte geben Sie eine gültige HTTP- oder HTTPS-URL ein",
       "loadError": "Bild konnte nicht geladen werden",
       "openInNewTab": "In neuem Tab öffnen",
       "preview": "Vorschau:",
       "title": "Browser-Favicon",
       "urlLabel": "Favicon-URL"
+    },
+    "theme": {
+      "title": "Designfarben",
+      "help": "Wählen Sie die Primärfarbe (Schaltflächen, Links, Fokusring) und die Akzentfarbe (Hintergründe beim Überfahren und für ausgewählte Elemente). Textfarben werden automatisch für ausreichenden Kontrast gewählt, und eine leere Farbe für den dunklen Modus wird aus der hellen abgeleitet.",
+      "primaryLight": "Primärfarbe",
+      "primaryDark": "Primärfarbe (dunkler Modus)",
+      "accentLight": "Akzentfarbe",
+      "accentDark": "Akzentfarbe (dunkler Modus)",
+      "pickerLabel": "{{field}}: Farbauswahl",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Geben Sie eine Hex-Farbe wie #2563eb ein",
+      "auto": "Automatisch: {{color}} (aus der hellen Farbe abgeleitet)",
+      "contrast": "{{text}} Text, Kontrast {{ratio}}:1",
+      "textLight": "Heller",
+      "textDark": "Dunkler",
+      "meetsAA": "AA",
+      "belowAA": "Unter AA"
     }
   },
   "connectors": {
@@ -985,6 +1036,24 @@
         "descriptionContract": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenvertrags, der sie verwendet. Bei einer Tabelle, die mehrere Verträge verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
         "valueLabel": "Tag-Wert:",
         "sharedKeyHint": "Sind die Status-Tags von Produkt und Vertrag beide mit demselben Schlüssel aktiviert, wird der Status des Produkts geschrieben."
+      },
+      "maturityThreshold": {
+        "variable": "true oder false: Die Levelnummer ist mindestens <order>",
+        "invalid": "Verwenden Sie {ASSET.MATURITY_AT_LEAST:<order>} mit einer Levelnummer, z. B. {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "Asset-UUID",
+        "assetType": "Name des Asset-Typs (Table, View, ...)",
+        "assetFqn": "Unity-Catalog-Name der Tabelle (catalog.schema.table)",
+        "assetMaturity": "Name der Reifestufe eines Tabellen- oder View-Assets (letzte Bewertung)",
+        "assetMaturityOrder": "Nummer der Reifestufe eines Tabellen- oder View-Assets (1 = erste Stufe)"
+      },
+      "maturity": {
+        "title": "Tag für die Reifestufe",
+        "description": "Versieht jedes Tabellen- oder View-Asset mit seiner Reifestufe (letzte Bewertung). Tabellen ohne Stufe erhalten kein Tag.",
+        "valueNeedsVariable": "Verwenden Sie {ASSET.MATURITY} oder {ASSET.MATURITY_ORDER} im Schlüssel oder im Wert.",
+        "tablesOnlyHint": "Nur Tabellen und Views mit einem Unity-Catalog-Namen werden getaggt, keine Schemas und Kataloge. Die Ausgabe des Laufs zählt die übersprungenen Assets und den Grund.",
+        "prefixHint": "Beginnen Sie den Schlüssel mit demselben Präfix wie die anderen aktiven Schlüssel (standardmäßig ontos_), damit der Job das Tag entfernen kann, wenn eine Tabelle ihre Stufe verliert."
       }
     },
     "entityPatterns": {
@@ -1267,11 +1336,44 @@
       "reorderFailed": "Neuanordnung fehlgeschlagen"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Alle Tabellen-, View- und Metric-View-Assets bewerten",
+    "description": "Bewertet jedes Tabellen-, View- und Metric-View-Asset im Umfang mit den aktuellen Asset-Levels. Ein seit Laufbeginn bewertetes Asset wird übersprungen; es läuft immer nur ein Lauf.",
+    "catalog": "Katalog (optional)",
+    "schema": "Schema (optional)",
+    "start": "Assets bewerten",
+    "running": "Bewertung: {{processed}} von {{total}} Assets",
+    "noAssetLevels": "Legen Sie zuerst Asset-Levels an: Ohne sie wird nichts bewertet.",
+    "lastRun": "Letzter Lauf",
+    "none": "Noch kein Lauf abgeschlossen.",
+    "scope": "Umfang: {{scope}}",
+    "allCatalogs": "Alle Kataloge",
+    "startedBy": "Gestartet von {{user}}",
+    "summary": "{{total}} Assets: {{evaluated}} bewertet, {{changed}} mit geändertem Level, {{errors}} Fehler.",
+    "skipped": "Übersprungen",
+    "errors": "Fehler",
+    "state": {
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Seit Laufbeginn bewertet",
+      "maturity_bulk_skipped_not_found": "Asset nicht gefunden",
+      "maturity_bulk_skipped_no_levels": "Keine Asset-Levels",
+      "maturity_bulk_skipped_asset_type": "Keine Tabelle, View oder Metric View",
+      "maturity_bulk_skipped_not_stored": "Nicht gespeichert: Die Tabelle konnte nicht gelesen werden",
+      "maturity_bulk_evaluation_failed": "Bewertung fehlgeschlagen (siehe Server-Log)",
+      "maturity_bulk_run_failed": "Der Lauf wurde gestoppt (siehe Server-Log)",
+      "maturity_bulk_run_in_progress": "Eine Massenbewertung läuft bereits.",
+      "maturity_bulk_scope_invalid": "Der Umfang ist ungültig."
+    }
+  },
   "maturityLevels": {
     "title": "Reifegradstufen",
     "description": "Definieren Sie die Reifegradleiter für Datenprodukte und Verträge. Jede Stufe ist durch Compliance-Richtlinien gesteuert.",
     "addLevel": "Stufe hinzufügen",
-    "allTypes": "Alle Typen",
+    "allTypes": "Produkte und Verträge",
     "gateCount_one": "{{count}} Gate",
     "gateCount_other": "{{count}} Gates",
     "complianceGates": "Compliance-Richtlinien-Gates",
@@ -1298,7 +1400,8 @@
       "levelNamePreview": "Stufenname"
     },
     "entityTypes": {
-      "all": "Alle Entity-Typen",
+      "all": "Datenprodukte und Datenverträge",
+      "Asset": "Assets (Tabellen, Views und Metric Views)",
       "DataProduct": "Datenprodukte",
       "DataContract": "Datenverträge"
     },
@@ -1311,6 +1414,18 @@
       "created": "Reifegradstufe \"{{name}}\" erstellt.",
       "deleted": "Reifegradstufe \"{{name}}\" gelöscht.",
       "cannotDeleteTitle": "Löschen nicht möglich"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Diese Richtlinie verwendet LLM_CHECK, das nur in Compliance-Läufen ausgewertet wird; ein Reifegrad-Gate würde daher jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Standardstufen für Assets laden",
+      "hint": "Fügt eine Standardleiter für Tabellen- und View-Assets hinzu (Prerequisite, 1 star, 2 stars, 3 stars) mit Beispiel-Gate-Richtlinien",
+      "loadedTitle": "Asset-Stufen geladen",
+      "loaded_one": "{{count}} Asset-Stufe erstellt",
+      "loaded_other": "{{count}} Asset-Stufen erstellt",
+      "alreadyLoaded": "Asset-Stufen sind bereits vorhanden: nichts wurde geändert",
+      "loadFailed": "Die Standardstufen für Assets konnten nicht geladen werden"
     }
   },
   "directory": {

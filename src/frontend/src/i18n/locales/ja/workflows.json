@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "ワークフローの説明",
       "failClosed": "このゲートを評価できない場合は遷移を拒否する",
       "failClosedHint": "Fail closed: このゲートの評価でエラーが発生した場合（通常の失敗ではない場合）、ステータス変更は拒否されます。オフ（fail open）の場合、変更は実行され、エラーはログと監査に記録されます。",
+      "updateGate": {
+        "failClosed": "このゲートを評価できない場合は更新を拒否する",
+        "failClosedHint": "Fail closed: このゲートの評価でエラーが発生した場合（通常の失敗ではない場合）、更新は拒否されます。オフ（fail open）の場合、更新は実行され、エラーはログと監査に記録されます。"
+      },
       "disabledFor": {
         "title": "無効にする対象",
         "hint": "このゲートは、ここに挙げたドメイン、データプロダクト、データコントラクトでは実行されません（ドメインはその配下のプロダクトとコントラクトを含みます）。スキップはすべてログと監査に記録されます。",
@@ -337,6 +341,9 @@
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
       "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。",
       "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
+      "updateGate": {
+        "stepNotAllowed": "ステップ「{{step}}」({{type}}) は before update ゲートでは実行できません。更新が拒否されても、その処理は実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。"
+      },
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
@@ -361,8 +368,13 @@
       "terminalStepHasNext": "ステップ「{{step}}」はワークフローを終了するため、「{{target}}」へのリンクは無視され、保存時に削除されます。",
       "conditionalBranchMissing": "条件「{{step}}」の{{branch}}の分岐にステップがありません。条件が{{branch}}のとき、ワークフローは成功として終了します。",
       "unreachableSteps": "最初のステップからたどれないステップがあります: {{steps}}。",
+      "assignTagKeyUnknown": "ステップ \"{{step}}\" はタグ \"{{key}}\" を割り当てますが、このタグはタグカタログにありません。タグを作成するまでこのステップは失敗します。",
       "storedEntityTypeUnknown": "トリガーには、もう存在しないエンティティタイプ「{{entityType}}」が含まれています。このタイプでは一度も起動しません。",
       "storedEntityTypeUnsupported": "{{trigger}} トリガーは {{entity}} では一度も起動しません。"
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "ステップ「{{step}}」は LLM_CHECK を使用するポリシーをチェックします。LLM_CHECK はコンプライアンス実行でのみ評価されるため、このステップはすべてのエンティティを不合格にします。LLM_CHECK を使用しないポリシーを選択してください。",
+      "validationRuleUsesLlmCheck": "ステップ「{{step}}」のルールは LLM_CHECK を使用しています。LLM_CHECK はコンプライアンスの実行でのみ評価されるため、このステップはすべてのエンティティで不合格になります。ルールから LLM_CHECK を外してください。"
     }
   },
   "approvalResponse": {
@@ -372,6 +384,13 @@
     "adjustTerms": "承認条件を調整",
     "durationDays": "期間（日）",
     "permissionLevel": "権限レベル",
+    "accessDecision": {
+      "adminHint": "管理者は自分のリクエストを判断し、リクエストより多くを付与できます。監査ログにはオーバーライドとして記録されます。",
+      "failedTitle": "判断は記録されましたが、アクセスはまだ更新されていません",
+      "failed": "ワークフローには判断が記録されましたが、アクセスリクエストを更新できませんでした。自動的に再試行されます。",
+      "narrowedTitle": "前のステップで条件が縮小されました",
+      "narrowed": "前の承認ステップが、選択した内容より少ない付与を行いました: {{granted_level}}、{{granted_days}} 日間(送信: {{sent_level}}、{{sent_days}} 日間)。"
+    },
     "reasonLabel": "承認または却下の理由",
     "reasonPlaceholder": "理由を入力...",
     "approved": "承認済み",
@@ -398,6 +417,13 @@
       "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
+      "access_request_already_decided": "このアクセスリクエストはすでに判断済みです。",
+      "access_terms_duration_not_allowed": "{{days}} 日は許可された期間ではありません (許可: {{allowed}})。",
+      "access_terms_exceed_requested_duration": "付与できるのはリクエストされた {{requested}} 日までです。",
+      "access_terms_exceed_requested_permission": "付与できるのはリクエストされたレベル ({{requested}}) までです。",
+      "access_terms_invalid_duration": "期間は {{min}} 日から {{max}} 日の間で指定してください。",
+      "access_terms_invalid_permission": "この権限レベルは付与できません。",
+      "own_access_request_approval": "自分のアクセスリクエストは判断できません。",
       "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
       "own_change_request_approval": "自分の変更リクエストは承認できません。",
       "approval_already_decided": "この承認はすでにあなたが判断済みです。",
@@ -542,6 +568,8 @@
     "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
     "stepErrors": {
       "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
+      "tag_not_found": "タグ '{{tag}}' がタグカタログに見つからなかったため、割り当てませんでした",
+      "update_gate_step_not_allowed": "{{stepType}} ステップは before update ゲートでは実行できません。更新が拒否されても、その処理は実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。",
       "approval_rejected": "リクエストが却下されました",
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
@@ -700,6 +728,33 @@
       "suffix": "以上が、このワークフローを表示・実行するために必要です。「設定」→「ロール」で設定してください。"
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "スケジュール (Quartz cron)",
+    "cronHint": "6 または 7 個のフィールド: 秒 分 時 日 月 曜日 [年]。例: {{example}} は毎日 06:00 に実行されます。秒は 0 にする必要があり、実行間隔は 5 分以上必要です。",
+    "timezoneLabel": "タイムゾーン",
+    "timezoneHint": "Europe/Berlin や America/Sao_Paulo などの IANA 名。空欄の場合は UTC です。",
+    "fields": {
+      "second": "秒",
+      "minute": "分",
+      "hour": "時",
+      "day_of_month": "日",
+      "month": "月",
+      "day_of_week": "曜日",
+      "year": "年"
+    },
+    "errors": {
+      "schedule_required": "スケジュールトリガーには cron 式が必要です。",
+      "cron_field_count": "Quartz cron 式のフィールドは 6 または 7 個です。この式は {{fields}} 個です。",
+      "cron_invalid_field": "「{{value}}」は {{field}} フィールドでは無効です。",
+      "cron_day_fields_conflict": "「?」は日フィールドと曜日フィールドのどちらか一方だけに指定してください。",
+      "cron_seconds_not_zero": "秒フィールドは 0 にする必要があります。実行は分の始まりに開始されます。",
+      "cron_unsupported_character": "{{field}} フィールドの「{{character}}」はワークフローのスケジュールではサポートされていません。",
+      "cron_invalid": "有効な Quartz cron 式ではありません。",
+      "cron_no_upcoming_runs": "この cron 式には今後の実行がありません。",
+      "cron_interval_too_short": "スケジュール実行の間隔は {{minutes}} 分以上必要です。",
+      "timezone_invalid": "不明なタイムゾーン「{{timezone}}」です。Europe/Berlin などの IANA 名を使用してください。"
+    }
+  },
   "view": {
     "subtitle": "検証、承認、通知のための自動化ワークフローを設定します。",
     "readOnlyAccess": "（読み取り専用アクセス）",
@@ -853,6 +908,7 @@
       "rejectResumeSuccess": "ワークフローを却下して再開しました",
       "rejectFailed": "ワークフローの却下に失敗しました",
       "forceDecisionRequireAll": "このステップは承認者だけが判断できます（全員の判断が必要です）。代わりに実行をキャンセルできます。",
+      "forceDecisionAccessRequest": "アクセスリクエストは承認者が判断します。ここから強制できません。",
       "noChanges": "変更なし",
       "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
       "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",

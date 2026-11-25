@@ -12,6 +12,11 @@ from src.common.logging import get_logger
 _logger = get_logger(__name__)
 
 
+# A key of a search's ``allowed_ids_by_type`` ending in this character names a type
+# prefix: ``asset-*`` is every asset type (``asset-table``, ``asset-view``, ...).
+TYPE_PREFIX_WILDCARD = "*"
+
+
 class SearchIndexItem(BaseModel):
     """Standardized structure for items returned by searchable assets."""
     id: str = Field(..., description="Unique identifier for the search item (e.g., 'product::uuid', 'term::uuid')")

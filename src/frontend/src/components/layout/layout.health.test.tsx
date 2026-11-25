@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import i18n from '@/i18n/config';
 import Layout from './layout';
+import { useUICustomizationStore } from '@/stores/ui-customization-store';
 
 vi.mock('./sidebar', () => ({ Sidebar: () => null }));
 vi.mock('./header', () => ({ Header: () => null }));
@@ -51,6 +52,7 @@ describe('Layout health banner', () => {
   let reload: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    useUICustomizationStore.setState({ isLoaded: true });
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     reload = vi.fn();

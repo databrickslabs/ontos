@@ -101,12 +101,15 @@ class AccessGrantRequestRepository:
         db: Session,
         email: str,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        status: Optional[str] = None,
     ) -> Tuple[List[AccessGrantRequestDb], int]:
-        """Get all requests made by a specific user (any status)."""
+        """Get the requests made by a specific user (any status, or only `status`)."""
         query = db.query(AccessGrantRequestDb).filter(
             AccessGrantRequestDb.requester_email == email
         )
+        if status:
+            query = query.filter(AccessGrantRequestDb.status == status)
         total = query.count()
         requests = query.order_by(AccessGrantRequestDb.created_at.desc()).offset(offset).limit(limit).all()
         return requests, total

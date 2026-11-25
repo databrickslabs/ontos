@@ -16,6 +16,13 @@ the ``alembic-branch`` label. There is no in-script escape hatch.
 
 Environment:
   BASE_REF   git ref of the PR base (default: ``origin/main``).
+  MERGE_BASE set to ``1`` on pull_request runs: merge ``BASE_REF`` into the
+             checkout (no commit) before the checks, so they see the tree the
+             PR would produce on the base's CURRENT tip. The checkout of a
+             pull_request run is refs/pull/N/merge, a snapshot taken when the
+             PR was last updated: a revision merged into the base afterwards
+             isn't in it, and two PRs on the same parent each pass on their
+             own and land with two heads.
 
 Exit codes:
   0 — pass.
@@ -128,17 +135,40 @@ def _as_tuple(down) -> tuple[str, ...]:
     return tuple(down)
 
 
+def merge_base_tip(base_ref: str) -> None:
+    """Merge ``base_ref`` into the working tree without committing."""
+    result = subprocess.run(
+        # An identity is set because git wants one even for --no-commit, and
+        # the runner has none
+        ["git", "-c", "user.name=ci", "-c", "user.email=ci@example.invalid",
+         "merge", "--no-commit", "--no-ff", base_ref],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        fail(
+            f"Could not merge {base_ref} into this checkout to check the merge result.\n"
+            "The PR conflicts with its base: rebase it onto the current base.\n\n"
+            + (result.stdout + result.stderr).strip()
+        )
+    info(f"      merged {base_ref} into the checkout: {result.stdout.strip()[:80]}")
+
+
 def main() -> int:
     base_ref = os.environ.get("BASE_REF", "origin/main")
+    if os.environ.get("MERGE_BASE") == "1":
+        info(f"[0/2] Merging {base_ref} into the checkout (merge result check)…")
+        merge_base_tip(base_ref)
 
-    # --- Check 1: single head on the PR tree -------------------------------
+    # --- Check 1: single head on the PR tree (merged with the base tip) ----
     info(f"[1/2] Loading alembic script directory from {INI_PATH}…")
     sd = load_script_dir(INI_PATH)
     heads = sd.get_heads()
     if len(heads) > 1:
         merge_cmd = "alembic merge -m 'merge heads' " + " ".join(heads)
         fail(
-            "Multiple Alembic heads detected on PR branch: "
+            "Multiple Alembic heads detected: "
             + ", ".join(heads)
             + "\n\n"
             "This happens when two PRs branched off the same alembic tip and each\n"

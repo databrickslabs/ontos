@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Workflow-Beschreibung",
       "failClosed": "Übergang ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
       "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Statusänderung abgelehnt. Aus (fail open) wird die Änderung durchgeführt und der Fehler protokolliert und auditiert.",
+      "updateGate": {
+        "failClosed": "Aktualisierung ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
+        "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Aktualisierung abgelehnt. Aus (fail open) wird die Aktualisierung durchgeführt und der Fehler protokolliert und auditiert."
+      },
       "disabledFor": {
         "title": "Deaktiviert für",
         "hint": "Dieses Gate läuft nicht für die hier aufgeführten Domänen, Datenprodukte und Datenverträge (eine Domäne umfasst ihre Produkte und Verträge). Jedes Überspringen wird protokolliert und auditiert.",
@@ -337,6 +341,9 @@
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
       "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
+      "updateGate": {
+        "stepNotAllowed": "Schritt \"{{step}}\" ({{type}}) kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow."
+      },
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
@@ -361,8 +368,13 @@
       "terminalStepHasNext": "Schritt \"{{step}}\" beendet den Workflow, daher wird seine Verknüpfung zu \"{{target}}\" ignoriert und beim Speichern entfernt.",
       "conditionalBranchMissing": "Bedingung \"{{step}}\" hat keinen Schritt für den Zweig {{branch}}. Ist die Bedingung {{branch}}, endet der Workflow als erfolgreich.",
       "unreachableSteps": "Diese Schritte sind vom ersten Schritt aus nicht erreichbar: {{steps}}.",
+      "assignTagKeyUnknown": "Der Schritt \"{{step}}\" weist den Tag \"{{key}}\" zu, der nicht im Tag-Katalog vorhanden ist. Der Schritt schlägt fehl, bis der Tag angelegt ist.",
       "storedEntityTypeUnknown": "Der Trigger enthält \"{{entityType}}\", einen Entity-Typ, den es nicht mehr gibt. Er löst dafür nie aus.",
       "storedEntityTypeUnsupported": "Der Trigger-Typ „{{trigger}}“ löst nie für {{entity}} aus."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Schritt \"{{step}}\" prüft eine Richtlinie, die LLM_CHECK verwendet. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Schritt \"{{step}}\" hat eine Regel mit LLM_CHECK. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Entfernen Sie LLM_CHECK aus der Regel."
     }
   },
   "approvalResponse": {
@@ -372,6 +384,13 @@
     "adjustTerms": "Genehmigungsbedingungen anpassen",
     "durationDays": "Dauer (Tage)",
     "permissionLevel": "Berechtigungsstufe",
+    "accessDecision": {
+      "adminHint": "Als Admin können Sie Ihren eigenen Antrag entscheiden und mehr gewähren als beantragt. Das Audit-Protokoll vermerkt dies als Übersteuerung.",
+      "failedTitle": "Entscheidung gespeichert, Zugriff noch nicht aktualisiert",
+      "failed": "Der Workflow hat Ihre Entscheidung, aber der Zugriffsantrag konnte nicht aktualisiert werden. Es wird automatisch erneut versucht.",
+      "narrowedTitle": "Bedingungen durch einen früheren Schritt verringert",
+      "narrowed": "Ein früherer Genehmigungsschritt hat weniger gewährt als Sie gewählt haben: {{granted_level}} für {{granted_days}} Tage (gesendet: {{sent_level}}, {{sent_days}} Tage)."
+    },
     "reasonLabel": "Grund für Genehmigung oder Ablehnung",
     "reasonPlaceholder": "Geben Sie Ihren Grund ein...",
     "approved": "Genehmigt",
@@ -398,6 +417,13 @@
       "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
     },
     "errors": {
+      "access_request_already_decided": "Über diese Zugriffsanfrage wurde bereits entschieden.",
+      "access_terms_duration_not_allowed": "{{days}} Tage sind keine zulässige Dauer (zulässig: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Sie können höchstens die angefragten {{requested}} Tage gewähren.",
+      "access_terms_exceed_requested_permission": "Sie können höchstens die angefragte Stufe ({{requested}}) gewähren.",
+      "access_terms_invalid_duration": "Die Dauer muss zwischen {{min}} und {{max}} Tagen liegen.",
+      "access_terms_invalid_permission": "Diese Berechtigungsstufe kann nicht erteilt werden.",
+      "own_access_request_approval": "Sie können nicht über Ihre eigene Zugriffsanfrage entscheiden.",
       "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
       "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
       "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",
@@ -542,6 +568,8 @@
     "removedStepsHint": "Diese Schritte liefen in dieser Ausführung und wurden später aus dem Workflow entfernt.",
     "stepErrors": {
       "rule_where_evaluation_failed": "Die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
+      "tag_not_found": "Die Tag '{{tag}}' wurde im Tag-Katalog nicht gefunden und daher nicht zugewiesen",
+      "update_gate_step_not_allowed": "Ein {{stepType}}-Schritt kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow.",
       "approval_rejected": "Anfrage abgelehnt",
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
@@ -700,6 +728,33 @@
       "suffix": "oder höher, um diesen Workflow zu sehen und auszuführen. Legen Sie dies unter Einstellungen → Rollen fest."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Zeitplan (Quartz-Cron)",
+    "cronHint": "6 oder 7 Felder: Sekunde Minute Stunde Tag-des-Monats Monat Wochentag [Jahr]. Beispiel: {{example}} läuft jeden Tag um 06:00. Die Sekunden müssen 0 sein, und zwischen zwei Läufen müssen mindestens 5 Minuten liegen.",
+    "timezoneLabel": "Zeitzone",
+    "timezoneHint": "Ein IANA-Name wie Europe/Berlin oder America/Sao_Paulo. Leer bedeutet UTC.",
+    "fields": {
+      "second": "Sekunde",
+      "minute": "Minute",
+      "hour": "Stunde",
+      "day_of_month": "Tag-des-Monats",
+      "month": "Monat",
+      "day_of_week": "Wochentag",
+      "year": "Jahr"
+    },
+    "errors": {
+      "schedule_required": "Ein geplanter Auslöser braucht einen Cron-Ausdruck.",
+      "cron_field_count": "Ein Quartz-Cron-Ausdruck hat 6 oder 7 Felder; dieser hat {{fields}}.",
+      "cron_invalid_field": "„{{value}}“ ist im Feld {{field}} nicht gültig.",
+      "cron_day_fields_conflict": "Setzen Sie „?“ in genau eines der Felder Tag-des-Monats und Wochentag.",
+      "cron_seconds_not_zero": "Das Sekundenfeld muss 0 sein: Läufe beginnen zur vollen Minute.",
+      "cron_unsupported_character": "„{{character}}“ im Feld {{field}} wird in Workflow-Zeitplänen nicht unterstützt.",
+      "cron_invalid": "Dies ist kein gültiger Quartz-Cron-Ausdruck.",
+      "cron_no_upcoming_runs": "Dieser Cron-Ausdruck hat keinen anstehenden Lauf.",
+      "cron_interval_too_short": "Zwischen geplanten Läufen müssen mindestens {{minutes}} Minuten liegen.",
+      "timezone_invalid": "Unbekannte Zeitzone „{{timezone}}“: Verwenden Sie einen IANA-Namen wie Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Konfigurieren Sie automatisierte Workflows für Validierung, Genehmigung und Benachrichtigungen.",
     "readOnlyAccess": "(Nur-Lese-Zugriff)",
@@ -853,6 +908,7 @@
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
       "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
+      "forceDecisionAccessRequest": "Zugriffsanfragen entscheiden ihre Genehmigenden, nicht von hier aus erzwungen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

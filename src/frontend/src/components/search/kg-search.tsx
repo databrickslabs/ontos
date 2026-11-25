@@ -152,6 +152,7 @@ export default function KGSearch({
     el.style.height = `${el.scrollHeight}px`;
   };
   const [resourceDescription, setResourceDescription] = useState<ResourceDescription | null>(null);
+  const [resourceLoadFailed, setResourceLoadFailed] = useState(false);
 
   // New filter states
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>(initialDirectionFilter);
@@ -243,23 +244,31 @@ export default function KGSearch({
 
   // Load full resource description (with expanded blank nodes) when path changes
   useEffect(() => {
+    // A failed request is shown as such, not as "Loading…" forever; a newer
+    // path wins over a slower earlier response
+    let cancelled = false;
     const loadDescription = async () => {
-      if (path.length === 0) {
-        setResourceDescription(null);
-        return;
-      }
+      setResourceDescription(null);
+      setResourceLoadFailed(false);
+      if (path.length === 0) return;
       const currentIri = path[path.length - 1];
       try {
         const res = await get<ResourceDescription>(
           `/api/semantic-models/resources/${encodeURIComponent(currentIri)}/description`
         );
-        setResourceDescription(res.data || null);
+        if (cancelled) return;
+        if (res.error || !res.data) {
+          setResourceLoadFailed(true);
+        } else {
+          setResourceDescription(res.data);
+        }
       } catch (e) {
         console.error('Failed to load resource description:', e);
-        setResourceDescription(null);
+        if (!cancelled) setResourceLoadFailed(true);
       }
     };
     loadDescription();
+    return () => { cancelled = true; };
   }, [path]);
 
   // Prefix search
@@ -445,7 +454,9 @@ export default function KGSearch({
           {path.length >= 1 && (
             <div className="mt-4 pt-4 border-t space-y-2">
               <h4 className="text-sm font-medium">{t('search:kg.resourceDetail', 'Resource detail')}</h4>
-              {resourceDescription == null ? (
+              {resourceLoadFailed ? (
+                <div className="text-sm text-destructive">{t('search:kg.resourceLoadFailed')}</div>
+              ) : resourceDescription == null ? (
                 <div className="text-sm text-muted-foreground">{t('search:kg.resourceLoading')}</div>
               ) : resourceDescription.triples.length === 0 ? (
                 <div className="text-sm text-muted-foreground">{t('search:kg.noTriples')}</div>

@@ -28,6 +28,7 @@ from src.common.workflow_executor import WorkflowExecutor
 from src.common.workflow_triggers import (
     GateEvaluationError,
     StatusChangeBlockedError,
+    UpdateGateEvaluationError,
     run_status_gates,
 )
 from src.controller import audit_manager
@@ -49,9 +50,12 @@ from src.models.process_workflows import (
 )
 
 
-def _gate(db_session, name, *, on_error=None, fail=False, entity_types=('data_product', 'data_contract')):
-    """An active before_status_change workflow: a Pass step, or a Fail step when ``fail``."""
-    trigger = {'type': 'before_status_change', 'entity_types': list(entity_types)}
+def _gate(
+    db_session, name, *, on_error=None, fail=False,
+    entity_types=('data_product', 'data_contract'), trigger_type='before_status_change',
+):
+    """An active gate workflow: a Pass step, or a Fail step when ``fail``."""
+    trigger = {'type': trigger_type, 'entity_types': list(entity_types)}
     if on_error:
         trigger['on_error'] = on_error
     wf_id = str(uuid.uuid4())
@@ -226,6 +230,78 @@ class TestContracts:
         with pytest.raises(StatusChangeBlockedError):
             contract_manager.transition_status(db_session, cid, 'proposed')
         assert _contract_status(db_session, cid) == 'draft'
+
+
+class TestUpdateGates:
+    """``before_update`` gates (PUT /data-contracts/{id}) honour ``on_error`` too."""
+
+    def _update(self, contract_manager, db_session, cid):
+        contract = db_session.get(DataContractDb, cid)
+        return contract_manager.run_update_gates(
+            db_session, contract, {'name': 'Renamed'}, 'owner@example.com',
+        )
+
+    def test_a_fail_closed_gate_that_errors_refuses_the_update(
+        self, contract_manager, db_session, raising_gates, audited,
+    ):
+        _gate(db_session, '[raise] Update gate', on_error='fail_closed',
+              trigger_type='before_update', entity_types=('data_contract',))
+        cid = _contract(db_session)
+        with pytest.raises(UpdateGateEvaluationError) as err:
+            self._update(contract_manager, db_session, cid)
+        assert err.value.code == 'update_gate_error'
+        assert err.value.params['workflows'] == ['[raise] Update gate']
+        assert audited[0]['details']['trigger_type'] == 'before_update'
+        assert audited[0]['details']['on_error'] == 'fail_closed'
+
+    @pytest.mark.parametrize('on_error', [None, 'fail_open'])
+    def test_a_fail_open_or_unmarked_gate_that_errors_lets_it_through(
+        self, contract_manager, db_session, raising_gates, audited, on_error,
+    ):
+        _gate(db_session, '[raise] Update gate', on_error=on_error,
+              trigger_type='before_update', entity_types=('data_contract',))
+        cid = _contract(db_session)
+        assert self._update(contract_manager, db_session, cid) == (True, [])
+        assert len(audited) == 1
+
+    def test_listing_fails_and_a_matching_gate_is_fail_closed(
+        self, contract_manager, db_session, audited, monkeypatch,
+    ):
+        def boom(self, *args, **kwargs):
+            raise RuntimeError('could not list the gates')
+        monkeypatch.setattr(WorkflowsManager, 'get_workflows_for_trigger', boom)
+        _gate(db_session, 'Update gate', on_error='fail_closed',
+              trigger_type='before_update', entity_types=('data_contract',))
+        _gate(db_session, 'Status gate', on_error='fail_closed')
+        cid = _contract(db_session)
+        with pytest.raises(UpdateGateEvaluationError) as err:
+            self._update(contract_manager, db_session, cid)
+        # Only the before_update gate: a status change gate doesn't guard updates
+        assert err.value.params['workflows'] == ['Update gate']
+
+    def test_listing_fails_and_no_update_gate_is_fail_closed(
+        self, contract_manager, db_session, audited, monkeypatch,
+    ):
+        def boom(self, *args, **kwargs):
+            raise RuntimeError('could not list the gates')
+        monkeypatch.setattr(WorkflowsManager, 'get_workflows_for_trigger', boom)
+        _gate(db_session, 'Status gate', on_error='fail_closed')
+        cid = _contract(db_session)
+        assert self._update(contract_manager, db_session, cid) == (True, [])
+        assert len(audited) == 1
+
+
+    def test_listing_and_the_fail_closed_lookup_fail_and_the_update_proceeds(
+        self, contract_manager, db_session, audited, monkeypatch,
+    ):
+        def boom(*args, **kwargs):
+            raise RuntimeError('database went away')
+        monkeypatch.setattr(WorkflowsManager, 'get_workflows_for_trigger', boom)
+        monkeypatch.setattr(workflow_triggers, '_fail_closed_gate_names', boom)
+        cid = _contract(db_session)
+        # The mode is unknown: as for status changes, the update goes ahead (reported)
+        assert self._update(contract_manager, db_session, cid) == (True, [])
+        assert [e['action'] for e in audited] == ['GATE_ERROR']
 
 
 class TestBeforeTheGatesAreKnown:

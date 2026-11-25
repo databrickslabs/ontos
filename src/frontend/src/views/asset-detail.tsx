@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
+import { DescriptionSyncNotice } from '@/components/assets/description-sync-notice';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -25,12 +26,12 @@ import { LineageEditor } from '@/components/common/lineage-editor';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
+import { MaturityPanel } from '@/components/data-products/maturity-panel';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
-import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
@@ -147,6 +148,8 @@ export default function AssetDetailView() {
 
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
+  // Maturity levels apply to table and view assets (MATURITY_ASSET_TYPES in the backend)
+  const hasMaturity = entityType === 'Table' || entityType === 'View';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
 
   const fetchAsset = useCallback(async () => {
@@ -312,6 +315,7 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
+        <DescriptionSyncNotice sync={asset.description_sync} />
       </div>
 
       {/* Tabs */}
@@ -430,6 +434,13 @@ export default function AssetDetailView() {
               )}
             </CardContent>
           </Card>
+
+          {/* Maturity of a table or view: current and next level, each gate and why it failed */}
+          {hasMaturity && (
+            <div data-testid="asset-maturity">
+              <MaturityPanel entityType="Asset" entityId={asset.id} />
+            </div>
+          )}
 
           {/* Type-specific: BusinessTerm - Definition & Synonyms */}
           {isBusinessTerm && asset.properties && (
@@ -605,9 +616,6 @@ export default function AssetDetailView() {
         showDistribution
         allowSubmit
       />
-
-      {/* Costs Panel */}
-      <EntityCostsPanel entityId={assetId!} entityType="asset" />
 
       {/* Quality Panel */}
       <EntityQualityPanel entityId={assetId!} entityType="asset" />

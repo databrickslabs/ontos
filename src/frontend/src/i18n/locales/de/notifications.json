@@ -9,6 +9,14 @@
     "refused": "Ihre Anfrage, den Status auf „{{toStatus}}“ zu ändern, wurde genehmigt, aber die Änderung konnte nicht übernommen werden: {{reason}}",
     "reviewNotApplied": "Über das Review des Datenprodukts wurde entschieden, aber die Änderung auf „{{toStatus}}“ konnte nicht angewendet werden: {{reason}}"
   },
+  "approvalOverdue": {
+    "approverTitle": "Genehmigung überfällig",
+    "approverDescription_one": "Die Genehmigung von '{{name}}' wartet seit mehr als {{count}} Tag. Entscheiden Sie sie unter Meine Aktionen.",
+    "approverDescription_other": "Die Genehmigung von '{{name}}' wartet seit mehr als {{count}} Tagen. Entscheiden Sie sie unter Meine Aktionen.",
+    "requesterTitle": "Ihre Anfrage wartet noch",
+    "requesterDescription_one": "Ihre Anfrage für '{{name}}' wartet seit mehr als {{count}} Tag auf eine Entscheidung. Die Genehmigenden wurden erinnert.",
+    "requesterDescription_other": "Ihre Anfrage für '{{name}}' wartet seit mehr als {{count}} Tagen auf eine Entscheidung. Die Genehmigenden wurden erinnert."
+  },
   "contractStatusNotChanged": {
     "title": "Vertragsstatus nicht geändert",
     "notUnderReview": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: Der Vertrag ist nicht in Prüfung (Status „{{currentStatus}}“)",

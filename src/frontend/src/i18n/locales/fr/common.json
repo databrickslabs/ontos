@@ -10,6 +10,7 @@
     "delete": "Supprimer",
     "deleteSelected": "Supprimer sélectionnés ({{count}})",
     "edit": "Modifier",
+    "rename": "Renommer",
     "add": "Ajouter",
     "create": "Créer",
     "update": "Mettre à jour",
@@ -42,6 +43,7 @@
     "discard": "Abandonner",
     "apply": "Appliquer",
     "select": "Sélectionner",
+    "done": "Terminé",
     "remove": "Supprimer",
     "link": "Lier",
     "unlink": "Délier",
@@ -358,7 +360,10 @@
       "job": "Job",
       "subscription": "Abonnement",
       "user": "Utilisateur",
-      "metric_view": "Metric View"
+      "metric_view": "Metric View",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collection",
+      "concept_changeset": "Ensemble de modifications de concepts"
     },
     "stepTypes": {
       "validation": "Validation",
@@ -398,6 +403,11 @@
     "assignedSuccess": "Propriétaire attribué avec succès.",
     "errorAssigning": "Erreur lors de l'attribution du propriétaire",
     "ownerUserAria": "Utilisateur propriétaire"
+  },
+  "assignOwnerRole": {
+    "noRoles": "Aucun rôle métier n'est configuré. Demandez à un administrateur d'en créer un.",
+    "ownerBadge": "Propriétaire",
+    "notOwnerHint": "Les propriétaires ayant ce rôle ne reçoivent ni les approbations ni les notifications de propriétaire. Choisissez Data Owner ou Owner pour cela."
   },
   "versionFamily": {
     "countBadge_one": "{{count}} version",
@@ -479,6 +489,9 @@
     "conceptRelationshipHint": "« {{relationship}} » relie cet élément à un concept sous forme de relation : elle apparaît dans Relations et dans le lignage. Pour afficher le concept dans les détails de cet élément et dans {{conceptSection}} sur la page du concept, utilisez plutôt {{section}}.",
     "targetNotPickable": "{{type}} ne peut pas être choisi ici. Il est géré sur sa propre page.",
     "noAccessToTarget": "Vous n'avez pas accès à {{type}}. Demandez un accès en lecture à un administrateur pour créer ce lien."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "Les propriétés enregistrées de l'actif n'ont pas pu être chargées : il ne peut pas être enregistré ici. Fermez la boîte de dialogue et réessayez."
   },
   "assetForm": {
     "groups": {
@@ -565,16 +578,25 @@
     "removeConfirm": "Êtes-vous sûr de vouloir supprimer cette relation ? Cette action ne peut pas être annulée."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Sélectionner {{kind}}…",
     "latestSuffix": "{{name}} (dernière)",
     "pinVersionTitle": "Épingler une version spécifique",
     "pinVersion": "Épingler la version",
     "followLatestTitle": "Toujours suivre la dernière version visible de la famille",
     "followLatest": "Suivre la dernière",
-    "searchPlaceholder": "Rechercher {{kind}}…",
     "loading": "Chargement…",
-    "noMatching": "Aucun(e) {{kind}} correspondant(e).",
     "unnamed": "(sans nom)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Sélectionner un contrat…",
+      "search": "Rechercher des contrats…",
+      "noMatching": "Aucun contrat correspondant."
+    },
+    "product": {
+      "select": "Sélectionner un produit…",
+      "search": "Rechercher des produits…",
+      "noMatching": "Aucun produit correspondant."
+    }
   },
   "entityTree": {
     "title": "Entités liées",
@@ -638,6 +660,8 @@
   "edit": "Modifier",
   "error": "Erreur",
   "home": "Accueil",
+  "loading": "Chargement…",
+  "optional": "(facultatif)",
   "refresh": "Actualiser",
   "retry": "Réessayer",
   "save": "Enregistrer",

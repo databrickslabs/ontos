@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -9,16 +10,37 @@ import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request
 import WorkflowApprovalResponseDialog, { type WorkflowApprovalResponseDialogPayload } from '@/components/workflows/workflow-approval-response-dialog';
 import { approvalActionPayload, notificationTitle } from '@/lib/notification-text';
 
+/**
+ * The entity an approval is for, as approvers may trust it: for an access request the
+ * name the backend read for the requested entity (else its id), never the requester's
+ * own entity_name (#1615).
+ */
+export function approvalEntityName(payload: Record<string, any> | null | undefined): string {
+  if (!payload) return '';
+  if (String(payload.entity_type ?? '').toLowerCase() === 'access_grant') {
+    return payload.underlying_entity_name || payload.underlying_entity_id || '';
+  }
+  return payload.entity_name || '';
+}
+
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
   products: { id: string; title?: string; status?: string }[];
 }
 
-export default function RequiredActionsSection() {
+interface RequiredActionsSectionProps {
+  /**
+   * Read the contracts/products approval queue. The queue route answers 403 unless the user
+   * reads data contracts or data products; pass `false` to skip the request for them.
+   */
+  fetchQueue?: boolean;
+}
+
+export default function RequiredActionsSection({ fetchQueue = true }: RequiredActionsSectionProps) {
   const { t, i18n } = useTranslation(['home', 'common']);
   const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationsStore();
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
-  const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
+  const [loadingApprovals, setLoadingApprovals] = useState<boolean>(fetchQueue);
   // A flag, translated at render: the fetch runs once, a language switch must still apply
   const [approvalsError, setApprovalsError] = useState<boolean>(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,6 +54,7 @@ export default function RequiredActionsSection() {
   }, [fetchNotifications]);
 
   useEffect(() => {
+    if (!fetchQueue) return;
     const fetchApprovals = async () => {
       setLoadingApprovals(true);
       setApprovalsError(false);
@@ -56,7 +79,7 @@ export default function RequiredActionsSection() {
       }
     };
     fetchApprovals();
-  }, []);
+  }, [fetchQueue]);
 
   // Filter role access requests separately
   const roleRequests = notifications.filter(
@@ -87,6 +110,8 @@ export default function RequiredActionsSection() {
     date: string;
     link?: string;
     payload?: Record<string, any>;
+    /** An approval step past its timeout_days, reminded once (#1119) */
+    overdue?: boolean;
   };
 
   const unifiedApprovals: UnifiedApproval[] = [
@@ -121,10 +146,12 @@ export default function RequiredActionsSection() {
     ...workflowApprovalNotifications.map(n => ({
       id: n.id,
       type: 'workflow_approval' as const,
-      title: n.action_payload?.entity_name || notificationTitle(n, t) || t('requiredActionsSection.approvalRequest'),
+      title: approvalEntityName(n.action_payload) || notificationTitle(n, t)
+        || t('requiredActionsSection.approvalRequest'),
       subtitle: n.action_payload?.requester_email || n.subtitle,
       date: n.created_at,
       payload: approvalActionPayload(n, t),
+      overdue: Boolean(n.action_payload?.overdue_since),
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -226,7 +253,18 @@ export default function RequiredActionsSection() {
                     {unifiedApprovals.slice(roleRequestPage * 10, (roleRequestPage + 1) * 10).map(item => (
                       <tr key={item.id} className="hover:bg-muted/20 transition-colors">
                         <td className="p-2.5">
-                          {getTypeBadge(item.type)}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {getTypeBadge(item.type)}
+                            {item.overdue && (
+                              <Badge
+                                variant="outline"
+                                className="border-red-500/40 text-red-700 dark:text-red-300"
+                                title={t('approvalOverdue.hint')}
+                              >
+                                {t('approvalOverdue.badge')}
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2.5">
                           <div className="font-medium truncate max-w-[250px]">

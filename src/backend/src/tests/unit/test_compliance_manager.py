@@ -216,8 +216,9 @@ class TestComplianceManager:
 
         # Assert
         assert result["active_policies"] == 1
-        assert result["overall_compliance"] == 0.0
-        assert result["critical_issues"] >= 0
+        # No policy has a scored run: no overall score, not 0 %
+        assert result["overall_compliance"] is None
+        assert result["critical_issues"] == 0
 
     def test_get_compliance_stats_with_runs(self, manager, db_session, sample_policy_db):
         """Test compliance stats with existing runs."""
@@ -312,6 +313,25 @@ class TestComplianceManager:
         assert len(result) == 7  # One entry per day
         assert all("date" in entry for entry in result)
         assert all("compliance" in entry for entry in result)
+
+    def test_get_compliance_trend_day_without_scored_run_is_none(
+        self, manager, db_session, sample_policy_db
+    ):
+        """A day with only failed or empty runs, or no run, has no score (not 0 %)."""
+        now = datetime.utcnow()
+        for score, status, days_ago, ok in (
+            (90.0, "succeeded", 2, 9), (None, "failed", 0, 0),
+        ):
+            db_session.add(ComplianceRunDb(
+                id=str(uuid.uuid4()), policy_id=sample_policy_db.id, status=status,
+                started_at=now - timedelta(days=days_ago), finished_at=now,
+                success_count=ok, failure_count=1 if ok else 0, score=score,
+            ))
+        db_session.commit()
+
+        result = manager.get_compliance_trend(db_session, days=3)
+
+        assert [p["compliance"] for p in result] == [90.0, None, None]
 
     # =====================================================================
     # Run Management Tests

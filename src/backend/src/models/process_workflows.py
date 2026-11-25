@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 import uuid
 
 from src.common.logging import get_logger
@@ -186,7 +186,7 @@ class StepExecutionStatus(str, Enum):
 # --- Trigger Configuration ---
 
 class GateErrorMode(str, Enum):
-    """What a ``before_status_change`` gate does when evaluating it raises."""
+    """What a ``before_status_change`` or ``before_update`` gate does when evaluating it raises."""
     FAIL_OPEN = "fail_open"  # The transition proceeds (the error is logged and audited)
     FAIL_CLOSED = "fail_closed"  # The transition is refused
 
@@ -224,15 +224,24 @@ class WorkflowTrigger(BaseModel):
     to_status: Optional[str] = Field(None, description="Status to transition to (for status change triggers)")
 
     # For scheduled
-    schedule: Optional[str] = Field(None, description="Cron expression for scheduled triggers")
+    schedule: Optional[str] = Field(
+        None,
+        description=(
+            "scheduled only: Quartz cron expression (sec min hour day-of-month month "
+            "day-of-week [year]), e.g. '0 30 2 * * ?'; see common/quartz_cron.py"
+        ),
+    )
+    timezone: Optional[str] = Field(
+        None, description="scheduled only: IANA timezone of the schedule; empty means UTC",
+    )
 
-    # For before_status_change
+    # For before_status_change and before_update
     on_error: GateErrorMode = Field(
         GateErrorMode.FAIL_OPEN,
         description=(
-            "before_status_change only: what happens when evaluating this gate raises. "
-            "fail_open lets the transition proceed, fail_closed refuses it. "
-            "A gate that fails normally blocks in both modes."
+            "before_status_change and before_update: what happens when evaluating this "
+            "gate raises. fail_open lets the transition or update proceed, fail_closed "
+            "refuses it. A gate that fails normally blocks in both modes."
         ),
     )
     disabled_for: GateExemptions = Field(
@@ -727,6 +736,10 @@ class TriggerContext(BaseModel):
     # For status change triggers
     from_status: Optional[str] = None
     to_status: Optional[str] = None
+
+    # before_update: the entity's tags and the pending tag removals after the
+    # gates that already ran, so the next gate starts from them (not stored)
+    _update_gate_tags: Optional[Dict[str, Any]] = PrivateAttr(default=None)
 
 
 class WorkflowStepExecutionResult(BaseModel):

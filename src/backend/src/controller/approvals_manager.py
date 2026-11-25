@@ -56,10 +56,15 @@ class ApprovalsManager:
         # Contracts awaiting approval (proposed or under_review)
         try:
             from src.db_models.data_contracts import DataContractDb
-            q = db.query(DataContractDb).filter(
-                DataContractDb.status.in_(['proposed', 'under_review'])
-            )
+            # A review stage that can still be approved, in the contract's own
+            # lifecycle stage group (proposed / under_review by default)
+            from src.controller.lifecycle_service import lifecycle_service
+            q = db.query(DataContractDb).filter(lifecycle_service.category_filter(
+                db, DataContractDb, 'data_contract', ['review'],
+            ))
             for c in q.all():
+                if not lifecycle_service.awaits_review_decision(db, 'data_contract', c):
+                    continue
                 if not _shown(db, can_see_contract, c):
                     continue
                 items['contracts'].append({
@@ -80,10 +85,13 @@ class ApprovalsManager:
             # products surface to stewards. Filtering on 'draft' instead listed
             # not-yet-submitted products and hid the ones actually awaiting
             # review (ONT-CUJ-020).
-            q = db.query(DataProductDb).filter(
-                DataProductDb.status.in_(['proposed', 'under_review'])
-            )
+            from src.controller.lifecycle_service import lifecycle_service
+            q = db.query(DataProductDb).filter(lifecycle_service.category_filter(
+                db, DataProductDb, 'data_product', ['review'],
+            ))
             for p in q.all():
+                if not lifecycle_service.awaits_review_decision(db, 'data_product', p):
+                    continue
                 if not _shown(db, can_see_product, p):
                     continue
                 items['products'].append({

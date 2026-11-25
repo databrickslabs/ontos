@@ -15,14 +15,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, ArrowLeft, PlayCircle, Scale, Pencil } from 'lucide-react';
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
+import { ResultStatusBadge } from '@/components/compliance/result-status-badge';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
-import { complianceRunWarningText } from '@/lib/compliance-run-warning';
+import {
+  complianceResultMessageText,
+  complianceRunCoverageText,
+  complianceRunScoreText,
+  complianceRunWarningText,
+} from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { llmCheckErrorText, llmUsageText } from '@/lib/compliance-llm-checks';
 
 type Policy = {
   id: string; // UUID
@@ -47,12 +54,15 @@ type Run = {
   finished_at?: string;
   success_count: number;
   failure_count: number;
-  score: number;
-  error_message?: string;
+  score: number | null;
+  coverage?: { evaluated?: number; not_evaluated?: number } | null;
   error_code?: string | null;
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
   warning_params?: Record<string, unknown> | null;
+  llm_calls?: number | null;
+  llm_cache_hits?: number | null;
+  not_evaluated_count?: number | null;
 };
 
 type Result = {
@@ -62,6 +72,7 @@ type Result = {
   object_id: string;
   object_name?: string;
   passed: boolean;
+  not_evaluated?: boolean;
   message?: string;
   details_json?: string;
   created_at: string;
@@ -93,12 +104,16 @@ export default function CompliancePolicyDetails() {
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
     { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
-      <Badge variant={row.original.passed ? 'secondary' : 'destructive'}>
-        {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
-      </Badge>
+      <ResultStatusBadge
+        passed={row.original.passed}
+        notEvaluated={row.original.not_evaluated}
+        detailsJson={row.original.details_json}
+      />
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
+      <span className="text-sm text-muted-foreground break-words">
+        {complianceResultMessageText(t, row.original) || t('compliance:results.empty')}
+      </span>
     ) },
   ], [t]);
 
@@ -165,11 +180,12 @@ export default function CompliancePolicyDetails() {
     try {
       const res = await post<Run>(`/api/compliance/policies/${policyId}/runs`, { mode: 'inline' });
       if (res.error) {
-        // e.g. 403 when the rule changes tags and the user can't write tags
+        // e.g. 403 when the rule changes tags and the user can't write tags; coded
+        // refusals (LLM_CHECK access, quota) are translated
         toast({
           variant: 'destructive',
           title: t('compliance:errors.runningPolicy'),
-          description: res.error,
+          description: llmCheckErrorText(t, res),
         });
         return;
       }
@@ -338,9 +354,17 @@ export default function CompliancePolicyDetails() {
           <CardHeader>
             <CardTitle className="text-xl">{t('compliance:policyDetails.runSummary.title')}</CardTitle>
             <CardDescription>
-              {t('compliance:policyDetails.runSummary.lastRunStarted', { date: new Date(activeRun.started_at).toLocaleString() })} • {t('compliance:policyDetails.runSummary.statusLabel')} <span className="font-medium">{activeRun.status}</span>
+              {t('compliance:policyDetails.runSummary.lastRunStarted', {
+                date: new Date(activeRun.started_at).toLocaleString(),
+              })}{' '}
+              • {t('compliance:policyDetails.runSummary.statusLabel')}{' '}
+              <span className="font-medium">
+                {t(`compliance:runStatus.${activeRun.status}`, {
+                  defaultValue: activeRun.status,
+                })}
+              </span>
             </CardDescription>
-            {activeRun.status === 'failed' && activeRun.error_message && (
+            {activeRun.status === 'failed' && (
               <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {complianceRunErrorText(t, activeRun)}</div>
             )}
             {activeRun.status !== 'failed' && activeRun.warning_code && (
@@ -348,12 +372,31 @@ export default function CompliancePolicyDetails() {
                 {complianceRunWarningText(t, activeRun)}
               </div>
             )}
+            {!!activeRun.not_evaluated_count && (
+              <div className="text-sm text-muted-foreground" data-testid="run-not-evaluated">
+                {t('compliance:llmCheck.notEvaluatedCount', {
+                  count: activeRun.not_evaluated_count,
+                })}
+              </div>
+            )}
+            {llmUsageText(t, activeRun) && (
+              <div className="text-sm text-muted-foreground" data-testid="run-llm-usage">
+                {llmUsageText(t, activeRun)}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-3 gap-4 mb-4">
               <div>
                 <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.score')}</div>
-                <div className="text-2xl font-semibold">{activeRun.score}%</div>
+                <div className="text-2xl font-semibold" data-testid="run-score">
+                  {complianceRunScoreText(t, activeRun)}
+                </div>
+                {complianceRunCoverageText(t, activeRun) && (
+                  <div className="text-xs text-muted-foreground" data-testid="run-coverage">
+                    {complianceRunCoverageText(t, activeRun)}
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.passed')}</div>
@@ -388,7 +431,9 @@ export default function CompliancePolicyDetails() {
                   {results.filter(r => !r.passed).slice(0, 5).map((r) => (
                     <li key={`fail-prev-${r.id}`} className="text-sm text-muted-foreground break-words">
                       <code className="text-xs bg-muted px-1 py-0.5 rounded">{r.object_name || r.object_id}</code>
-                      {r.message ? <span className="ml-2">— {r.message}</span> : null}
+                      {r.message ? (
+                        <span className="ml-2">— {complianceResultMessageText(t, r)}</span>
+                      ) : null}
                     </li>
                   ))}
                   {results.filter(r => !r.passed).length === 0 && (
@@ -414,9 +459,17 @@ export default function CompliancePolicyDetails() {
               {runs.map(r => (
                 <button key={r.id} onClick={() => setActiveRun(r)} className={`text-left p-2 rounded border ${activeRun?.id === r.id ? 'bg-muted' : ''}`}>
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline">{r.status}</Badge>
+                    <Badge variant="outline">
+                      {t(`compliance:runStatus.${r.status}`, { defaultValue: r.status })}
+                    </Badge>
                     <div className="text-sm">{new Date(r.started_at).toLocaleString()}</div>
-                    <div className="ml-auto text-sm">{t('compliance:policyDetails.runsList.scoreLabel')} <span className="font-semibold">{r.score}%</span> • {t('compliance:policyDetails.runsList.scoreDetail', { passed: r.success_count, failed: r.failure_count })}</div>
+                    <div className="ml-auto text-sm">
+                      {t('compliance:policyDetails.runsList.scoreLabel')}{' '}
+                      <span className="font-semibold">{complianceRunScoreText(t, r)}</span> •{' '}
+                      {t('compliance:policyDetails.runsList.scoreDetail', {
+                        passed: r.success_count, failed: r.failure_count,
+                      })}
+                    </div>
                   </div>
                   <div className="mt-2 text-xs">
                     <a href={`/compliance/runs/${r.id}`} className="text-primary hover:underline">{t('compliance:policyDetails.runsList.openRunDetails')}</a>

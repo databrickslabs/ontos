@@ -18,7 +18,7 @@
   "noResults": "No results found",
   "noResultsHint": "Try adjusting your search terms or filters",
   "results": "{{count}} result found",
-  "results_plural": "{{count}} results found",
+  "results_other": "{{count}} results found",
   "filters": {
     "all": "All",
     "dataProducts": "Data Products",
@@ -66,6 +66,7 @@
     "resourceDetail": "Resource detail",
     "prefixPlaceholder": "e.g., example.org/banking",
     "resourceLoading": "Loading…",
+    "resourceLoadFailed": "Couldn't load the resource details.",
     "noTriples": "No triples for this resource.",
     "blankNodeExpanded": "(blank node, expanded below)",
     "hover": {

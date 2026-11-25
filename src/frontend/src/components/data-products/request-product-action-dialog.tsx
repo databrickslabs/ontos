@@ -319,8 +319,10 @@ export default function RequestProductActionDialog({
       return {
         entity_type: 'data_product',
         entity_id: productId,
+        // The name the requester saw: My Requests and the notifications show it (#1615)
+        entity_name: productName || undefined,
         reason: message.trim(),
-        requested_permission_level: 'READ',
+        permission_level: 'READ',
         requested_duration_days: selectedDuration,
       };
     } else if (type === 'review') {

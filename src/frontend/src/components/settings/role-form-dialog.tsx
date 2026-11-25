@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { homeSectionBlocked, normalizeHomeSections } from '@/lib/home-sections';
 import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection, ApprovalEntity, NO_ROLE_SENTINEL, PermissionGroup, PERMISSION_GROUP_ORDER } from '@/types/settings';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -55,6 +56,7 @@ const SETTINGS_SUB_GROUPS: SettingsSubGroup[] = [
             'settings-data-product-types',
             'settings-certification-levels',
             'settings-maturity-levels',
+            'settings-lifecycle-stage-groups',
         ],
     },
     {
@@ -211,6 +213,36 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
     );
     const watchedPermissions = watch('feature_permissions');
     const watchedIsAdmin = Boolean(watch('is_admin'));
+    const watchedHomeSections = normalizeHomeSections(watch('home_sections'));
+    // The journey home can't be combined with other sections (see lib/home-sections).
+    const renderHomeSection = (section: HomeSection) => {
+        const blocked = homeSectionBlocked(watchedHomeSections, section);
+        const base = 'roles.privileges.homeSections';
+        const derived = section.replace('_', ' ').toLowerCase()
+            .replace(/\b\w/g, c => c.toUpperCase());
+        const description = t(`${base}.descriptions.${section}`, { defaultValue: '' });
+        return (
+            <label
+                key={section}
+                className={`flex items-start gap-2 text-sm ${blocked ? 'opacity-50' : ''}`}
+            >
+                <input
+                    type="checkbox"
+                    className="mt-1"
+                    {...register('home_sections')}
+                    value={section}
+                    disabled={blocked}
+                    defaultChecked={defaultValues.home_sections?.includes(section)}
+                />
+                <span>
+                    {t(`${base}.labels.${section}`, { defaultValue: derived })}
+                    {description && (
+                        <span className="block text-xs text-muted-foreground">{description}</span>
+                    )}
+                </span>
+            </label>
+        );
+    };
     const renderNavCell = (featureId: string, label: string) => {
         if (!navFeatureIds.has(featureId)) {
             return <div className={NAV_COLUMN_CLASS} aria-hidden="true" />;
@@ -516,17 +548,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                         <h4 className="font-medium">{t('roles.privileges.homeSections.title')}</h4>
                                         <p className="text-xs text-muted-foreground">{t('roles.privileges.homeSections.description')}</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {Object.values(HomeSection).map(section => (
-                                                <label key={section} className="flex items-center gap-2 text-sm">
-                                                    <input
-                                                        type="checkbox"
-                                                        {...register('home_sections')}
-                                                        value={section}
-                                                        defaultChecked={defaultValues.home_sections?.includes(section)}
-                                                    />
-                                                    <span>{section.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
-                                                </label>
-                                            ))}
+                                            {Object.values(HomeSection).map(renderHomeSection)}
                                         </div>
                                     </div>
 

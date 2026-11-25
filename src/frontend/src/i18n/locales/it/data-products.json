@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Non proprietario",
+    "notOwnerMessage": "Puoi visualizzare questo prodotto ma non modificarlo. Solo il team proprietario, i membri del suo progetto, il proprietario della bozza o un amministratore dei prodotti dati possono modificarlo."
+  },
   "title": "Prodotti Dati",
   "subtitle": "Gestisci i tuoi prodotti dati",
   "newProduct": "Nuovo Prodotto Dati",
@@ -795,7 +799,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Come questo deliverable fornisce i dati ai consumatori (ad es. accesso a tabella, endpoint di serving)",
-      "onlyActiveContracts": "Vengono mostrati solo i contratti attivi/approvati/certificati",
+      "onlyActiveContracts": "Vengono mostrati solo i contratti attivi/approvati",
       "containsPiiHint": "Questo deliverable contiene informazioni di identificazione personale?",
       "autoApproveHint": "Approvare automaticamente le richieste di accesso per questo deliverable?",
       "afterCreation": "Dopo aver creato questo deliverable, potrai collegarvi asset (tabelle, viste, dataset, ecc.) dalla pagina dei dettagli."
@@ -1010,7 +1014,28 @@
     "required": "Obbligatorio",
     "advisory": "Consultivo",
     "overTime": "Maturità nel tempo",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "currentLevel": "Livello attuale",
+    "nextLevel": "Livello successivo",
+    "belowFirstLevel": "Sotto il primo livello",
+    "topLevelReached": "Livello più alto raggiunto",
+    "noLevels": "Non sono ancora definiti livelli di maturità per questo tipo.",
+    "gateStatus": {
+      "pass": "Superato",
+      "fail": "Non superato",
+      "warn": "Non soddisfatto"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog non è raggiungibile, quindi mancano i campi della tabella {{tableName}}.",
+    "maturity_uc_table_unreadable": "La tabella {{tableName}} non può essere letta da Unity Catalog, quindi i suoi campi mancano.",
+    "maturity_uc_table_read_failed": "Non è stato possibile leggere la tabella {{tableName}} da Unity Catalog, quindi mancano i suoi campi.",
+    "maturity_gate_error": "Non è stato possibile valutare il gate {{gateName}}. I dettagli sono nel log del server.",
+    "maturity_level_partial": "Il livello conta solo i controlli che non richiedono la tabella {{tableName}}; l'asset può raggiungere un livello più alto."
+  },
+  "maturityResult": {
+    "notStored": "Calcolato ora e non salvato: la cronologia mostra le valutazioni salvate. Rivaluta per salvare questo risultato.",
+    "notEvaluated": "Non valutato"
   },
   "createDialog": {
     "editTitle": "Modifica metadati del prodotto dati",
@@ -1127,8 +1152,8 @@
     "exportSuccessfulDesc": "Scaricato {{filename}}",
     "exportFailed": "Esportazione non riuscita",
     "exportFailedDesc": "Impossibile esportare il prodotto dati",
-    "exportDescription": "Cliccando su \"Esporta\" questo prodotto verrà scaricato come file JSON conforme a ODPS v1.0.0. I campi di audit (created_at, updated_at) verranno esclusi per la portabilità.",
-    "exportAsJson": "Esporta come JSON",
+    "exportDescription": "Cliccando su \"Esporta\" questo prodotto verrà scaricato come file YAML ODPS v1.0.0, generato dal prodotto salvato in modo che una reimportazione lo ripristini.",
+    "exportAsJson": "Esporta come YAML",
     "currentProduct": "Prodotto attuale",
     "unnamed": "Senza nome",
     "noProductDesc": "Nessun prodotto selezionato. Apri questa finestra da una pagina di dettagli del prodotto per esportare."

@@ -13,6 +13,7 @@ import type { EntityKind, CostItem, CostItemCreate, CostItemUpdate, CostCenter, 
 import { formatCents } from '@/types/costs';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { readJsonResponse, responseErrorMessage } from '@/lib/http-response';
 
 type Props = { entityId: string; entityType: EntityKind };
 
@@ -50,18 +51,27 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
   });
   const [errors, setErrors] = React.useState<Record<string,string>>({});
   const { toast } = useToast();
+  const responseMessages = React.useMemo(() => ({
+    requestFailed: t('metadata:costs.messages.requestFailed'),
+    validationFailed: t('metadata:costs.messages.validationFailed'),
+    invalidResponse: t('metadata:costs.messages.invalidResponse'),
+  }), [t]);
 
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const list = await fetch(`/api/entities/${entityType}/${entityId}/cost-items?month=${month}`).then(r => r.json());
-      const sum = await fetch(`/api/entities/${entityType}/${entityId}/cost-items/summary?month=${month}`).then(r => r.json());
+      const [list, sum] = await Promise.all([
+        fetch(`/api/entities/${entityType}/${entityId}/cost-items?month=${month}`)
+          .then(response => readJsonResponse<CostItem[]>(response, responseMessages)),
+        fetch(`/api/entities/${entityType}/${entityId}/cost-items/summary?month=${month}`)
+          .then(response => readJsonResponse<CostSummary>(response, responseMessages)),
+      ]);
       setItems(Array.isArray(list) ? list : []);
       setSummary(sum || null);
     } catch (e: any) {
       toast({ title: t('metadata:costs.messages.loadFailed'), description: e?.message || String(e), variant: 'destructive' });
     } finally { setLoading(false); }
-  }, [entityId, entityType, month, toast]);
+  }, [entityId, entityType, month, responseMessages, t, toast]);
 
   React.useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -145,15 +155,29 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
     try {
       if (editing) {
         const resp = await fetch(`/api/cost-items/${editing.id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload as CostItemUpdate) });
-        if (!resp.ok) throw new Error(await resp.text());
+        if (!resp.ok) throw new Error(await responseErrorMessage(resp, responseMessages));
       } else {
         const resp = await fetch(`/api/entities/${entityType}/${entityId}/cost-items`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-        if (!resp.ok) throw new Error(await resp.text());
+        if (!resp.ok) throw new Error(await responseErrorMessage(resp, responseMessages));
       }
       toast({ title: editing ? t('metadata:costs.messages.updated') : t('metadata:costs.messages.added') });
       setShowForm(false); resetForm(); fetchData();
     } catch (e: any) {
       toast({ title: t('metadata:costs.messages.saveFailed'), description: e?.message || String(e), variant: 'destructive' });
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    const resp = await fetch(`/api/cost-items/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+      toast({ title: t('metadata:costs.messages.deleted') });
+      fetchData();
+    } else {
+      toast({
+        title: t('metadata:costs.messages.deleteFailed'),
+        description: await responseErrorMessage(resp, responseMessages),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -239,7 +263,14 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(it)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => { const resp = await fetch(`/api/cost-items/${it.id}`, { method: 'DELETE' }); if (resp.ok) { toast({ title: t('metadata:costs.messages.deleted') }); fetchData(); } else { toast({ title: t('metadata:costs.messages.deleteFailed'), description: await resp.text(), variant: 'destructive' }); } }}><Trash2 className="h-4 w-4" /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => deleteItem(it.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

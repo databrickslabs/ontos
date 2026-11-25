@@ -20,11 +20,11 @@
       "helpText": "Access will expire after the selected duration. You can request renewal before expiry.",
       "help": "Your access will automatically expire after this period.",
       "days": "{{count}} day",
-      "days_plural": "{{count}} days",
+      "days_other": "{{count}} days",
       "months": "{{count}} month",
-      "months_plural": "{{count}} months",
+      "months_other": "{{count}} months",
       "years": "{{count}} year",
-      "years_plural": "{{count}} years"
+      "years_other": "{{count}} years"
     },
     "submit": "Send Request",
     "submitting": "Sending Request...",

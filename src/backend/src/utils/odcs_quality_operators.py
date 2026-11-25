@@ -7,9 +7,13 @@ The contract wizard and API use shorter names (``mustBeGt``,
 ``mustBeBetweenMin`` ...). Both are read; the ODCS export writes the ODCS names.
 Values are stored as text (``0`` included) and exported as numbers again when
 they are numbers.
+
+A check's ``tags`` (an array) and an object ``implementation`` are stored as
+JSON text (the columns are text), and exported in the shape they came in.
 """
-import json
 from typing import Any, Dict, Optional
+
+from src.utils.odcs_values import dumps, strict_loads
 
 # column -> accepted keys (ODCS name first)
 _SCALAR_OPERATORS = {
@@ -43,7 +47,7 @@ def _first(rule: Dict[str, Any], keys) -> Any:
 def _as_text(value: Any) -> Optional[str]:
     if value is None:
         return None
-    return value if isinstance(value, str) else json.dumps(value)
+    return value if isinstance(value, str) else dumps(value)
 
 
 def _as_value(text: Optional[str]) -> Any:
@@ -51,9 +55,65 @@ def _as_value(text: Optional[str]) -> Any:
     if text is None:
         return None
     try:
-        return json.loads(text)
+        return strict_loads(text)
     except (TypeError, ValueError):
         return text
+
+
+def tags_text(tags: Any) -> Optional[str]:
+    """A check's ``tags`` for its text column: an ODCS list as JSON; text (what
+    the quality rule form sends) as is."""
+    if tags is None or isinstance(tags, str):
+        return tags
+    return dumps(list(tags) if isinstance(tags, tuple) else tags)
+
+
+def implementation_text(implementation: Any) -> Optional[str]:
+    """A custom check's ``implementation`` for its text column: a string as is
+    (JSON-quoted when it would read back as an object or a quoted string), an
+    object (ODCS allows both) as JSON."""
+    if implementation is None:
+        return None
+    if isinstance(implementation, str):
+        if implementation.lstrip()[:1] in ('{', '"'):
+            return dumps(implementation)
+        return implementation
+    return dumps(implementation)
+
+
+def odcs_tags(text: Optional[str]) -> Optional[list]:
+    """The stored tags as the ODCS list: JSON as stored, other text split at commas."""
+    if not text:
+        return None
+    try:
+        value = strict_loads(text)
+    except (TypeError, ValueError):
+        value = text
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(',')]
+    if not isinstance(value, list):
+        value = [value]
+    tags = [str(tag) for tag in value if tag not in (None, '')]
+    return tags or None
+
+
+def odcs_implementation(text: Optional[str]) -> Any:
+    """The stored implementation: an object (or a quoted string) as written by
+    ``implementation_text``; any other text, arrays included, as is."""
+    if not text or text.lstrip()[:1] not in ('{', '"'):
+        return text
+    try:
+        value = strict_loads(text)
+    except (TypeError, ValueError):
+        return text
+    return value if isinstance(value, (dict, str)) else text
+
+
+def implementation_page_text(text: Optional[str]) -> Optional[str]:
+    """A stored implementation as the API and the forms show it: a string as
+    the string, an object as its JSON text."""
+    value = odcs_implementation(text)
+    return value if isinstance(value, str) or value is None else text
 
 
 def operator_columns(rule: Dict[str, Any]) -> Dict[str, Optional[str]]:
@@ -96,8 +156,8 @@ def _uses_metric(api_version: Optional[str]) -> bool:
 _CHECK_FIELDS = (
     ('stable_id', 'id'), ('description', 'description'), ('dimension', 'dimension'),
     ('business_impact', 'businessImpact'), ('severity', 'severity'), ('method', 'method'),
-    ('schedule', 'schedule'), ('scheduler', 'scheduler'), ('unit', 'unit'), ('tags', 'tags'),
-    ('query', 'query'), ('engine', 'engine'), ('implementation', 'implementation'),
+    ('schedule', 'schedule'), ('scheduler', 'scheduler'), ('unit', 'unit'),
+    ('query', 'query'), ('engine', 'engine'),
 )
 
 
@@ -113,5 +173,11 @@ def odcs_quality_check(check: Any, api_version: Optional[str]) -> Dict[str, Any]
         value = getattr(check, column, None)
         if value:
             out[key] = value
+    tags = odcs_tags(getattr(check, 'tags', None))
+    if tags:
+        out['tags'] = tags
+    implementation = odcs_implementation(getattr(check, 'implementation', None))
+    if implementation:
+        out['implementation'] = implementation
     out.update(odcs_operators(check))
     return out

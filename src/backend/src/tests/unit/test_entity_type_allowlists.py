@@ -1,10 +1,10 @@
 """
 Entity-type allowlists for the polymorphic metadata and costs panels.
 
-The asset detail view renders the metadata and costs panels with
-``entityType="asset"``; the request models must accept it, or every
-note/link/document/cost item on an asset fails with a 422.
+The asset detail view renders metadata for assets. Costs remain a dedicated
+data-domain/product/contract capability according to the panel matrix.
 """
+
 from datetime import date
 
 import pytest
@@ -14,15 +14,19 @@ from src.models.costs import CostItemCreate
 from src.models.metadata import DocumentCreate, LinkCreate, RichTextCreate
 
 METADATA_ENTITY_TYPES = ["data_domain", "data_product", "data_contract", "dataset", "asset"]
-COST_ENTITY_TYPES = ["data_domain", "data_product", "data_contract", "asset"]
+COST_ENTITY_TYPES = ["data_domain", "data_product", "data_contract"]
 
 
 def _rich_text(entity_type: str) -> RichTextCreate:
-    return RichTextCreate(entity_id="e-1", entity_type=entity_type, title="Note", content_markdown="Body")
+    return RichTextCreate(
+        entity_id="e-1", entity_type=entity_type, title="Note", content_markdown="Body"
+    )
 
 
 def _link(entity_type: str) -> LinkCreate:
-    return LinkCreate(entity_id="e-1", entity_type=entity_type, title="Link", url="https://example.com")
+    return LinkCreate(
+        entity_id="e-1", entity_type=entity_type, title="Link", url="https://example.com"
+    )
 
 
 def _document(entity_type: str) -> DocumentCreate:
@@ -57,6 +61,7 @@ def test_cost_item_accepts_supported_entity_types(entity_type):
     assert _cost_item(entity_type).entity_type == entity_type
 
 
-def test_cost_item_rejects_unknown_entity_type():
+@pytest.mark.parametrize("entity_type", ["asset", "not_an_entity"])
+def test_cost_item_rejects_unsupported_entity_type(entity_type):
     with pytest.raises(ValidationError):
-        _cost_item("not_an_entity")
+        _cost_item(entity_type)

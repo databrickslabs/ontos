@@ -189,7 +189,7 @@ export default function LinkContractToPortDialog({
               onClick={() => setIsCreateContractOpen(true)}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Create New Contract
+              {t('data-products:linkContract.actions.createNewContract')}
             </Button>
           </div>
 
@@ -199,7 +199,7 @@ export default function LinkContractToPortDialog({
               onClick={() => onOpenChange(false)} 
               disabled={isSubmitting}
             >
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button 
               onClick={handleSubmit} 
@@ -208,10 +208,10 @@ export default function LinkContractToPortDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Linking...
+                  {t('data-products:linkContract.actions.linking')}
                 </>
               ) : (
-                'Link Contract'
+                t('data-products:linkContract.actions.linkContract')
               )}
             </Button>
           </DialogFooter>
@@ -223,8 +223,10 @@ export default function LinkContractToPortDialog({
         onOpenChange={setIsCreateContractOpen}
         onSuccess={handleContractCreated}
         prefillData={{
-          domain: product?.domain,
-          domainId: product?.domain,
+          // Domain ids (product.domain is the primary domain's name, which the contract
+          // create would refuse as an unknown id)
+          domainIds: product?.domain_ids,
+          primaryDomainId: product?.primary_domain_id,
           tenant: product?.tenant,
           owner_team_id: product?.owner_team_id
         }}

@@ -4,6 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import app
+from src.common import authorization
+from src.common.features import FeatureAccessLevel
 from src.common.manager_dependencies import get_audit_manager
 
 # test_settings fixture is not directly used here, but the client fixture uses it.
@@ -143,3 +145,218 @@ def test_branding_rejects_display_name_too_long(client: TestClient):
     assert response.status_code == 400
     detail = response.json().get("detail", "")
     assert "display name" in detail.lower() or "characters" in detail.lower()
+
+
+def test_ui_customization_extra_branding_defaults(client: TestClient):
+    """Tagline, dark logo and theme colors are exposed and unset by default."""
+    payload = client.get("/api/settings/ui-customization").json()
+    assert payload["app_tagline"] is None
+    assert payload["custom_logo_dark_url"] is None
+    assert payload["theme"] == {
+        "primary": None, "primary_dark": None, "accent": None, "accent_dark": None,
+    }
+
+
+def test_ui_customization_extra_branding_round_trip(client: TestClient):
+    """PUT validates/normalizes the new branding keys; GET returns them; null clears."""
+    put = client.put(
+        "/api/settings",
+        json={
+            "ui_app_tagline": "  Ontology of Acme ",
+            "ui_custom_logo_dark_url": "/branding/acme/logo-dark.svg",
+            "ui_theme_primary": "#2563eb",
+            "ui_theme_primary_dark": "#93c5fd",
+        },
+    )
+    assert put.status_code == 200, put.text
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot["app_tagline"] == "Ontology of Acme"
+    assert boot["custom_logo_dark_url"] == "/branding/acme/logo-dark.svg"
+    assert boot["theme"]["primary"] == "#2563eb"
+    assert boot["theme"]["primary_dark"] == "#93c5fd"
+    assert boot["theme"]["accent"] is None
+
+    bad = client.put("/api/settings", json={"ui_theme_accent": "red;}"})
+    assert bad.status_code == 400
+
+    clear = client.put(
+        "/api/settings",
+        json={"ui_app_tagline": None, "ui_theme_primary": "", "ui_custom_logo_dark_url": None},
+    )
+    assert clear.status_code == 200, clear.text
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot["app_tagline"] is None
+    assert boot["custom_logo_dark_url"] is None
+    assert boot["theme"]["primary"] is None
+    assert boot["theme"]["primary_dark"] == "#93c5fd"
+
+
+@pytest.mark.parametrize(
+    "key", ["ui_custom_logo_url", "ui_custom_logo_dark_url", "ui_favicon_url"]
+)
+@pytest.mark.parametrize("value", [
+    "javascript:alert(1)", "data:image/svg+xml,<svg/>", "//evil.example/x.svg",
+    "/../etc/x.svg", "/branding/%2e%2e/x.svg", "/a b.svg",
+])
+def test_branding_images_reject_unsafe_values(client: TestClient, key: str, value: str):
+    """Image fields take http(s) URLs or clean root-relative paths, nothing else."""
+    response = client.put("/api/settings", json={key: value})
+    assert response.status_code == 400
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot.get(key.removeprefix("ui_")) != value
+
+
+def test_ui_customization_ignores_invalid_env_color(client: TestClient, test_settings):
+    """A malformed color coming from the environment is dropped, not injected."""
+    test_settings.UI_THEME_PRIMARY = "#fff;}body{display:none"
+    try:
+        payload = client.get("/api/settings/ui-customization").json()
+        assert payload["theme"]["primary"] is None
+    finally:
+        test_settings.UI_THEME_PRIMARY = None
+
+
+def test_ui_customization_show_powered_by(client: TestClient, test_settings):
+    """The powered-by toggle defaults to on, round-trips as a bool and rejects other types."""
+    try:
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is True
+        assert client.get("/api/settings").json()["ui_show_powered_by"] is True
+
+        put = client.put("/api/settings", json={"ui_show_powered_by": False})
+        assert put.status_code == 200, put.text
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
+        assert client.get("/api/settings").json()["ui_show_powered_by"] is False
+
+        bad = client.put("/api/settings", json={"ui_show_powered_by": "no"})
+        assert bad.status_code == 400
+        # null clears the stored override: the environment default (on) applies again
+        clear = client.put("/api/settings", json={"ui_show_powered_by": None})
+        assert clear.status_code == 200, clear.text
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is True
+    finally:
+        test_settings.UI_SHOW_POWERED_BY = True
+
+
+def test_branding_traversal_path_returns_a_coded_error(client: TestClient):
+    """A `..` path says so (code + params) instead of "no scheme"."""
+    response = client.put("/api/settings", json={"ui_custom_logo_url": "/../x.svg"})
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "branding_path_traversal"
+    assert detail["params"] == {"field": "custom logo URL"}
+    assert "no scheme" not in detail["message"]
+
+
+def test_rejected_branding_save_leaves_earlier_keys_unchanged(client: TestClient):
+    """One bad value makes the whole save a no-op."""
+    before = client.get("/api/settings/ui-customization").json()
+    bad = client.put("/api/settings", json={
+        "ui_app_tagline": "Half saved",
+        "ui_theme_primary": "#2563eb",
+        "ui_favicon_url": "javascript:alert(1)",
+    })
+    assert bad.status_code == 400
+    assert client.get("/api/settings/ui-customization").json() == before
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/settings is gated per feature: UI keys need settings-ui,
+# every other key settings-general
+# ---------------------------------------------------------------------------
+
+_RW = FeatureAccessLevel.READ_WRITE
+_RO = FeatureAccessLevel.READ_ONLY
+
+
+@pytest.fixture
+def with_levels(client: TestClient, monkeypatch):
+    """Run the client as a user whose effective feature levels are exactly ``levels``."""
+
+    def _set(levels):
+        async def _resolve(*_args, **_kwargs):
+            return levels
+
+        monkeypatch.setattr(authorization, "resolve_effective_permissions", _resolve)
+        return client
+
+    return _set
+
+
+_BRANDING = {"ui_app_display_name": "Acme Catalog", "ui_theme_primary": "#2563eb"}
+_GENERAL = {"allow_job_enablement_requests": True}
+
+
+def test_settings_ui_alone_saves_branding(with_levels):
+    client = with_levels({"settings-ui": _RW})
+    assert client.put("/api/settings", json=_BRANDING).status_code == 200
+    assert client.get("/api/settings/ui-customization").json()["app_display_name"] == "Acme Catalog"
+
+
+def test_settings_ui_alone_cannot_save_general_settings(with_levels):
+    client = with_levels({"settings-ui": _RW})
+    assert client.put("/api/settings", json=_GENERAL).status_code == 403
+    assert client.put("/api/settings", json={**_GENERAL, **_BRANDING}).status_code == 403
+
+
+def test_settings_general_alone_saves_general_settings(with_levels):
+    client = with_levels({"settings-general": _RW})
+    assert client.put("/api/settings", json=_GENERAL).status_code == 200
+
+
+def test_settings_general_alone_cannot_save_branding(with_levels):
+    client = with_levels({"settings-general": _RW})
+    assert client.put("/api/settings", json=_BRANDING).status_code == 403
+    assert client.put("/api/settings", json={**_GENERAL, **_BRANDING}).status_code == 403
+
+
+def test_both_features_save_a_mixed_payload(with_levels):
+    client = with_levels({"settings-general": _RW, "settings-ui": _RW})
+    assert client.put("/api/settings", json={**_GENERAL, **_BRANDING}).status_code == 200
+
+
+def test_read_only_levels_cannot_write(with_levels):
+    client = with_levels({"settings-general": _RO, "settings-ui": _RO})
+    assert client.put("/api/settings", json=_BRANDING).status_code == 403
+    assert client.put("/api/settings", json=_GENERAL).status_code == 403
+
+
+def test_settings_ui_alone_reads_only_the_ui_keys(with_levels):
+    client = with_levels({"settings-ui": _RO})
+    body = client.get("/api/settings").json()
+    assert body and all(k.startswith("ui_") for k in body)
+    assert "ui_app_display_name" in body and "ui_show_powered_by" in body
+
+
+def test_settings_general_reads_every_key(with_levels):
+    client = with_levels({"settings-general": _RO})
+    body = client.get("/api/settings").json()
+    assert "current_settings" in body and "ui_app_display_name" in body
+
+
+def test_no_settings_feature_cannot_read(with_levels):
+    client = with_levels({"settings-git": _RW})
+    assert client.get("/api/settings").status_code == 403
+
+
+def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(
+    client: TestClient, test_settings
+):
+    """A volume that can't name a UC volume answers 400 with code + params and changes nothing."""
+    response = client.put(
+        "/api/settings",
+        json={"databricks_volume": "a.b", "databricks_catalog": "other_catalog"},
+    )
+
+    assert response.status_code == 400, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "volume_invalid"
+    assert detail["params"]["value"] == "a.b"
+    assert test_settings.DATABRICKS_VOLUME == "test_volume"
+    assert test_settings.DATABRICKS_CATALOG == "test_catalog"
+
+
+def test_valid_volume_is_saved(client: TestClient, test_settings):
+    response = client.put("/api/settings", json={"databricks_volume": "cat.sch.vol"})
+
+    assert response.status_code == 200, response.text
+    assert test_settings.DATABRICKS_VOLUME == "cat.sch.vol"

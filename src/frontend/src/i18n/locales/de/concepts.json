@@ -1,10 +1,125 @@
 {
   "title": "Konzepte",
+  "sections": {
+    "label": "Konzeptbereiche",
+    "define": "Definieren",
+    "explore": "Erkunden",
+    "enrich": "Anreichern"
+  },
+  "explore": {
+    "viewLabel": "Ansichten erkunden",
+    "viewList": "Liste",
+    "viewTree": "Baum",
+    "viewGraph": "Graph",
+    "createConcept": "Neues Konzept",
+    "createScheme": "Neues Konzeptschema",
+    "description": "Erstellen, durchsuchen und stellen Sie Ihre Geschäftskonzeptschemata bereit.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL- und Knowledge-Graph-Suche"
+  },
   "nav": {
     "collections": "Konzeptschemata",
     "browser": "Konzepte",
     "search": "Suche",
+    "searchSparql": "Suche / SPARQL",
     "graph": "Graph",
-    "hierarchy": "Hierarchie"
+    "hierarchy": "Hierarchie",
+    "generator": "Generator",
+    "import": "Import",
+    "mapping": "Zuordnung"
+  },
+  "define": {
+    "description": "Erstellen, generieren oder importieren Sie Ihre Geschäftskonzeptschemata."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Schreiben Sie verwaltete Metadaten auf die zugeordneten {{platform}}-Assets.",
+      "tags": {
+        "name": "Tags",
+        "desc": "Key/Value-Governance-Tags auf Tabellen und Spalten. Steuern Auffindbarkeit und Zugriffsrichtlinien.",
+        "via": "über uc_tag_sync",
+        "notConfigured": "Die Tag-Bereitstellung ist nicht konfiguriert. Um sie zu aktivieren, muss der Job uc_tag_sync unter Einstellungen > Jobs installiert werden.",
+        "note": "Die Tag-Bereitstellung läuft über den gemeinsamen Job uc_tag_sync, der neben der semantischen Zuordnung auch weitere Aspekte abdeckt. Umfang und Zeitplan konfigurieren Sie unter Einstellungen > Jobs."
+      },
+      "desc": {
+        "name": "Spaltenbeschreibungen",
+        "desc": "Verständliche Bedeutung von Spalten. Diese lesen Genie und die Suche, um präzise zu antworten.",
+        "assist": "dbxmetagen kann Entwürfe erstellen"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "Das verwaltete Geschäftsglossar direkt in der Plattform.",
+        "note": "Synchronisiert Konzepte in das native Geschäftsglossar von Unity Catalog, die verwaltete Ebene, aus der Genie Ontology liest. Verfügbar mit der GA von UC Glossary."
+      },
+      "title": "Bereitstellen",
+      "tip": "Bereitstellen schreibt Ihre verwalteten Metadaten auf die Plattform. Nachgelagerte Tools (Genie, Suche, Agents) lesen sie von dort. Tags = Richtlinien & Auffindbarkeit. Beschreibungen = was Genie liest. Glossar = die verwaltete Geschäftsebene.",
+      "pendingTitle": "Ausstehende Tag-Änderungen",
+      "pendingSubtitle": "Verknüpfungen zwischen Konzepten und Assets, die seit der letzten erfolgreichen Tag-Synchronisierung erstellt wurden. Ein erneuter Lauf von uc_tag_sync würde diese bereitstellen.",
+      "pendingEmpty": "Nichts ausstehend.",
+      "pendingInScheme": "in",
+      "pendingAppliesTo": "gilt für",
+      "coverageSynced": "{{synced}} von {{total}} synchronisiert · ",
+      "pendingCount": "{{pending}} ausstehend",
+      "lastRun": " · letzter Lauf {{run}}",
+      "notSynced": "Noch nicht synchronisiert",
+      "manageInSettings": "In den Einstellungen verwalten",
+      "configure": "Konfigurieren",
+      "comingSoon": "Demnächst verfügbar: Das Konfigurieren und Ausführen dieser Synchronisierung aus Ontos ist noch nicht angebunden.",
+      "syncNow": "Jetzt synchronisieren",
+      "about": "Über dieses Bereitstellungsziel"
+    },
+    "subtitle": "Ordnen Sie Ihre Konzepte Assets zu und stellen Sie anschließend verwaltete Metadaten auf der Plattform bereit.",
+    "deliverTo": "Bereitstellen in",
+    "platformTip": "Bereitstellungsplattformen stammen aus den in den Einstellungen konfigurierten Verbindungen. Unity Catalog ist der Standard. Die folgenden Bereitstellungsziele passen sich an die gewählte Plattform an.",
+    "manageConnections": "Verbindungen verwalten ↗",
+    "map": {
+      "title": "Zuordnen",
+      "suggest": "Treffer vorschlagen",
+      "desc": "Verknüpfen Sie ein Konzept direkt mit einem {{platform}}-Asset (der Standardweg, ohne Datenprodukt oder Vertrag), und fügen Sie optional Verknüpfungen zu Datenprodukten und Datenverträgen hinzu. Alle drei sind voneinander unabhängig.",
+      "col": {
+        "scheme": "Konzeptschema",
+        "lastRun": "Letzter Lauf",
+        "concepts": "Konzepte",
+        "coverage": "Abdeckung",
+        "products": "Produkte",
+        "contracts": "Verträge",
+        "assets": "Assets",
+        "suggested": "Vorgeschlagen"
+      },
+      "assetNote": "Asset-Verknüpfungen sind das, was Bereitstellen in Schritt 2 anreichert. Die direkte Asset-Verknüpfung funktioniert bereits, bevor ein Produkt oder Vertrag existiert, und löst so das Henne-Ei-Problem.",
+      "review": "Prüfen",
+      "allSelected": "Alle ausgewählt",
+      "unmappedNote": "{{unmapped}} Konzepte haben noch keine Verknüpfung.",
+      "coverageTip": "Abdeckung = Anteil der Konzepte eines Konzeptschemas mit mindestens einer Verknüpfung. Produkte und Verträge sind optionale zusätzliche Verknüpfungen, daher ergeben die drei Werte zusammen nicht die Gesamtzahl. Nur Assets können in Schritt 2 angereichert werden.",
+      "placeholderNote": "Die Abdeckungswerte sind Beispieldaten — der Live-Abdeckungsdienst ist derzeit nicht verfügbar."
+    },
+    "review": {
+      "title": "Vorgeschlagene Treffer prüfen",
+      "subtitle": "Akzeptieren oder verwerfen Sie jeden Treffer zwischen Konzept und Asset. Erst nach Ihrer Annahme wird synchronisiert.",
+      "loading": "Vorgeschlagene Treffer werden geladen…",
+      "applied": "{{count}} Treffer übernommen. Sie werden bei der nächsten Bereitstellung synchronisiert.",
+      "applyError": "Treffer konnten nicht übernommen werden: ",
+      "placeholderNote": "Beispieltreffer zur Veranschaulichung.",
+      "reject": "Ablehnen",
+      "accept": "Akzeptieren",
+      "drift": "Zu behebende Schemaabweichung",
+      "openFull": "Vollständiges Review Board öffnen",
+      "applying": "Wird übernommen…",
+      "acceptApplyAll": "Alle {{count}} akzeptieren & übernehmen"
+    },
+    "modes": {
+      "direct": "Direkt",
+      "directDesc": "Ontos wendet Änderungen über den Service Principal sofort auf diesen Workspace an.",
+      "indirect": "Indirekt",
+      "indirectDesc": "Ontos schreibt YAML nach Git, damit Ihre CI/CD-Pipeline es weiterreicht (von Dev über Staging nach Prod).",
+      "manual": "Manuell",
+      "manualDesc": "Ontos benachrichtigt eine Person, die Änderung an anderer Stelle anzuwenden.",
+      "active": "aktiv",
+      "manageLink": "Der Bereitstellungsmodus wird pro Standort unter Einstellungen > Bereitstellung festgelegt"
+    }
+  },
+  "mode": {
+    "description": "Die erweiterte Ansicht zeigt die Ontologieebene: RDF/SKOS, IRIs, Domain & Range von Properties sowie technische Bereitstellungseinstellungen. Die einfache Ansicht blendet sie aus. Ihre Auswahl wird gespeichert.",
+    "label": "Ansichtsmodus"
   }
 }

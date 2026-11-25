@@ -252,6 +252,11 @@ def _rendered(sent, lang):
 
 
 def test_an_approval_is_sent_with_the_keys_of_its_lines(db_session):
+    from src.db_models.data_products import DataProductDb
+
+    # Approvers see the stored name of the requested product (#1615 review)
+    db_session.add(DataProductDb(id='p-1', name='Sales Pipeline', status='active'))
+    db_session.flush()
     sent = _approval(db_session, {}, _access_request())
 
     # The stored English texts are as before

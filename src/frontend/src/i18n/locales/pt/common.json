@@ -43,6 +43,7 @@
     "discard": "Descartar",
     "apply": "Aplicar",
     "select": "Selecionar",
+    "done": "Concluído",
     "remove": "Remover",
     "link": "Vincular",
     "unlink": "Desvincular",
@@ -403,6 +404,11 @@
     "errorAssigning": "Erro ao atribuir proprietário",
     "ownerUserAria": "Usuário proprietário"
   },
+  "assignOwnerRole": {
+    "noRoles": "Nenhum papel de negócio configurado. Peça a um administrador para criar um.",
+    "ownerBadge": "Proprietário",
+    "notOwnerHint": "Proprietários com este papel não recebem aprovações nem notificações de proprietário. Para isso, escolha Data Owner ou Owner."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} versão",
     "countBadge_other": "{{count}} versões"
@@ -483,6 +489,9 @@
     "conceptRelationshipHint": "“{{relationship}}” liga este item a um conceito como relação: ela aparece em Relações e na linhagem. Para mostrar o conceito nos detalhes deste item e em {{conceptSection}} na página do conceito, use {{section}}.",
     "targetNotPickable": "{{type}} não pode ser escolhido aqui. É gerido na sua própria página.",
     "noAccessToTarget": "Você não tem acesso a {{type}}. Peça acesso de leitura a um administrador para criar o vínculo."
+  },
+  "assetFormStoredProperties": {
+    "loadError": "Não foi possível carregar as propriedades salvas do ativo, então ele não pode ser salvo aqui. Feche a caixa de diálogo e tente novamente."
   },
   "assetForm": {
     "groups": {
@@ -569,16 +578,25 @@
     "removeConfirm": "Tem certeza de que deseja remover este relacionamento? Esta ação não pode ser desfeita."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Selecione {{kind}}…",
     "latestSuffix": "{{name}} (mais recente)",
     "pinVersionTitle": "Fixar uma versão específica",
     "pinVersion": "Fixar versão",
     "followLatestTitle": "Seguir sempre a versão visível mais recente da família",
     "followLatest": "Seguir a mais recente",
-    "searchPlaceholder": "Pesquisar {{kind}}…",
     "loading": "Carregando…",
-    "noMatching": "Nenhum {{kind}} correspondente.",
     "unnamed": "(sem nome)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Selecione um contrato…",
+      "search": "Pesquisar contratos…",
+      "noMatching": "Nenhum contrato correspondente."
+    },
+    "product": {
+      "select": "Selecione um produto…",
+      "search": "Pesquisar produtos…",
+      "noMatching": "Nenhum produto correspondente."
+    }
   },
   "entityTree": {
     "title": "Entidades relacionadas",
@@ -642,6 +660,8 @@
   "edit": "Editar",
   "error": "Erro",
   "home": "Início",
+  "loading": "Carregando…",
+  "optional": "(opcional)",
   "refresh": "Atualizar",
   "retry": "Tentar novamente",
   "save": "Salvar",

@@ -324,3 +324,27 @@ def test_a_transition_closes_the_open_requests_with_its_status_write(db_session)
     close_open_requests(db_session, 'data_product', product.id, 'retired', 'someone')
     db_session.commit()
     assert pending_request_id(db_session, 'data_product', product.id) is None
+
+
+def test_a_custom_deprecated_stage_is_guarded_too(products, db_session):
+    from src.controller.lifecycle_service import lifecycle_service
+
+    def stage(key, category, order, initial=False):
+        return {'key': key, 'label': key.title(), 'category': category, 'color': None,
+                'order': order, 'is_initial': initial}
+
+    group = lifecycle_service.save_group(db_session, {
+        'name': 'Sunset lifecycle', 'description': None, 'entity_type': 'data_product',
+        'is_default_for_type': False,
+        'stages': [stage('draft', 'draft', 0, True), stage('live', 'active', 1),
+                   stage('sunset', 'deprecated', 2), stage('gone', 'retired', 3)],
+        'transitions': [{'from_key': 'draft', 'to_key': 'live'},
+                        {'from_key': 'live', 'to_key': 'sunset'},
+                        {'from_key': 'sunset', 'to_key': 'gone'}],
+    }, 'admin')
+    product = _product(db_session, status='live')
+    product.lifecycle_stage_group_id = group.id
+    db_session.commit()
+
+    with pytest.raises(CertifiedDeprecationRequiresApprovalError):
+        products.transition_status(product.id, 'sunset')

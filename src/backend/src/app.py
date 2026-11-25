@@ -79,6 +79,7 @@ from src.routes import (
     suggestion_routes,
     certification_levels_routes,
     data_product_types_routes,
+    lifecycle_stage_groups_routes,
     maturity_routes,
     directory_routes,
     term_mapping_routes,
@@ -121,7 +122,7 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 def _seed_reference_data() -> None:
     """Seed the reference data that alembic data-migrations insert but that
     create_all()+stamp (a fresh database) cannot: certification levels, data
-    product types and maturity levels. Idempotent: each no-ops when rows exist.
+    product types, maturity levels and default tags. Idempotent: each no-ops when rows exist.
     A failure is logged and doesn't stop the app.
     """
     try:
@@ -129,11 +130,13 @@ def _seed_reference_data() -> None:
         from src.repositories.certification_levels_repository import certification_levels_repo
         from src.repositories.data_product_types_repository import data_product_types_repo
         from src.repositories.maturity_repository import maturity_repo
+        from src.repositories.tags_repository import seed_default_tags
 
         with get_session_factory()() as db:
             certification_levels_repo.seed_defaults(db)
             data_product_types_repo.seed_defaults(db)
             maturity_repo.seed_defaults(db)
+            seed_default_tags(db)
             db.commit()
         logger.info("Reference data seed step complete.")
     except Exception as e:
@@ -254,6 +257,8 @@ async def startup_event():
     
     logger.info("Running application startup event...")
     settings = get_settings()
+    from src.common.workspace_client import warn_if_sp_fallback
+    warn_if_sp_fallback(settings)
     
     try:
         initialize_database()
@@ -353,6 +358,8 @@ async def startup_event():
 # Application Shutdown Event
 async def shutdown_event():
     logger.info("Running application shutdown event...")
+    # stop() joins the scheduler thread and drains the runs: not on the event loop.
+    await asyncio.to_thread(_stop_workflow_scheduler)
     logger.info("Application shutdown complete.")
 
 # --- FastAPI App Instantiation (AFTER defining lifecycle functions) ---
@@ -531,6 +538,7 @@ readiness_routes.register_routes(app)
 suggestion_routes.register_routes(app)
 certification_levels_routes.register_routes(app)
 data_product_types_routes.register_routes(app)
+lifecycle_stage_groups_routes.register_routes(app)
 maturity_routes.register_routes(app)
 data_asset_reviews_routes.register_routes(app)
 data_catalog_routes.register_routes(app)
@@ -637,13 +645,24 @@ def _managers_running() -> bool:
 
 
 def _stop_job_polling() -> None:
-    """Stop the running managers' job poller before they are replaced."""
+    """Stop the running managers' job poller and workflow scheduler before they are replaced."""
     jobs_manager = getattr(app.state, "jobs_manager", None)
     if jobs_manager is not None:
         try:
             jobs_manager.stop_background_polling()
         except Exception as e:
             logger.warning(f"Could not stop the job poller before re-initializing: {e}")
+    _stop_workflow_scheduler()
+
+
+def _stop_workflow_scheduler() -> None:
+    """Stop the workflow scheduler thread (#941), if one runs."""
+    scheduler = getattr(app.state, "workflow_scheduler", None)
+    if scheduler is not None:
+        try:
+            scheduler.stop()
+        except Exception as e:
+            logger.warning(f"Could not stop the workflow scheduler: {e}")
 
 
 def _close_replaced_manager_session(old_session) -> None:

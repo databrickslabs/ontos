@@ -406,6 +406,19 @@ async def require_ontos_admin(
     return user_details
 
 
+def is_ontos_admin(request: Request, user: Optional[UserInfo]) -> bool:
+    """Whether ``user`` is an Ontos admin, as ``require_ontos_admin`` decides, for a check
+    inside a route. False when it can't be told (no authorization manager, an error)."""
+    if user is None:
+        return False
+    try:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
+        return bool(auth_manager is not None and auth_manager.is_user_ontos_admin(user.groups))
+    except Exception:
+        logger.warning("Could not check whether the caller is an Ontos admin.", exc_info=True)
+        return False
+
+
 _TEAM_ROLES_CACHE_ATTR = "_ontos_team_roles"
 
 
@@ -533,8 +546,10 @@ def effective_permissions_for_request(
     if auth_manager is None:
         raise RuntimeError("AuthorizationManager not found in app state")
 
+    # The email stays as given: the applied-override lookup is exact, so two casings
+    # can resolve differently and must not share an entry.
     key = (
-        (user_email or "").strip().lower(),
+        user_email or "",
         tuple(sorted({(g or "").lower() for g in user_groups or []})),
         apply_role_override,
         id(auth_manager),
@@ -732,7 +747,8 @@ def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
 
 
 def user_has_feature_level(
-    auth_manager, user, feature_id: str, required_level: FeatureAccessLevel, request: Request,
+    auth_manager, user, feature_id: str, required_level: FeatureAccessLevel,
+    request: Optional[Request] = None,
 ) -> bool:
     """Imperative permission check for conditional in-handler gates.
 
@@ -744,8 +760,13 @@ def user_has_feature_level(
 
     **Fails closed.** Any exception during resolution is caught and ``False`` is
     returned (with a warning log), so a transient error denies the extra capability
-    rather than silently granting it.
+    rather than silently granting it. A call without ``request`` denies too.
     """
+    if request is None:
+        logger.warning(
+            "user_has_feature_level called without a request for '%s'; denying.", feature_id,
+        )
+        return False
     try:
         effective = effective_permissions_for_request(
             request, getattr(user, "email", None), getattr(user, "groups", None) or [], auth_manager,

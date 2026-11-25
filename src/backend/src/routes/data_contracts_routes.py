@@ -8,7 +8,11 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.controller.data_contracts_manager import DataContractsManager, InvalidVersionFormatError
+from src.controller.data_contracts_manager import (
+    DataContractsManager,
+    DeployRequestAlreadyDecidedError,
+    InvalidVersionFormatError,
+)
 from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
@@ -50,7 +54,7 @@ from src.models.data_contracts_api import (
     DataContractCommentCreate,
     DataContractCommentRead,
 )
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, InvalidStatusTransitionError
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
 from src.common.authorization import has_feature_permission
@@ -344,14 +348,23 @@ async def approve_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
-        if from_status not in ('proposed', 'under_review'):
+        # A review decision: from a review-category stage, to the stage the
+        # named action resolves in the contract's lifecycle (409 when none)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(db, 'data_contract', contract):
+            raise InvalidReviewDecisionError(contract.status, 'approved')
+        try:
+            target_status = lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'approve'
+            )
+        except InvalidStatusTransitionError:
             raise InvalidReviewDecisionError(contract.status, 'approved')
         
         # Business logic now in manager
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='approved',
+            new_status=target_status,
             current_user=current_user.username if current_user else None
         )
         _decide_waiting_review_workflows(
@@ -398,14 +411,23 @@ async def reject_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
-        if from_status not in ('proposed', 'under_review'):
+        # A review decision: from a review-category stage, to the stage the
+        # named action resolves in the contract's lifecycle (409 when none)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(db, 'data_contract', contract):
+            raise InvalidReviewDecisionError(contract.status, 'draft')
+        try:
+            target_status = lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'reject'
+            )
+        except InvalidStatusTransitionError:
             raise InvalidReviewDecisionError(contract.status, 'draft')
         
         # Business logic now in manager (ODCS: rejected contracts return to draft)
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='draft',
+            new_status=target_status,
             current_user=current_user.username if current_user else None
         )
         _decide_waiting_review_workflows(
@@ -452,7 +474,7 @@ async def change_contract_status(
     """
     Change contract status. Validates transition is allowed per ODCS lifecycle.
     
-    Valid transitions: ``DATA_CONTRACT_TRANSITIONS`` (src.models.lifecycle).
+    Valid transitions: the contract's lifecycle stage group (``lifecycle_service``).
     Certification is a separate field (``/certify``), not a status.
     """
     try:
@@ -753,7 +775,14 @@ class HandlePublishPayload(BaseModel):
 class HandleDeployPayload(BaseModel):
     decision: str  # 'approve', 'deny'
     message: Optional[str] = None
-    execute_deployment: bool = False  # If true, actually trigger deployment
+    execute_deployment: bool = Field(
+        False,
+        description=(
+            "Ignored. Approving a deployment request records the decision and doesn't "
+            "deploy anything; when true, the response has a 'deployment_not_available' "
+            "warning."
+        ),
+    )
 
 
 @router.post('/data-contracts/{contract_id}/handle-review')
@@ -1042,7 +1071,8 @@ async def certify_contract_direct(
         if not contract_db:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        if (contract_db.status or "").lower() != "active":
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_contract', contract_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Contract must be active to certify. Current status: {contract_db.status}",
@@ -1218,6 +1248,17 @@ async def set_contract_publication_scope(
         raise HTTPException(status_code=500, detail="Failed to set publication scope")
 
 
+def _deploy_request_already_decided() -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        # code: translated by the UI (data-contracts:deployRequest.errors.*)
+        detail={
+            'code': DeployRequestAlreadyDecidedError.code,
+            'message': "This deployment request has already been decided.",
+        },
+    )
+
+
 @router.post('/data-contracts/{contract_id}/handle-deploy')
 async def handle_deploy_request_response(
     contract_id: str,
@@ -1230,21 +1271,42 @@ async def handle_deploy_request_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a deployment request decision (approve/deny). Optionally executes deployment."""
+    """Record a deployment request decision (approve/deny).
+
+    Only an approver of the contract's deployment request (a recipient of its
+    notification, e.g. the Admin role) other than its requester decides it,
+    once; others get 403, a second decision 409 (also when two decide at the
+    same time: the manager re-checks under a row lock). A request an
+    ``on_request_deploy`` workflow handles has no such notification: its
+    approval step decides it (``POST /api/workflows/handle-approval``), so it
+    is refused here for everyone. Nothing is deployed. ``execute_deployment`` is accepted and
+    ignored with a warning in the response.
+    """
+    access = manager.deploy_request_access(db, notifications, contract_id, current_user)
+    if access == 'decided':
+        raise _deploy_request_already_decided()
+    if access != 'pending':
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_not_an_approver',
+                'message': "Only the approvers of this deployment request can decide it.",
+            },
+        )
+    if manager.is_own_deploy_request(db, contract_id, current_user):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_own_request',
+                'message': "You can't decide your own deployment request.",
+            },
+        )
     try:
-        # Get jobs manager for deployment execution
-        jobs_manager = None
-        try:
-            from src.common.dependencies import get_jobs_manager
-            jobs_manager = request.app.state.jobs_manager
-        except Exception:
-            logger.warning("Jobs manager not available")
-        
-        # Business logic now in manager
         result = manager.handle_deploy_response(
             db=db,
             notifications_manager=notifications,
-            jobs_manager=jobs_manager,
             contract_id=contract_id,
             approver_email=current_user.email,
             decision=payload.decision,
@@ -1261,11 +1323,17 @@ async def handle_deploy_request_response(
             feature='data-contracts',
             action=f'DEPLOY_{payload.decision.upper()}',
             success=True,
-            details={'contract_id': contract_id, 'decision': payload.decision, 'deployed': payload.execute_deployment}
+            details={
+                'contract_id': contract_id, 'decision': payload.decision, 'deployed': False,
+                'execute_deployment_ignored': payload.execute_deployment,
+            }
         )
         
         return result
         
+    except DeployRequestAlreadyDecidedError:
+        # Another decision took it between the check above and the row lock
+        raise _deploy_request_already_decided()
     except ValueError as e:
         logger.error("Handle deploy validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
@@ -1496,7 +1564,11 @@ async def update_contract(
                 )
 
         # Check if versioning is required for non-draft contracts
-        if db_obj.status and db_obj.status.lower() != 'draft':
+        # A contract that isn't edited in place (past draft and the review awaiting
+        # its decision) is versioned
+        from src.controller.lifecycle_service import lifecycle_service
+        if db_obj.status and \
+                not lifecycle_service.editable_in_place(db, 'data_contract', db_obj):
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             
@@ -1560,6 +1632,8 @@ async def update_contract(
             contract_data=contract_data,
             current_user=current_user.username if current_user else None,
             background_tasks=background_tasks,
+            # The gates' tag steps write their changes with the update
+            gate_executions=pre_executions,
         )
 
         success = True
@@ -1663,6 +1737,23 @@ async def delete_contract(
             details=details_for_audit,
         )
 
+def _owner_restorer(request, audit_manager, auth_manager, current_user):
+    """Business owners an Ontos export wrote (ontosOwners) are assigned on import
+    only with the permission and the audit of POST /api/business-owners."""
+    from src.utils.contract_owners import OwnerRestorer
+
+    def audit(details):
+        audit_manager.log_action(
+            db=None, username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="business-owners", action="ASSIGN_OWNER", success=True, details=details,
+        )
+
+    allowed = user_has_feature_level(
+        auth_manager, current_user, 'business-owners', FeatureAccessLevel.READ_WRITE, request)
+    return OwnerRestorer(allowed=allowed, audit=audit)
+
+
 @router.post('/data-contracts/upload', response_model=BatchImportResult)
 async def upload_contract(
     request: Request,
@@ -1748,6 +1839,7 @@ async def upload_contract(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
         for safe_filename in decode_failures:
             result.add(ImportItemResult(
@@ -1848,6 +1940,7 @@ async def import_odcs_json(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
 
         success = result.created > 0
@@ -2032,7 +2125,7 @@ async def get_schema_properties(
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
-    from src.utils.property_custom_properties import custom_properties_by_property
+    from src.utils.property_custom_properties import custom_properties_by_property, decode_value
     custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
@@ -2055,13 +2148,15 @@ async def get_schema_properties(
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
             "classification": p.classification,
-            "description": p.transform_description,
+            "description": p.description,
+            "physicalName": p.physical_name,
             "businessName": p.business_name,
             "criticalDataElement": p.critical_data_element,
             "examples": p.examples,
             "transformLogic": p.transform_logic,
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
+            "tags": decode_value(p.tags) if p.tags else None,
             "encryptedName": p.encrypted_name,
             "customProperties": custom_props.get(p.id, {}),
         }
@@ -2085,7 +2180,7 @@ async def export_odcs(
         db_obj = data_contract_repo.get_with_all(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
-        odcs = manager.build_odcs_from_db(db_obj, db)
+        odcs = manager.build_odcs_from_db(db_obj, db, for_export=True)
 
         # Convert to YAML format for ODCS compliance
         yaml_content = yaml.dump(odcs, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -4385,6 +4480,7 @@ def _relationship_db_to_dict(rel) -> dict:
         pass
     result = {
         'id': rel.id,
+        'stableId': rel.stable_id,  # the ODCS id (v3.2.0); `id` is the row id
         'type': rel.relationship_type,
         'to': to_val,
     }

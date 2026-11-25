@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface TurtleSerializationPanelProps {
   conceptIri: string;
@@ -88,7 +89,7 @@ export function TurtleSerializationPanel({ conceptIri }: TurtleSerializationPane
       await navigator.clipboard.writeText(turtleText);
       toast({
         title: t('common:toast.success'),
-        description: t('common:messages.copiedToClipboard', { defaultValue: 'Copied to clipboard' }),
+        description: t('common:toast.copied'),
       });
     } catch (err: any) {
       toast({
@@ -113,9 +114,10 @@ export function TurtleSerializationPanel({ conceptIri }: TurtleSerializationPane
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {t('common:actions.loading')}
+        <div className="space-y-2 py-2" data-testid="turtle-serialization-loading">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-11/12" />
+          <Skeleton className="h-3 w-4/5" />
         </div>
       )}
 

@@ -43,6 +43,7 @@ from src.models.process_workflows import (
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
 from src.common.workflow_step_config import check_condition, check_script_config
+from src.common.quartz_cron import QuartzCronError, validate_schedule
 
 logger = get_logger(__name__)
 
@@ -90,8 +91,9 @@ def _partition_entity_types(values: Any) -> tuple[List[EntityType], List[str]]:
     return known, unknown
 
 # Trigger types no event fires: manual runs go by workflow id
-# (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
-# so two active workflows of these types can't consume the same event.
+# (POST /api/workflows/{id}/execute) and the scheduler runs a ``scheduled``
+# workflow by id (controller/workflow_scheduler.py), so two active workflows of
+# these types can't consume the same event.
 _NON_EVENT_TRIGGER_TYPES = frozenset({TriggerType.MANUAL.value, TriggerType.SCHEDULED.value})
 # Trigger types whose from/to status filters narrow the events they match.
 _STATUS_FILTERED_TRIGGER_TYPES = frozenset({
@@ -116,10 +118,43 @@ def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optiona
 ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'timestamp')
 
 
+def _update_gate_step_errors(workflow: ProcessWorkflowCreate) -> List[str]:
+    """Steps a ``before_update`` gate can't have are refused.
+
+    Entity actions, asset reviews, deliveries and UC grants commit or act outside
+    the database as the gate runs, so a later step, or another gate, that refuses
+    the update would leave them done (``UPDATE_GATE_REFUSED_STEP_TYPES``). Tag
+    steps are fine: the update writes their change (#1403).
+    """
+    from src.common.workflow_executor import (
+        UPDATE_GATE_REFUSED_STEP_TYPES, UPDATE_GATE_STEP_NOT_ALLOWED,
+    )
+
+    if workflow.trigger is None or workflow.trigger.type != TriggerType.BEFORE_UPDATE:
+        return []
+    errors = []
+    for step in workflow.steps:
+        step_type = getattr(step.step_type, 'value', step.step_type)
+        if step_type in UPDATE_GATE_REFUSED_STEP_TYPES:
+            errors.append(CodedMessage(
+                f"Step '{step.step_id}': a {step_type} step can't run in a before_update "
+                "gate, since what it does would stay done when the update is refused",
+                UPDATE_GATE_STEP_NOT_ALLOWED, step=step.step_id, stepType=step_type,
+            ))
+    return errors
+
+
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
                         step=step.step_id, fields=fields)
+
+
+def _schedules_changed() -> None:
+    """Tell the workflow scheduler to re-read the scheduled workflows (#941)."""
+    from src.controller.workflow_scheduler import notify_schedules_changed
+
+    notify_schedules_changed()
 
 
 def _step_issue(step: WorkflowStepCreate, issue: Dict[str, Any]) -> CodedMessage:
@@ -270,6 +305,7 @@ class WorkflowsManager:
                     from_status=trigger_data.get('from_status'),
                     to_status=trigger_data.get('to_status'),
                     schedule=trigger_data.get('schedule'),
+                    timezone=trigger_data.get('timezone'),
                     on_error=self._safe_gate_error_mode(trigger_data.get('on_error')),
                     disabled_for=self._safe_gate_exemptions(trigger_data.get('disabled_for')),
                 )
@@ -404,6 +440,7 @@ class WorkflowsManager:
             is_default=False,
             created_by=created_by,
         )
+        _schedules_changed()
         return self._db_to_model(db_workflow)
 
     def update_workflow(
@@ -423,18 +460,24 @@ class WorkflowsManager:
         )
         if not db_workflow:
             return None
+        _schedules_changed()
         return self._db_to_model(db_workflow)
 
     def delete_workflow(self, workflow_id: str) -> bool:
         """Delete a workflow (non-default only)."""
-        return process_workflow_repo.delete(self._db, workflow_id)
+        deleted = process_workflow_repo.delete(self._db, workflow_id)
+        if deleted:
+            _schedules_changed()
+        return deleted
 
     def policy_reference_errors(self, steps: Iterable[Any]) -> List[CodedMessage]:
-        """Errors for ``policy_check`` steps whose policy doesn't exist.
+        """Errors for ``policy_check`` steps whose policy doesn't exist or uses LLM_CHECK.
 
         An active workflow with such a step fails at run time ("Policy not
         found") on every event it handles, so it can't be activated. A step
         with no ``policy_id`` (a template still to be configured) counts too.
+        So does a policy with ``LLM_CHECK``: a policy check evaluates it without
+        a model (``llm_check_not_available``), so the step fails every entity.
         """
         from src.common.workflow_step_config import policy_id_of
 
@@ -447,23 +490,57 @@ class WorkflowsManager:
             return []
         from src.db_models.compliance import CompliancePolicyDb
 
+        from src.controller.compliance_manager import rule_uses_llm_check
+
         wanted = {policy_id for _, policy_id in checks if policy_id}
-        found = set()
+        rules: Dict[str, str] = {}
         if wanted:
-            found = {
-                row[0] for row in
-                self._db.query(CompliancePolicyDb.id)
+            rules = {
+                row[0]: row[1] for row in
+                self._db.query(CompliancePolicyDb.id, CompliancePolicyDb.rule)
                 .filter(CompliancePolicyDb.id.in_(wanted)).all()
             }
-        return [
-            CodedMessage(
-                f"Step '{step_id}': the policy to check "
-                + (f"'{policy_id}' does not exist" if policy_id else "is not selected"),
-                'policy_check_policy_missing', step=step_id, policyId=policy_id,
-            )
-            for step_id, policy_id in checks
-            if policy_id not in found
-        ]
+        errors = []
+        for step_id, policy_id in checks:
+            if policy_id not in rules:
+                errors.append(CodedMessage(
+                    f"Step '{step_id}': the policy to check "
+                    + (f"'{policy_id}' does not exist" if policy_id else "is not selected"),
+                    'policy_check_policy_missing', step=step_id, policyId=policy_id,
+                ))
+            elif rule_uses_llm_check(rules[policy_id]):
+                # LLM_CHECK isn't evaluated in a policy check (llm_check_not_available):
+                # the step would fail, and block, every entity it checks
+                errors.append(CodedMessage(
+                    f"Step '{step_id}': the policy '{policy_id}' uses LLM_CHECK, which is only "
+                    "evaluated in compliance runs, so the step would fail every entity",
+                    'policy_check_policy_uses_llm_check', step=step_id, policyId=policy_id,
+                ))
+        return errors
+
+    @staticmethod
+    def validation_rule_errors(steps: Iterable[Any]) -> List[CodedMessage]:
+        """Errors for validation steps whose rule uses LLM_CHECK.
+
+        A validation step evaluates its rule without a model
+        (``llm_check_not_available``): it would fail, and block, every entity it
+        checks. Checked on save and again when a stored workflow is activated, so
+        one stored another way (the YAML load, an import) can't be switched on.
+        """
+        from src.controller.compliance_manager import rule_uses_llm_check
+
+        errors = []
+        for step in steps:
+            if step.step_type != StepType.VALIDATION:
+                continue
+            rule = (step.config or {}).get('rule')
+            if isinstance(rule, str) and rule_uses_llm_check(rule):
+                errors.append(CodedMessage(
+                    f"Step '{step.step_id}': the rule uses LLM_CHECK, which is only "
+                    "evaluated in compliance runs, so the step would fail every entity",
+                    'validation_rule_uses_llm_check', step=step.step_id,
+                ))
+        return errors
 
     def toggle_active(
         self,
@@ -481,6 +558,7 @@ class WorkflowsManager:
         )
         if not db_workflow:
             return None
+        _schedules_changed()
         return self._db_to_model(db_workflow)
 
     @staticmethod
@@ -617,6 +695,7 @@ class WorkflowsManager:
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
+            timezone=trigger_config.get('timezone'),
             on_error=self._safe_gate_error_mode(trigger_config.get('on_error')),
             disabled_for=self._safe_gate_exemptions(trigger_config.get('disabled_for')),
         )
@@ -689,8 +768,10 @@ class WorkflowsManager:
         
         return matching
 
-    def validate_workflow(self, workflow: ProcessWorkflowCreate) -> WorkflowValidationResult:
-        """Validate a workflow definition."""
+    def validate_workflow(
+        self, workflow: ProcessWorkflowCreate, stored_trigger: Optional[WorkflowTrigger] = None,
+    ) -> WorkflowValidationResult:
+        """Validate a workflow definition; ``stored_trigger`` when it updates a stored one."""
         errors = []
         warnings = []
 
@@ -705,6 +786,7 @@ class WorkflowsManager:
         step_ids = [s.step_id for s in workflow.steps]
         if len(step_ids) != len(set(step_ids)):
             errors.append(CodedMessage("Duplicate step IDs found", 'duplicate_step_ids'))
+        errors.extend(_update_gate_step_errors(workflow))
 
         # Check step references
         step_id_set = set(step_ids)
@@ -772,6 +854,8 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
+        errors.extend(self.changed_schedule_errors(workflow.trigger, stored_trigger))
+        warnings.extend(self._unknown_assign_tag_keys(workflow))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -973,6 +1057,95 @@ class WorkflowsManager:
             )
         return warned
 
+    @staticmethod
+    def schedule_errors(trigger: WorkflowTrigger) -> List[str]:
+        """A ``scheduled`` trigger needs a Quartz cron (common/quartz_cron.py) and a timezone."""
+        if trigger.type != TriggerType.SCHEDULED:
+            return []
+        if not (trigger.schedule or '').strip():
+            return [CodedMessage(
+                "A scheduled trigger requires a cron expression (schedule)", 'schedule_required',
+            )]
+        try:
+            validate_schedule(trigger.schedule, trigger.timezone)
+        except QuartzCronError as e:
+            return [CodedMessage(str(e), e.code, **e.params)]
+        return []
+
+    @classmethod
+    def changed_schedule_errors(
+        cls, new: WorkflowTrigger, stored: Optional[WorkflowTrigger],
+    ) -> List[str]:
+        """``schedule_errors``, unless ``new`` keeps the stored schedule and timezone.
+
+        A stored schedule the checks refuse today (saved before them, or with no run left)
+        doesn't block saves that leave it as is; the scheduler doesn't run it either way.
+        A trigger switched to ``scheduled``, or a changed schedule or timezone, is checked.
+        """
+        if (stored is not None and new.type == TriggerType.SCHEDULED
+                and stored.type == TriggerType.SCHEDULED
+                and (new.schedule or '') == (stored.schedule or '')
+                and (new.timezone or '') == (stored.timezone or '')):
+            return []
+        return cls.schedule_errors(new)
+
+    @staticmethod
+    def with_stored_schedule(
+        new: Optional[WorkflowTrigger], stored: Optional[WorkflowTrigger],
+    ) -> Optional[WorkflowTrigger]:
+        """A sent ``scheduled`` trigger keeps the stored ``schedule``/``timezone`` it leaves out.
+
+        A client that doesn't know these fields (an older designer, a script) sends
+        neither, so without this its save of a scheduled workflow would drop the
+        schedule. A field that is sent, even empty, is used as sent (and validated).
+        The timezone belongs to its cron: a new cron sent without a timezone doesn't
+        keep the stored one (it runs in UTC, the default).
+        """
+        if (new is None or stored is None or new.type != TriggerType.SCHEDULED
+                or stored.type != TriggerType.SCHEDULED):
+            return new
+        sent = new.model_fields_set
+        kept = {}
+        if 'schedule' not in sent:
+            kept['schedule'] = stored.schedule
+        if 'timezone' not in sent and (
+                'schedule' not in sent or (new.schedule or '') == (stored.schedule or '')):
+            kept['timezone'] = stored.timezone
+        return new.model_copy(update=kept) if kept else new
+
+    def _unknown_assign_tag_keys(self, workflow: ProcessWorkflowCreate) -> List[CodedMessage]:
+        """Warnings for Assign Tag steps whose key is not in the tag catalog.
+
+        Such a step fails at run time with ``tag_not_found``. A warning, not an
+        error: the tag may be created before the workflow runs.
+        """
+        keys = {
+            step.step_id: (step.config or {}).get('key')
+            for step in workflow.steps
+            if step.step_type == StepType.ASSIGN_TAG and (step.config or {}).get('key')
+        }
+        if not keys:
+            return []
+        from src.controller.tags_manager import TagsManager
+        tags_mgr = TagsManager()
+        warnings = []
+        for step_id, key in keys.items():
+            try:
+                # Savepoint: a failed lookup must not abort the transaction the
+                # create or update route saves the workflow in (PostgreSQL)
+                with self._db.begin_nested():
+                    found = tags_mgr.get_tag_by_fqn(db=self._db, fqn=str(key))
+            except Exception:
+                logger.warning("Could not look up tag %s while validating", key, exc_info=True)
+                continue
+            if not found:
+                warnings.append(CodedMessage(
+                    f"Step '{step_id}': tag '{key}' is not in the tag catalog; "
+                    "the step fails until it is created",
+                    'assign_tag_key_unknown', step=step_id, key=str(key),
+                ))
+        return warnings
+
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""
         exemptions = trigger.disabled_for
@@ -1004,6 +1177,8 @@ class WorkflowsManager:
         if step.step_type == StepType.VALIDATION:
             if not config.get('rule'):
                 errors.append(_missing(step, "Validation step requires 'rule' in config", ['rule']))
+            else:
+                errors.extend(self.validation_rule_errors([step]))
 
         elif step.step_type == StepType.APPROVAL:
             if not config.get('approvers'):
@@ -1889,6 +2064,7 @@ class WorkflowsManager:
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
+            timezone=trigger_config.get('timezone'),
             on_error=self._safe_gate_error_mode(trigger_config.get('on_error')),
             disabled_for=self._safe_gate_exemptions(trigger_config.get('disabled_for')),
         )

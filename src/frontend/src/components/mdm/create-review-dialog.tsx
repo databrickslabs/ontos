@@ -147,6 +147,7 @@ export default function CreateReviewDialog({
                 <PrincipalPicker
                   id="reviewer_email"
                   accepts={['user']}
+                  suggestKnownUsers
                   value={field.value || null}
                   onChange={(next) => field.onChange(next ?? '')}
                   placeholder={t('mdm:review.reviewerPlaceholder')}

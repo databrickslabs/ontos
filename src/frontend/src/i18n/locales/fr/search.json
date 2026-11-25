@@ -18,7 +18,7 @@
   "noResults": "Aucun résultat trouvé",
   "noResultsHint": "Essayez d'ajuster vos termes de recherche ou filtres",
   "results": "{{count}} résultat trouvé",
-  "results_plural": "{{count}} résultats trouvés",
+  "results_other": "{{count}} résultats trouvés",
   "filters": {
     "all": "Tous",
     "dataProducts": "Produits de Données",
@@ -66,6 +66,7 @@
     "resourceDetail": "Détail de la ressource",
     "prefixPlaceholder": "par ex. example.org/banking",
     "resourceLoading": "Chargement…",
+    "resourceLoadFailed": "Impossible de charger les détails de la ressource.",
     "noTriples": "Aucun triplet pour cette ressource.",
     "blankNodeExpanded": "(nœud anonyme, développé ci-dessous)",
     "hover": {

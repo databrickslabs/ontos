@@ -115,10 +115,48 @@ def test_contract_update_without_tags_keeps_them(contracts_manager, contract, db
     assert _contract_tags(db_session, contract) == 1
 
 
-def test_contract_update_with_unreadable_tags_keeps_them(contracts_manager, contract, db_session):
-    contracts_manager.update_contract_with_relations(db_session, contract, {'tags': [None, 7]}, current_user='u')
+def test_contract_update_with_unreadable_tags_is_refused(
+    contracts_manager, contract, db_session,
+):
+    from src.controller.data_contracts_manager import InvalidTagEntryError
 
-    assert _contract_tags(db_session, contract) == 1
+    with pytest.raises(InvalidTagEntryError) as exc:
+        contracts_manager.update_contract_with_relations(
+            db_session, contract, {'tags': [None, 7]}, current_user='u')
+
+    assert exc.value.code == 'invalid_tag_entry'
+    assert exc.value.params == {'index': 0}
+
+
+def test_contract_update_with_a_mixed_tag_list_is_refused(
+    contracts_manager, contract, db_session,
+):
+    from src.controller.data_contracts_manager import InvalidTagEntryError
+
+    with pytest.raises(InvalidTagEntryError) as exc:
+        contracts_manager.update_contract_with_relations(
+            db_session, contract, {'tags': [{'tag_fqn': 'ns/new'}, 123]}, current_user='u')
+
+    assert exc.value.params == {'index': 1}
+
+
+def test_product_model_reads_null_tags_as_not_sent():
+    from src.models.data_products import DataProduct
+
+    base = {'id': 'p', 'name': 'P', 'version': '1.0.0', 'status': 'draft'}
+    assert 'tags' not in DataProduct(**base, tags=None).model_fields_set
+    assert 'tags' not in DataProduct(**base).model_fields_set
+    cleared = DataProduct(**base, tags=[])
+    assert 'tags' in cleared.model_fields_set and cleared.tags == []
+
+
+def test_product_model_refuses_a_tag_list_with_an_unreadable_entry():
+    from pydantic import ValidationError
+    from src.models.data_products import DataProduct
+
+    base = {'id': 'p', 'name': 'P', 'version': '1.0.0', 'status': 'draft'}
+    with pytest.raises(ValidationError):
+        DataProduct(**base, tags=[{'tag_fqn': 'ns/new'}, 123])
 
 
 def test_clearing_the_last_tag_is_logged(manager, product, db_session):
@@ -138,3 +176,46 @@ def test_clearing_an_untagged_entity_logs_nothing(db_session):
     )
 
     assert db_session.query(ChangeLogDb).filter_by(entity_id='untagged').count() == 0
+
+
+def test_details_page_put_with_empty_tags_clears_them_on_reload(
+    contracts_manager, contract, db_session,
+):
+    """The contract details page PUTs ``tags: []`` once the last tag is removed; the
+    reloaded contract has no tags (the reported contract case, #1435)."""
+    from src.models.data_contracts_api import DataContractUpdate
+    from src.repositories.data_contracts_repository import data_contract_repo
+
+    body = DataContractUpdate(**{'name': 'C', 'version': '1.0.0', 'status': 'draft', 'tags': []})
+    contracts_manager.update_contract_with_relations(db_session, contract, body, current_user='u')
+    db_session.expire_all()
+
+    reloaded = contracts_manager._build_contract_api_model(
+        db_session, data_contract_repo.get_with_all(db_session, id=contract),
+    )
+    assert reloaded.tags == []
+
+
+def test_failed_tag_write_is_rolled_back_and_the_update_is_saved(
+    contracts_manager, contract, db_session, monkeypatch,
+):
+    """A tag write that fails part-way leaves the stored tags as they were (its own
+    savepoint is rolled back) and the rest of the contract update is still saved."""
+    from src.db_models.data_contracts import DataContractDb
+
+    def failing_write(db, *, entity_id, entity_type, tags, user_email, commit=True):
+        db.query(EntityTagAssociationDb).filter_by(
+            entity_id=entity_id, entity_type=entity_type,
+        ).delete(synchronize_session=False)
+        db.flush()
+        raise RuntimeError('tag write failed')
+
+    monkeypatch.setattr(contracts_manager._tags_manager, 'set_tags_for_entity', failing_write)
+
+    contracts_manager.update_contract_with_relations(
+        db_session, contract, {'tags': [], 'name': 'Renamed'}, current_user='u',
+    )
+    db_session.expire_all()
+
+    assert _contract_tags(db_session, contract) == 1
+    assert db_session.query(DataContractDb).filter_by(id=contract).one().name == 'Renamed'

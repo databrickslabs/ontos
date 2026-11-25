@@ -1,0 +1,733 @@
+"""Governed tags and lineage counts on UC table/view entities in compliance rules (#1315)."""
+import os
+
+os.environ['TESTING'] = 'true'
+os.environ['SKIP_STARTUP_TASKS'] = 'true'
+
+import json
+import uuid
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+from databricks.sdk.service.catalog import ColumnInfo, TableInfo, TableType
+
+from src.common.compliance_dsl import Evaluator, parse_rule
+from src.common.compliance_entities import (
+    EntityIterator, TableEnrichment, UnityCatalogLoader, parse_entity_filter,
+)
+from src.common import uc_table_enrichment as enr
+from src.controller.compliance_manager import ComplianceManager
+from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
+from src.common.uc_table_enrichment import (
+    LINEAGE, TAGS, SourceUnavailable, WarehouseSqlRunner, enrich_catalog_tables, fields_read,
+    groups_for_fields,
+)
+
+
+def _table(name, schema='sales', catalog='main', columns=None, table_type=TableType.MANAGED):
+    return TableInfo(
+        name=name, full_name=f'{catalog}.{schema}.{name}', catalog_name=catalog,
+        schema_name=schema, table_type=table_type,
+        columns=columns if columns is not None else [ColumnInfo(name='id', comment='Id')],
+    )
+
+
+def _ws(tables_by_schema, catalogs=('main',)):
+    """Workspace client listing the given tables per (catalog, schema)."""
+    ws = MagicMock()
+    ws.catalogs.list.return_value = [SimpleNamespace(name=c) for c in catalogs]
+    ws.schemas.list.side_effect = lambda catalog_name: [
+        SimpleNamespace(name=s) for (c, s) in tables_by_schema if c == catalog_name
+    ]
+    ws.tables.list.side_effect = lambda catalog_name, schema_name: list(
+        tables_by_schema.get((catalog_name, schema_name), [])
+    )
+    return ws
+
+
+class FakeRunner:
+    """SqlRunner returning canned rows per source; records each statement."""
+
+    def __init__(self, tag_rows=(), lineage_rows=(), fail=None):
+        self.tag_rows, self.lineage_rows, self.fail = list(tag_rows), list(lineage_rows), fail
+        self.calls = []
+
+    def rows(self, statement, parameters):
+        source = LINEAGE if enr.LINEAGE_SOURCE in statement else TAGS
+        self.calls.append((source, statement, dict(parameters)))
+        if self.fail and source in self.fail:
+            raise SourceUnavailable(self.fail[source])
+        return self.tag_rows if source == TAGS else self.lineage_rows
+
+
+def _tag(table, tag, value='', schema='sales'):
+    return {'schema_name': schema, 'table_name': table, 'tag_name': tag, 'tag_value': value}
+
+
+def _lineage(direction, full_name, count):
+    return {'direction': direction, 'table_full_name': full_name, 'table_count': str(count)}
+
+
+def _rule_eval(rule, entity):
+    return bool(Evaluator(entity).evaluate(parse_rule(rule)['assert_clause']))
+
+
+# --- which fields a rule reads -------------------------------------------------
+
+@pytest.mark.parametrize('rule, groups', [
+    ("MATCH (t:table) ASSERT HAS_TAG('data_classification')", {TAGS}),
+    ("MATCH (t:table) ASSERT TAG('tier') = 'gold'", {TAGS}),
+    ("MATCH (t:table) ASSERT t.upstream_count > 0", {LINEAGE}),
+    ("MATCH (t:table) WHERE NOT HAS_TAG('x') ASSERT t.downstream_count >= 0", {TAGS, LINEAGE}),
+    ("MATCH (t:table) ASSERT CASE WHEN t.owner = 'a' THEN t.upstream_count > 0 ELSE true END",
+     {LINEAGE}),
+    ("MATCH (t:table) ASSERT t.column_comment_ratio >= 0.8", set()),
+    ("MATCH (t:table) ASSERT t.owner IN ['a', 'b']", set()),
+])
+def test_rule_needs_only_the_groups_it_reads(rule, groups):
+    parsed = parse_rule(rule)
+
+    assert groups_for_fields(fields_read(parsed['where_clause'], parsed['assert_clause'])) == groups
+
+
+# --- statements -------------------------------------------------------------------
+
+def test_tags_statement_is_scoped_by_catalog_and_schemas_with_parameters():
+    statement, params = enr.tags_statement('Main', {'sales', 'Ops'})
+
+    assert enr.TABLE_TAGS_SOURCE in statement and 'column_tags' not in statement
+    assert statement.count(
+        'lower(catalog_name) = :catalog AND lower(schema_name) IN (:s0, :s1)') == 1
+    assert params == {'catalog': 'main', 's0': 'ops', 's1': 'sales'}
+
+
+def test_tags_statement_matches_mixed_case_names_and_rows_map_without_case():
+    statement, params = enr.tags_statement('Main', ['Sales'])
+
+    assert params == {'catalog': 'main', 's0': 'sales'}
+    assert 'lower(catalog_name) = :catalog' in statement
+    assert 'lower(schema_name) IN (:s0)' in statement
+    entity = enr.table_entity(_table('Orders', schema='Sales', catalog='Main'))
+    enr.apply_tag_rows([entity], [_tag('ORDERS', 'pii', schema='SALES')])
+    assert entity['tags'] == {'pii': True}
+
+
+def test_lineage_statement_has_a_bounded_window_and_counts_distinct_tables():
+    statement, params = enr.lineage_statement('main', ['sales'])
+
+    assert statement.count(f'INTERVAL {enr.LINEAGE_WINDOW_DAYS} DAYS') == 2
+    assert 'COUNT(DISTINCT lower(source_table_full_name))' in statement
+    assert 'COUNT(DISTINCT lower(target_table_full_name))' in statement
+    assert 'source_table_full_name IS NOT NULL' in statement
+    assert params == {'catalog': 'main', 's0': 'sales'}
+
+
+# --- rows to fields ----------------------------------------------------------------
+
+def test_tag_rows_fill_table_tags_only():
+    entities = [
+        {'schema': 'sales', 'name': 'orders', 'full_name': 'main.sales.orders',
+         'columns': [{'name': 'Email'}, {'name': 'id'}]},
+        {'schema': 'sales', 'name': 'untagged', 'full_name': 'main.sales.untagged',
+         'columns': [{'name': 'id'}]},
+    ]
+
+    enr.apply_tag_rows(entities, [
+        _tag('orders', 'data_classification', 'internal'),
+        _tag('ORDERS', 'certified'),  # key-only tag: '' in UC
+        _tag('other_table', 'x'),
+    ])
+
+    orders, untagged = entities
+    assert orders['tags'] == {'data_classification': 'internal', 'certified': True}
+    assert untagged['tags'] == {}
+    # Column tags are not read: no rule can reach them
+    assert all('tags' not in c for e in entities for c in e['columns'])
+
+
+def test_tag_not_empty_passes_untagged_tables_so_rules_use_has_tag():
+    """Pins the documented trap: TAG() is null without the tag, and null != ''."""
+    untagged = {'type': 'table', 'tags': {}}
+    key_only = {'type': 'table', 'tags': {'data_classification': True}}
+    tagged = {'type': 'table', 'tags': {'data_classification': 'internal'}}
+    not_empty = "MATCH (t:table) ASSERT TAG('data_classification') != ''"
+    has_tag = "MATCH (t:table) ASSERT HAS_TAG('data_classification')"
+    one_of = "MATCH (t:table) ASSERT TAG('data_classification') IN ['public', 'internal']"
+
+    assert [_rule_eval(not_empty, e) for e in (untagged, key_only, tagged)] == [True] * 3
+    assert [_rule_eval(has_tag, e) for e in (untagged, key_only, tagged)] == [False, True, True]
+    assert [_rule_eval(one_of, e) for e in (untagged, key_only, tagged)] == [False, False, True]
+
+
+def test_lineage_rows_give_counts_and_zero_without_events():
+    entities = [{'full_name': 'main.sales.Orders'}, {'full_name': 'main.sales.raw'}]
+
+    enr.apply_lineage_rows(entities, [
+        _lineage('upstream', 'main.sales.orders', 2),
+        _lineage('downstream', 'main.sales.orders', 1),
+    ])
+
+    assert [(e['upstream_count'], e['downstream_count']) for e in entities] == [(2, 1), (0, 0)]
+
+
+# --- loader ---------------------------------------------------------------------------
+
+def test_loader_reads_tags_and_lineage_once_per_catalog_and_rules_see_them():
+    ws = _ws({
+        ('main', 'sales'): [_table('orders'), _table('raw_orders')],
+        ('main', 'ops'): [_table('v_orders', schema='ops', table_type=TableType.VIEW)],
+        ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')],
+    }, catalogs=('main', 'lake'))
+    runner = FakeRunner(
+        tag_rows=[_tag('orders', 'data_classification', 'internal')],
+        lineage_rows=[_lineage('upstream', 'main.sales.orders', 1)],
+    )
+    loader = UnityCatalogLoader(ws, TableEnrichment(groups={TAGS, LINEAGE}, runner=runner))
+
+    entities = {e['name']: e for e in loader.load_entities(['table', 'view'])}
+
+    # One tags and one lineage statement per catalog, never one per table
+    assert [(source, params['catalog']) for source, _, params in runner.calls] == [
+        (TAGS, 'main'), (LINEAGE, 'main'), (TAGS, 'lake'), (LINEAGE, 'lake'),
+    ]
+    assert runner.calls[0][2] == {'catalog': 'main', 's0': 'ops', 's1': 'sales'}
+    has_tag = "MATCH (t:table) ASSERT HAS_TAG('data_classification')"
+    upstream = "MATCH (t:table) ASSERT t.upstream_count > 0"
+    assert [_rule_eval(has_tag, entities[n]) for n in ('orders', 'raw_orders')] == [True, False]
+    assert [_rule_eval(upstream, entities[n]) for n in ('orders', 'raw_orders')] == [True, False]
+    assert entities['v_orders']['type'] == 'view' and entities['v_orders']['tags'] == {}
+    assert 'tags' not in entities['orders']['columns'][0]
+
+
+def test_loader_without_enrichment_makes_no_statement_and_adds_no_fields():
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+
+    [entity] = UnityCatalogLoader(ws).load_entities(['table'])
+
+    assert 'tags' not in entity and 'upstream_count' not in entity
+    ws.statement_execution.execute_statement.assert_not_called()
+
+
+def test_where_scope_limits_the_statements_to_the_selected_schemas_and_catalogs():
+    ws = _ws({
+        ('main', 'sales'): [_table('orders')],
+        ('main', 'ops'): [_table('jobs', schema='ops')],
+        ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')],
+    }, catalogs=('main', 'lake'))
+    runner = FakeRunner()
+    rule = "MATCH (t:table) WHERE t.catalog = 'main' AND t.schema = 'sales' ASSERT HAS_TAG('x')"
+    parsed = parse_rule(rule)
+    loader = UnityCatalogLoader(
+        ws, TableEnrichment(
+            groups={TAGS}, runner=runner,
+            scope=enr.conditions_without(parsed['where_clause'], enr.FIELD_GROUP),
+        ),
+    )
+
+    entities = {e['name']: e for e in loader.load_entities(['table'])}
+
+    assert [params for _, _, params in runner.calls] == [{'catalog': 'main', 's0': 'sales'}]
+    assert entities['orders']['tags'] == {}
+    # Out of scope: not enriched (the WHERE drops them anyway)
+    assert 'tags' not in entities['jobs'] and 'tags' not in entities['events']
+
+
+def test_no_runner_marks_the_fields_unavailable_with_the_source():
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    loader = UnityCatalogLoader(ws, TableEnrichment(groups={TAGS, LINEAGE}, runner=None))
+
+    [entity] = loader.load_entities(['table'])
+
+    assert 'tags' not in entity and 'upstream_count' not in entity
+    assert entity[enr.UNAVAILABLE_KEY] == {
+        'tags': {'source': enr.GROUP_SOURCE[TAGS], 'reason': 'no_warehouse'},
+        'upstream_count': {'source': enr.LINEAGE_SOURCE, 'reason': 'no_warehouse'},
+        'downstream_count': {'source': enr.LINEAGE_SOURCE, 'reason': 'no_warehouse'},
+    }
+
+
+def test_a_failed_source_leaves_only_its_fields_out():
+    entities = [{'schema': 'sales', 'name': 'orders', 'full_name': 'main.sales.orders',
+                 'columns': []}]
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+
+    enrich_catalog_tables('main', entities, {TAGS, LINEAGE}, runner)
+
+    [entity] = entities
+    assert entity['tags'] == {'pii': True}
+    assert 'upstream_count' not in entity
+    assert set(entity[enr.UNAVAILABLE_KEY]) == {'upstream_count', 'downstream_count'}
+    assert entity[enr.UNAVAILABLE_KEY]['upstream_count']['reason'] == 'no_access'
+
+
+def test_iterator_keeps_an_entity_whose_where_field_is_unavailable():
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    rule = "MATCH (t:table) WHERE HAS_TAG('gold') ASSERT t.upstream_count > 0"
+    loader = UnityCatalogLoader(ws, TableEnrichment(groups={TAGS, LINEAGE}, runner=None))
+
+    entities = list(EntityIterator([loader]).iterate(parse_entity_filter(rule)))
+
+    # Without the tags, HAS_TAG('gold') would be false and the table silently dropped
+    assert [e['name'] for e in entities] == ['orders']
+
+
+def test_iterator_drops_an_entity_the_readable_part_of_where_excludes():
+    ws = _ws({
+        ('main', 'sales'): [_table('orders')],
+        ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')],
+    }, catalogs=('main', 'lake'))
+    rule = "MATCH (t:table) WHERE t.catalog = 'main' AND HAS_TAG('gold') ASSERT true"
+    loader = UnityCatalogLoader(ws, TableEnrichment(groups={TAGS}, runner=None))
+
+    entities = list(EntityIterator([loader]).iterate(parse_entity_filter(rule)))
+
+    # lake.bronze.events is out of the WHERE whatever its tags; only orders is kept
+    assert [e['name'] for e in entities] == ['orders']
+
+
+def test_conditions_without_keeps_only_and_parts_free_of_the_fields():
+    where = parse_rule(
+        "MATCH (t:table) WHERE t.catalog = 'main' AND (HAS_TAG('a') OR t.schema = 'x') "
+        "AND t.upstream_count > 0 ASSERT true"
+    )['where_clause']
+
+    parts = enr.conditions_without(where, enr.FIELD_GROUP)
+
+    assert [fields_read(p) for p in parts] == [{'catalog'}]
+    assert enr.conditions_without(None, enr.FIELD_GROUP) == []
+
+
+# --- reuse, budget and chunks ---------------------------------------------------------
+
+def test_statement_cache_reuses_rows_and_failures_and_keeps_a_budget():
+    cache = enr.StatementCache(max_statements=2)
+    inner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+    runner = cache.runner(inner)
+    tags = enr.tags_statement('main', ['sales'])
+    lineage = enr.lineage_statement('main', ['sales'])
+
+    assert runner.rows(*tags) == runner.rows(*tags)
+    for _ in range(2):
+        with pytest.raises(SourceUnavailable):
+            runner.rows(*lineage)
+    assert len(inner.calls) == 2  # each sent once
+
+    with pytest.raises(SourceUnavailable) as raised:
+        runner.rows(*enr.tags_statement('lake', ['bronze']))
+    assert raised.value.reason == 'budget_exceeded'
+    assert len(inner.calls) == 2
+
+
+def test_policies_sharing_a_cache_send_each_statement_once(db_session):
+    """Two rules reading tags of the same tables, in one job run: one tags statement."""
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')])
+    cache = enr.StatementCache()
+    settings = SimpleNamespace(DATABRICKS_WAREHOUSE_ID='wh-1')
+
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings), \
+            patch('src.controller.compliance_manager.WarehouseSqlRunner', return_value=runner):
+        for rule in ("MATCH (t:table) ASSERT HAS_TAG('pii')",
+                     "MATCH (t:table) ASSERT NOT HAS_TAG('deprecated')"):
+            run = ComplianceManager().run_policy_inline(
+                db_session, policy=_policy(db_session, rule), statement_cache=cache,
+            )
+            assert run.status == 'succeeded' and run.warning_code is None
+
+    assert [source for source, _, _ in runner.calls] == [TAGS]
+
+
+def test_loader_enriches_chunk_by_chunk_and_stops_with_the_iterator(monkeypatch):
+    monkeypatch.setattr('src.common.compliance_entities.CHUNK_TABLES', 2)
+    schemas = {('main', f's{i}'): [_table(f't{i}a', schema=f's{i}'),
+                                   _table(f't{i}b', schema=f's{i}')] for i in range(3)}
+    runner = FakeRunner()
+    loader = UnityCatalogLoader(_ws(schemas), TableEnrichment(groups={TAGS}, runner=runner))
+    iterator = EntityIterator([loader])
+
+    first = list(iterator.iterate(parse_entity_filter("MATCH (t:table) ASSERT HAS_TAG('x')"),
+                                  limit=2))
+
+    assert [e['name'] for e in first] == ['t0a', 't0b']
+    # Only the first chunk (schema s0) was read; whole schemas per statement
+    assert [params for _, _, params in runner.calls] == [{'catalog': 'main', 's0': 's0'}]
+
+
+# --- the shared table builder ------------------------------------------------------
+
+def test_table_entity_is_what_the_loader_yields():
+    table = _table('orders', columns=[ColumnInfo(name='id', comment='Id', partition_index=0)])
+    ws = _ws({('main', 'sales'): [table]})
+
+    loaded = list(UnityCatalogLoader(ws).load_entities(['table']))
+
+    assert loaded == [enr.table_entity(table)]
+    view = enr.table_entity(_table('v', table_type=TableType.MATERIALIZED_VIEW))
+    assert (view['type'], view['table_type']) == ('view', 'MATERIALIZED_VIEW')
+
+
+def test_one_table_enriched_alone_reports_the_fields_it_could_not_read():
+    """What a maturity gate on one table asset needs: values, or which are missing."""
+    orders = enr.table_entity(_table('orders'))
+    events = enr.table_entity(_table('events', schema='bronze', catalog='lake'))
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+
+    enr.enrich_tables([orders, events], {TAGS, LINEAGE}, runner)
+
+    assert {params['catalog'] for _, _, params in runner.calls} == {'main', 'lake'}
+    assert orders['tags'] == {'pii': True} and events['tags'] == {}
+    assert 'upstream_count' not in orders
+    assert set(enr.unavailable_fields_read(orders, {'upstream_count', 'tags'})) == {
+        'upstream_count',
+    }
+
+
+def test_uc_tag_keys_have_no_namespace():
+    entity = {'type': 'table', 'tags': {'pii': True}}
+
+    assert _rule_eval("MATCH (t:table) ASSERT HAS_TAG('pii')", entity) is True
+    assert _rule_eval("MATCH (t:table) ASSERT HAS_TAG('governance/pii')", entity) is False
+
+
+# --- the warehouse runner -------------------------------------------------------------
+
+def _response(state, rows=None, columns=('a', 'b'), next_chunk=None, error=None):
+    return SimpleNamespace(
+        statement_id='st-1',
+        status=SimpleNamespace(state=SimpleNamespace(value=state),
+                               error=SimpleNamespace(message=error) if error else None),
+        manifest=SimpleNamespace(schema=SimpleNamespace(
+            columns=[SimpleNamespace(name=c) for c in columns])),
+        result=SimpleNamespace(data_array=rows, next_chunk_index=next_chunk),
+    )
+
+
+def test_runner_passes_parameters_and_reads_every_chunk():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = _response(
+        'SUCCEEDED', rows=[['1', 'x']], next_chunk=1,
+    )
+    ws.statement_execution.get_statement_result_chunk_n.return_value = SimpleNamespace(
+        data_array=[['2', 'y']], next_chunk_index=None,
+    )
+
+    rows = WarehouseSqlRunner(ws, 'wh-1').rows('SELECT :catalog', {'catalog': 'main'})
+
+    assert rows == [{'a': '1', 'b': 'x'}, {'a': '2', 'b': 'y'}]
+    kwargs = ws.statement_execution.execute_statement.call_args.kwargs
+    assert kwargs['warehouse_id'] == 'wh-1'
+    assert [(p.name, p.value) for p in kwargs['parameters']] == [('catalog', 'main')]
+    ws.statement_execution.get_statement_result_chunk_n.assert_called_once_with('st-1', 1)
+
+
+@pytest.mark.parametrize('response, reason', [
+    (_response('FAILED', error='PERMISSION_DENIED: User does not have USE SCHEMA'), 'no_access'),
+    (_response('FAILED', error='[TABLE_OR_VIEW_NOT_FOUND] system.access.table_lineage'),
+     'not_found'),
+    (_response('FAILED', error='[DIVIDE_BY_ZERO]'), 'query_failed'),
+    (_response('CANCELED'), 'query_failed'),
+])
+def test_runner_turns_a_failed_statement_into_source_unavailable(response, reason):
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = response
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, FakeClock()).rows('SELECT 1', {})
+
+    assert raised.value.reason == reason
+    # Not transient: sent once
+    assert ws.statement_execution.execute_statement.call_count == 1
+
+
+def _sdk_error(cls, message):
+    from databricks.sdk import errors
+    return getattr(errors, cls)(message)
+
+
+@pytest.mark.parametrize('error', [
+    _sdk_error('TooManyRequests', 'rate limited'),
+    _sdk_error('TemporarilyUnavailable', 'warehouse starting'),
+    _sdk_error('DeadlineExceeded', 'deadline'),
+    TimeoutError('read timed out'),
+])
+def test_runner_retries_a_transient_error_and_then_succeeds(error):
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.side_effect = [
+        error, _response('SUCCEEDED', rows=[['1', 'x']]),
+    ]
+    clock = FakeClock()
+
+    rows = _runner(ws, clock).rows('SELECT 1', {})
+
+    assert rows == [{'a': '1', 'b': 'x'}]
+    assert clock.sleeps == [WarehouseSqlRunner.RETRY_BACKOFF_SECONDS[0]]
+
+
+def test_runner_reports_transient_when_every_attempt_fails():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = SimpleNamespace(
+        statement_id='st-1',
+        status=SimpleNamespace(
+            state=SimpleNamespace(value='FAILED'),
+            error=SimpleNamespace(message='busy', error_code=SimpleNamespace(
+                value='TEMPORARILY_UNAVAILABLE')),
+        ),
+    )
+    clock = FakeClock()
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, clock).rows('SELECT 1', {})
+
+    assert raised.value.reason == 'transient'
+    attempts = len(WarehouseSqlRunner.RETRY_BACKOFF_SECONDS) + 1
+    assert ws.statement_execution.execute_statement.call_count == attempts
+    assert clock.sleeps == list(WarehouseSqlRunner.RETRY_BACKOFF_SECONDS)
+
+
+def test_runner_reports_not_found_for_the_sdk_not_found_error():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.side_effect = _sdk_error(
+        'NotFound', 'schema system.access does not exist',
+    )
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, FakeClock()).rows('SELECT 1', {})
+
+    assert raised.value.reason == 'not_found'
+
+
+def test_runner_turns_an_sdk_error_into_source_unavailable():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.side_effect = RuntimeError('warehouse stopped')
+
+    with pytest.raises(SourceUnavailable) as raised:
+        WarehouseSqlRunner(ws, 'wh-1').rows('SELECT 1', {})
+
+    assert raised.value.reason == 'query_failed'
+
+
+class FakeClock:
+    """Monotonic clock that sleeping advances."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def _runner(ws, clock):
+    return WarehouseSqlRunner(ws, 'wh-1', clock=clock, sleep=clock.sleep)
+
+
+def test_runner_keeps_a_long_statement_running_and_polls_it_to_the_end():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = _response('PENDING')
+    ws.statement_execution.get_statement.side_effect = [
+        _response('RUNNING'), _response('SUCCEEDED', rows=[['1', 'x']]),
+    ]
+    clock = FakeClock()
+
+    rows = _runner(ws, clock).rows('SELECT 1', {})
+
+    assert rows == [{'a': '1', 'b': 'x'}]
+    kwargs = ws.statement_execution.execute_statement.call_args.kwargs
+    # Not cancelled at the first wait: CONTINUE, then polled
+    assert kwargs['on_wait_timeout'].value == 'CONTINUE'
+    assert ws.statement_execution.get_statement.call_count == 2
+    ws.statement_execution.cancel_execution.assert_not_called()
+
+
+def test_runner_cancels_a_statement_still_running_at_the_deadline():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = _response('RUNNING')
+    ws.statement_execution.get_statement.return_value = _response('RUNNING')
+    clock = FakeClock()
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, clock).rows('SELECT 1', {})
+
+    assert raised.value.reason == 'timed_out'
+    assert clock.now >= WarehouseSqlRunner.DEADLINE_SECONDS
+    ws.statement_execution.cancel_execution.assert_called_once_with('st-1')
+
+
+# --- policy runs ----------------------------------------------------------------------
+
+def _policy(db_session, rule):
+    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='p', is_active=True, rule=rule)
+    db_session.add(policy)
+    db_session.flush()
+    return policy
+
+
+def _run(db_session, rule, ws, runner=None, warehouse_id='wh-1'):
+    policy = _policy(db_session, rule)
+    settings = SimpleNamespace(DATABRICKS_WAREHOUSE_ID=warehouse_id)
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings), \
+            patch('src.controller.compliance_manager.WarehouseSqlRunner',
+                  return_value=runner) as make_runner:
+        run = ComplianceManager().run_policy_inline(db_session, policy=policy)
+    results = db_session.query(ComplianceResultDb).filter_by(run_id=run.id).all()
+    return run, {r.object_name: r for r in results}, make_runner
+
+
+def test_policy_run_on_tags_and_lineage(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders'), _table('raw_orders')]})
+    runner = FakeRunner(
+        tag_rows=[_tag('orders', 'data_classification', 'internal')],
+        lineage_rows=[_lineage('upstream', 'main.sales.orders', 3)],
+    )
+    rule = "MATCH (t:table) ASSERT HAS_TAG('data_classification') AND t.upstream_count > 0"
+
+    run, results, make_runner = _run(db_session, rule, ws, runner)
+
+    make_runner.assert_called_once_with(ws, 'wh-1')
+    assert run.status == 'succeeded' and run.warning_code is None
+    assert {n: r.passed for n, r in results.items()} == {'orders': True, 'raw_orders': False}
+    assert len(runner.calls) == 2
+
+
+def test_policy_run_without_tag_or_lineage_fields_runs_no_statement(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+
+    run, results, make_runner = _run(
+        db_session, "MATCH (t:table) ASSERT t.column_comment_ratio >= 0.8", ws, FakeRunner(),
+    )
+
+    make_runner.assert_not_called()
+    assert results['orders'].passed is True and run.warning_code is None
+
+
+def test_policy_run_without_warehouse_reports_entities_not_evaluated(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders'), _table('raw_orders')]})
+    rule = ("MATCH (t:table) ASSERT HAS_TAG('data_classification')\n"
+            "ON_FAIL ASSIGN_TAG compliance: 'failed'")
+
+    with patch('src.controller.compliance_manager.ActionExecutor.execute_actions') as act:
+        run, results, make_runner = _run(db_session, rule, ws, warehouse_id='')
+
+    make_runner.assert_not_called()
+    act.assert_not_called()  # no ON_FAIL for an entity that was not evaluated
+    assert run.status == 'succeeded'
+    # Not evaluated is neither passed nor failed: out of the counts, and no score stored
+    assert (run.success_count, run.failure_count, run.score) == (0, 0, None)
+    assert run.warning_code == 'rule_fields_unavailable'
+    assert json.loads(run.warning_params) == {
+        'count': 2, 'sources': enr.GROUP_SOURCE[TAGS], 'reasons': 'no_warehouse',
+    }
+    details = json.loads(results['orders'].details_json)
+    assert details == {'code': 'rule_field_unavailable', 'params': {
+        'fields': 'tags', 'sources': enr.GROUP_SOURCE[TAGS], 'reason': 'no_warehouse',
+    }}
+    assert results['orders'].passed is False
+    assert 'Not evaluated' in results['orders'].message
+
+
+def test_policy_run_with_lineage_denied_still_evaluates_tag_only_rules(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+
+    run, results, _ = _run(
+        db_session, "MATCH (t:table) ASSERT HAS_TAG('pii') AND t.downstream_count >= 0",
+        ws, runner,
+    )
+
+    assert run.warning_code == 'rule_fields_unavailable'
+    assert json.loads(run.warning_params)['reasons'] == 'no_access'
+    assert json.loads(results['orders'].details_json)['params']['fields'] == (
+        'downstream_count'
+    )
+
+
+def test_policy_run_with_where_on_tags_enriches_the_catalog_scope(db_session):
+    ws = _ws({
+        ('main', 'sales'): [_table('orders'), _table('raw_orders')],
+        ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')],
+    }, catalogs=('main', 'lake'))
+    runner = FakeRunner(tag_rows=[_tag('orders', 'gold')],
+                        lineage_rows=[_lineage('upstream', 'main.sales.orders', 1)])
+    rule = ("MATCH (t:table) WHERE t.catalog = 'main' AND HAS_TAG('gold') "
+            "ASSERT t.upstream_count > 0")
+
+    run, results, _ = _run(db_session, rule, ws, runner)
+
+    # The tag part of WHERE can't scope the statements; the catalog part does
+    assert {(source, params['catalog']) for source, _, params in runner.calls} == {
+        (TAGS, 'main'), (LINEAGE, 'main'),
+    }
+    assert {n: r.passed for n, r in results.items()} == {'orders': True}
+    assert run.warning_code is None
+
+
+def test_not_evaluated_entities_leave_the_score_and_the_failed_list(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders'), _table('raw_orders')]})
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+    rule = "MATCH (t:table) ASSERT HAS_TAG('pii') OR t.upstream_count > 0"
+
+    run, results, _ = _run(db_session, rule, ws, runner)
+
+    # Both read the missing lineage field, so both are not evaluated
+    assert (run.success_count, run.failure_count) == (0, 0)
+    from src.repositories.compliance_repository import compliance_result_repo
+    assert compliance_result_repo.list_for_run(db_session, run_id=run.id, only_failed=True) == []
+    assert len(compliance_result_repo.list_for_run(db_session, run_id=run.id)) == 2
+
+
+def test_score_counts_only_evaluated_entities(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders'), _table('raw_orders')],
+              ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')]},
+             catalogs=('main', 'lake'))
+
+    class LakeDenied(FakeRunner):
+        def rows(self, statement, parameters):
+            if parameters.get('catalog') == 'lake':
+                raise SourceUnavailable('no_access')
+            return super().rows(statement, parameters)
+
+    runner = LakeDenied(tag_rows=[_tag('orders', 'pii')])
+
+    run, results, _ = _run(db_session, "MATCH (t:table) ASSERT HAS_TAG('pii')", ws, runner)
+
+    assert (run.success_count, run.failure_count, run.score) == (1, 1, 50.0)
+    assert json.loads(run.warning_params)['count'] == 1
+    from src.repositories.compliance_repository import compliance_result_repo
+    failed = compliance_result_repo.list_for_run(db_session, run_id=run.id, only_failed=True)
+    assert [r.object_name for r in failed] == ['raw_orders']
+
+
+def test_a_run_with_nothing_evaluated_keeps_the_previous_score(db_session):
+    """No 0 % for a policy whose latest run could read nothing (Isaac review)."""
+    from datetime import datetime, timedelta
+
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    rule = "MATCH (t:table) ASSERT HAS_TAG('pii')"
+    policy = _policy(db_session, rule)
+    settings = SimpleNamespace(DATABRICKS_WAREHOUSE_ID='wh-1')
+    manager = ComplianceManager()
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings), \
+            patch('src.controller.compliance_manager.WarehouseSqlRunner',
+                  return_value=FakeRunner(tag_rows=[_tag('orders', 'pii')])):
+        scored = manager.run_policy_inline(db_session, policy=policy)
+    settings.DATABRICKS_WAREHOUSE_ID = ''
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings):
+        unread = manager.run_policy_inline(db_session, policy=policy)
+    scored.started_at = datetime.utcnow() - timedelta(minutes=1)
+    db_session.flush()
+
+    assert scored.score == 100.0
+    assert unread.warning_code == 'rule_fields_unavailable'
+    assert (unread.success_count, unread.failure_count) == (0, 0)
+    assert manager._latest_score(db_session, policy.id) == 100.0
+    today = [p for p in manager.get_compliance_trend(db_session, days=1)]
+    assert today[-1]['compliance'] == 100.0

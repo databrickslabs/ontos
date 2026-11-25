@@ -9,6 +9,14 @@
     "refused": "ステータスを「{{toStatus}}」に変更するリクエストは承認されましたが、変更を適用できませんでした: {{reason}}",
     "reviewNotApplied": "データプロダクトのレビューは決定されましたが、「{{toStatus}}」への変更を適用できませんでした: {{reason}}"
   },
+  "approvalOverdue": {
+    "approverTitle": "承認の期限超過",
+    "approverDescription_one": "「{{name}}」の承認が {{count}} 日以上待機しています。マイアクションで判断してください。",
+    "approverDescription_other": "「{{name}}」の承認が {{count}} 日以上待機しています。マイアクションで判断してください。",
+    "requesterTitle": "リクエストはまだ待機中です",
+    "requesterDescription_one": "「{{name}}」へのリクエストは {{count}} 日以上判断を待っています。承認者にリマインドを送りました。",
+    "requesterDescription_other": "「{{name}}」へのリクエストは {{count}} 日以上判断を待っています。承認者にリマインドを送りました。"
+  },
   "contractStatusNotChanged": {
     "title": "契約のステータスは変更されませんでした",
     "notUnderReview": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: 契約はレビュー中ではありません（ステータス「{{currentStatus}}」）",

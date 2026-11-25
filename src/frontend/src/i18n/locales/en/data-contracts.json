@@ -529,6 +529,10 @@
     "personal": "Personal",
     "requestAccess": "Request Access ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} is empty: send a domain id, or leave the field out to keep the contract's domains.",
+    "primaryDomainNotInDomains": "Domain {{primaryDomainId}} is not one of the contract's domains, so it cannot be the primary domain."
+  },
   "createInline": {
     "title": "Create New Contract",
     "description": "Create a minimal data contract. You can add schemas and quality rules later.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID of owning team",
     "ownerTeamIdHint": "Optional: Inherited from product if available",
     "creating": "Creating..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} is not an ODCS version. Use one of the ODCS versions, for example v3.1.0."
   },
   "basicForm": {
     "editTitle": "Edit Contract Metadata",
@@ -1204,20 +1211,21 @@
     "responseMessageLabel": "Response Message (optional)",
     "responseMessagePlaceholder": "Add notes about your decision...",
     "messageHint": "This message will be sent to the requester along with your decision.",
-    "executeLabel": "Execute deployment immediately upon approval",
-    "executeHint": "If checked, the deployment will be triggered automatically when you approve this request.",
     "warningLabel": "Warning:",
     "warningText": "Deployment will create physical assets in Unity Catalog. Ensure you have reviewed the contract schema and configuration.",
     "deny": "Deny",
-    "approveAndDeploy": "Approve & Deploy",
     "toast": {
       "approvedTitle": "Deploy Approved",
       "deniedTitle": "Deploy Denied",
       "approvedDescription": "Deployment request has been approved.",
       "deniedDescription": "Deployment request has been denied.",
-      "deploymentInitiated": "Deployment has been initiated.",
       "failedTitle": "Failed",
       "couldNotSubmit": "Could not submit decision"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "You aren't an approver of this deployment request, so you can't decide it.",
+      "deploy_request_already_decided": "This deployment request has already been decided.",
+      "deploy_request_own_request": "You can't decide your own deployment request."
     }
   },
   "publishRequest": {

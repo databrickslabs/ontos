@@ -50,6 +50,69 @@ afterEach(() => {
   useDirectoryStore.getState().reset();
 });
 
+// #1618: a non-admin gets 403 from /api/directory/status, so the reviewer
+// picker had no suggestions. It falls back to the users of the Ontos teams
+// the caller can read.
+describe('PrincipalPicker — known-user suggestions', () => {
+  const teams = [
+    {
+      name: 'analytics',
+      members: [
+        { member_type: 'user', member_identifier: 'sam@x.com', member_name: 'Sam Steward' },
+        { member_type: 'group', member_identifier: 'stewards', member_name: null },
+      ],
+    },
+    {
+      name: 'sales',
+      members: [{ member_type: 'user', member_identifier: 'SAM@x.com', member_name: 'Dup' }],
+    },
+  ];
+
+  function mockDeniedDirectory() {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/teams') {
+        return Promise.resolve(new Response(JSON.stringify(teams), { status: 200 }));
+      }
+      return Promise.resolve(new Response('{"detail":"forbidden"}', { status: 403 }));
+    });
+  }
+
+  it('suggests team users while typing and picks one', async () => {
+    mockDeniedDirectory();
+    const onChange = vi.fn();
+    renderWithProviders(
+      <PrincipalPicker value={null} onChange={onChange} accepts={['user']} suggestKnownUsers />,
+    );
+    const input = screen.getByTestId('principal-picker-input');
+    await userEvent.type(input, 'sam');
+    const list = await screen.findByTestId('principal-picker-suggestions');
+    const rows = within(list).getAllByTestId('principal-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Sam Steward');
+    await userEvent.click(rows[0]);
+    expect(onChange).toHaveBeenLastCalledWith('sam@x.com');
+    expect(fetchMock).toHaveBeenCalledWith('/api/teams');
+  });
+
+  it('does not load or suggest anything without the prop', async () => {
+    mockDeniedDirectory();
+    renderWithProviders(<PrincipalPicker value={null} onChange={() => {}} accepts={['user']} />);
+    await userEvent.type(screen.getByTestId('principal-picker-input'), 'sam');
+    await waitFor(() => expect(useDirectoryStore.getState().loaded).toBe(true));
+    expect(screen.queryByTestId('principal-picker-suggestions')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/teams');
+  });
+
+  it('never suggests to a picker that accepts only groups', async () => {
+    mockDeniedDirectory();
+    renderWithProviders(
+      <PrincipalPicker value={null} onChange={() => {}} accepts={['group']} suggestKnownUsers />,
+    );
+    await userEvent.type(screen.getByTestId('principal-picker-input'), 'sam');
+    expect(screen.queryByTestId('principal-picker-suggestions')).toBeNull();
+  });
+});
+
 describe('PrincipalPicker — pre-existing values', () => {
   it('renders a badge for each existing id without resolving against the directory', () => {
     setDirectoryStatus(false);
@@ -252,5 +315,79 @@ describe('PrincipalPicker — configured mode', () => {
     const manualInput = screen.getByTestId('principal-picker-input');
     await userEvent.type(manualInput, 'alice@x.com{Enter}');
     expect(onChange).toHaveBeenLastCalledWith(['alice@x.com']);
+  });
+});
+
+describe('PrincipalPicker — pickValue (#1151 item 5)', () => {
+  const RESULTS = [
+    { type: 'group', id: 'reviewer', display_name: 'Reviewer group', sub_label: 'g-1' },
+    { type: 'user', id: 'rita@x.com', display_name: 'Rita', sub_label: 'rita@x.com' },
+  ];
+  const prefixGroups = (p: { type: string; id: string }) =>
+    (p.type === 'group' ? `group:${p.id}` : p.id);
+
+  beforeEach(() => {
+    setDirectoryStatus(true);
+    fetchMock.mockImplementation((url: RequestInfo | URL) => {
+      const body = url.toString().includes('/api/directory/search') ? { results: RESULTS } : {};
+      return Promise.resolve(new Response(JSON.stringify(body), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }));
+    });
+  });
+
+  async function browseAndPick(name: string) {
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    await userEvent.type(screen.getByTestId('principal-picker-dialog-input'), 're');
+    const rows = await screen.findAllByTestId('principal-row');
+    await userEvent.click(rows.find((r) => r.textContent?.includes(name))!);
+  }
+
+  it('emits the id by default', async () => {
+    const onChange = vi.fn();
+    renderWithProviders(<PrincipalPicker multiple value={[]} onChange={onChange} />);
+
+    await browseAndPick('Reviewer group');
+
+    expect(onChange).toHaveBeenLastCalledWith(['reviewer']);
+  });
+
+  it('emits what pickValue returns for the picked principal', async () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <PrincipalPicker multiple value={[]} onChange={onChange} pickValue={prefixGroups} />,
+    );
+
+    await browseAndPick('Reviewer group');
+    expect(onChange).toHaveBeenLastCalledWith(['group:reviewer']);
+  });
+
+  it('hides a principal whose pickValue is already selected', async () => {
+    renderWithProviders(
+      <PrincipalPicker
+        multiple value={['group:reviewer']} onChange={() => {}} pickValue={prefixGroups}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    await userEvent.type(screen.getByTestId('principal-picker-dialog-input'), 're');
+
+    const rows = await screen.findAllByTestId('principal-row');
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining('Rita')]);
+  });
+
+  it('shows the picked group by its display name', async () => {
+    const onChange = vi.fn();
+    const { rerender } = renderWithProviders(
+      <PrincipalPicker multiple value={[]} onChange={onChange} pickValue={prefixGroups} />,
+    );
+    await browseAndPick('Reviewer group');
+
+    rerender(
+      <PrincipalPicker
+        multiple value={onChange.mock.lastCall![0]} onChange={onChange} pickValue={prefixGroups}
+      />,
+    );
+
+    expect(screen.getByTestId('principal-badge')).toHaveTextContent('Reviewer group');
   });
 });

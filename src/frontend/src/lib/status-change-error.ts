@@ -16,6 +16,18 @@ const REASON_KEYS: Record<string, string> = {
   rule_where_evaluation_failed: 'workflow-gates:reasons.whereEvaluationFailed',
 };
 
+/**
+ * Codes of a contract update refused by its before_update gates
+ * (`workflow-gates:updateGate.<key>`): a `fail_closed` gate that couldn't be
+ * evaluated (`params.workflows`), a gate's tag change or the update's own
+ * tags, which the gates checked, that couldn't be written.
+ */
+const UPDATE_GATE_ERROR_KEYS: Record<string, string> = {
+  update_gate_error: 'error',
+  update_gate_tag_write_failed: 'tagWriteFailed',
+  update_gate_tag_list_write_failed: 'tagListWriteFailed',
+};
+
 /** Codes of the deprecation checks (`common:deprecation.errors.<code>`). */
 const DEPRECATION_ERROR_CODES = new Set([
   'deprecation_reason_required',
@@ -50,7 +62,9 @@ function reasonText(reason: BlockedReason, t: TFunction): string {
  * tries to change the status (`status_change_requires_transition`) and a status
  * that isn't a lifecycle one (`certified_is_not_a_status`, `invalid_status`)
  * are translated too, and so is a `fail_closed` gate that couldn't be evaluated
- * (`status_change_gate_error`). Any other error is the English `error` the API sent.
+ * (`status_change_gate_error`), and so are the refusals of a contract update by
+ * its before_update gates (`UPDATE_GATE_ERROR_KEYS`). Any other error is the
+ * English `error` the API sent.
  *
  * A deprecation the details don't allow (no reason, a past sunset date, an
  * unusable replacement) is answered with one of `DEPRECATION_ERROR_CODES`
@@ -113,6 +127,16 @@ export function statusChangeErrorText(
     return t(workflows.length ? 'workflow-gates:gateError' : 'workflow-gates:gateErrorUnnamed', {
       fromStatus: statusLabel(params.fromStatus),
       toStatus: statusLabel(params.toStatus),
+      workflows: workflows.join(', '),
+      defaultValue: error,
+    });
+  }
+  // An update its before_update gates refused although they passed or ran
+  const updateGateKey = UPDATE_GATE_ERROR_KEYS[response.errorCode ?? ''];
+  if (updateGateKey) {
+    const workflows = Array.isArray(params?.workflows) ? params.workflows.map(String) : [];
+    const key = updateGateKey === 'error' && !workflows.length ? 'errorUnnamed' : updateGateKey;
+    return t(`workflow-gates:updateGate.${key}`, {
       workflows: workflows.join(', '),
       defaultValue: error,
     });

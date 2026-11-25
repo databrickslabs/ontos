@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { buildContractMetadataUpdate } from '@/lib/contract-metadata-payload'
+import { contractDomainErrorText } from '@/lib/contract-domain-error'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import DeprecationNotice from '@/components/common/deprecation-notice'
 import { useTranslation } from 'react-i18next'
@@ -74,6 +75,7 @@ import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
+import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error'
 
 // Status-based editability constants
 // Only draft/proposed contracts can be edited in place
@@ -975,7 +977,9 @@ export default function DataContractDetails() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null)
-        throw new Error(statusChangeErrorText(
+        const versionError = odcsApiVersionErrorText(body, t)
+        if (versionError) throw new Error(versionError)
+        throw new Error(contractDomainErrorText(body, t) ?? statusChangeErrorText(
           apiErrorOf(body, t('data-contracts:detailsView.errors.updateFailed', 'Update failed')),
           t,
           'data-contracts',
@@ -1400,7 +1404,15 @@ export default function DataContractDetails() {
         }
       }
       
-      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updateFailed', 'Update failed'))
+      if (!res.ok) {
+        // A coded refusal (a before_update gate's, a lifecycle check's) in the user's language
+        const body = await res.json().catch(() => null)
+        throw new Error(statusChangeErrorText(
+          apiErrorOf(body, t('data-contracts:detailsView.errors.updateFailed', 'Update failed')),
+          t,
+          'data-contracts',
+        ))
+      }
       await fetchDetails()
       if (showToast) {
         toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.contractUpdated', 'Contract updated successfully.') })
@@ -3208,6 +3220,7 @@ export default function DataContractDetails() {
         onOpenChange={setIsSchemaFormOpen}
         initial={schemaFormInitial}
         onSubmit={editingSchemaIndex !== null ? handleUpdateSchema : handleAddSchema}
+        apiVersion={contract?.apiVersion}
       />
 
       <QualityRuleFormDialog
@@ -3285,12 +3298,14 @@ export default function DataContractDetails() {
         isOpen={isInferFromCatalogOpen}
         onOpenChange={setIsInferFromCatalogOpen}
         onInfer={handleInferFromCatalog}
+        apiVersion={contract?.apiVersion}
       />
 
       <InferFromAssetDialog
         isOpen={isInferFromAssetOpen}
         onOpenChange={setIsInferFromAssetOpen}
         onInfer={handleInferFromAsset}
+        apiVersion={contract?.apiVersion}
       />
 
       {contract && (

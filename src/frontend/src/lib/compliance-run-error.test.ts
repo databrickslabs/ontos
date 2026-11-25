@@ -11,7 +11,6 @@ describe('complianceRunErrorText', () => {
   it('translates a run error that has a code', async () => {
     await i18n.changeLanguage('pt');
     const text = complianceRunErrorText(i18n.t, {
-      error_message: 'Failed to parse rule: Parser error at line 1',
       error_code: 'rule_parse_failed',
       error_params: { detail: 'Parser error at line 1' },
     });
@@ -22,7 +21,6 @@ describe('complianceRunErrorText', () => {
   it('translates the entity-load error with its entity type', async () => {
     await i18n.changeLanguage('pt');
     const text = complianceRunErrorText(i18n.t, {
-      error_message: 'Could not load the data_contract entities',
       error_code: 'entities_load_failed',
       error_params: { entityType: 'data_contract' },
     });
@@ -35,7 +33,6 @@ describe('complianceRunErrorText', () => {
   it('translates the tag-load error with its entity type', async () => {
     await i18n.changeLanguage('pt');
     const text = complianceRunErrorText(i18n.t, {
-      error_message: 'Could not load the tags of data_product entities',
       error_code: 'tags_load_failed',
       error_params: { entityType: 'data_product' },
     });
@@ -45,10 +42,23 @@ describe('complianceRunErrorText', () => {
     );
   });
 
+  it('translates a run refused for tag actions on an LLM_CHECK rule', async () => {
+    await i18n.changeLanguage('pt');
+    const text = complianceRunErrorText(i18n.t, {
+      error_code: 'llm_check_tag_action',
+      error_params: { actions: 'ASSIGN_TAG' },
+    });
+
+    expect(text).toBe(
+      'Uma regra com LLM_CHECK não pode usar ASSIGN_TAG nem REMOVE_TAG (ASSIGN_TAG): o '
+      + 'veredito do modelo mudaria tags. Use NOTIFY, ou uma regra separada sem LLM_CHECK '
+      + 'para as ações de tag.',
+    );
+  });
+
   it('does not show the stored exception text for an error that has a code', async () => {
     await i18n.changeLanguage('en');
     const text = complianceRunErrorText(i18n.t, {
-      error_message: 'cannot get access token from https://internal.example',
       error_code: 'workspace_client_unavailable',
       error_params: null,
     });
@@ -59,15 +69,27 @@ describe('complianceRunErrorText', () => {
     expect(text).not.toContain('internal.example');
   });
 
-  it('shows the stored message when there is no code', async () => {
+  it('shows the generic text, not a stored message, when there is no code', async () => {
     await i18n.changeLanguage('pt');
-    expect(complianceRunErrorText(i18n.t, { error_message: 'connection reset' })).toBe('connection reset');
+    const text = complianceRunErrorText(i18n.t, {
+      error_message: 'PERMISSION_DENIED on main.secret.payroll',
+    } as never);
+
+    expect(text).toBe('A execução falhou. Os detalhes estão no log do app.');
+    expect(text).not.toContain('payroll');
   });
 
-  it('shows the stored message for a code without a translation', async () => {
-    await i18n.changeLanguage('pt');
-    expect(
-      complianceRunErrorText(i18n.t, { error_message: 'Something new', error_code: 'not_a_known_code' }),
-    ).toBe('Something new');
+  it('shows the generic text for a code without a translation', async () => {
+    await i18n.changeLanguage('en');
+    expect(complianceRunErrorText(i18n.t, { error_code: 'not_a_known_code' })).toBe(
+      'The run failed. The details are in the app log.',
+    );
+  });
+
+  it('translates the run_failed code the backend sends for errors without one', async () => {
+    await i18n.changeLanguage('de');
+    expect(complianceRunErrorText(i18n.t, { error_code: 'run_failed' })).toBe(
+      'Der Lauf ist fehlgeschlagen. Die Details stehen im App-Log.',
+    );
   });
 });

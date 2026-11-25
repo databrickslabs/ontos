@@ -93,6 +93,9 @@ def run_syncs(db, ws, sync_id: Optional[str] = None, importer=None) -> int:
     print(f"{len(syncs)} connector sync(s) to run")
 
     if importer is None:
+        # This process has no app startup: register the connectors the syncs use
+        from src.connectors.registration import register_asset_connectors
+        register_asset_connectors(ws)
         # The job's identity (the app's service principal) reads the sources: it
         # needs READ_SECRET on each connection's secret
         importer = SchemaImportManager(

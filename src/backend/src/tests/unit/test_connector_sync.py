@@ -24,6 +24,7 @@ from src.controller.connector_sync_manager import (
     MISSED_PROPERTY,
     RETIRED_BY_SYNC_PROPERTY,
     STATUS_COMPLETED,
+    STATUS_FAILED,
     STATUS_INCOMPLETE,
     ConnectorSyncManager,
 )
@@ -330,6 +331,28 @@ def test_the_job_runs_due_syncs_and_fails_when_one_fails(db_session, sync, impor
     broken.execute_import.side_effect = RuntimeError("boom")
     assert run_syncs(db_session, ws=None, sync_id=sync.id, importer=broken) == 1
     assert run_syncs(db_session, ws=None, sync_id=str(uuid4()), importer=importer) == 1
+
+
+def test_the_job_resolves_the_connectors_its_syncs_use_without_app_startup(db_session, sync, monkeypatch):
+    """The job runs in its own process: with a fresh registry and no injected importer it
+    still finds the Tableau connector (it failed with "No connector class registered")."""
+    from src.connectors import registry as registry_module
+    from src.workflows.connector_sync.connector_sync import run_syncs
+    monkeypatch.setattr(registry_module, "_registry", None)
+    monkeypatch.setattr(db_session, "commit", db_session.flush)
+    resolved = []
+
+    def resolve_then_stop(self, db, request, current_user_id=None):
+        resolved.append(self._connections.get_connector_for_connection(request.connection_id))
+        raise RuntimeError("stop after resolving the connector")
+
+    monkeypatch.setattr(SchemaImportManager, "execute_import", resolve_then_stop)
+    ws = MagicMock()
+    ws.secrets_uc.get_secret.return_value = MagicMock(effective_value="secret-value")
+
+    assert run_syncs(db_session, ws=ws, sync_id=sync.id) == 1
+    assert isinstance(resolved[0], TableauConnector)
+    assert sync.last_status == STATUS_FAILED
 
 
 # --- Review: scope and incomplete walks ---------------------------------------------

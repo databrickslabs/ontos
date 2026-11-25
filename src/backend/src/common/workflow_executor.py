@@ -1045,6 +1045,40 @@ def _step_clarify_target(step: 'WorkflowStep') -> Optional[str]:
     return target if isinstance(target, str) and target else None
 
 
+# An access request has no state for "waiting for the requester" (it is pending, approved,
+# denied, expired or cancelled): a clarification there would leave it pending and unrecorded
+_NO_CLARIFY_ENTITY_TYPES = frozenset({'access_grant'})
+
+
+def _takes_clarification(entity_type: Optional[str]) -> bool:
+    """Whether a request of this entity type can be answered with a clarification."""
+    return (entity_type or '').lower() not in _NO_CLARIFY_ENTITY_TYPES
+
+
+def _execution_takes_clarification(db_execution: Any) -> bool:
+    """Whether the execution's trigger entity can be answered with a clarification."""
+    try:
+        context = json.loads(getattr(db_execution, 'trigger_context', None) or '{}') or {}
+    except (TypeError, ValueError):
+        return True
+    return _takes_clarification(context.get('entity_type') if isinstance(context, dict) else None)
+
+
+# The (entity type, trigger) pairs whose request is closed when its review is clarified: the
+# run has no step left to decide it. Other reviews keep no request state of their own.
+_CLARIFICATION_CLOSES_REQUEST = frozenset({
+    ('data_product', 'on_request_status_change'),
+    ('data_contract', 'on_request_status_change'),
+    ('metric_view', 'on_request_definition_change'),
+})
+
+
+def _clarification_closes_request(entity_type: Optional[str], trigger_type: Any) -> bool:
+    """Whether a clarified review of this entity and trigger still closes its request."""
+    trigger = str(getattr(trigger_type, 'value', trigger_type) or '').lower()
+    return ((entity_type or ''), trigger) in _CLARIFICATION_CLOSES_REQUEST
+
+
 def _approval_result(step_result: bool, clarify: bool, decision: bool = False) -> str:
     """The approval's outcome: the approval_result (or, with decision, the decision) text."""
     if clarify:
@@ -1710,7 +1744,10 @@ class ApprovalStepHandler(StepHandler):
                             "workflow_message": approval_message or None,
                             # The step has an on_clarify branch: the dialog offers
                             # "Request clarification" (config.on_clarify)
-                            "can_clarify": bool(self._config.get('on_clarify')),
+                            "can_clarify": bool(
+                                self._config.get('on_clarify')
+                                and _takes_clarification(context.entity_type)
+                            ),
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,
@@ -4390,7 +4427,11 @@ class WorkflowExecutor:
         step = next((s for s in workflow.steps if s.step_id == db_execution.current_step_id), None)
         if step is None or step.step_type != StepType.APPROVAL:
             return None
-        if not _step_clarify_target(step) or self.paused_at_required_approval(execution_id):
+        if (
+            not _step_clarify_target(step)
+            or not _execution_takes_clarification(db_execution)
+            or self.paused_at_required_approval(execution_id)
+        ):
             return CLARIFY_NOT_SUPPORTED
         return None
 
@@ -4460,6 +4501,8 @@ class WorkflowExecutor:
             step_result = False
             if not _step_clarify_target(current_step):
                 raise ClarifyNotSupportedError("This approval step has no clarification branch")
+            if not _execution_takes_clarification(db_execution):
+                raise ClarifyNotSupportedError("An access request takes no clarification")
             # A step that needs every approver (its pause record decides, as for a
             # decision) is not resumed by one approver's clarification
             paused = self._paused_approval(execution_id, lock=True)
@@ -4995,18 +5038,11 @@ class WorkflowExecutor:
             return
         
         # A clarification is "no decision yet": the entity keeps its status and
-        # only the notification goes out. A status change request is the one
-        # exception: it is still closed ('workflow_clarified') below.
-        # The request-based branches (a status change request, a metric view
-        # change request) still close their request, or it would stay open
-        # with no workflow left.
-        if clarified and not (
-            (entity_type in ('data_product', 'data_contract')
-             and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE'))
-            or (entity_type == 'metric_view'
-                and trigger_type in ('on_request_definition_change',
-                                     'ON_REQUEST_DEFINITION_CHANGE'))
-        ):
+        # only the notification goes out. The requests that have a state of
+        # their own (_CLARIFICATION_CLOSES_REQUEST) still end it below: a status
+        # change request is closed ('workflow_clarified'), a metric view change
+        # request goes back to a draft; neither is recorded as rejected.
+        if clarified and not _clarification_closes_request(entity_type, trigger_type):
             return
 
         try:

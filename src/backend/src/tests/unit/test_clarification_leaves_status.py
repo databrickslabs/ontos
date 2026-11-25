@@ -6,6 +6,7 @@ goes out), whatever the request type: a clarified data product review is not
 activated, a clarified concept review does not send the concept back to
 changes_requested.
 """
+import json
 import os
 
 os.environ['TESTING'] = 'true'
@@ -17,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.common.workflow_executor import WorkflowExecutor
+from src.common.workflow_executor import ClarifyNotSupportedError, WorkflowExecutor
 from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.data_products import DataProductDb
 from src.models.process_workflows import (
@@ -34,10 +35,10 @@ from src.repositories.process_workflows_repository import process_workflow_repo
 REQUESTER = 'requester@example.com'
 
 
-def _workflow(db, entity_type):
+def _workflow(db, entity_type, trigger_type=TriggerType.ON_REQUEST_REVIEW):
     db_workflow = process_workflow_repo.create(db, ProcessWorkflowCreate(
         name=f'review-{uuid.uuid4().hex[:6]}',
-        trigger=WorkflowTrigger(type=TriggerType.ON_REQUEST_REVIEW, entity_types=[entity_type]),
+        trigger=WorkflowTrigger(type=trigger_type, entity_types=[entity_type]),
         steps=[
             WorkflowStepCreate(
                 step_id='approve', step_type=StepType.APPROVAL,
@@ -56,13 +57,14 @@ def _workflow(db, entity_type):
     return WorkflowsManager(db).get_workflow(db_workflow.id)
 
 
-def _paused(db, workflow, entity_type, entity_id, name):
+def _paused(db, workflow, entity_type, entity_id, name,
+            trigger_type=TriggerType.ON_REQUEST_REVIEW):
     execution = WorkflowExecutor(db).execute_workflow(
         workflow=workflow, entity={'id': entity_id, 'name': name}, entity_type=entity_type,
         entity_id=entity_id, entity_name=name, user_email=REQUESTER,
         trigger_context=TriggerContext(
             entity_type=entity_type, entity_id=entity_id, entity_name=name,
-            trigger_type=TriggerType.ON_REQUEST_REVIEW, user_email=REQUESTER,
+            trigger_type=trigger_type, user_email=REQUESTER,
         ),
     )
     assert execution.status.value == 'paused'
@@ -143,3 +145,81 @@ def test_a_denied_concept_review_still_requests_changes(db_session):
         )
 
     assert smm.apply_review_decision.call_args.kwargs['decision'] == 'changes_requested'
+
+
+def _access_request_execution(db):
+    request_id = str(uuid.uuid4())
+    execution = _paused(
+        db, _workflow(db, EntityType.ACCESS_GRANT, TriggerType.ON_REQUEST_ACCESS),
+        'access_grant', request_id, 'requester', TriggerType.ON_REQUEST_ACCESS,
+    )
+    return execution
+
+
+def test_an_access_request_step_refuses_a_clarification(db_session):
+    # An access request has no "waiting for the requester" state (pending, approved,
+    # denied, expired, cancelled): the approver decides it or leaves it pending
+    execution = _access_request_execution(db_session)
+
+    assert WorkflowExecutor(db_session).clarify_refusal(execution.id) == 'clarify_not_supported'
+    with pytest.raises(ClarifyNotSupportedError):
+        _decide(db_session, execution, clarify=True)
+
+    from src.repositories.process_workflows_repository import workflow_execution_repo
+    # execute_workflow returns the pydantic model: read the ORM row back
+    assert workflow_execution_repo.get(db_session, execution.id).status == 'paused'
+
+
+def test_an_access_request_step_still_takes_a_decision(db_session):
+    execution = _access_request_execution(db_session)
+
+    result = _decide(db_session, execution, clarify=False)
+
+    assert result.status.value == 'succeeded'
+
+
+def _offered(db, execution):
+    from src.db_models.notifications import NotificationDb
+
+    rows = [
+        json.loads(n.action_payload) for n in db.query(NotificationDb).all()
+        if n.action_payload and execution.id in n.action_payload
+    ]
+    assert rows
+    return [r.get('can_clarify') for r in rows]
+
+
+def test_the_approval_notice_of_an_access_request_does_not_offer_a_clarification(db_session):
+    execution = _access_request_execution(db_session)
+
+    assert _offered(db_session, execution) == [False] * len(_offered(db_session, execution))
+
+
+def test_the_approval_notice_of_a_review_offers_a_clarification(db_session):
+    product = _product(db_session)
+    execution = _paused(
+        db_session, _workflow(db_session, EntityType.DATA_PRODUCT), 'data_product',
+        product.id, product.name,
+    )
+
+    assert all(_offered(db_session, execution))
+
+
+def test_the_approval_of_an_access_request_does_not_offer_a_clarification():
+    from src.common.workflow_executor import _takes_clarification
+
+    assert not _takes_clarification('access_grant')
+    assert not _takes_clarification('ACCESS_GRANT')
+    assert _takes_clarification('data_product')
+    assert _takes_clarification(None)
+
+
+def test_a_review_that_has_no_request_state_does_not_close_one_when_clarified():
+    from src.common.workflow_executor import _clarification_closes_request
+
+    assert _clarification_closes_request('data_product', 'on_request_status_change')
+    assert _clarification_closes_request('data_contract', TriggerType.ON_REQUEST_STATUS_CHANGE)
+    assert _clarification_closes_request('metric_view', 'ON_REQUEST_DEFINITION_CHANGE')
+    assert not _clarification_closes_request('data_product', 'on_request_review')
+    assert not _clarification_closes_request('data_contract', 'on_request_deploy')
+    assert not _clarification_closes_request('metric_view', 'on_request_status_change')

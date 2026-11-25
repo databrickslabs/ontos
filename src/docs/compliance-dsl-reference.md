@@ -517,11 +517,16 @@ when Ontos lists the tables (no extra call per table):
   let column-less objects pass
 - `partition_column_count` - Number of partition columns
 - `partition_columns_without_comment_count` - Partition columns with no comment
+- `primary_key_columns`, `foreign_key_columns` - Names of the columns in the table's primary and
+  foreign key constraints (empty lists when it has none)
+- `primary_key_columns_without_comment_count`, `foreign_key_columns_without_comment_count` - Key
+  columns with no comment
 
 ```
 MATCH (t:table) ASSERT t.columns_without_comment_count = 0
 MATCH (t:table) ASSERT t.column_comment_ratio >= 0.8
 MATCH (t:table) ASSERT t.partition_columns_without_comment_count = 0
+MATCH (t:table) ASSERT t.primary_key_columns_without_comment_count = 0
 MATCH (v:view) ASSERT v.columns_without_comment_count = 0
 ```
 

@@ -47,6 +47,7 @@
 
 ## ✨ Features
 
+- **compliance**: rules on Unity Catalog tables and views can read the columns of the table's primary and foreign keys: `primary_key_columns` and `foreign_key_columns` (column names, empty lists without constraints), and `primary_key_columns_without_comment_count` and `foreign_key_columns_without_comment_count`. They come from the table's constraints in the same listing as the columns, so they make no extra call (#1315).
 - **lists**: list views keep their search, column filters, page and page size when you open an item and come back (Back, or a reload). Stored per list in the browser's localStorage, next to the sort order. The Data Products and Data Contracts "Show all versions" toggle and the Data Products "My Subscriptions" toggle, and the Asset Explorer name filter and page, are kept the same way. Stored filters for columns that no longer exist are dropped, and a stored page past the last page is clamped. Settings > Roles and Tags/Permissions, and Asset Reviews, now remember their sort order too (#966)
 - **maturity**: add configurable multi-level maturity assessment for data products and contracts
 - **term-mapping**: ontology term suggestion, AR-based review, inline suggester

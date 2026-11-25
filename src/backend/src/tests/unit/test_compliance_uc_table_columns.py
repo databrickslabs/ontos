@@ -9,7 +9,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from databricks.sdk.service.catalog import ColumnInfo, ColumnTypeName, TableInfo, TableType
+from databricks.sdk.service.catalog import (
+    ColumnInfo, ColumnTypeName, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint,
+    TableInfo, TableType,
+)
 
 from src.common.compliance_dsl import Evaluator, parse_rule
 from src.common.compliance_entities import UnityCatalogLoader
@@ -95,6 +98,52 @@ def test_partition_columns():
     assert fields['partition_column_count'] == 2
     assert fields['partition_columns_without_comment_count'] == 1
     assert fields['columns_without_comment_count'] == 2
+
+
+def _constraints(primary=(), foreign=()):
+    found = []
+    if primary:
+        found.append(TableConstraint(
+            primary_key_constraint=PrimaryKeyConstraint(name='pk', child_columns=list(primary))))
+    for i, cols in enumerate(foreign):
+        found.append(TableConstraint(foreign_key_constraint=ForeignKeyConstraint(
+            name=f'fk{i}', child_columns=list(cols), parent_table='main.sales.parent',
+            parent_columns=list(cols))))
+    return found
+
+
+def test_key_columns_and_their_missing_comments():
+    table = _table('orders', [
+        _col('id', 'Order id'), _col('customer_id'), _col('region_id', ' '), _col('note'),
+    ])
+    table.table_constraints = _constraints(
+        primary=['id'], foreign=[['customer_id'], ['customer_id', 'region_id']])
+
+    fields = table_column_fields(table)
+
+    assert fields['primary_key_columns'] == ['id']
+    assert fields['foreign_key_columns'] == ['customer_id', 'region_id']
+    assert fields['primary_key_columns_without_comment_count'] == 0
+    assert fields['foreign_key_columns_without_comment_count'] == 2
+
+
+def test_no_constraints_gives_empty_key_fields():
+    fields = table_column_fields(_table('orders', [_col('id')]))
+
+    assert fields['primary_key_columns'] == []
+    assert fields['foreign_key_columns'] == []
+    assert fields['primary_key_columns_without_comment_count'] == 0
+    assert fields['foreign_key_columns_without_comment_count'] == 0
+
+
+def test_rule_on_key_columns():
+    table = _table('orders', [_col('id'), _col('amount', 'x')])
+    table.table_constraints = _constraints(primary=['id'])
+    rule = "MATCH (t:table) ASSERT t.primary_key_columns_without_comment_count = 0"
+
+    entity = {'type': 'table', **table_column_fields(table)}
+
+    assert _assert(rule, entity) is False
 
 
 def test_accepts_any_table_like_object():

@@ -54,7 +54,7 @@ class TestMetadataRoutes:
 
     @pytest.fixture
     def product_with_shallow_inheritance(self, db_session: Session):
-        """A product (max_level_inheritance=20) whose contract has a level-10 and a level-50 note."""
+        """A product (max_level_inheritance=20) whose contract has level-10 and level-50 notes."""
         from uuid import uuid4
 
         from src.db_models.data_contracts import DataContractDb

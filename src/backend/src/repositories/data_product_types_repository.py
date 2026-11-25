@@ -1,10 +1,13 @@
 """Repository for data_product_types operations."""
 
+import hashlib
 import json
 import re
+import unicodedata
 from uuid import UUID
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
@@ -80,14 +83,29 @@ def normalize_type_key(raw) -> str | None:
     """Turn a productType value into a type key: ``sourceAligned``, ``"source-aligned"``,
     ``Source Aligned`` and ``SOURCE_ALIGNED`` all become ``source-aligned``.
 
+    Accents are removed (``Café`` -> ``cafe``). A value with letters or digits
+    that have no ASCII form (``データ製品``, ``Data 製品``) or with no letters or
+    digits at all (``!!!``) gets a short hash of its text as a suffix
+    (``type-1a2b3c4d``, ``data-1a2b3c4d``), so any non-empty value has a key and
+    distinct values don't share one. None only for an empty value.
+
     Same rules as the b12 migration, which keeps its own copy.
     """
-    value = type_label_for(raw)
-    if value is None:
+    label = type_label_for(raw)
+    if label is None:
         return None
-    value = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", value)
+    label = unicodedata.normalize("NFC", label)
+    folded = "".join(
+        c for c in unicodedata.normalize("NFKD", label) if not unicodedata.combining(c)
+    )
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", folded)
     value = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return value[:_KEY_MAX].rstrip("-") or None
+    lossy = any(c.isalnum() and not c.isascii() for c in folded)
+    if value and not lossy:
+        return value[:_KEY_MAX].rstrip("-")
+    suffix = hashlib.sha256(label.encode("utf-8")).hexdigest()[:8]
+    stem = value[: _KEY_MAX - len(suffix) - 1].rstrip("-") or "type"
+    return f"{stem}-{suffix}"
 
 
 class DataProductTypesRepository:
@@ -161,13 +179,23 @@ class DataProductTypesRepository:
         existing = self.get_by_key(db, key)
         if existing is not None:
             return existing
-        created = self.create(
-            db,
-            key=key,
-            label=(type_label_for(raw) or key)[:_LABEL_MAX],
-            sort_order=self.get_max_order(db) + 1,
-            is_imported=True,
-        )
+        try:
+            # In a savepoint: a concurrent import of the same new key makes the
+            # insert fail on the unique key, and then the other import's type is used.
+            with db.begin_nested():
+                created = self.create(
+                    db,
+                    key=key,
+                    label=(type_label_for(raw) or key)[:_LABEL_MAX],
+                    sort_order=self.get_max_order(db) + 1,
+                    is_imported=True,
+                )
+        except IntegrityError:
+            existing = self.get_by_key(db, key)
+            if existing is None:
+                raise
+            logger.info("Data product type '%s' was created by a concurrent import", key)
+            return existing
         logger.info("Created imported data product type '%s'", key)
         return created
 

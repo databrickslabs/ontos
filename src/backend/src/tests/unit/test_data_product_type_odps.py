@@ -82,6 +82,7 @@ def _stored_product_type_rows(db_session, product_id):
         ('"aggregate"', "aggregate"),
         ("SOURCE_ALIGNED", "source-aligned"),
         (" Consumer Aligned ", "consumer-aligned"),
+        ("Café", "cafe"),
         ("", None),
         (None, None),
     ],
@@ -126,6 +127,16 @@ def test_create_with_unknown_type_is_rejected(manager, db_session, seeded):
     assert data_product_types_repo.get_by_key(db_session, "typo-tyep") is None
 
 
+@pytest.mark.parametrize("value", ["!!!", "データ製品"])
+def test_create_with_a_value_without_an_ascii_key_is_rejected(manager, db_session, seeded, value):
+    """It must not be read as "no type" and silently leave the product untyped."""
+    with pytest.raises(UnknownDataProductTypeError) as err:
+        manager.create_product(_product(product_type=value), db=db_session)
+
+    assert err.value.code == "unknown_data_product_type"
+    assert err.value.params == {"key": value}
+
+
 def test_create_with_deactivated_type_is_rejected(manager, db_session, seeded):
     data_product_types_repo.get_by_key(db_session, "sink").is_active = False
     db_session.flush()
@@ -146,6 +157,38 @@ def test_import_with_unknown_type_creates_imported_type(manager, db_session, see
     assert _type_key(db_session, created.id) == "golden-record"
 
 
+@pytest.mark.parametrize("value", ["データ製品", "!!!"])
+def test_import_of_a_value_without_an_ascii_key_keeps_it(manager, db_session, seeded, value):
+    created = manager.create_product(
+        _product(product_type=value), db=db_session, create_missing_type=True,
+    )
+
+    imported = data_product_types_repo.get_by_key(db_session, normalize_type_key(value))
+    assert imported.is_imported and imported.label == value
+    assert _type_key(db_session, created.id) == imported.key
+
+
+def test_import_uses_the_type_a_concurrent_import_just_created(db_session, seeded, monkeypatch):
+    """The other import's type isn't visible on the first lookup, so the insert hits
+    the unique key; the type it created is used instead of failing the item."""
+    other = data_product_types_repo.create(
+        db_session, key="golden-record", label="Golden Record", sort_order=6, is_imported=True,
+    )
+    real_get_by_key = data_product_types_repo.get_by_key
+    lookups = []
+
+    def get_by_key(db, key):
+        lookups.append(key)
+        return None if len(lookups) == 1 else real_get_by_key(db, key)
+
+    monkeypatch.setattr(data_product_types_repo, "get_by_key", get_by_key)
+
+    resolved = data_product_types_repo.resolve_or_create_imported(db_session, "Golden Record")
+
+    assert resolved.id == other.id
+    assert lookups == ["golden-record", "golden-record"]
+
+
 # --- update ---
 
 
@@ -163,7 +206,7 @@ def test_update_changes_type(manager, db_session, seeded):
     assert _stored_product_type_rows(db_session, created.id) == 0
 
 
-@pytest.mark.parametrize("value", ["Typo Tyep", "sink"])
+@pytest.mark.parametrize("value", ["Typo Tyep", "sink", "!!!"])
 def test_update_to_unknown_or_deactivated_type_is_rejected(manager, db_session, seeded, value):
     created = manager.create_product(_product(product_type="aggregate"), db=db_session)
     data_product_types_repo.get_by_key(db_session, "sink").is_active = False

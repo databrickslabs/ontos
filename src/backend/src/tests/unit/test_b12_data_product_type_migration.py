@@ -2,6 +2,7 @@
 data_products.product_type_id, by running its upgrade()/downgrade() on SQLite."""
 
 import importlib.util
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,6 +11,11 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy.pool import StaticPool
+
+from src.models.data_product_types import KEY_PATTERN
+from src.repositories.data_product_types_repository import (
+    normalize_type_key as app_normalize_type_key,
+)
 
 _PATH = (
     Path(__file__).resolve().parents[3]
@@ -102,6 +108,8 @@ def _product_type_props(conn):
         ('"aggregate"', "aggregate"),
         ("sink", "sink"),
         ("Golden Record!", "golden-record"),
+        ("Café", "cafe"),
+        ("Données", "donnees"),
         ("", None),
         ("   ", None),
         ('""', None),
@@ -110,6 +118,31 @@ def _product_type_props(conn):
 )
 def test_normalize_type_key(migration, raw, key):
     assert migration.normalize_type_key(raw) == key
+
+
+@pytest.mark.parametrize(
+    ("raw", "stem"),
+    [("データ製品", "type"), ("!!!", "type"), ("Data 製品", "data")],
+)
+def test_normalize_type_key_hashes_values_without_an_ascii_form(migration, raw, stem):
+    key = migration.normalize_type_key(raw)
+    assert re.fullmatch(rf"{stem}-[0-9a-f]{{8}}", key)
+    assert re.fullmatch(KEY_PATTERN, key)
+    assert migration.normalize_type_key(raw) == key
+
+
+def test_normalize_type_key_keeps_distinct_values_apart(migration):
+    values = ["データ製品", "データ", "!!!", "!!", "Data 製品", "Data"]
+    keys = [migration.normalize_type_key(v) for v in values]
+    assert len(set(keys)) == len(keys)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["sourceAligned", "Café", "Données", "データ製品", "!!!", "Data 製品", '"sink"', "", None],
+)
+def test_normalize_type_key_matches_the_app(migration, raw):
+    assert migration.normalize_type_key(raw) == app_normalize_type_key(raw)
 
 
 def test_upgrade_moves_values_onto_the_fk_and_drops_the_rows(engine, migration):
@@ -156,6 +189,42 @@ def test_upgrade_creates_an_imported_type_for_unknown_values(engine, migration):
         assert created["label"] == "Golden Record"
         assert created["is_imported"] and created["is_active"] and not created["is_default"]
         assert created["sort_order"] == 6
+
+
+def test_upgrade_keeps_values_without_an_ascii_form(engine, migration):
+    values = {"p-ja": "データ製品", "p-sym": "!!!", "p-mixed": "Data 製品", "p-data": "Data",
+              "p-cafe": "Café", "p-caf": "Caf"}
+    with engine.begin() as conn:
+        for product_id, value in values.items():
+            _add_product(conn, migration, product_id, value)
+
+    _run(engine, migration.upgrade)
+
+    with engine.connect() as conn:
+        types = _types_by_product(conn, migration)
+        assert all(types[p] is not None for p in values)
+        # No two different values share a type
+        assert len(set(types.values())) == len(values)
+        assert types["p-cafe"] == "cafe" and types["p-caf"] == "caf"
+        t = migration.data_product_types
+        labels = dict(conn.execute(sa.select(t.c.key, t.c.label)).all())
+        assert {labels[types[p]] for p in values} == set(values.values())
+        assert _product_type_props(conn) == []
+
+
+def test_downgrade_writes_back_the_original_text_of_imported_types(engine, migration):
+    with engine.begin() as conn:
+        _add_product(conn, migration, "p-ja", "データ製品")
+        _add_product(conn, migration, "p-golden", "Golden Record")
+        _add_product(conn, migration, "p-seeded", "sourceAligned")
+
+    _run(engine, migration.upgrade)
+    _run(engine, migration.downgrade)
+
+    with engine.connect() as conn:
+        assert _product_type_props(conn) == [
+            ("p-golden", "Golden Record"), ("p-ja", "データ製品"), ("p-seeded", "source-aligned"),
+        ]
 
 
 def test_upgrade_keeps_an_existing_fk_and_uses_the_first_usable_value(engine, migration):

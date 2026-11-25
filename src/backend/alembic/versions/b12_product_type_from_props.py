@@ -7,22 +7,29 @@ deletes the custom property rows.
 Values are normalised to type keys before lookup: surrounding JSON quotes are
 removed, camelCase is split, and spaces/underscores become hyphens, so
 ``sourceAligned``, ``"source-aligned"``, ``Source Aligned`` and
-``SOURCE_ALIGNED`` all become ``source-aligned``. A value that matches no
-existing type gets a new active type with that key, flagged ``is_imported``,
-so no product loses its type.
+``SOURCE_ALIGNED`` all become ``source-aligned``. Accents are removed
+(``Café`` -> ``cafe``). A value with letters or digits that have no ASCII form
+(``データ製品``, ``Data 製品``) or with no letters or digits at all (``!!!``)
+gets a short hash of its text as a suffix (``type-1a2b3c4d``,
+``data-1a2b3c4d``), so every non-empty value has a key and distinct values
+don't share one. A value that matches no existing type gets a new active type
+with that key and the original text as its label, flagged ``is_imported``, so
+no product loses its type.
 
 When a product has several ``productType`` rows, the first one with a usable
 value wins. A product that already has a ``product_type_id`` keeps it. Empty
-values are just deleted. Running it twice is a no-op.
+values are just deleted. Only the rows it has handled are deleted. Running it
+twice is a no-op.
 
-Downgrade writes the type keys back as ``productType`` custom properties (for
+Downgrade writes the types back as ``productType`` custom properties (for
 products that don't have one) and clears the foreign key. Types created here
 are left in place; b11's downgrade drops the table.
 
-The value written back is the normalised key, not the original text:
-``Data Mesh Node`` comes back as ``data-mesh-node``. After a downgrade past
-b11 and a new upgrade, such an imported type is re-created with the key as
-its label (rename it on the Data Product Types page if needed).
+For an imported type the value written back is its label, which is the
+original text unless it was renamed, so ``Data Mesh Node`` and ``データ製品``
+come back as they were. For the other types it's the key
+(``source-aligned``). A new upgrade turns these values into the same keys
+again.
 
 Revision ID: b12_product_type_from_props
 Revises: b11_data_product_types
@@ -30,9 +37,11 @@ Create Date: 2026-11-16 12:00:00.000000
 
 """
 
+import hashlib
 import json
 import logging
 import re
+import unicodedata
 from collections.abc import Sequence
 from uuid import uuid4
 
@@ -98,12 +107,23 @@ def label_for(raw: str | None) -> str | None:
 
 def normalize_type_key(raw: str | None) -> str | None:
     """Turn a stored productType value into a type key, or None if it's empty."""
-    value = label_for(raw)
-    if value is None:
+    label = label_for(raw)
+    if label is None:
         return None
-    value = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", value)  # sourceAligned -> source-Aligned
+    label = unicodedata.normalize("NFC", label)
+    # Café -> Cafe
+    folded = "".join(
+        c for c in unicodedata.normalize("NFKD", label) if not unicodedata.combining(c)
+    )
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", folded)  # sourceAligned -> source-Aligned
     value = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return value[:_KEY_MAX].rstrip("-") or None
+    lossy = any(c.isalnum() and not c.isascii() for c in folded)
+    if value and not lossy:
+        return value[:_KEY_MAX].rstrip("-")
+    # データ製品 -> type-<hash>, Data 製品 -> data-<hash>, !!! -> type-<hash>
+    suffix = hashlib.sha256(label.encode("utf-8")).hexdigest()[:8]
+    stem = value[: _KEY_MAX - len(suffix) - 1].rstrip("-") or "type"
+    return f"{stem}-{suffix}"
 
 
 def upgrade() -> None:
@@ -136,11 +156,16 @@ def upgrade() -> None:
     }
 
     assigned = created = 0
-    for _, product_id, raw in rows:
+    handled = []
+    for row_id, product_id, raw in rows:
         if product_id in typed_products:
+            handled.append(row_id)
             continue
         key = normalize_type_key(raw)
         if key is None:
+            # An empty value: nothing to keep. (A non-empty value always has a key.)
+            if label_for(raw) is None:
+                handled.append(row_id)
             continue
 
         type_id = types_by_key.get(key)
@@ -168,19 +193,17 @@ def upgrade() -> None:
             .values(product_type_id=type_id)
         )
         typed_products.add(product_id)
+        handled.append(row_id)
         assigned += 1
 
-    bind.execute(
-        custom_properties.delete().where(
-            custom_properties.c.id.in_([row_id for row_id, _, _ in rows])
-        )
-    )
+    if handled:
+        bind.execute(custom_properties.delete().where(custom_properties.c.id.in_(handled)))
     logger.info(
         "b12: set product_type_id on %d data product(s), created %d imported type(s), "
         "removed %d productType custom propert(ies)",
         assigned,
         created,
-        len(rows),
+        len(handled),
     )
 
 
@@ -195,15 +218,20 @@ def downgrade() -> None:
             )
         )
     }
+    # An imported type's label is the original text (データ製品, not type-1a2b3c4d)
+    value = sa.case(
+        (data_product_types.c.is_imported.is_(True), data_product_types.c.label),
+        else_=data_product_types.c.key,
+    )
     typed = bind.execute(
-        sa.select(data_products.c.id, data_product_types.c.key).join(
+        sa.select(data_products.c.id, value).join(
             data_product_types, data_products.c.product_type_id == data_product_types.c.id
         )
     ).all()
 
     restored = [
-        {"id": str(uuid4()), "product_id": product_id, "property": PROPERTY, "value": key}
-        for product_id, key in typed
+        {"id": str(uuid4()), "product_id": product_id, "property": PROPERTY, "value": stored}
+        for product_id, stored in typed
         if product_id not in has_property
     ]
     if restored:

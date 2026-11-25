@@ -16,9 +16,15 @@ from src.connectors.snowflake import SnowflakeConnector
 from src.connectors.tableau import TableauConnector
 
 
-def register_asset_connectors(workspace_client: Any) -> ConnectorRegistry:
-    """Register the Databricks connector (default) and the other connectors by class."""
-    registry = get_registry()
+def register_asset_connectors(
+    workspace_client: Any, registry: ConnectorRegistry | None = None,
+) -> ConnectorRegistry:
+    """Register the Databricks connector (default) and the other connectors by class.
+
+    Registers in the global registry unless one is given.
+    """
+    if registry is None:
+        registry = get_registry()
 
     # Register Databricks/UC connector (primary connector)
     databricks_connector = DatabricksConnector(workspace_client=workspace_client)

@@ -65,6 +65,7 @@ from src.repositories.tags_repository import (
 
 
 # Import connector registry and connectors for pluggable asset support
+from src.connectors import get_registry
 from src.connectors.registration import register_asset_connectors
 
 logger = get_logger(__name__)
@@ -426,7 +427,7 @@ def initialize_managers(app: FastAPI):
         # --- Initialize Connector Registry ---
         logger.info("Initializing asset connector registry...")
         try:
-            register_asset_connectors(ws_client)
+            register_asset_connectors(ws_client, registry=get_registry())
             logger.info("Registered Databricks connector (default) and the other connectors")
             
             logger.info("Connector registry initialized")

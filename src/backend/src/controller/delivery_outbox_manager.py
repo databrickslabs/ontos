@@ -13,6 +13,11 @@ a session of its own and holds the lock until it records the outcome, so two app
 instances, or the worker and the attempt after a commit, never deliver the same
 row together. It reads the entity in that session: never an object of the
 request's session, expired or detached once that one committed.
+
+Delivery is at-least-once: when a delivery went through but not even its outcome can be
+written (the database keeps failing), the row stays due and a later pass may deliver it
+again. The modes a row can have tolerate that: Git rewrites the same file (named after the
+entity), Unity Catalog grants re-apply, and a manual task only logs.
 """
 from __future__ import annotations
 
@@ -467,6 +472,10 @@ class DeliveryOutboxWorker:
     knows of is due (rows of this instance, or seen by its last pass). With no
     pending row, nothing wakes it up. Delivered rows older than ``RETENTION`` are
     deleted at most once a day across instances (claimed in ``scheduler_claims``).
+
+    Delivery is at-least-once: when a delivery went through and the outcome can't be
+    written either, the pass stops and the row, still due, may be delivered again by a
+    later pass. The delivery modes are idempotent, so that is harmless.
     """
 
     def __init__(self, clock: Optional[Callable[[], datetime]] = None):
@@ -565,10 +574,18 @@ class DeliveryOutboxWorker:
                 # another attempt would repeat its external effect.
                 logger.error("Delivery of outbox row %s broke before an outcome (%s)",
                              row_id, type(e).__name__, exc_info=True)
-                if getattr(row, 'delivery_done', False):
-                    _record_unrecorded(session_factory, row_id, now)
-                else:
-                    DeliveryOutboxWorker._fail_row(session_factory, row_id, now)
+                try:
+                    if getattr(row, 'delivery_done', False):
+                        _record_unrecorded(session_factory, row_id, now)
+                    else:
+                        DeliveryOutboxWorker._fail_row(session_factory, row_id, now)
+                except Exception as recording:
+                    # The database is still failing: the row stays as it was (due), so
+                    # the next claim would take it again in this pass. Stop the pass; a
+                    # later one tries again (at-least-once, see the module docstring).
+                    logger.error("Outcome of outbox row %s not recorded (%s)", row_id,
+                                 type(recording).__name__, exc_info=True)
+                    return tried + 1, True
                 tried += 1
             finally:
                 db.close()

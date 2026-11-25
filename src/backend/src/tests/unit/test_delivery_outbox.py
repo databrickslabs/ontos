@@ -360,6 +360,24 @@ class TestPoisonRow:
         rows = delivery_outbox_repo.by_ids(sessions(), [poison])
         assert outbox.outcome_of(rows).status == 'delivered'
 
+    def test_a_pass_stops_when_not_even_the_outcome_can_be_written(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        poison, good = self._due_rows(manager, sessions, service, 'P A', 'P B')
+        self._break_after_delivery(monkeypatch, poison)
+
+        def unwritable(*args, **kwargs):
+            raise OperationalError('stmt', {}, Exception('database down'))
+
+        monkeypatch.setattr(outbox, '_record_unrecorded', unwritable)
+        service.calls.clear()
+
+        result = DeliveryOutboxWorker._sweep(sessions, _now() + timedelta(minutes=2))
+
+        assert result == (1, True)  # no exception; more may be due
+        assert [call[0] for call in service.calls] == ['P A']  # not claimed again
+        assert _row(sessions, good).status == 'pending'  # left for a later pass
+
     def test_an_attempt_after_the_commit_keeps_it_too(
         self, manager, sessions, service, monkeypatch,
     ):

@@ -1,4 +1,3 @@
-from io import BytesIO
 from typing import Annotated, List, Optional
 
 from src.common.api_errors import CodedValueError
@@ -297,28 +296,26 @@ async def upload_document(
         content_type = file.content_type
         size_bytes = len(content) if content else 0
 
-        # Destination path (filename is now sanitized)
-        dest_path = f"{volume_fs_base}/{base_dir}/{filename}"
-
-        # Ensure directory exists in UC Volumes filesystem
-        try:
-            ws.files.create_directory(f"{volume_fs_base}/{base_dir}")
-        except Exception:
-            pass
-
-        # Upload file bytes to the UC Volume path (path, file-like object, overwrite)
-        ws.files.upload(dest_path, BytesIO(content))
-
-        result = manager.create_document_record(
-            db,
-            data=payload,
-            filename=filename,
-            content_type=content_type,
-            size_bytes=size_bytes,
-            storage_path=dest_path,
-            user_email=current_user.email if current_user else None,
+        # Upload file bytes to a directory of its own in the UC Volume (filename is now sanitized)
+        dest_path = manager.store_document_file(
+            ws, volume_fs_base=volume_fs_base, base_dir=base_dir, filename=filename, content=content,
         )
-        
+
+        try:
+            result = manager.create_document_record(
+                db,
+                data=payload,
+                filename=filename,
+                content_type=content_type,
+                size_bytes=size_bytes,
+                storage_path=dest_path,
+                user_email=current_user.email if current_user else None,
+            )
+        except Exception:
+            # No row points to the file: don't leave it in the volume
+            manager.delete_document_files(ws, [dest_path])
+            raise
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -484,6 +481,21 @@ async def upload_shared_document(
 ):
     """Upload a new shared document asset. Stored in shared folder."""
     try:
+        # Validate the request before touching the volume, so a rejected
+        # request never leaves an orphaned file behind.
+        try:
+            payload = DocumentCreate(
+                entity_type="data_domain",  # Shared assets use a generic type
+                entity_id=SHARED_ENTITY_ID,
+                title=title,
+                short_description=short_description,
+                is_shared=True,
+                level=level,
+                inheritable=inheritable,
+            )
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
+
         # Use shared folder for shared documents
         base_dir = "uploads/__shared__"
         volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
@@ -494,33 +506,24 @@ async def upload_shared_document(
         content_type = file.content_type
         size_bytes = len(content) if content else 0
 
-        dest_path = f"{volume_fs_base}/{base_dir}/{filename}"
+        dest_path = manager.store_document_file(
+            ws, volume_fs_base=volume_fs_base, base_dir=base_dir, filename=filename, content=content,
+        )
 
         try:
-            ws.files.create_directory(f"{volume_fs_base}/{base_dir}")
+            result = manager.create_shared_document_record(
+                db,
+                data=payload,
+                filename=filename,
+                content_type=content_type,
+                size_bytes=size_bytes,
+                storage_path=dest_path,
+                user_email=current_user.email if current_user else None,
+            )
         except Exception:
-            pass
-
-        ws.files.upload(dest_path, BytesIO(content))
-
-        payload = DocumentCreate(
-            entity_type="data_domain",  # Shared assets use a generic type
-            entity_id=SHARED_ENTITY_ID,
-            title=title,
-            short_description=short_description,
-            is_shared=True,
-            level=level,
-            inheritable=inheritable,
-        )
-        result = manager.create_shared_document_record(
-            db,
-            data=payload,
-            filename=filename,
-            content_type=content_type,
-            size_bytes=size_bytes,
-            storage_path=dest_path,
-            user_email=current_user.email if current_user else None,
-        )
+            # No row points to the file: don't leave it in the volume
+            manager.delete_document_files(ws, [dest_path])
+            raise
         
         audit_manager.log_action(
             db=db,

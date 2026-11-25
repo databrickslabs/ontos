@@ -25,6 +25,8 @@ from src.models.data_products import (
     ONTOS_PORT_DELIVERY_METHOD_PROPERTY,
 )
 
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "odps-json-schema-v1.0.0.json"
 
 
@@ -45,7 +47,7 @@ def _stored_product(manager, db_session) -> DataProductDb:
     db_session.add(method)
     db_session.flush()
     created = manager.create_product({
-        "name": "Orders", "version": "1.0.0", "productType": "sourceAligned",
+        "name": "Orders", "version": "1.0.0", "productType": "source-aligned",
         "description": {"purpose": "Sales orders", "usage": "Reporting"},
         "outputPorts": [{
             "name": "orders", "version": "1.0.0", "contractId": "c-1", "type": "table",

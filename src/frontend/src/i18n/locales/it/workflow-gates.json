@@ -18,6 +18,12 @@
   "invalidStatus": "{{status}} non è uno stato del ciclo di vita. Usa uno di: {{allowed}}.",
   "gateError": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare il gate del workflow {{workflows}}. Chiedi a un amministratore di controllare il workflow.",
   "gateErrorUnnamed": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare un gate del workflow. Chiedi a un amministratore di controllare il workflow.",
+  "updateGate": {
+    "error": "L'aggiornamento è stato rifiutato: non è stato possibile valutare il gate di workflow {{workflows}}. Chiedi a un amministratore di controllare il workflow.",
+    "errorUnnamed": "L'aggiornamento è stato rifiutato: non è stato possibile valutare un gate di workflow. Chiedi a un amministratore di controllare il workflow.",
+    "tagWriteFailed": "L'aggiornamento è stato rifiutato: non è stato possibile salvare una modifica dei tag dei suoi gate di workflow. Chiedi a un amministratore di controllare il log del server.",
+    "tagListWriteFailed": "L'aggiornamento è stato rifiutato: non è stato possibile salvare i suoi tag, verificati dai suoi gate di workflow. Chiedi a un amministratore di controllare il log del server."
+  },
   "certifiedDeprecationRequiresApproval": "{{name}} è certificato, quindi può essere deprecato solo tramite una richiesta di modifica dello stato approvata. Richiedi invece la modifica dello stato.",
   "requestInstead": "Richiedi la modifica dello stato",
   "certifiedGuard": {

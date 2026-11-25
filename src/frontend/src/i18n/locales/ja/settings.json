@@ -1035,6 +1035,24 @@
         "descriptionContract": "各テーブルに、そのテーブルを使用するデータコントラクトのライフサイクルステータスをタグ付けします。複数のコントラクトが使用するテーブルでは、最も良いステータスが優先されます(active が最優先、retired が最後)。",
         "valueLabel": "タグの値:",
         "sharedKeyHint": "プロダクトとコントラクトのステータスタグが同じキーで両方とも有効な場合は、プロダクトのステータスが書き込まれます。"
+      },
+      "maturityThreshold": {
+        "variable": "true または false: レベル番号が <order> 以上",
+        "invalid": "レベル番号を使って {ASSET.MATURITY_AT_LEAST:<order>} と書いてください。例: {ASSET.MATURITY_AT_LEAST:1}"
+      },
+      "assetVariables": {
+        "assetId": "アセット UUID",
+        "assetType": "アセットタイプ名 (Table、View など)",
+        "assetFqn": "テーブルの Unity Catalog 名 (catalog.schema.table)",
+        "assetMaturity": "テーブルまたはビューのアセットの成熟度レベル名 (最新の評価)",
+        "assetMaturityOrder": "テーブルまたはビューのアセットの成熟度レベル番号 (1 = 最初のレベル)"
+      },
+      "maturity": {
+        "title": "成熟度レベルタグ",
+        "description": "テーブルまたはビューの各アセットに成熟度レベル (最新の評価) をタグ付けします。レベルのないテーブルにはタグが付きません。",
+        "valueNeedsVariable": "キーまたは値に {ASSET.MATURITY} か {ASSET.MATURITY_ORDER} を使用してください。",
+        "tablesOnlyHint": "タグが付くのは Unity Catalog 名を持つテーブルとビューだけで、スキーマやカタログには付きません。実行の出力に、スキップしたアセットの数と理由が表示されます。",
+        "prefixHint": "テーブルがレベルを失ったときにジョブがタグを削除できるよう、キーは他の有効なキーと同じプレフィックス (既定は ontos_) で始めてください。"
       }
     },
     "entityPatterns": {
@@ -1252,11 +1270,44 @@
       "reorderFailed": "並べ替えに失敗しました"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "テーブル、ビュー、メトリックビューのアセットをすべて評価",
+    "description": "現在のAssetレベルで、対象範囲のすべてのテーブル、ビュー、メトリックビューのアセットを評価します。実行開始後に評価済みのアセットはスキップされ、同時に実行できるのは1つだけです。",
+    "catalog": "カタログ（任意）",
+    "schema": "スキーマ（任意）",
+    "start": "アセットを評価",
+    "running": "評価中: {{total}} 件中 {{processed}} 件",
+    "noAssetLevels": "先にAssetレベルを追加してください。ないと何も評価されません。",
+    "lastRun": "前回の実行",
+    "none": "完了した実行はまだありません。",
+    "scope": "対象: {{scope}}",
+    "allCatalogs": "すべてのカタログ",
+    "startedBy": "開始者: {{user}}",
+    "summary": "{{total}} 件: 評価 {{evaluated}} 件、レベル変更 {{changed}} 件、エラー {{errors}} 件。",
+    "skipped": "スキップ",
+    "errors": "エラー",
+    "state": {
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "実行開始後に評価済み",
+      "maturity_bulk_skipped_not_found": "アセットが見つかりません",
+      "maturity_bulk_skipped_no_levels": "Assetレベルがありません",
+      "maturity_bulk_skipped_asset_type": "テーブル、ビュー、メトリックビューのいずれでもありません",
+      "maturity_bulk_skipped_not_stored": "保存されていません: テーブルを読み取れませんでした",
+      "maturity_bulk_evaluation_failed": "評価に失敗しました（サーバーログを確認）",
+      "maturity_bulk_run_failed": "実行が停止しました（サーバーログを確認）",
+      "maturity_bulk_run_in_progress": "一括評価がすでに実行中です。",
+      "maturity_bulk_scope_invalid": "対象範囲が無効です。"
+    }
+  },
   "maturityLevels": {
     "title": "成熟度レベル",
     "description": "データプロダクトと契約の成熟度の段階を定義します。各レベルはコンプライアンスポリシーによってゲートされます。",
     "addLevel": "レベルを追加",
-    "allTypes": "すべてのタイプ",
+    "allTypes": "プロダクトと契約",
     "gateCount_one": "{{count}} 個のゲート",
     "gateCount_other": "{{count}} 個のゲート",
     "complianceGates": "コンプライアンスポリシーゲート",
@@ -1283,7 +1334,8 @@
       "levelNamePreview": "レベル名"
     },
     "entityTypes": {
-      "all": "すべてのエンティティタイプ",
+      "all": "データプロダクトとデータ契約",
+      "Asset": "アセット（テーブル、ビュー、メトリックビュー）",
       "DataProduct": "データプロダクト",
       "DataContract": "データ契約"
     },
@@ -1299,6 +1351,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "このポリシーは LLM_CHECK を使用しますが、LLM_CHECK はコンプライアンス実行でのみ評価されるため、成熟度ゲートはすべてのエンティティを不合格にします。LLM_CHECK を使用しないポリシーを選択してください。"
+    },
+    "assetDefaults": {
+      "load": "アセットの既定レベルを読み込む",
+      "hint": "テーブルとビューのアセット用の既定のラダー (Prerequisite、1 star、2 stars、3 stars) とゲートポリシーの例を追加します",
+      "loadedTitle": "アセットのレベルを読み込みました",
+      "loaded_one": "{{count}} 件のアセットレベルを作成しました",
+      "loaded_other": "{{count}} 件のアセットレベルを作成しました",
+      "alreadyLoaded": "アセットのレベルは既に存在します。何も変更されていません",
+      "loadFailed": "アセットの既定レベルを読み込めませんでした"
     }
   },
   "directory": {

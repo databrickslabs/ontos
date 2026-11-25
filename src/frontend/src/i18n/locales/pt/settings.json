@@ -1053,6 +1053,24 @@
         "descriptionContract": "Marca cada tabela com o status do ciclo de vida do contrato de dados que a usa. Em uma tabela usada por vários contratos, vence o melhor status (active primeiro, retired por último).",
         "valueLabel": "Valor da tag:",
         "sharedKeyHint": "Quando as tags de status do produto e do contrato estão ativadas com a mesma chave, é gravado o status do produto."
+      },
+      "maturityThreshold": {
+        "variable": "true ou false: o número do nível é pelo menos <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<ordem>} com o número de um nível, por exemplo {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "UUID do ativo",
+        "assetType": "Nome do tipo de ativo (Table, View, ...)",
+        "assetFqn": "Nome da tabela no Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nome do nível de maturidade de um ativo tabela ou view (última avaliação)",
+        "assetMaturityOrder": "Número do nível de maturidade de um ativo tabela ou view (1 = primeiro nível)"
+      },
+      "maturity": {
+        "title": "Tag de nível de maturidade",
+        "description": "Marca cada ativo tabela ou view com o seu nível de maturidade (última avaliação). Tabelas sem nível não recebem a tag.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} ou {ASSET.MATURITY_ORDER} na chave ou no valor.",
+        "tablesOnlyHint": "Só tabelas e views com nome no Unity Catalog recebem a tag; schemas e catálogos não. A saída da execução conta os ativos ignorados e o motivo.",
+        "prefixHint": "Comece a chave com o mesmo prefixo das outras chaves ativas (ontos_ por padrão), para que o job possa remover a tag quando uma tabela perde o nível."
       }
     },
     "entityPatterns": {
@@ -1270,11 +1288,44 @@
       "reorderFailed": "Falha ao reordenar"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Avaliar todos os assets de tabela, view e metric view",
+    "description": "Avalia cada asset de tabela, view e metric view do escopo com os níveis de Asset atuais. Um asset avaliado desde o início da execução é ignorado, e só há uma execução por vez.",
+    "catalog": "Catálogo (opcional)",
+    "schema": "Schema (opcional)",
+    "start": "Avaliar assets",
+    "running": "Avaliando: {{processed}} de {{total}} assets",
+    "noAssetLevels": "Crie primeiro os níveis de Asset: sem eles nada é avaliado.",
+    "lastRun": "Última execução",
+    "none": "Nenhuma execução terminou ainda.",
+    "scope": "Escopo: {{scope}}",
+    "allCatalogs": "Todos os catálogos",
+    "startedBy": "Iniciada por {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} avaliados, {{changed}} com nível alterado, {{errors}} erros.",
+    "skipped": "Ignorados",
+    "errors": "Erros",
+    "state": {
+      "running": "Em execução",
+      "completed": "Concluída",
+      "failed": "Falhou"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Avaliado desde o início da execução",
+      "maturity_bulk_skipped_not_found": "Asset não encontrado",
+      "maturity_bulk_skipped_no_levels": "Sem níveis de Asset",
+      "maturity_bulk_skipped_asset_type": "Não é tabela, view nem metric view",
+      "maturity_bulk_skipped_not_stored": "Não armazenado: não foi possível ler a tabela",
+      "maturity_bulk_evaluation_failed": "Falha na avaliação (veja o log do servidor)",
+      "maturity_bulk_run_failed": "A execução parou (veja o log do servidor)",
+      "maturity_bulk_run_in_progress": "Já há uma avaliação em massa em andamento.",
+      "maturity_bulk_scope_invalid": "O escopo não é válido."
+    }
+  },
   "maturityLevels": {
     "title": "Níveis de maturidade",
     "description": "Defina a escala de maturidade para produtos e contratos de dados. Cada nível é condicionado por políticas de conformidade.",
     "addLevel": "Adicionar nível",
-    "allTypes": "Todos os tipos",
+    "allTypes": "Produtos e contratos",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gates",
     "complianceGates": "Gates de políticas de conformidade",
@@ -1301,7 +1352,8 @@
       "levelNamePreview": "Nome do nível"
     },
     "entityTypes": {
-      "all": "Todos os tipos de entidade",
+      "all": "Produtos e contratos de dados",
+      "Asset": "Ativos (tabelas, views e metric views)",
       "DataProduct": "Produtos de dados",
       "DataContract": "Contratos de dados"
     },
@@ -1317,6 +1369,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "Esta política usa LLM_CHECK, que só é avaliado em execuções de conformidade, então um gate de maturidade reprovaria todas as entidades. Selecione uma política sem LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Carregar níveis padrão de ativos",
+      "hint": "Adiciona uma escada padrão para ativos tabela e view (Prerequisite, 1 star, 2 stars, 3 stars) com políticas de gate de exemplo",
+      "loadedTitle": "Níveis de ativos carregados",
+      "loaded_one": "{{count}} nível de ativo criado",
+      "loaded_other": "{{count}} níveis de ativo criados",
+      "alreadyLoaded": "Já existem níveis de ativos: nada foi alterado",
+      "loadFailed": "Não foi possível carregar os níveis padrão de ativos"
     }
   },
   "directory": {

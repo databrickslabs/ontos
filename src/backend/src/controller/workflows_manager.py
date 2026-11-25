@@ -118,6 +118,32 @@ def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optiona
 ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'timestamp')
 
 
+def _update_gate_step_errors(workflow: ProcessWorkflowCreate) -> List[str]:
+    """Steps a ``before_update`` gate can't have are refused.
+
+    Entity actions, asset reviews, deliveries and UC grants commit or act outside
+    the database as the gate runs, so a later step, or another gate, that refuses
+    the update would leave them done (``UPDATE_GATE_REFUSED_STEP_TYPES``). Tag
+    steps are fine: the update writes their change (#1403).
+    """
+    from src.common.workflow_executor import (
+        UPDATE_GATE_REFUSED_STEP_TYPES, UPDATE_GATE_STEP_NOT_ALLOWED,
+    )
+
+    if workflow.trigger is None or workflow.trigger.type != TriggerType.BEFORE_UPDATE:
+        return []
+    errors = []
+    for step in workflow.steps:
+        step_type = getattr(step.step_type, 'value', step.step_type)
+        if step_type in UPDATE_GATE_REFUSED_STEP_TYPES:
+            errors.append(CodedMessage(
+                f"Step '{step.step_id}': a {step_type} step can't run in a before_update "
+                "gate, since what it does would stay done when the update is refused",
+                UPDATE_GATE_STEP_NOT_ALLOWED, step=step.step_id, stepType=step_type,
+            ))
+    return errors
+
+
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
@@ -760,6 +786,7 @@ class WorkflowsManager:
         step_ids = [s.step_id for s in workflow.steps]
         if len(step_ids) != len(set(step_ids)):
             errors.append(CodedMessage("Duplicate step IDs found", 'duplicate_step_ids'))
+        errors.extend(_update_gate_step_errors(workflow))
 
         # Check step references
         step_id_set = set(step_ids)

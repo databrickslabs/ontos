@@ -123,6 +123,10 @@
     "title": "マイアクション",
     "approvals": "承認"
   },
+  "approvalOverdue": {
+    "badge": "期限超過",
+    "hint": "期限を過ぎても待機中です。承認者と申請者にリマインドを送りました。"
+  },
   "quickActions": {
     "title": "クイックアクション",
     "loading": "読み込み中...",

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronRight,
-  LockKeyhole, FileText, BookOpen, Activity, ShieldCheck, ExternalLink, Info,
+  LockKeyhole, FileText, BookOpen, Activity, ShieldCheck, ExternalLink, Info, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +47,7 @@ const COLOR_OPTIONS = ['blue', 'cyan', 'green', 'amber', 'purple', 'red', 'emera
 
 const ENTITY_TYPE_OPTIONS: Array<{ value: string }> = [
   { value: 'all' },
+  { value: 'Asset' },
   { value: 'DataProduct' },
   { value: 'DataContract' },
 ];
@@ -82,7 +83,9 @@ export default function MaturityLevelsSettings() {
     name: '', description: '', icon: 'shield-check', color: 'blue', entity_type: 'all',
   });
   const [saving, setSaving] = useState(false);
+  const [loadingAssetDefaults, setLoadingAssetDefaults] = useState(false);
   const hasFetched = useRef(false);
+  const hasAssetLevels = levels.some(l => l.entity_type === 'Asset');
 
   const fetchLevels = useCallback(async () => {
     try {
@@ -165,6 +168,34 @@ export default function MaturityLevelsSettings() {
       toast({ title: t('common:status.error'), description: err?.message || t('common:errors.saveFailed'), variant: 'destructive' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Optional default ladder for table and view assets (offered while there is none)
+  const handleLoadAssetDefaults = async () => {
+    setLoadingAssetDefaults(true);
+    try {
+      const { data, error } = await post<{ created: number }>(
+        '/api/maturity-levels/asset-defaults', {},
+      );
+      if (error) throw new Error(error);
+      const created = data?.created ?? 0;
+      toast({
+        title: t('maturityLevels.assetDefaults.loadedTitle'),
+        description: created > 0
+          ? t('maturityLevels.assetDefaults.loaded', { count: created })
+          : t('maturityLevels.assetDefaults.alreadyLoaded'),
+      });
+      fetchLevels();
+      fetchPolicies();
+    } catch {
+      toast({
+        title: t('common:status.error'),
+        description: t('maturityLevels.assetDefaults.loadFailed'),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingAssetDefaults(false);
     }
   };
 
@@ -255,9 +286,25 @@ export default function MaturityLevelsSettings() {
             {t('maturityLevels.description')}
           </p>
         </div>
-        <Button onClick={handleOpenCreate} size="sm">
-          <Plus className="h-4 w-4 mr-1" /> {t('maturityLevels.addLevel')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {!hasAssetLevels && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLoadAssetDefaults}
+              disabled={loadingAssetDefaults}
+              title={t('maturityLevels.assetDefaults.hint')}
+            >
+              {loadingAssetDefaults
+                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                : <Download className="h-4 w-4 mr-1" />}
+              {t('maturityLevels.assetDefaults.load')}
+            </Button>
+          )}
+          <Button onClick={handleOpenCreate} size="sm">
+            <Plus className="h-4 w-4 mr-1" /> {t('maturityLevels.addLevel')}
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -283,7 +330,9 @@ export default function MaturityLevelsSettings() {
                   </Badge>
                   <span className="text-sm text-muted-foreground flex-1">{level.description || ''}</span>
                   <Badge variant="secondary" className="text-xs">
-                    {level.entity_type === 'all' ? t('maturityLevels.allTypes') : level.entity_type}
+                    {level.entity_type === 'all'
+                      ? t('maturityLevels.allTypes')
+                      : t(`maturityLevels.entityTypes.${level.entity_type}`)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{t('maturityLevels.gateCount', { count: level.gates?.length || 0 })}</span>
                 </button>

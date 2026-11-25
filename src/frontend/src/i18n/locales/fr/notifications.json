@@ -9,6 +9,14 @@
     "refused": "Votre demande de changement du statut en « {{toStatus}} » a été approuvée, mais le changement n'a pas pu être appliqué : {{reason}}",
     "reviewNotApplied": "La revue du produit de données a été décidée, mais le passage à « {{toStatus}} » n'a pas pu être appliqué : {{reason}}"
   },
+  "approvalOverdue": {
+    "approverTitle": "Approbation en retard",
+    "approverDescription_one": "L'approbation de '{{name}}' attend depuis plus de {{count}} jour. Décidez-la dans Mes actions.",
+    "approverDescription_other": "L'approbation de '{{name}}' attend depuis plus de {{count}} jours. Décidez-la dans Mes actions.",
+    "requesterTitle": "Votre demande est toujours en attente",
+    "requesterDescription_one": "Votre demande pour '{{name}}' attend une décision depuis plus de {{count}} jour. Les approbateurs ont été relancés.",
+    "requesterDescription_other": "Votre demande pour '{{name}}' attend une décision depuis plus de {{count}} jours. Les approbateurs ont été relancés."
+  },
   "contractStatusNotChanged": {
     "title": "Statut du contrat inchangé",
     "notUnderReview": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : le contrat n'est pas en revue (statut « {{currentStatus}} »)",

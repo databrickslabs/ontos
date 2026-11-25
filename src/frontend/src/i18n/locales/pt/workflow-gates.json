@@ -18,6 +18,12 @@
   "invalidStatus": "{{status}} não é um status do ciclo de vida. Use um destes: {{allowed}}.",
   "gateError": "A mudança de status de {{fromStatus}} para {{toStatus}} foi recusada: não foi possível avaliar o gate de workflow {{workflows}}. Peça a um administrador para verificar o workflow.",
   "gateErrorUnnamed": "A mudança de status de {{fromStatus}} para {{toStatus}} foi recusada: não foi possível avaliar um gate de workflow. Peça a um administrador para verificar o workflow.",
+  "updateGate": {
+    "error": "A atualização foi recusada: o gate de workflow {{workflows}} não pôde ser avaliado. Peça a um administrador que verifique o workflow.",
+    "errorUnnamed": "A atualização foi recusada: um gate de workflow não pôde ser avaliado. Peça a um administrador que verifique o workflow.",
+    "tagWriteFailed": "A atualização foi recusada: uma alteração de tag dos gates de workflow não pôde ser salva. Peça a um administrador que verifique o log do servidor.",
+    "tagListWriteFailed": "A atualização foi recusada: as tags dela, verificadas pelos gates de workflow, não puderam ser salvas. Peça a um administrador que verifique o log do servidor."
+  },
   "certifiedDeprecationRequiresApproval": "{{name}} é certificado, então só pode ser descontinuado por uma solicitação de mudança de status aprovada. Solicite a mudança de status.",
   "requestInstead": "Solicitar a mudança de status",
   "certifiedGuard": {

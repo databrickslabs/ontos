@@ -1014,7 +1014,28 @@
     "required": "Requis",
     "advisory": "Indicatif",
     "overTime": "Maturité au fil du temps",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "currentLevel": "Niveau actuel",
+    "nextLevel": "Niveau suivant",
+    "belowFirstLevel": "Sous le premier niveau",
+    "topLevelReached": "Niveau le plus élevé atteint",
+    "noLevels": "Aucun niveau de maturité n'est encore défini pour ce type.",
+    "gateStatus": {
+      "pass": "Réussi",
+      "fail": "Échoué",
+      "warn": "Non satisfait"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog est injoignable, les champs de la table {{tableName}} sont donc absents.",
+    "maturity_uc_table_unreadable": "La table {{tableName}} ne peut pas être lue depuis Unity Catalog, ses champs sont donc manquants.",
+    "maturity_uc_table_read_failed": "La table {{tableName}} n'a pas pu être lue depuis Unity Catalog, ses champs sont donc absents.",
+    "maturity_gate_error": "Le gate {{gateName}} n'a pas pu être évalué. Les détails figurent dans le journal du serveur.",
+    "maturity_level_partial": "Le niveau ne compte que les contrôles qui n'ont pas besoin de la table {{tableName}} ; l'actif peut atteindre un niveau plus élevé."
+  },
+  "maturityResult": {
+    "notStored": "Calculé maintenant et non enregistré : l'historique montre les évaluations enregistrées. Réévaluez pour enregistrer ce résultat.",
+    "notEvaluated": "Non évalué"
   },
   "createDialog": {
     "editTitle": "Modifier les métadonnées du produit de données",

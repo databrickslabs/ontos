@@ -26,6 +26,7 @@ import { LineageEditor } from '@/components/common/lineage-editor';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
+import { MaturityPanel } from '@/components/data-products/maturity-panel';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
@@ -147,6 +148,8 @@ export default function AssetDetailView() {
 
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
+  // Maturity levels apply to table and view assets (MATURITY_ASSET_TYPES in the backend)
+  const hasMaturity = entityType === 'Table' || entityType === 'View';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
 
   const fetchAsset = useCallback(async () => {
@@ -431,6 +434,13 @@ export default function AssetDetailView() {
               )}
             </CardContent>
           </Card>
+
+          {/* Maturity of a table or view: current and next level, each gate and why it failed */}
+          {hasMaturity && (
+            <div data-testid="asset-maturity">
+              <MaturityPanel entityType="Asset" entityId={asset.id} />
+            </div>
+          )}
 
           {/* Type-specific: BusinessTerm - Definition & Synonyms */}
           {isBusinessTerm && asset.properties && (

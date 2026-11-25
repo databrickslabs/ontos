@@ -1053,6 +1053,24 @@
         "descriptionContract": "Tags each table with the lifecycle status of the data contract that uses it. On a table used by several contracts, the best status wins (active first, retired last).",
         "valueLabel": "Tag value:",
         "sharedKeyHint": "When the product and contract status tags are both enabled with the same key, the product's status is written."
+      },
+      "maturityThreshold": {
+        "variable": "true or false: the level number is at least <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<order>} with a level number, for example {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "Asset UUID",
+        "assetType": "Asset type name (Table, View, ...)",
+        "assetFqn": "Unity Catalog name of the table (catalog.schema.table)",
+        "assetMaturity": "Maturity level name of a table or view asset (latest evaluation)",
+        "assetMaturityOrder": "Maturity level number of a table or view asset (1 = first level)"
+      },
+      "maturity": {
+        "title": "Maturity level tag",
+        "description": "Tags each table or view asset with its maturity level (latest evaluation). Tables without a level get no tag.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} or {ASSET.MATURITY_ORDER} in the key or the value.",
+        "tablesOnlyHint": "Only tables and views with a Unity Catalog name are tagged; schemas and catalogs are not. The run output counts the assets it skipped and why.",
+        "prefixHint": "Start the key with the same prefix as the other enabled keys (ontos_ by default), so the job can remove the tag when a table loses its level."
       }
     },
     "entityPatterns": {
@@ -1270,11 +1288,44 @@
       "reorderFailed": "Failed to reorder"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Evaluate all table, view and metric view assets",
+    "description": "Evaluates every table, view and metric view asset in the scope with the current Asset levels. An asset evaluated since the run started is skipped, and only one run goes at a time.",
+    "catalog": "Catalog (optional)",
+    "schema": "Schema (optional)",
+    "start": "Evaluate assets",
+    "running": "Evaluating: {{processed}} of {{total}} assets",
+    "noAssetLevels": "Add Asset levels first: without them nothing is evaluated.",
+    "lastRun": "Last run",
+    "none": "No run has finished yet.",
+    "scope": "Scope: {{scope}}",
+    "allCatalogs": "All catalogs",
+    "startedBy": "Started by {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} evaluated, {{changed}} changed level, {{errors}} errors.",
+    "skipped": "Skipped",
+    "errors": "Errors",
+    "state": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Evaluated since the run started",
+      "maturity_bulk_skipped_not_found": "Asset not found",
+      "maturity_bulk_skipped_no_levels": "No Asset levels",
+      "maturity_bulk_skipped_asset_type": "Not a table, view or metric view",
+      "maturity_bulk_skipped_not_stored": "Not stored: the table couldn't be read",
+      "maturity_bulk_evaluation_failed": "Evaluation failed (see the server log)",
+      "maturity_bulk_run_failed": "The run stopped (see the server log)",
+      "maturity_bulk_run_in_progress": "A bulk evaluation is already running.",
+      "maturity_bulk_scope_invalid": "The scope is not valid."
+    }
+  },
   "maturityLevels": {
     "title": "Maturity Levels",
     "description": "Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",
     "addLevel": "Add Level",
-    "allTypes": "All types",
+    "allTypes": "Products and contracts",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gates",
     "complianceGates": "Compliance Policy Gates",
@@ -1301,7 +1352,8 @@
       "levelNamePreview": "Level Name"
     },
     "entityTypes": {
-      "all": "All Entity Types",
+      "all": "Data products and contracts",
+      "Asset": "Assets (tables, views and metric views)",
       "DataProduct": "Data Products",
       "DataContract": "Data Contracts"
     },
@@ -1317,6 +1369,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "This policy uses LLM_CHECK, which is only evaluated in compliance runs, so a maturity gate would fail every entity. Select a policy without LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Load default asset levels",
+      "hint": "Adds a default ladder for table and view assets (Prerequisite, 1 star, 2 stars, 3 stars) with example gate policies",
+      "loadedTitle": "Asset levels loaded",
+      "loaded_one": "{{count}} asset level created",
+      "loaded_other": "{{count}} asset levels created",
+      "alreadyLoaded": "Asset levels exist already: nothing was changed",
+      "loadFailed": "The default asset levels could not be loaded"
     }
   },
   "directory": {

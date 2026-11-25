@@ -404,6 +404,11 @@
     "errorAssigning": "オーナーの割り当てエラー",
     "ownerUserAria": "オーナーユーザー"
   },
+  "assignOwnerRole": {
+    "noRoles": "ビジネスロールが設定されていません。管理者に追加を依頼してください。",
+    "ownerBadge": "オーナー",
+    "notOwnerHint": "このロールのオーナーは、オーナー向けの承認や通知を受け取りません。受け取るには Data Owner または Owner を選択してください。"
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} バージョン",
     "countBadge_other": "{{count}} バージョン"

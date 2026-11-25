@@ -21,6 +21,45 @@ class SemanticLinksManager:
     def __init__(self, db: Session, semantic_models_manager: Optional['SemanticModelsManager'] = None):
         self._db = db
         self._semantic_models_manager = semantic_models_manager
+        # Graph changes of links written with commit=False, applied by apply_graph_changes
+        self._pending_graph_changes: List[tuple] = []
+
+    def _models_manager(self):
+        """The shared semantic models manager (app state), else None."""
+        manager = self._semantic_models_manager
+        if manager is None:
+            try:
+                # Preferred runtime path: retrieve the shared application manager.
+                from src.common.app_state import get_app_state_manager
+                manager = get_app_state_manager('semantic_models_manager')
+            except Exception:
+                manager = None
+        return manager
+
+    def _log_link_change(self, commit: bool, **entry: Any) -> None:
+        """A change-log entry; with ``commit=False`` in a savepoint and not committed."""
+        if commit:
+            change_log_manager.log_change_with_details(self._db, **entry)
+        else:
+            with self._db.begin_nested():
+                change_log_manager.log_change_with_details(self._db, **entry, commit=False)
+
+    def apply_graph_changes(self) -> None:
+        """Apply to the knowledge graph the link changes written with ``commit=False``.
+
+        Call once the caller committed them; a rolled-back caller drops them instead
+        (``discard_graph_changes``).
+        """
+        changes, self._pending_graph_changes = self._pending_graph_changes, []
+        for kind, entity_type, entity_id, iri, created_by in changes:
+            if kind == 'add':
+                self._add_to_graph(entity_type, entity_id, iri, created_by)
+            else:
+                self._remove_from_graph(entity_type, entity_id, iri)
+
+    def discard_graph_changes(self) -> None:
+        """Forget the pending graph changes (the caller rolled the links back)."""
+        self._pending_graph_changes = []
 
     def _resolve_entity_name(self, entity_id: str, entity_type: str) -> Optional[str]:
         """Resolve the readable name for an entity based on its type and ID."""
@@ -355,7 +394,12 @@ class SemanticLinksManager:
         existing = entity_semantic_links_repo.get_by_entity_and_iri(self._db, entity_id, entity_type, iri)
         return existing is not None
 
-    def add(self, payload: EntitySemanticLinkCreate, created_by: str | None) -> EntitySemanticLink:
+    def add(
+        self, payload: EntitySemanticLinkCreate, created_by: str | None, commit: bool = True,
+    ) -> EntitySemanticLink:
+        """Add a link. With ``commit=False`` (inside the caller's transaction, e.g. a
+        contract update) it is written in a savepoint, not committed, and the graph is
+        updated only by ``apply_graph_changes`` once the caller committed."""
         # Check if link already exists
         if self._link_exists(payload.entity_id, payload.entity_type, payload.iri):
             # Return existing link instead of creating a duplicate
@@ -366,39 +410,22 @@ class SemanticLinksManager:
             return self._to_api(existing)
         
         # Create new link
-        db_obj = entity_semantic_links_repo.create(self._db, obj_in=payload)
-        if created_by:
-            db_obj.created_by = created_by
-            self._db.add(db_obj)
-        self._db.commit()
-        self._db.refresh(db_obj)
-        
-        # Incrementally update the in-memory RDF graph via the shared manager on app.state
-        try:
-            manager = self._semantic_models_manager
-            if manager is None:
-                try:
-                    # Preferred runtime path: retrieve the shared application manager.
-                    from src.common.app_state import get_app_state_manager
-                    manager = get_app_state_manager('semantic_models_manager')
-                except Exception:
-                    manager = None
-            if manager is not None:
-                manager.add_entity_semantic_link_to_graph(payload.entity_type, payload.entity_id, payload.iri, created_by=created_by)
-                # The new triple changes which entities resolve to a concept,
-                # so any cached concept/property/stat snapshot is now stale.
-                manager._invalidate_cache()
-            else:
-                # As a safe fallback, perform a lightweight rebuild using a temp instance
-                from src.controller.semantic_models_manager import SemanticModelsManager
-                SemanticModelsManager(db=self._db).on_models_changed()
-        except Exception as e:
-            logger.warning(f"Failed to update KG after link add: {e}")
-        
+        if commit:
+            db_obj = self._create_link(payload, created_by)
+            self._db.commit()
+            self._db.refresh(db_obj)
+            self._add_to_graph(payload.entity_type, payload.entity_id, payload.iri, created_by)
+        else:
+            with self._db.begin_nested():
+                db_obj = self._create_link(payload, created_by)
+            self._pending_graph_changes.append(
+                ('add', payload.entity_type, payload.entity_id, payload.iri, created_by),
+            )
+
         # Change log entry for semantic link addition
         try:
-            change_log_manager.log_change_with_details(
-                self._db,
+            self._log_link_change(
+                commit,
                 entity_type=payload.entity_type,
                 entity_id=payload.entity_id,
                 action="SEMANTIC_LINK_ADD",
@@ -412,33 +439,66 @@ class SemanticLinksManager:
             logger.warning(f"Failed to log change for semantic link add: {log_err}")
         return self._to_api(db_obj)
 
-    def remove(self, link_id: Union[str, UUID], removed_by: Optional[str] = None) -> bool:
-        removed = entity_semantic_links_repo.remove(self._db, id=link_id)
+    def _create_link(self, payload: EntitySemanticLinkCreate, created_by: str | None):
+        db_obj = entity_semantic_links_repo.create(self._db, obj_in=payload)
+        if created_by:
+            db_obj.created_by = created_by
+            self._db.add(db_obj)
+        return db_obj
+
+    def _add_to_graph(self, entity_type: str, entity_id: str, iri: str, created_by) -> None:
+        """Incrementally update the in-memory RDF graph via the shared manager on app.state."""
         try:
-            manager = self._semantic_models_manager
-            if manager is None:
-                try:
-                    from src.common.app_state import get_app_state_manager
-                    manager = get_app_state_manager('semantic_models_manager')
-                except Exception:
-                    manager = None
-            if removed:
-                if manager is not None:
-                    manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
-                    # Mirror of the add path: the removed triple invalidates
-                    # cached concepts/properties/stats and the inferred-link cache.
-                    manager._invalidate_cache()
-                else:
-                    from src.controller.semantic_models_manager import SemanticModelsManager
-                    SemanticModelsManager(db=self._db).on_models_changed()
+            manager = self._models_manager()
+            if manager is not None:
+                manager.add_entity_semantic_link_to_graph(
+                    entity_type, entity_id, iri, created_by=created_by,
+                )
+                # The new triple changes which entities resolve to a concept,
+                # so any cached concept/property/stat snapshot is now stale.
+                manager._invalidate_cache()
+            else:
+                # As a safe fallback, perform a lightweight rebuild using a temp instance
+                from src.controller.semantic_models_manager import SemanticModelsManager
+                SemanticModelsManager(db=self._db).on_models_changed()
+        except Exception as e:
+            logger.warning(f"Failed to update KG after link add: {e}")
+
+    def _remove_from_graph(self, entity_type: str, entity_id: str, iri: str) -> None:
+        try:
+            manager = self._models_manager()
+            if manager is not None:
+                manager.remove_entity_semantic_link_from_graph(entity_type, entity_id, iri)
+                # Mirror of the add path: the removed triple invalidates
+                # cached concepts/properties/stats and the inferred-link cache.
+                manager._invalidate_cache()
+            else:
+                from src.controller.semantic_models_manager import SemanticModelsManager
+                SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
             logger.warning(f"Failed to update KG after link removal: {e}")
-        
+
+    def remove(
+        self, link_id: Union[str, UUID], removed_by: Optional[str] = None, commit: bool = True,
+    ) -> bool:
+        """Remove a link; ``commit=False`` as for ``add`` (only flushed, graph deferred)."""
+        if commit:
+            removed = entity_semantic_links_repo.remove(self._db, id=link_id)
+        else:
+            with self._db.begin_nested():
+                removed = entity_semantic_links_repo.remove(self._db, id=link_id)
+        if removed and commit:
+            self._remove_from_graph(removed.entity_type, removed.entity_id, removed.iri)
+        elif removed:
+            self._pending_graph_changes.append(
+                ('remove', removed.entity_type, removed.entity_id, removed.iri, None),
+            )
+
         # Change log entry for semantic link removal
         try:
             if removed is not None:
-                change_log_manager.log_change_with_details(
-                    self._db,
+                self._log_link_change(
+                    commit,
                     entity_type=removed.entity_type,
                     entity_id=removed.entity_id,
                     action="SEMANTIC_LINK_REMOVE",

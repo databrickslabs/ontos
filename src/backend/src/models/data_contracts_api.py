@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 from src.common.payload_spellings import CamelCaseSpellingWins
-from src.common.odcs_api_version import normalized_api_version
+from src.common.odcs_api_version import normalize_odcs_api_version, normalized_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -465,6 +465,8 @@ class DataContractBase(CamelCaseSpellingWins):
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
+    # (the camelCase one wins when both are sent); refused outside the ODCS versions,
+    # null included (coded 422 odcs_api_version_unsupported)
     apiVersion: str = Field('v3.1.0', alias='api_version')
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
     # Multi-domain assignment (primary included). The create dialogs send the fields by
@@ -479,8 +481,7 @@ class DataContractBase(CamelCaseSpellingWins):
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
 
-    # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
-    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+    _api_version = field_validator('apiVersion', mode='before')(normalize_odcs_api_version)
 
     class Config:
         # The create dialogs and the wizard send the field names (dataProduct, tenant,
@@ -622,7 +623,7 @@ class DataContractUpdate(CamelCaseSpellingWins):
     class Config:
         populate_by_name = True
 
-    # Spelling only ('3.0.2' -> 'v3.0.2'), as on create
+    # Spelling only: the manager refuses a change to a value outside ODCS
     _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
 
 

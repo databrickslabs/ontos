@@ -512,7 +512,7 @@ async def upload_shared_document(
             level=level,
             inheritable=inheritable,
         )
-        result = manager.create_document_record(
+        result = manager.create_shared_document_record(
             db,
             data=payload,
             filename=filename,

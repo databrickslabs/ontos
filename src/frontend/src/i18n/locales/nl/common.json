@@ -404,6 +404,11 @@
     "errorAssigning": "Fout bij toewijzen eigenaar",
     "ownerUserAria": "Eigenaargebruiker"
   },
+  "assignOwnerRole": {
+    "noRoles": "Er zijn geen bedrijfsrollen geconfigureerd. Vraag een beheerder er een toe te voegen.",
+    "ownerBadge": "Eigenaar",
+    "notOwnerHint": "Eigenaren met deze rol ontvangen geen eigenaarsgoedkeuringen of -meldingen. Kies daarvoor Data Owner of Owner."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} versie",
     "countBadge_other": "{{count}} versies"

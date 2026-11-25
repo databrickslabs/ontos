@@ -404,6 +404,11 @@
     "errorAssigning": "Erreur lors de l'attribution du propriétaire",
     "ownerUserAria": "Utilisateur propriétaire"
   },
+  "assignOwnerRole": {
+    "noRoles": "Aucun rôle métier n'est configuré. Demandez à un administrateur d'en créer un.",
+    "ownerBadge": "Propriétaire",
+    "notOwnerHint": "Les propriétaires ayant ce rôle ne reçoivent ni les approbations ni les notifications de propriétaire. Choisissez Data Owner ou Owner pour cela."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} version",
     "countBadge_other": "{{count}} versions"

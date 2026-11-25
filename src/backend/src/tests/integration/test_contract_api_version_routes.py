@@ -91,3 +91,31 @@ def test_a_create_stores_the_data_product_under_either_spelling(client, db_sessi
     created = _create(client, **fields)
 
     assert db_session.get(DataContractDb, created["id"]).data_product == "orders-dp"
+
+
+def test_a_create_outside_odcs_answers_422_with_the_code_through_the_real_app(
+    client, db_session
+):
+    """The real app's handlers, not a bare FastAPI app, shape the refusal."""
+    resp = client.post("/api/data-contracts", json={
+        "name": f"Orders {uuid.uuid4().hex[:6]}", "version": "1.0.0", "apiVersion": "v4.0.0",
+    })
+
+    assert resp.status_code == 422, resp.text
+    [detail] = resp.json()["detail"]
+    assert detail["type"] == "odcs_api_version_unsupported"
+    assert detail["ctx"] == {"api_version": "v4.0.0"}
+
+
+def test_an_update_outside_odcs_answers_400_with_the_code_through_the_real_app(
+    client, db_session
+):
+    contract = _create(client, apiVersion="v3.0.0")
+
+    resp = client.put(f"/api/data-contracts/{contract['id']}", json={"apiVersion": "v9.9.9"})
+
+    assert resp.status_code == 400, resp.text
+    detail = resp.json()["detail"]
+    assert (detail["code"], detail["params"]) == (
+        "odcs_api_version_unsupported", {"api_version": "v9.9.9"},
+    )

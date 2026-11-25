@@ -180,3 +180,32 @@ def test_a_failing_before_update_gate_refuses_both_ways(
                       json={'description': {'purpose': 'edited with PUT'}})
     assert resp.status_code == 400, resp.text
     assert resp.json()['detail']['message'] == 'Pre-update validation failed'
+
+
+def test_a_fail_closed_before_update_gate_that_raises_refuses_the_put(
+    client, db_session, monkeypatch
+):
+    from src.common.workflow_executor import WorkflowExecutor
+
+    gate = _workflow(db_session, 'before_update')
+    row = db_session.get(ProcessWorkflowDb, gate)
+    row.trigger_config = json.dumps({
+        'type': 'before_update', 'entity_types': ['data_contract'], 'on_error': 'fail_closed',
+    })
+    name = row.name
+    db_session.commit()
+    created = client.post('/api/data-contracts', json={
+        'name': f'Closed {uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+    })
+    assert created.status_code in (200, 201), created.text
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError('database went away while evaluating the gate')
+
+    monkeypatch.setattr(WorkflowExecutor, 'execute_workflow', boom)
+    resp = client.put(f"/api/data-contracts/{created.json()['id']}", json={'name': 'Renamed'})
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()['detail']['code'] == 'update_gate_error'
+    # Last: the refused request rolls back the test's shared session
+    assert resp.json()['detail']['params']['workflows'] == [name]

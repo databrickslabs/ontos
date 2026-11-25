@@ -9,6 +9,7 @@ import copy
 import os
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -17,6 +18,7 @@ from sqlalchemy.orm import sessionmaker
 from src.common.search_config_loader import SearchConfigLoader
 from src.common.search_interfaces import SearchIndexItem
 from src.controller import search_scoring
+from src.controller.data_domains_manager import DataDomainManager
 from src.db_models.search_documents import SearchDocumentDb
 from src.models.search_config import MatchType, SortField
 from src.repositories import search_repository as repo
@@ -56,6 +58,13 @@ def _item(id_, type_, feature_id, title, description="", tags=None, extra=None):
     )
 
 
+def _domain_item():
+    """A real domain item built by the manager, with a user email as creator."""
+    db_domain = SimpleNamespace(id="d-7", name="Customer Domain", description="All things customer",
+                                status="active", created_by="alice@example.com")
+    return DataDomainManager._build_search_index_item(None, db_domain)
+
+
 ITEMS = [
     _item("product::1", "data-product", "data-products", "Customer Churn",
           "Predicts customer churn risk for retention", tags=["ml", "customer/retention"],
@@ -75,8 +84,7 @@ ITEMS = [
           extra={"status": "proposed", "domain": "Customer"}),
     _item("glossary::6", "glossary-term", "semantic-models", "Customer Lifetime Value",
           "Predicted net revenue from a customer", tags=["metric"], extra={"domain": "Finance"}),
-    _item("domain::7", "data-domain", "data-domains", "Customer Domain",
-          "All things customer", extra={}),
+    _domain_item(),
     _item("asset::8", "asset-table", "assets", "sales_orders_daily",
           "Daily orders aggregated", tags=["sales"], extra={"status": "active"}),
     _item("team::9", "team", "teams", "Retention Squad", "Owns churn initiatives", extra={}),
@@ -217,9 +225,16 @@ def test_facets_include_owner_and_count_matches(seeded):
 
 @pytest.mark.parametrize("query", ["customer", "*"])
 def test_facets_expose_no_user_identifiers(seeded, query):
-    """Owner facets carry the owning team, never a username or email, on both backends."""
+    """Owner facets carry the owning team, never a username or email, on both backends.
+
+    The seeded domain has a creator email; it must match the query (so the check
+    is not vacuous) and must not leak into any facet.
+    """
     config = VARIANTS["shipped"]
-    pg = repo.search(seeded, query, config=config, limit=100)["facets"]
-    mem = search_scoring.search_index(_memory_items(config), query, config, limit=100)["facets"]
-    for facets in (pg, mem):
+    pg_res = repo.search(seeded, query, config=config, limit=100)
+    mem_res = search_scoring.search_index(_memory_items(config), query, config, limit=100)
+    if query == "customer":
+        assert any(r["id"].endswith("d-7") for r in pg_res["results"])
+        assert any(r["id"].endswith("d-7") for r in mem_res["results"])
+    for facets in (pg_res["facets"], mem_res["facets"]):
         assert not [v for counts in facets.values() for v in counts if "@" in str(v)]

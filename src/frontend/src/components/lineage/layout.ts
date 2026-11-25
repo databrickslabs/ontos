@@ -56,7 +56,7 @@ export interface LayoutConfig {
   maxChildrenShown: number; // collapse after N children
   /** Which child rows cards show — see LineageDetail */
   detail: LineageDetail;
-  /** Rows always shown regardless of detail (e.g. the selected path) */
+  /** Field rows shown at Structure detail too (e.g. the selected row); Entities still shows none */
   alwaysShow?: Set<string> | null;
 }
 
@@ -416,9 +416,11 @@ export function layoutLineageGraph(
     const children: LineageGraphNode[] = [];
     const childDepths: number[] = [];
     all.nodes.forEach((c, i) => {
-      const show = config.alwaysShow?.has(c.id)
-        || config.detail === 'fields'
-        || (config.detail === 'structure' && !FIELD_TYPES.has(c.entity_type));
+      // The detail level wins: Entities shows cards only, even for the
+      // selected row (its edges land on the card instead)
+      const show = config.detail === 'fields'
+        || (config.detail === 'structure'
+          && (!FIELD_TYPES.has(c.entity_type) || !!config.alwaysShow?.has(c.id)));
       if (show) {
         children.push(c);
         childDepths.push(all.depths[i]);

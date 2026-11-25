@@ -15,6 +15,7 @@ from src.models.compliance_templates import (
     ComplianceTemplateCreate,
     ComplianceTemplateRead,
     ComplianceValueRead,
+    ComplianceValueType,
     ComplianceValueWrite,
     EntityComplianceRead,
 )
@@ -215,9 +216,13 @@ class ComplianceTemplatesManager:
         has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0
 
         # The route passes a raw JSON dict, so value_type may be a plain string OR a ComplianceValueType enum.
-        new_value_type = payload.get("value_type")
-        if new_value_type is not None:
-            payload["value_type"] = getattr(new_value_type, "value", new_value_type)
+        # Validate before anything is read or written: an unknown type must be a 400, never a committed row.
+        if "value_type" in payload:
+            raw_value_type = getattr(payload["value_type"], "value", payload["value_type"])
+            try:
+                payload["value_type"] = ComplianceValueType(raw_value_type).value
+            except (ValueError, TypeError):
+                raise ComplianceTemplateError(f"Unknown value type '{raw_value_type}'.")
 
         if has_stored_values:
             if payload.get("value_type") is not None and payload["value_type"] != field.value_type:

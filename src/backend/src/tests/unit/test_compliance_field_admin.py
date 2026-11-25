@@ -491,3 +491,55 @@ class TestCanEditValuesOfAProduct(unittest.TestCase):
     def test_other_entity_types_keep_feature_check_only(self):
         owns_check = self._check(None, entity_type="other_entity")
         owns_check.assert_not_called()
+
+
+class TestUpdateFieldValueTypeValidation(unittest.TestCase):
+    """An unknown value_type must be rejected before anything is persisted (400, not a committed 500)."""
+
+    def setUp(self):
+        self.manager = ComplianceTemplatesManager()
+        self.field_id = uuid4()
+        self.field = ComplianceTemplateFieldDb(
+            id=self.field_id,
+            template_id=uuid4(),
+            key="test_field",
+            label="Test Field",
+            reference_id="test_field",
+            value_type="string",
+            is_mandatory=False,
+        )
+
+    def _update(self, payload, stored_values=0):
+        db = MagicMock()
+        with patch.object(compliance_templates_repo, "get_field", return_value=self.field), \
+             patch.object(compliance_templates_repo, "count_field_values", return_value=stored_values), \
+             patch.object(compliance_templates_repo, "update_field") as repo_update:
+            with self.assertRaises(ComplianceTemplateError) as ctx:
+                self.manager.update_field(db, field_id=self.field_id, payload=payload)
+        repo_update.assert_not_called()
+        db.commit.assert_not_called()
+        return ctx.exception
+
+    def test_bogus_value_type_is_rejected_and_nothing_persisted(self):
+        err = self._update({"value_type": "bogus"})
+        self.assertIn("Unknown value type", str(err))
+
+    def test_bogus_value_type_rejected_when_values_exist(self):
+        self._update({"value_type": "bogus"}, stored_values=3)
+
+    def test_explicit_null_value_type_is_rejected(self):
+        self._update({"value_type": None})
+
+    def test_non_string_value_type_is_rejected(self):
+        self._update({"value_type": {"nested": "x"}})
+
+    def test_valid_value_type_string_is_accepted(self):
+        db = MagicMock()
+        with patch.object(compliance_templates_repo, "get_field", return_value=self.field), \
+             patch.object(compliance_templates_repo, "count_field_values", return_value=0), \
+             patch.object(compliance_templates_repo, "update_field") as repo_update:
+            repo_update.return_value = self.field
+            with patch("src.controller.compliance_templates_manager.ComplianceFieldRead.model_validate"):
+                self.manager.update_field(db, field_id=self.field_id, payload={"value_type": "numeric"})
+        self.assertEqual(repo_update.call_args.kwargs["update_data"]["value_type"], "numeric")
+        db.commit.assert_called_once()

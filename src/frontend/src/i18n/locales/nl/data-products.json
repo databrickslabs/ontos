@@ -379,7 +379,7 @@
     },
     "contractDangling": "Contract bestaat niet meer",
     "errors": {
-      "complianceIncomplete": "__TODO__ Cannot publish: required compliance fields are missing: {{missing}}."
+      "complianceIncomplete": "Publiceren niet mogelijk: verplichte compliancevelden ontbreken: {{missing}}."
     }
   },
   "form": {
@@ -1221,25 +1221,25 @@
   },
   "compliance": {
     "modal": {
-      "defaultTitle": "__TODO__ Compliance",
-      "descriptionWrite": "__TODO__ Complete the compliance information for this item.",
-      "descriptionReadOnly": "__TODO__ Compliance information for this item (read-only).",
-      "noTemplate": "__TODO__ No active compliance template for this item.",
-      "loadFailed": "__TODO__ Failed to load compliance data",
-      "saved": "__TODO__ Saved",
-      "savedDescription": "__TODO__ Compliance information updated.",
-      "saveFailed": "__TODO__ Failed to save",
-      "yes": "__TODO__ Yes",
-      "no": "__TODO__ No",
-      "selectPlaceholder": "__TODO__ Select…",
-      "noOptions": "__TODO__ No options defined.",
-      "low": "__TODO__ Low",
-      "high": "__TODO__ High",
-      "rangeLowLabel": "__TODO__ {{label}} low",
-      "rangeHighLabel": "__TODO__ {{label}} high",
-      "cancel": "__TODO__ Cancel",
-      "close": "__TODO__ Close",
-      "save": "__TODO__ Save"
+      "defaultTitle": "Compliance",
+      "descriptionWrite": "Vul de complianceinformatie voor dit item in.",
+      "descriptionReadOnly": "Complianceinformatie voor dit item (alleen-lezen).",
+      "noTemplate": "Er is geen actieve compliancesjabloon voor dit item.",
+      "loadFailed": "Compliancegegevens laden mislukt",
+      "saved": "Opgeslagen",
+      "savedDescription": "Complianceinformatie bijgewerkt.",
+      "saveFailed": "Opslaan mislukt",
+      "yes": "Ja",
+      "no": "Nee",
+      "selectPlaceholder": "Selecteren…",
+      "noOptions": "Geen opties gedefinieerd.",
+      "low": "Laag",
+      "high": "Hoog",
+      "rangeLowLabel": "{{label}} minimum",
+      "rangeHighLabel": "{{label}} maximum",
+      "cancel": "Annuleren",
+      "close": "Sluiten",
+      "save": "Opslaan"
     }
   }
 }

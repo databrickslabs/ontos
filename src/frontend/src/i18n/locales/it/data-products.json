@@ -379,7 +379,7 @@
     },
     "contractDangling": "Il contratto non esiste più",
     "errors": {
-      "complianceIncomplete": "__TODO__ Cannot publish: required compliance fields are missing: {{missing}}."
+      "complianceIncomplete": "Impossibile pubblicare: mancano i campi di conformità obbligatori: {{missing}}."
     }
   },
   "form": {
@@ -1221,25 +1221,25 @@
   },
   "compliance": {
     "modal": {
-      "defaultTitle": "__TODO__ Compliance",
-      "descriptionWrite": "__TODO__ Complete the compliance information for this item.",
-      "descriptionReadOnly": "__TODO__ Compliance information for this item (read-only).",
-      "noTemplate": "__TODO__ No active compliance template for this item.",
-      "loadFailed": "__TODO__ Failed to load compliance data",
-      "saved": "__TODO__ Saved",
-      "savedDescription": "__TODO__ Compliance information updated.",
-      "saveFailed": "__TODO__ Failed to save",
-      "yes": "__TODO__ Yes",
-      "no": "__TODO__ No",
-      "selectPlaceholder": "__TODO__ Select…",
-      "noOptions": "__TODO__ No options defined.",
-      "low": "__TODO__ Low",
-      "high": "__TODO__ High",
-      "rangeLowLabel": "__TODO__ {{label}} low",
-      "rangeHighLabel": "__TODO__ {{label}} high",
-      "cancel": "__TODO__ Cancel",
-      "close": "__TODO__ Close",
-      "save": "__TODO__ Save"
+      "defaultTitle": "Conformità",
+      "descriptionWrite": "Completa le informazioni di conformità per questo elemento.",
+      "descriptionReadOnly": "Informazioni di conformità per questo elemento (sola lettura).",
+      "noTemplate": "Nessun modello di conformità attivo per questo elemento.",
+      "loadFailed": "Impossibile caricare i dati di conformità",
+      "saved": "Salvato",
+      "savedDescription": "Informazioni di conformità aggiornate.",
+      "saveFailed": "Salvataggio non riuscito",
+      "yes": "Sì",
+      "no": "No",
+      "selectPlaceholder": "Seleziona…",
+      "noOptions": "Nessuna opzione definita.",
+      "low": "Basso",
+      "high": "Alto",
+      "rangeLowLabel": "{{label}} minimo",
+      "rangeHighLabel": "{{label}} massimo",
+      "cancel": "Annulla",
+      "close": "Chiudi",
+      "save": "Salva"
     }
   }
 }

@@ -114,7 +114,7 @@
     "dataProductTypes": "Types de produit de données",
     "certificationLevels": "Niveaux de certification",
     "maturityLevels": "Niveaux de maturité",
-    "complianceTemplates": "__TODO__ Compliance Templates"
+    "complianceTemplates": "Modèles de conformité"
   },
   "accessDenied": {
     "title": "Accès refusé",
@@ -1544,85 +1544,85 @@
     }
   },
   "complianceTemplates": {
-    "title": "__TODO__ Compliance Templates",
-    "intro": "__TODO__ Define typed, grouped governance fields bound to an entity type. Exactly one template can be active per entity type.",
-    "addTemplate": "__TODO__ Add Template",
+    "title": "Modèles de conformité",
+    "intro": "Définissez des champs de gouvernance typés et regroupés, liés à un type d’entité. Un seul modèle peut être actif par type d’entité.",
+    "addTemplate": "Ajouter un modèle",
     "columns": {
-      "name": "__TODO__ Name",
-      "entityType": "__TODO__ Entity Type",
-      "fields": "__TODO__ Fields",
-      "status": "__TODO__ Status",
-      "actions": "__TODO__ Actions"
+      "name": "Nom",
+      "entityType": "Type d’entité",
+      "fields": "Champs",
+      "status": "Statut",
+      "actions": "Actions"
     },
     "entityTypes": {
-      "data_product": "__TODO__ Data Products"
+      "data_product": "Produits de données"
     },
     "status": {
-      "active": "__TODO__ Active",
-      "inactive": "__TODO__ Inactive"
+      "active": "Actif",
+      "inactive": "Inactif"
     },
     "actions": {
-      "edit": "__TODO__ Edit",
-      "activate": "__TODO__ Activate",
-      "deactivate": "__TODO__ Deactivate"
+      "edit": "Modifier",
+      "activate": "Activer",
+      "deactivate": "Désactiver"
     },
-    "emptyState": "__TODO__ No compliance templates configured. Click \"Add Template\" to create one.",
+    "emptyState": "Aucun modèle de conformité configuré. Cliquez sur « Ajouter un modèle » pour en créer un.",
     "dialog": {
-      "editTitle": "__TODO__ Edit Compliance Template",
-      "createTitle": "__TODO__ Add Compliance Template",
-      "editDescription": "__TODO__ Edit fields, defaults, hints and mandatory flags. Changing a field’s type or removing a field/enum value is blocked when products have already stored values.",
-      "createDescription": "__TODO__ Create a template and optionally add fields. Activate it to make it available on the bound entity type.",
-      "name": "__TODO__ Name",
-      "namePlaceholder": "__TODO__ e.g., Terms of Use",
-      "description": "__TODO__ Description",
-      "descriptionPlaceholder": "__TODO__ What this template captures...",
-      "entityType": "__TODO__ Entity Type",
-      "fields": "__TODO__ Fields",
-      "addField": "__TODO__ Add Field",
-      "noFields": "__TODO__ No fields yet. Click \"Add Field\" to define one.",
-      "fieldLabelPlaceholder": "__TODO__ Field label",
-      "groupPlaceholder": "__TODO__ Group (optional)",
-      "optionsPlaceholder": "__TODO__ Options (comma-separated)",
-      "hintPlaceholder": "__TODO__ Hint text (optional)",
-      "defaultPlaceholder": "__TODO__ Default (optional)",
-      "referencePlaceholder": "__TODO__ Reference id (auto)",
-      "mandatory": "__TODO__ Mandatory",
-      "mandatoryWithDefault": "__TODO__ This field is mandatory but has a default — the default will satisfy the requirement, so owners can publish without changing it.",
-      "cancel": "__TODO__ Cancel",
-      "saveChanges": "__TODO__ Save changes",
-      "create": "__TODO__ Create"
+      "editTitle": "Modifier le modèle de conformité",
+      "createTitle": "Ajouter un modèle de conformité",
+      "editDescription": "Modifiez les champs, valeurs par défaut, indications et indicateurs obligatoires. Le changement de type d’un champ ou la suppression d’un champ ou d’une valeur d’énumération est bloqué si des produits ont déjà des valeurs enregistrées.",
+      "createDescription": "Créez un modèle et ajoutez éventuellement des champs. Activez-le pour le rendre disponible pour le type d’entité lié.",
+      "name": "Nom",
+      "namePlaceholder": "par ex. Conditions d’utilisation",
+      "description": "Description",
+      "descriptionPlaceholder": "Ce que ce modèle couvre…",
+      "entityType": "Type d’entité",
+      "fields": "Champs",
+      "addField": "Ajouter un champ",
+      "noFields": "Aucun champ pour le moment. Cliquez sur « Ajouter un champ » pour en définir un.",
+      "fieldLabelPlaceholder": "Libellé du champ",
+      "groupPlaceholder": "Groupe (facultatif)",
+      "optionsPlaceholder": "Options (séparées par des virgules)",
+      "hintPlaceholder": "Texte d’aide (facultatif)",
+      "defaultPlaceholder": "Valeur par défaut (facultatif)",
+      "referencePlaceholder": "Identifiant de référence (auto)",
+      "mandatory": "Obligatoire",
+      "mandatoryWithDefault": "Ce champ est obligatoire mais possède une valeur par défaut : celle-ci satisfait l’exigence, les responsables peuvent donc publier sans la modifier.",
+      "cancel": "Annuler",
+      "saveChanges": "Enregistrer les modifications",
+      "create": "Créer"
     },
     "valueTypes": {
-      "string": "__TODO__ Text",
-      "numeric": "__TODO__ Number",
-      "boolean": "__TODO__ Yes/No",
-      "date": "__TODO__ Date",
-      "enum": "__TODO__ Single choice",
-      "multi_enum": "__TODO__ Multiple choice",
-      "range": "__TODO__ Range (low–high)"
+      "string": "Texte",
+      "numeric": "Nombre",
+      "boolean": "Oui/Non",
+      "date": "Date",
+      "enum": "Choix unique",
+      "multi_enum": "Choix multiple",
+      "range": "Plage (minimum–maximum)"
     },
     "deleteDialog": {
-      "title": "__TODO__ Delete compliance template?",
-      "description": "__TODO__ Are you sure you want to delete \"{{name}}\"? Its fields will be removed. A template whose products already have stored values can't be deleted. This cannot be undone.",
-      "confirm": "__TODO__ Delete",
-      "cancel": "__TODO__ Cancel"
+      "title": "Supprimer le modèle de conformité ?",
+      "description": "Voulez-vous vraiment supprimer « {{name}} » ? Ses champs seront supprimés. Un modèle dont des produits contiennent déjà des valeurs enregistrées ne peut pas être supprimé. Cette action est irréversible.",
+      "confirm": "Supprimer",
+      "cancel": "Annuler"
     },
     "toast": {
-      "created": "__TODO__ Created",
-      "createdDescription": "__TODO__ Template \"{{name}}\" created.",
-      "saved": "__TODO__ Saved",
-      "savedDescription": "__TODO__ Template \"{{name}}\" updated.",
-      "activated": "__TODO__ Activated",
-      "activatedDescription": "__TODO__ Template \"{{name}}\" is now active.",
-      "deactivated": "__TODO__ Deactivated",
-      "deactivatedDescription": "__TODO__ Template \"{{name}}\" deactivated.",
-      "deleted": "__TODO__ Deleted",
-      "deletedDescription": "__TODO__ Template \"{{name}}\" deleted.",
-      "cannotDelete": "__TODO__ Cannot delete",
-      "saveFailed": "__TODO__ Failed to save",
-      "cannotAdd": "__TODO__ Cannot add \"{{label}}\": {{error}}",
-      "cannotUpdate": "__TODO__ Cannot update \"{{label}}\": {{error}}",
-      "cannotRemove": "__TODO__ Cannot remove \"{{label}}\": {{error}}"
+      "created": "Créé",
+      "createdDescription": "Modèle « {{name}} » créé.",
+      "saved": "Enregistré",
+      "savedDescription": "Modèle « {{name}} » mis à jour.",
+      "activated": "Activé",
+      "activatedDescription": "Le modèle « {{name}} » est maintenant actif.",
+      "deactivated": "Désactivé",
+      "deactivatedDescription": "Modèle « {{name}} » désactivé.",
+      "deleted": "Supprimé",
+      "deletedDescription": "Modèle « {{name}} » supprimé.",
+      "cannotDelete": "Suppression impossible",
+      "saveFailed": "Échec de l’enregistrement",
+      "cannotAdd": "Impossible d’ajouter « {{label}} » : {{error}}",
+      "cannotUpdate": "Impossible de mettre à jour « {{label}} » : {{error}}",
+      "cannotRemove": "Impossible de supprimer « {{label}} » : {{error}}"
     }
   }
 }

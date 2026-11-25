@@ -379,7 +379,7 @@
     },
     "contractDangling": "Vertrag existiert nicht mehr",
     "errors": {
-      "complianceIncomplete": "__TODO__ Cannot publish: required compliance fields are missing: {{missing}}."
+      "complianceIncomplete": "Veröffentlichung nicht möglich: Pflichtfelder der Compliance fehlen: {{missing}}."
     }
   },
   "form": {
@@ -1221,25 +1221,25 @@
   },
   "compliance": {
     "modal": {
-      "defaultTitle": "__TODO__ Compliance",
-      "descriptionWrite": "__TODO__ Complete the compliance information for this item.",
-      "descriptionReadOnly": "__TODO__ Compliance information for this item (read-only).",
-      "noTemplate": "__TODO__ No active compliance template for this item.",
-      "loadFailed": "__TODO__ Failed to load compliance data",
-      "saved": "__TODO__ Saved",
-      "savedDescription": "__TODO__ Compliance information updated.",
-      "saveFailed": "__TODO__ Failed to save",
-      "yes": "__TODO__ Yes",
-      "no": "__TODO__ No",
-      "selectPlaceholder": "__TODO__ Select…",
-      "noOptions": "__TODO__ No options defined.",
-      "low": "__TODO__ Low",
-      "high": "__TODO__ High",
-      "rangeLowLabel": "__TODO__ {{label}} low",
-      "rangeHighLabel": "__TODO__ {{label}} high",
-      "cancel": "__TODO__ Cancel",
-      "close": "__TODO__ Close",
-      "save": "__TODO__ Save"
+      "defaultTitle": "Compliance",
+      "descriptionWrite": "Vervollständige die Compliance-Informationen für dieses Element.",
+      "descriptionReadOnly": "Compliance-Informationen zu diesem Element (nur lesen).",
+      "noTemplate": "Für dieses Element gibt es keine aktive Compliance-Vorlage.",
+      "loadFailed": "Compliance-Daten konnten nicht geladen werden",
+      "saved": "Gespeichert",
+      "savedDescription": "Compliance-Informationen aktualisiert.",
+      "saveFailed": "Speichern fehlgeschlagen",
+      "yes": "Ja",
+      "no": "Nein",
+      "selectPlaceholder": "Auswählen…",
+      "noOptions": "Keine Optionen definiert.",
+      "low": "Niedrig",
+      "high": "Hoch",
+      "rangeLowLabel": "{{label}} untere Grenze",
+      "rangeHighLabel": "{{label}} obere Grenze",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "save": "Speichern"
     }
   }
 }

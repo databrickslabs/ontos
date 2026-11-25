@@ -114,7 +114,7 @@
     "dataProductTypes": "データプロダクトタイプ",
     "certificationLevels": "認定レベル",
     "maturityLevels": "成熟度レベル",
-    "complianceTemplates": "__TODO__ Compliance Templates"
+    "complianceTemplates": "コンプライアンステンプレート"
   },
   "accessDenied": {
     "title": "アクセス拒否",
@@ -1542,85 +1542,85 @@
     }
   },
   "complianceTemplates": {
-    "title": "__TODO__ Compliance Templates",
-    "intro": "__TODO__ Define typed, grouped governance fields bound to an entity type. Exactly one template can be active per entity type.",
-    "addTemplate": "__TODO__ Add Template",
+    "title": "コンプライアンステンプレート",
+    "intro": "エンティティタイプに紐づく、型付きでグループ化されたガバナンス項目を定義します。エンティティタイプごとに有効にできるテンプレートは1つだけです。",
+    "addTemplate": "テンプレートを追加",
     "columns": {
-      "name": "__TODO__ Name",
-      "entityType": "__TODO__ Entity Type",
-      "fields": "__TODO__ Fields",
-      "status": "__TODO__ Status",
-      "actions": "__TODO__ Actions"
+      "name": "名前",
+      "entityType": "エンティティタイプ",
+      "fields": "項目",
+      "status": "ステータス",
+      "actions": "操作"
     },
     "entityTypes": {
-      "data_product": "__TODO__ Data Products"
+      "data_product": "データプロダクト"
     },
     "status": {
-      "active": "__TODO__ Active",
-      "inactive": "__TODO__ Inactive"
+      "active": "有効",
+      "inactive": "無効"
     },
     "actions": {
-      "edit": "__TODO__ Edit",
-      "activate": "__TODO__ Activate",
-      "deactivate": "__TODO__ Deactivate"
+      "edit": "編集",
+      "activate": "有効にする",
+      "deactivate": "無効にする"
     },
-    "emptyState": "__TODO__ No compliance templates configured. Click \"Add Template\" to create one.",
+    "emptyState": "コンプライアンステンプレートが設定されていません。「テンプレートを追加」をクリックして作成してください。",
     "dialog": {
-      "editTitle": "__TODO__ Edit Compliance Template",
-      "createTitle": "__TODO__ Add Compliance Template",
-      "editDescription": "__TODO__ Edit fields, defaults, hints and mandatory flags. Changing a field’s type or removing a field/enum value is blocked when products have already stored values.",
-      "createDescription": "__TODO__ Create a template and optionally add fields. Activate it to make it available on the bound entity type.",
-      "name": "__TODO__ Name",
-      "namePlaceholder": "__TODO__ e.g., Terms of Use",
-      "description": "__TODO__ Description",
-      "descriptionPlaceholder": "__TODO__ What this template captures...",
-      "entityType": "__TODO__ Entity Type",
-      "fields": "__TODO__ Fields",
-      "addField": "__TODO__ Add Field",
-      "noFields": "__TODO__ No fields yet. Click \"Add Field\" to define one.",
-      "fieldLabelPlaceholder": "__TODO__ Field label",
-      "groupPlaceholder": "__TODO__ Group (optional)",
-      "optionsPlaceholder": "__TODO__ Options (comma-separated)",
-      "hintPlaceholder": "__TODO__ Hint text (optional)",
-      "defaultPlaceholder": "__TODO__ Default (optional)",
-      "referencePlaceholder": "__TODO__ Reference id (auto)",
-      "mandatory": "__TODO__ Mandatory",
-      "mandatoryWithDefault": "__TODO__ This field is mandatory but has a default — the default will satisfy the requirement, so owners can publish without changing it.",
-      "cancel": "__TODO__ Cancel",
-      "saveChanges": "__TODO__ Save changes",
-      "create": "__TODO__ Create"
+      "editTitle": "コンプライアンステンプレートを編集",
+      "createTitle": "コンプライアンステンプレートを追加",
+      "editDescription": "項目、既定値、ヒント、必須フラグを編集します。製品にすでに保存済みの値がある場合、項目の型の変更や項目・列挙値の削除はブロックされます。",
+      "createDescription": "テンプレートを作成し、必要に応じて項目を追加します。紐づくエンティティタイプで利用するには有効にしてください。",
+      "name": "名前",
+      "namePlaceholder": "例: 利用規約",
+      "description": "説明",
+      "descriptionPlaceholder": "このテンプレートが扱う内容…",
+      "entityType": "エンティティタイプ",
+      "fields": "項目",
+      "addField": "項目を追加",
+      "noFields": "まだ項目がありません。「項目を追加」をクリックして定義してください。",
+      "fieldLabelPlaceholder": "項目名",
+      "groupPlaceholder": "グループ（任意）",
+      "optionsPlaceholder": "オプション（カンマ区切り）",
+      "hintPlaceholder": "ヒント文（任意）",
+      "defaultPlaceholder": "既定値（任意）",
+      "referencePlaceholder": "参照ID（自動）",
+      "mandatory": "必須",
+      "mandatoryWithDefault": "この項目は必須ですが既定値があります。既定値が要件を満たすため、担当者は変更せずに公開できます。",
+      "cancel": "キャンセル",
+      "saveChanges": "変更を保存",
+      "create": "作成"
     },
     "valueTypes": {
-      "string": "__TODO__ Text",
-      "numeric": "__TODO__ Number",
-      "boolean": "__TODO__ Yes/No",
-      "date": "__TODO__ Date",
-      "enum": "__TODO__ Single choice",
-      "multi_enum": "__TODO__ Multiple choice",
-      "range": "__TODO__ Range (low–high)"
+      "string": "テキスト",
+      "numeric": "数値",
+      "boolean": "はい/いいえ",
+      "date": "日付",
+      "enum": "単一選択",
+      "multi_enum": "複数選択",
+      "range": "範囲（下限〜上限）"
     },
     "deleteDialog": {
-      "title": "__TODO__ Delete compliance template?",
-      "description": "__TODO__ Are you sure you want to delete \"{{name}}\"? Its fields will be removed. A template whose products already have stored values can't be deleted. This cannot be undone.",
-      "confirm": "__TODO__ Delete",
-      "cancel": "__TODO__ Cancel"
+      "title": "コンプライアンステンプレートを削除しますか？",
+      "description": "「{{name}}」を削除してもよろしいですか？ 含まれる項目も削除されます。製品に保存済みの値があるテンプレートは削除できません。この操作は元に戻せません。",
+      "confirm": "削除",
+      "cancel": "キャンセル"
     },
     "toast": {
-      "created": "__TODO__ Created",
-      "createdDescription": "__TODO__ Template \"{{name}}\" created.",
-      "saved": "__TODO__ Saved",
-      "savedDescription": "__TODO__ Template \"{{name}}\" updated.",
-      "activated": "__TODO__ Activated",
-      "activatedDescription": "__TODO__ Template \"{{name}}\" is now active.",
-      "deactivated": "__TODO__ Deactivated",
-      "deactivatedDescription": "__TODO__ Template \"{{name}}\" deactivated.",
-      "deleted": "__TODO__ Deleted",
-      "deletedDescription": "__TODO__ Template \"{{name}}\" deleted.",
-      "cannotDelete": "__TODO__ Cannot delete",
-      "saveFailed": "__TODO__ Failed to save",
-      "cannotAdd": "__TODO__ Cannot add \"{{label}}\": {{error}}",
-      "cannotUpdate": "__TODO__ Cannot update \"{{label}}\": {{error}}",
-      "cannotRemove": "__TODO__ Cannot remove \"{{label}}\": {{error}}"
+      "created": "作成しました",
+      "createdDescription": "テンプレート「{{name}}」を作成しました。",
+      "saved": "保存しました",
+      "savedDescription": "テンプレート「{{name}}」を更新しました。",
+      "activated": "有効にしました",
+      "activatedDescription": "テンプレート「{{name}}」が有効になりました。",
+      "deactivated": "無効にしました",
+      "deactivatedDescription": "テンプレート「{{name}}」を無効にしました。",
+      "deleted": "削除しました",
+      "deletedDescription": "テンプレート「{{name}}」を削除しました。",
+      "cannotDelete": "削除できません",
+      "saveFailed": "保存に失敗しました",
+      "cannotAdd": "「{{label}}」を追加できません: {{error}}",
+      "cannotUpdate": "「{{label}}」を更新できません: {{error}}",
+      "cannotRemove": "「{{label}}」を削除できません: {{error}}"
     }
   }
 }

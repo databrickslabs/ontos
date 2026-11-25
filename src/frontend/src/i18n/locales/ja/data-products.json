@@ -379,7 +379,7 @@
     },
     "contractDangling": "契約はもう存在しません",
     "errors": {
-      "complianceIncomplete": "__TODO__ Cannot publish: required compliance fields are missing: {{missing}}."
+      "complianceIncomplete": "公開できません: 必須のコンプライアンス項目が不足しています: {{missing}}。"
     }
   },
   "form": {
@@ -1221,25 +1221,25 @@
   },
   "compliance": {
     "modal": {
-      "defaultTitle": "__TODO__ Compliance",
-      "descriptionWrite": "__TODO__ Complete the compliance information for this item.",
-      "descriptionReadOnly": "__TODO__ Compliance information for this item (read-only).",
-      "noTemplate": "__TODO__ No active compliance template for this item.",
-      "loadFailed": "__TODO__ Failed to load compliance data",
-      "saved": "__TODO__ Saved",
-      "savedDescription": "__TODO__ Compliance information updated.",
-      "saveFailed": "__TODO__ Failed to save",
-      "yes": "__TODO__ Yes",
-      "no": "__TODO__ No",
-      "selectPlaceholder": "__TODO__ Select…",
-      "noOptions": "__TODO__ No options defined.",
-      "low": "__TODO__ Low",
-      "high": "__TODO__ High",
-      "rangeLowLabel": "__TODO__ {{label}} low",
-      "rangeHighLabel": "__TODO__ {{label}} high",
-      "cancel": "__TODO__ Cancel",
-      "close": "__TODO__ Close",
-      "save": "__TODO__ Save"
+      "defaultTitle": "コンプライアンス",
+      "descriptionWrite": "この項目のコンプライアンス情報を入力してください。",
+      "descriptionReadOnly": "この項目のコンプライアンス情報（読み取り専用）。",
+      "noTemplate": "この項目に有効なコンプライアンステンプレートはありません。",
+      "loadFailed": "コンプライアンスデータの読み込みに失敗しました",
+      "saved": "保存しました",
+      "savedDescription": "コンプライアンス情報を更新しました。",
+      "saveFailed": "保存に失敗しました",
+      "yes": "はい",
+      "no": "いいえ",
+      "selectPlaceholder": "選択…",
+      "noOptions": "オプションが定義されていません。",
+      "low": "下限",
+      "high": "上限",
+      "rangeLowLabel": "{{label}} 下限",
+      "rangeHighLabel": "{{label}} 上限",
+      "cancel": "キャンセル",
+      "close": "閉じる",
+      "save": "保存"
     }
   }
 }

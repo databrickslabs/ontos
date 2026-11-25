@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from src.common.database import Base
 from src.db_models.delivery_outbox import DeliveryOutboxDb
 
-_NAME = 'o4_delivery_outbox'
+_NAME = 'b13_delivery_outbox'
 _INDEXES = {'ix_delivery_outbox_status_next_attempt', 'ix_delivery_outbox_entity'}
 
 

@@ -162,7 +162,7 @@ def test_two_instances_deliver_each_row_once(database, monkeypatch):
 
 
 def _migration():
-    name = 'o4_delivery_outbox'
+    name = 'b13_delivery_outbox'
     path = Path(__file__).resolve().parents[3] / 'alembic' / 'versions' / f'{name}.py'
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)

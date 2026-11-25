@@ -7,6 +7,9 @@ import pytest
 from src.db_models.tags import EntityTagAssociationDb, TagDb
 from src.repositories.tags_repository import entity_tag_repo, tag_namespace_repo
 
+# Products are created with productType: sourceAligned, which must exist and be active.
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 @pytest.fixture
 def tag(db_session):

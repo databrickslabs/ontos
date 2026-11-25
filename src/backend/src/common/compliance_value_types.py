@@ -58,7 +58,11 @@ def _coerce_numeric(value: Any) -> float | int:
         # bool is a subclass of int; reject to avoid True -> 1 surprises.
         raise ValueTypeError("Expected a numeric value, got a boolean.")
     if isinstance(value, (int, float)):
-        num: float = float(value)
+        try:
+            num: float = float(value)
+        except OverflowError:
+            # A JSON integer beyond the float range (e.g. 400 digits) can't be a finite number.
+            raise ValueTypeError("Number is out of range.")
     elif isinstance(value, str):
         s = value.strip()
         if not s:

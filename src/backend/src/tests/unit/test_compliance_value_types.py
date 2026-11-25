@@ -205,6 +205,16 @@ class TestNonFiniteNumbers:
         with pytest.raises(ValueTypeError):
             coerce_value("range", {"low": "1e400", "high": 10})
 
+    @pytest.mark.parametrize("raw", [10 ** 400, -(10 ** 400)])
+    def test_integer_beyond_float_range_is_rejected_not_overflow(self, raw):
+        # A JSON integer with 400 digits made float() raise OverflowError, which the route answered as a 500.
+        with pytest.raises(ValueTypeError):
+            coerce_value("numeric", raw)
+
+    def test_integer_beyond_float_range_in_range_bound_is_rejected(self):
+        with pytest.raises(ValueTypeError):
+            coerce_value("range", {"low": 1, "high": 10 ** 400})
+
     def test_finite_numbers_still_accepted(self):
         assert coerce_value("numeric", "1e3") == 1000
         assert coerce_value("numeric", "-2.5") == -2.5

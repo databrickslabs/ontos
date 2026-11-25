@@ -317,10 +317,10 @@ class TestPoisonRow:
         real = outbox._deliver_claimed
 
         def deliver(db, row, now):
-            real(db, row, now)
             if row.id == poison:
                 row.params = {'bad': object()}  # not JSON-serializable: the flush raises
                 db.flush()
+            return real(db, row, now)
 
         monkeypatch.setattr(outbox, '_deliver_claimed', deliver)
 
@@ -328,6 +328,50 @@ class TestPoisonRow:
 
         assert _row(sessions, poison).code == 'delivery_failed'
         assert _row(sessions, good).status == 'delivered'
+
+    def _break_after_delivery(self, monkeypatch, row_id):
+        """The delivery goes through, then saving its outcome raises."""
+        real = outbox._deliver_claimed
+
+        def deliver(db, row, now):
+            real(db, row, now)
+            if row.id == row_id:
+                row.params = {'bad': object()}  # not JSON-serializable: the flush raises
+                db.flush()
+
+        monkeypatch.setattr(outbox, '_deliver_claimed', deliver)
+
+    def test_a_delivery_whose_outcome_cannot_be_saved_is_not_retried(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        poison, good = self._due_rows(manager, sessions, service, 'P A', 'P B')
+        self._break_after_delivery(monkeypatch, poison)
+        service.calls.clear()
+        worker, now = DeliveryOutboxWorker(), _now() + timedelta(minutes=2)
+
+        worker.run(sessions, now)
+        worker.run(sessions, now + timedelta(hours=7))
+
+        row = _row(sessions, poison)
+        assert (row.status, row.code, row.attempts) == (  # 1 failed at the import + this one
+            'delivered', 'delivery_outcome_unrecorded', 2)
+        assert sorted(call[0] for call in service.calls) == ['P A', 'P B']  # once each
+        assert _row(sessions, good).status == 'delivered'
+        rows = delivery_outbox_repo.by_ids(sessions(), [poison])
+        assert outbox.outcome_of(rows).status == 'delivered'
+
+    def test_an_attempt_after_the_commit_keeps_it_too(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        (poison,) = self._due_rows(manager, sessions, service, 'P A')
+        self._break_after_delivery(monkeypatch, poison)
+        service.calls.clear()
+
+        result = outbox.attempt(sessions, poison)
+        outbox.attempt(sessions, poison)
+
+        assert (result.status, result.code) == ('delivered', 'delivery_outcome_unrecorded')
+        assert len(service.calls) == 1
 
 
 class TestOutcome:
@@ -405,6 +449,59 @@ class TestRedeliver:
         assert (untouched.status, untouched.attempts, untouched.code) == (
             'pending', 1, 'delivery_git_unavailable')
         assert len(_rows(sessions)) == 1  # no second row for the held one's mode
+
+    def test_a_mode_turned_on_since_gets_a_row(self, manager, sessions, service):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        product_id = _import(manager, 'P A').created_ids[0]
+        service.failing = {}
+        service.modes = ['indirect', 'manual']
+
+        ids = delivery_outbox_manager.redeliver(
+            sessions(), 'DataProduct', product_id, user='admin').row_ids
+
+        assert sorted(row.mode for row in delivery_outbox_repo.by_ids(sessions(), ids)) == [
+            'indirect', 'manual']
+        assert len(_rows(sessions)) == 2
+
+    def test_a_row_of_a_mode_turned_off_since_is_closed_not_reset(
+        self, manager, sessions, service,
+    ):
+        service.modes = ['indirect', 'manual']
+        service.failing = {'indirect': 'delivery_git_unavailable', 'manual': 'x'}
+        product_id = _import(manager, 'P A').created_ids[0]
+        service.failing = {}
+        service.modes = ['indirect']
+        service.calls.clear()
+
+        queued = delivery_outbox_manager.redeliver(
+            sessions(), 'DataProduct', product_id, user='admin')
+        rows = outbox.attempt_all(sessions, queued.row_ids)
+
+        assert [(row.mode, row.status) for row in rows] == [('indirect', 'delivered')]
+        off = [row for row in _rows(sessions) if row.mode == 'manual'][0]
+        assert (off.status, off.code, off.attempts) == ('delivered', 'delivery_mode_inactive', 1)
+        assert [call[1] for call in service.calls] == ['indirect']
+
+    def test_a_mode_with_only_a_held_row_gets_no_second_row(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        product_id = _import(manager, 'P A').created_ids[0]
+        held = _rows(sessions)[0].id
+        service.modes = ['indirect', 'manual']
+        real = delivery_outbox_repo.for_entity
+
+        def for_entity(db, entity_type, entity_id, statuses=outbox.OPEN_STATUSES, lock=False):
+            found = real(db, entity_type, entity_id, statuses)
+            return [r for r in found if r.id != held] if lock else found
+
+        monkeypatch.setattr(delivery_outbox_repo, 'for_entity', for_entity)
+
+        queued = delivery_outbox_manager.redeliver(
+            sessions(), 'DataProduct', product_id, user='admin')
+
+        modes = [row.mode for row in delivery_outbox_repo.by_ids(sessions(), queued.row_ids)]
+        assert (modes, queued.in_progress) == (['manual'], [held])
 
     def test_refusals(self, manager, sessions, service):
         product_id = _import(manager, 'P A').created_ids[0]

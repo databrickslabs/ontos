@@ -61,6 +61,8 @@ ERROR_RETRY_CAP = timedelta(hours=1)
 # Codes of a delivered row with nothing done, and of a not yet tried one
 NOT_APPLICABLE = 'delivery_not_applicable'
 MODE_INACTIVE = 'delivery_mode_inactive'
+# The delivery went through but its outcome couldn't be saved: delivered, never retried
+OUTCOME_UNRECORDED = 'delivery_outcome_unrecorded'
 PENDING_CODE = 'delivery_pending'
 IN_PROGRESS_CODE = 'delivery_in_progress'
 
@@ -194,10 +196,12 @@ def queue(
     change_type: Any,
     user: Optional[str],
     now: Optional[datetime] = None,
+    modes: Optional[Sequence[str]] = None,
 ) -> List[str]:
-    """Add a pending row per active delivery mode to ``db``'s transaction (not
-    committed); their ids, none when no mode is active."""
-    modes = _active_modes(_delivery_service())
+    """Add a pending row per delivery mode (default: the active ones) to ``db``'s
+    transaction (not committed); their ids, none when no mode is active."""
+    if modes is None:
+        modes = _active_modes(_delivery_service())
     now = now or _now()
     return [
         delivery_outbox_repo.add(
@@ -251,6 +255,9 @@ def _deliver_claimed(db: Session, row: DeliveryOutboxDb, now: datetime) -> None:
                        row.mode, exc_info=True)
         result = None
     if result is not None and result.success:
+        # From here the delivery is done: if saving the outcome breaks, the row is not
+        # a failed attempt (see ``_record_unrecorded``)
+        row.delivery_done = True
         skipped = bool((result.details or {}).get('skipped'))
         delivery_outbox_repo.record(row, status=DELIVERED, now=now,
                                     code=NOT_APPLICABLE if skipped else None)
@@ -269,6 +276,25 @@ def _deliver_claimed(db: Session, row: DeliveryOutboxDb, now: datetime) -> None:
                                 next_attempt_at=next_attempt)
 
 
+def _record_unrecorded(
+    session_factory: Callable[[], Session], row_id: str, now: datetime,
+) -> None:
+    """Record, in a session and transaction of its own, a row whose delivery went
+    through but whose outcome couldn't be saved: delivered (never retried), with a
+    code of its own, not a failed attempt."""
+    db = session_factory()
+    try:
+        row = delivery_outbox_repo.claim(db, row_id)
+        if row is not None:
+            delivery_outbox_repo.record(row, status=DELIVERED, now=now, code=OUTCOME_UNRECORDED)
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def attempt(
     session_factory: Callable[[], Session], row_id: str, now: Optional[datetime] = None,
 ) -> Optional[DeliveryOutboxRow]:
@@ -276,6 +302,7 @@ def attempt(
     afterwards (as it is when another session holds it or it isn't pending), or
     None when it doesn't exist."""
     db = session_factory()
+    row = None
     try:
         row = delivery_outbox_repo.claim(db, row_id)
         if row is None:
@@ -287,6 +314,11 @@ def attempt(
     except Exception:
         logger.error("Delivery attempt of outbox row %s failed", row_id, exc_info=True)
         db.rollback()
+        if getattr(row, 'delivery_done', False):
+            try:
+                _record_unrecorded(session_factory, row_id, _utc(now) or _now())
+            except Exception:
+                logger.error("Outcome of outbox row %s not recorded", row_id, exc_info=True)
         current = delivery_outbox_repo.get(db, row_id)
         return row_model(current) if current is not None else None
     finally:
@@ -375,9 +407,10 @@ class DeliveryOutboxManager:
     ) -> Redelivery:
         """Queue the entity again and commit; the ids of the rows to try.
 
-        Its open rows (pending or failed) start over; without one, a row per active
-        mode is added for its current state. A row another session holds (an attempt
-        under way) is left alone and reported in ``in_progress``.
+        Its open rows (pending or failed) of an active mode start over; those of a mode
+        turned off since are closed (``delivery_mode_inactive``); an active mode without
+        an open row gets a new one for the entity's current state. A row another session
+        holds (an attempt under way) is left alone and reported in ``in_progress``.
         """
         kind = ENTITY_KINDS.get(entity_type)
         if kind is None:
@@ -390,19 +423,29 @@ class DeliveryOutboxManager:
         if not _active_modes(_delivery_service()):
             raise DeliveryNoActiveModeError("No delivery mode is active")
         now = _utc(now) or _now()
+        active = _active_modes(_delivery_service())
+        open_rows = delivery_outbox_repo.for_entity(db, entity_type, entity_id)
         rows = delivery_outbox_repo.for_entity(db, entity_type, entity_id, lock=True)
-        held = {row.id for row in delivery_outbox_repo.for_entity(db, entity_type, entity_id)}
-        held -= {row.id for row in rows}
+        locked = {row.id for row in rows}
+        held = {row.id for row in open_rows} - locked
+        ids = []
         for row in rows:
+            if row.mode not in active:
+                # Its mode was turned off since: nothing to try, close it
+                delivery_outbox_repo.record(row, status=DELIVERED, now=now, code=MODE_INACTIVE,
+                                            counted=False)
+                continue
             row.status, row.attempts, row.code, row.params = PENDING, 0, None, None
             row.next_attempt_at, row.delivered_at = now + FIRST_ATTEMPT_GRACE, None
             row.queued_by, row.updated_at = user, now
-        ids = [row.id for row in rows]
-        if not ids and not held:
-            ids = queue(
-                db, entity_type=entity_type, entity_id=entity_id,
-                change_type=kind.redeliver_change, user=user, now=now,
-            )
+            ids.append(row.id)
+        # A mode turned on since has no row yet; one with a held row has its attempt
+        covered = {row.mode for row in open_rows}
+        ids += queue(
+            db, entity_type=entity_type, entity_id=entity_id,
+            change_type=kind.redeliver_change, user=user, now=now,
+            modes=[mode for mode in active if mode not in covered],
+        )
         db.commit()
         return Redelivery(ids, sorted(held))
 
@@ -502,7 +545,7 @@ class DeliveryOutboxWorker:
         tried = 0
         while tried < MAX_ROWS_PER_PASS:
             db = session_factory()
-            row_id = None
+            row = row_id = None
             try:
                 row = delivery_outbox_repo.claim_next_due(db, now)
                 if row is None:
@@ -517,10 +560,15 @@ class DeliveryOutboxWorker:
                 if row_id is None:
                     raise
                 # One bad row (the entity load, the outcome, the commit) must not stall
-                # the rows behind it: count it as a failed attempt and go on.
+                # the rows behind it: count it as a failed attempt and go on. When the
+                # delivery itself went through, it is recorded as delivered instead:
+                # another attempt would repeat its external effect.
                 logger.error("Delivery of outbox row %s broke before an outcome (%s)",
                              row_id, type(e).__name__, exc_info=True)
-                DeliveryOutboxWorker._fail_row(session_factory, row_id, now)
+                if getattr(row, 'delivery_done', False):
+                    _record_unrecorded(session_factory, row_id, now)
+                else:
+                    DeliveryOutboxWorker._fail_row(session_factory, row_id, now)
                 tried += 1
             finally:
                 db.close()

@@ -109,6 +109,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     services:
       postgres:
@@ -140,7 +143,7 @@ jobs:
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         working-directory: ./src

@@ -581,11 +581,12 @@ class DeliveryOutboxWorker:
                         DeliveryOutboxWorker._fail_row(session_factory, row_id, now)
                 except Exception as recording:
                     # The database is still failing: the row stays as it was (due), so
-                    # the next claim would take it again in this pass. Stop the pass; a
-                    # later one tries again (at-least-once, see the module docstring).
+                    # the next claim would take it again in this pass. Fail the pass so
+                    # run() waits for the error backoff before the next one; that one
+                    # tries again (at-least-once, see the module docstring).
                     logger.error("Outcome of outbox row %s not recorded (%s)", row_id,
                                  type(recording).__name__, exc_info=True)
-                    return tried + 1, True
+                    raise
                 tried += 1
             finally:
                 db.close()

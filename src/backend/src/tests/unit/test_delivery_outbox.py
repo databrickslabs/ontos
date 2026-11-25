@@ -372,11 +372,14 @@ class TestPoisonRow:
         monkeypatch.setattr(outbox, '_record_unrecorded', unwritable)
         service.calls.clear()
 
-        result = DeliveryOutboxWorker._sweep(sessions, _now() + timedelta(minutes=2))
+        worker, now = DeliveryOutboxWorker(), _now() + timedelta(minutes=2)
 
-        assert result == (1, True)  # no exception; more may be due
+        assert worker.run(sessions, now) == 0  # the pass fails, it doesn't raise
         assert [call[0] for call in service.calls] == ['P A']  # not claimed again
         assert _row(sessions, good).status == 'pending'  # left for a later pass
+        # The next pass waits for the error backoff instead of running at once
+        assert worker.next_deadline() == now + outbox.ERROR_RETRY
+        assert not worker.due(now)
 
     def test_an_attempt_after_the_commit_keeps_it_too(
         self, manager, sessions, service, monkeypatch,

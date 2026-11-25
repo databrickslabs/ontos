@@ -220,6 +220,58 @@ jobs:
           path: ./src/frontend/coverage/
           if-no-files-found: ignore
 
+  playwright-cache:
+    name: Playwright Browser Cache
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
+    # Caches are scoped to the ref that saved them, and a PR run can only
+    # restore its own entries and its base branch's. E2E doesn't run on pushes
+    # to development, so this job saves the browsers there for PRs to restore.
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Lookup only: on a hit the job ends here without downloading the entry
+      # or setting up Node; the remaining steps run only on a miss.
+      - name: Restore Playwright browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('src/frontend/package.json') }}
+          lookup-only: true
+
+      - uses: ./.github/actions/setup-node-jfrog
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: '24'
+
+      # npx playwright must resolve the repo's pinned version
+      - name: Install frontend dependencies
+        working-directory: ./src/frontend
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      # Browsers only: OS packages live outside the cached path
+      - name: Install Playwright browsers
+        working-directory: ./src/frontend
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
+
+      - name: Save Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+
   e2e-tests:
     name: E2E Tests
     runs-on:

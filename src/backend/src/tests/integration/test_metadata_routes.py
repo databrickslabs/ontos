@@ -186,6 +186,21 @@ class TestAssetMetadataRoutes:
         assert response.json()["entity_type"] == "asset"
         mock_ws.files.upload.assert_called_once()
 
+    def test_uploaded_library_documents_are_listed_in_the_shared_library(self, client: TestClient, mock_ws):
+        response = client.post(
+            "/api/metadata/shared/documents",
+            data={"title": "Glossary handbook", "level": "10", "inheritable": "false"},
+            files={"file": ("handbook.pdf", b"%PDF", "application/pdf")},
+        )
+        assert response.status_code == 201, response.text
+        created = response.json()
+        assert created["is_shared"] is True
+        assert (created["level"], created["inheritable"]) == (10, False)
+
+        shared = client.get("/api/metadata/shared")
+        assert shared.status_code == 200, shared.text
+        assert created["id"] in [d["id"] for d in shared.json()["documents"]]
+
     def test_upload_document_rejects_unknown_entity_type_before_writing(self, client: TestClient, mock_ws):
         response = client.post(
             "/api/entities/not_an_entity/documents",

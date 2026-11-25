@@ -5,6 +5,7 @@ Repository for agreement wizard sessions.
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.db_models.agreement_wizard_sessions import AgreementWizardSessionDb
@@ -64,10 +65,21 @@ class AgreementWizardSessionsRepository:
             AgreementWizardSessionDb.id == session_id
         ).first()
 
-    def list_recent(self, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
-        """List recent wizard sessions with basic info."""
+    def list_recent(
+        self, db: Session, limit: int = 50, created_by: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """List recent wizard sessions with basic info.
+
+        ``created_by`` limits the list to one user's sessions (compared
+        case-insensitively); ``None`` lists everyone's.
+        """
+        query = db.query(AgreementWizardSessionDb)
+        if created_by is not None:
+            query = query.filter(
+                func.lower(AgreementWizardSessionDb.created_by) == created_by.lower()
+            )
         sessions = (
-            db.query(AgreementWizardSessionDb)
+            query
             .order_by(AgreementWizardSessionDb.created_at.desc())
             .limit(limit)
             .all()

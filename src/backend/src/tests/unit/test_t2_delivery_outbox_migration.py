@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from src.common.database import Base
 from src.db_models.delivery_outbox import DeliveryOutboxDb
 
-_NAME = 'b13_delivery_outbox'
+_NAME = 't2_delivery_outbox'
 _INDEXES = {'ix_delivery_outbox_status_next_attempt', 'ix_delivery_outbox_entity'}
 
 
@@ -40,7 +40,7 @@ def _state(conn):
 
 def test_it_revises_the_development_head(migration):
     assert migration.revision == _NAME
-    assert migration.down_revision == 'b12_product_type_from_props'
+    assert migration.down_revision == 't1_contract_tag_backfill'
 
 
 def test_upgrade_twice_downgrade_and_upgrade_again(tmp_path, migration):

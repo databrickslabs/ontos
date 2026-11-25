@@ -4,8 +4,8 @@ One row per change and active delivery mode, written in the change's transaction
 (#1688). The workflow scheduler's thread delivers the pending rows, with bounded
 retries; delivered rows are deleted after the retention period.
 
-Revision ID: b13_delivery_outbox
-Revises: b12_product_type_from_props
+Revision ID: t2_delivery_outbox
+Revises: t1_contract_tag_backfill
 Create Date: 2026-11-24 12:00:00.000000
 
 """
@@ -15,8 +15,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 'b13_delivery_outbox'
-down_revision: Union[str, None] = 'b12_product_type_from_props'
+revision: str = 't2_delivery_outbox'
+down_revision: Union[str, None] = 't1_contract_tag_backfill'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

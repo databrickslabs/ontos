@@ -436,7 +436,7 @@ class TestDecisionAndDelivery:
         assert audits[-1]['details']['base_digest'] == row.base_digest
         assert audits[-1]['details']['proposed_digest'] == row.proposed_digest
 
-    def test_a_clarified_review_closes_the_request_without_delivering(
+    def test_a_clarified_review_returns_the_request_to_a_draft_without_delivering(
         self, db_session, manager, asset, ws, review, delivery, audits
     ):
         from src.common.workflow_executor import WorkflowExecutor
@@ -458,7 +458,9 @@ class TestDecisionAndDelivery:
         )
 
         row = db_session.get(MetricViewChangeRequestDb, request.id)
-        assert row.status == 'rejected' and row.delivered_at is None
+        # Not rejected: the requester answers and submits it again
+        assert row.status == 'draft' and row.submitted_at is None
+        assert row.delivered_at is None and row.error_code is None
         assert row.decided_by == APPROVER
         assert audits[-1]['action'] == 'METRIC_VIEW_CHANGE_REQUEST_CLARIFIED'
 

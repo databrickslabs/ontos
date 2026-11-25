@@ -384,6 +384,8 @@ class MetricViewChangeRequestsManager:
         row.warnings = warnings
         row.status = 'in_review'
         row.submitted_at = now
+        # A resubmitted draft starts a new review: an earlier clarification no longer shows
+        row.decided_by = row.decided_at = row.decision_message = None
         self._db.flush()
         self._db.commit()
         _audit('METRIC_VIEW_CHANGE_REQUEST_SUBMITTED', row, user_email,
@@ -579,10 +581,11 @@ class MetricViewChangeRequestsManager:
         values: Dict[str, Any] = {'decided_by': responded_by, 'decided_at': now,
                                   'decision_message': self._decision_message(execution_id)}
         if clarified:
-            # A clarification is no decision, but no workflow is left to decide:
-            # the request is closed with the approver's message for the requester
+            # A clarification is no decision, but no workflow is left to decide: the
+            # request goes back to a draft (not rejected) with the approver's message,
+            # and the requester answers it by submitting it again
             if self._repo.set_status_if(self._db, row, 'in_review',
-                                        {**values, 'status': 'rejected'}):
+                                        {**values, 'status': 'draft', 'submitted_at': None}):
                 self._db.commit()
                 _audit('METRIC_VIEW_CHANGE_REQUEST_CLARIFIED', row, responded_by,
                        execution_id=execution_id)

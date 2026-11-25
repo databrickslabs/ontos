@@ -384,6 +384,13 @@
     "adjustTerms": "Ajuster les conditions d'approbation",
     "durationDays": "Durée (jours)",
     "permissionLevel": "Niveau de permission",
+    "accessDecision": {
+      "adminHint": "En tant qu'administrateur, vous pouvez décider de votre propre demande et accorder plus que ce qui a été demandé. Le journal d'audit l'enregistre comme une dérogation.",
+      "failedTitle": "Décision enregistrée, accès pas encore mis à jour",
+      "failed": "Le workflow a votre décision, mais la demande d'accès n'a pas pu être mise à jour. Une nouvelle tentative aura lieu automatiquement.",
+      "narrowedTitle": "Conditions réduites par une étape précédente",
+      "narrowed": "Une étape d'approbation précédente a accordé moins que votre choix : {{granted_level}} pendant {{granted_days}} jours (vous avez envoyé {{sent_level}}, {{sent_days}} jours)."
+    },
     "reasonLabel": "Raison de l'approbation ou du rejet",
     "reasonPlaceholder": "Saisissez votre raison...",
     "approved": "Approuvé",
@@ -410,6 +417,13 @@
       "waitingForApprovers_other": "En attente de {{count}} autres approbateurs."
     },
     "errors": {
+      "access_request_already_decided": "Cette demande d'accès a déjà été décidée.",
+      "access_terms_duration_not_allowed": "{{days}} jours n'est pas une durée autorisée (autorisées : {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Vous pouvez accorder au plus les {{requested}} jours demandés.",
+      "access_terms_exceed_requested_permission": "Vous pouvez accorder au plus le niveau demandé ({{requested}}).",
+      "access_terms_invalid_duration": "La durée doit être comprise entre {{min}} et {{max}} jours.",
+      "access_terms_invalid_permission": "Ce niveau d'autorisation ne peut pas être accordé.",
+      "own_access_request_approval": "Vous ne pouvez pas décider de votre propre demande d'accès.",
       "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande.",
       "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification.",
       "approval_already_decided": "Vous avez déjà pris une décision sur cette approbation.",
@@ -894,6 +908,7 @@
       "rejectResumeSuccess": "Workflow rejeté et repris",
       "rejectFailed": "Échec du rejet du workflow",
       "forceDecisionRequireAll": "Seuls les approbateurs peuvent décider de cette étape (tous doivent décider). Vous pouvez plutôt annuler l'exécution.",
+      "forceDecisionAccessRequest": "Les demandes d'accès sont décidées par leurs approbateurs, pas forcées d'ici.",
       "noChanges": "Aucune modification",
       "allAlreadyEnabled": "Tous les workflows sélectionnés sont déjà activés.",
       "allAlreadyDisabled": "Tous les workflows sélectionnés sont déjà désactivés.",

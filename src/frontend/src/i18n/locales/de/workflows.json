@@ -384,6 +384,13 @@
     "adjustTerms": "Genehmigungsbedingungen anpassen",
     "durationDays": "Dauer (Tage)",
     "permissionLevel": "Berechtigungsstufe",
+    "accessDecision": {
+      "adminHint": "Als Admin können Sie Ihren eigenen Antrag entscheiden und mehr gewähren als beantragt. Das Audit-Protokoll vermerkt dies als Übersteuerung.",
+      "failedTitle": "Entscheidung gespeichert, Zugriff noch nicht aktualisiert",
+      "failed": "Der Workflow hat Ihre Entscheidung, aber der Zugriffsantrag konnte nicht aktualisiert werden. Es wird automatisch erneut versucht.",
+      "narrowedTitle": "Bedingungen durch einen früheren Schritt verringert",
+      "narrowed": "Ein früherer Genehmigungsschritt hat weniger gewährt als Sie gewählt haben: {{granted_level}} für {{granted_days}} Tage (gesendet: {{sent_level}}, {{sent_days}} Tage)."
+    },
     "reasonLabel": "Grund für Genehmigung oder Ablehnung",
     "reasonPlaceholder": "Geben Sie Ihren Grund ein...",
     "approved": "Genehmigt",
@@ -410,6 +417,13 @@
       "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
     },
     "errors": {
+      "access_request_already_decided": "Über diese Zugriffsanfrage wurde bereits entschieden.",
+      "access_terms_duration_not_allowed": "{{days}} Tage sind keine zulässige Dauer (zulässig: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Sie können höchstens die angefragten {{requested}} Tage gewähren.",
+      "access_terms_exceed_requested_permission": "Sie können höchstens die angefragte Stufe ({{requested}}) gewähren.",
+      "access_terms_invalid_duration": "Die Dauer muss zwischen {{min}} und {{max}} Tagen liegen.",
+      "access_terms_invalid_permission": "Diese Berechtigungsstufe kann nicht erteilt werden.",
+      "own_access_request_approval": "Sie können nicht über Ihre eigene Zugriffsanfrage entscheiden.",
       "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
       "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
       "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",
@@ -894,6 +908,7 @@
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
       "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
+      "forceDecisionAccessRequest": "Zugriffsanfragen entscheiden ihre Genehmigenden, nicht von hier aus erzwungen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

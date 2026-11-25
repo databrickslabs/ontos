@@ -9,6 +9,14 @@
     "refused": "Su solicitud de cambiar el estado a «{{toStatus}}» se aprobó, pero el cambio no se pudo aplicar: {{reason}}",
     "reviewNotApplied": "La revisión del producto de datos se decidió, pero no se pudo aplicar el cambio a «{{toStatus}}»: {{reason}}"
   },
+  "approvalOverdue": {
+    "approverTitle": "Aprobación vencida",
+    "approverDescription_one": "La aprobación de '{{name}}' lleva más de {{count}} día esperando. Decídela en Mis acciones.",
+    "approverDescription_other": "La aprobación de '{{name}}' lleva más de {{count}} días esperando. Decídela en Mis acciones.",
+    "requesterTitle": "Tu solicitud sigue esperando",
+    "requesterDescription_one": "Tu solicitud para '{{name}}' lleva más de {{count}} día esperando una decisión. Se recordó a los aprobadores.",
+    "requesterDescription_other": "Tu solicitud para '{{name}}' lleva más de {{count}} días esperando una decisión. Se recordó a los aprobadores."
+  },
   "contractStatusNotChanged": {
     "title": "Estado del contrato sin cambios",
     "notUnderReview": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: el contrato no está en revisión (estado «{{currentStatus}}»)",

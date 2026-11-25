@@ -404,6 +404,11 @@
     "errorAssigning": "Errore nell'assegnazione del proprietario",
     "ownerUserAria": "Utente proprietario"
   },
+  "assignOwnerRole": {
+    "noRoles": "Nessun ruolo di business configurato. Chiedi a un amministratore di crearne uno.",
+    "ownerBadge": "Proprietario",
+    "notOwnerHint": "I proprietari con questo ruolo non ricevono approvazioni né notifiche da proprietario. Per questo, scegli Data Owner o Owner."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} versione",
     "countBadge_other": "{{count}} versioni"

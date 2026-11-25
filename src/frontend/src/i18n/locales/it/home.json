@@ -123,6 +123,10 @@
     "title": "Le mie azioni",
     "approvals": "Approvazioni"
   },
+  "approvalOverdue": {
+    "badge": "Scaduta",
+    "hint": "In attesa oltre il termine; approvatori e richiedente sono stati sollecitati."
+  },
   "quickActions": {
     "title": "Azioni rapide",
     "loading": "Caricamento...",

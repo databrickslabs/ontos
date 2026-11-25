@@ -384,6 +384,13 @@
     "adjustTerms": "承認条件を調整",
     "durationDays": "期間（日）",
     "permissionLevel": "権限レベル",
+    "accessDecision": {
+      "adminHint": "管理者は自分のリクエストを判断し、リクエストより多くを付与できます。監査ログにはオーバーライドとして記録されます。",
+      "failedTitle": "判断は記録されましたが、アクセスはまだ更新されていません",
+      "failed": "ワークフローには判断が記録されましたが、アクセスリクエストを更新できませんでした。自動的に再試行されます。",
+      "narrowedTitle": "前のステップで条件が縮小されました",
+      "narrowed": "前の承認ステップが、選択した内容より少ない付与を行いました: {{granted_level}}、{{granted_days}} 日間(送信: {{sent_level}}、{{sent_days}} 日間)。"
+    },
     "reasonLabel": "承認または却下の理由",
     "reasonPlaceholder": "理由を入力...",
     "approved": "承認済み",
@@ -410,6 +417,13 @@
       "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
+      "access_request_already_decided": "このアクセスリクエストはすでに判断済みです。",
+      "access_terms_duration_not_allowed": "{{days}} 日は許可された期間ではありません (許可: {{allowed}})。",
+      "access_terms_exceed_requested_duration": "付与できるのはリクエストされた {{requested}} 日までです。",
+      "access_terms_exceed_requested_permission": "付与できるのはリクエストされたレベル ({{requested}}) までです。",
+      "access_terms_invalid_duration": "期間は {{min}} 日から {{max}} 日の間で指定してください。",
+      "access_terms_invalid_permission": "この権限レベルは付与できません。",
+      "own_access_request_approval": "自分のアクセスリクエストは判断できません。",
       "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
       "own_change_request_approval": "自分の変更リクエストは承認できません。",
       "approval_already_decided": "この承認はすでにあなたが判断済みです。",
@@ -894,6 +908,7 @@
       "rejectResumeSuccess": "ワークフローを却下して再開しました",
       "rejectFailed": "ワークフローの却下に失敗しました",
       "forceDecisionRequireAll": "このステップは承認者だけが判断できます（全員の判断が必要です）。代わりに実行をキャンセルできます。",
+      "forceDecisionAccessRequest": "アクセスリクエストは承認者が判断します。ここから強制できません。",
       "noChanges": "変更なし",
       "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
       "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",

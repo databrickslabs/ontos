@@ -404,6 +404,11 @@
     "errorAssigning": "Erro ao atribuir proprietário",
     "ownerUserAria": "Usuário proprietário"
   },
+  "assignOwnerRole": {
+    "noRoles": "Nenhum papel de negócio configurado. Peça a um administrador para criar um.",
+    "ownerBadge": "Proprietário",
+    "notOwnerHint": "Proprietários com este papel não recebem aprovações nem notificações de proprietário. Para isso, escolha Data Owner ou Owner."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} versão",
     "countBadge_other": "{{count}} versões"

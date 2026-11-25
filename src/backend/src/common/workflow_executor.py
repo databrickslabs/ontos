@@ -1375,7 +1375,35 @@ def _humanize_entity_type(entity_type: Optional[str]) -> str:
     return entity_type.replace("_", " ").title()
 
 
-def _extract_approval_facets(context: "StepContext") -> Dict[str, Any]:
+def _server_entity_name(db: Optional[Session], entity_type: Any, entity_id: Any) -> Optional[str]:
+    """The name Ontos stores for a data product or contract; None when it can't say.
+
+    Approvers see this name, never one sent with the request (#1615 review): a requester
+    could otherwise make an approval read as being for another entity.
+    """
+    if db is None or not entity_id:
+        return None
+    kind = str(entity_type or '').lower().replace(' ', '')
+    try:
+        if kind in ('data_product', 'dataproduct'):
+            from src.db_models.data_products import DataProductDb as model
+        elif kind in ('data_contract', 'datacontract'):
+            from src.db_models.data_contracts import DataContractDb as model
+        else:
+            return None
+        # a savepoint: a failed SELECT aborts the whole transaction on Postgres, and
+        # this session is the step's own
+        with db.begin_nested():
+            name = db.query(model.name).filter(model.id == str(entity_id)).scalar()
+    except SQLAlchemyError:
+        logger.warning(f"Could not read the name of {kind} {entity_id}", exc_info=True)
+        return None
+    return str(name) if name else None
+
+
+def _extract_approval_facets(
+    context: "StepContext", db: Optional[Session] = None,
+) -> Dict[str, Any]:
     """Pull readable request facets out of the trigger entity_data.
 
     The approval step is generic, but the most common payload — access
@@ -1398,10 +1426,8 @@ def _extract_approval_facets(context: "StepContext") -> Dict[str, Any]:
     if context.entity_type and context.entity_type.lower() == "access_grant":
         underlying_type = entity.get("entity_type")
         underlying_id = entity.get("entity_id")
-        underlying_name = (
-            entity.get("entity_name")
-            or entity.get("data_product_name")
-        )
+        # From the database, never the request's own entity_name / data_product_name
+        underlying_name = _server_entity_name(db, underlying_type, underlying_id)
         if underlying_type:
             facets["underlying_entity_type"] = str(underlying_type)
         if underlying_id:
@@ -1587,11 +1613,13 @@ class ApprovalStepHandler(StepHandler):
             # instead of just the proxy ``access_grant`` UUID. Best-effort —
             # the approval step is generic and only access-grant triggers
             # populate these fields today.
-            facets = _extract_approval_facets(context)
+            facets = _extract_approval_facets(context, self._db)
 
+            # An access request's proxy name is the requester's: not shown to approvers
+            proxy = (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES
             entity_display = (
                 facets.get("underlying_entity_name")
-                or context.entity_name
+                or (None if proxy else context.entity_name)
                 or facets.get("underlying_entity_id")
                 or context.entity_id
             )
@@ -1634,7 +1662,10 @@ class ApprovalStepHandler(StepHandler):
                             "workflow_name": context.workflow_name,
                             "entity_type": context.entity_type,
                             "entity_id": context.entity_id,
-                            "entity_name": context.entity_name,
+                            "entity_name": entity_display if proxy else context.entity_name,
+                            # The name the requester gave: only for texts to the requester
+                            **({"requester_entity_name": context.entity_name}
+                               if proxy and context.entity_name else {}),
                             "requester_email": _requester_email(context),
                             "timeout_days": timeout_days,
                             # Structured request context for the approval
@@ -1688,6 +1719,40 @@ class ApprovalStepHandler(StepHandler):
     def _resolve_approvers(self, approvers: str, context: StepContext) -> List[tuple]:
         """Resolve approver specification to list of (identifier, role_uuid) tuples."""
         return _resolve_role_to_users(self._db, approvers, context)
+
+
+def _notification_subtitle(
+    context: StepContext, name: Optional[str] = None,
+) -> Optional[str]:
+    """Subtitle of a notification step: the entity's type and name (else its id).
+
+    An access request runs on the proxy ``access_grant`` whose id is the request's: the
+    subtitle names the requested entity instead (#1615), by ``name`` (the caller picks it
+    per recipient, see ``_recipient_entity_name``), else its id.
+    """
+    if (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES:
+        entity = context.entity if isinstance(context.entity, dict) else {}
+        underlying_type = entity.get('entity_type')
+        ref = name or entity.get('entity_id') or context.entity_id
+        if underlying_type and ref:
+            return f"{_humanize_entity_type(str(underlying_type))}: {ref}"
+    ref = context.entity_name or context.entity_id
+    return f"{context.entity_type}: {ref}" if ref else None
+
+
+def _recipient_entity_name(
+    context: StepContext, recipient: Optional[str], server_name: Optional[str],
+) -> Optional[str]:
+    """The requested entity's name a recipient of an access request's notice sees.
+
+    The requester: the name they sent (what they saw), so nothing new becomes readable to
+    them. Anyone else: the stored name (``_server_entity_name``), never the sent one.
+    """
+    entity = context.entity if isinstance(context.entity, dict) else {}
+    requester = (_requester_email(context) or '').strip().lower()
+    if requester and (recipient or '').strip().lower() == requester:
+        return entity.get('entity_name') or context.entity_name
+    return server_name
 
 
 class NotificationStepHandler(StepHandler):
@@ -1755,8 +1820,12 @@ class NotificationStepHandler(StepHandler):
             
             # Typed-ID manual runs have no entity name: fall back to the id and
             # leave the subtitle out when neither is known.
-            subtitle_ref = context.entity_name or context.entity_id
-            subtitle = f"{context.entity_type}: {subtitle_ref}" if subtitle_ref else None
+            proxy = (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES
+            entity = context.entity if isinstance(context.entity, dict) else {}
+            server_name = _server_entity_name(
+                self._db, entity.get('entity_type'), entity.get('entity_id'),
+            ) if proxy else None
+            subtitle = _notification_subtitle(context)
 
             created_count = 0
             email_count = 0
@@ -1773,7 +1842,10 @@ class NotificationStepHandler(StepHandler):
                             created_at=utc_now(),
                             type=notification_type,
                             title=title,
-                            subtitle=subtitle,
+                            subtitle=_notification_subtitle(
+                                context, _recipient_entity_name(
+                                    context, recipient_id, server_name),
+                            ) if proxy else subtitle,
                             description=message,
                             link=link,
                             recipient=recipient_id,
@@ -4162,6 +4234,34 @@ class WorkflowExecutor:
             'outcome': outcome, 'pending_approvers': len(pending), 'decisions': decisions,
             'rejection': rejection,
         }
+
+    def record_decision_terms(
+        self, execution_id: str, decided_by: Optional[str], terms: Dict[str, Any],
+    ) -> bool:
+        """Keep what an approval grants with its ``require_all`` decision.
+
+        An access request's checked terms (duration, level) are stored on the caller's
+        approving decisions of the paused step, so the step's outcome can grant the
+        narrowest of every approver's. Call right after ``record_required_approval``.
+        Flushed, not committed. Whether a decision was found.
+        """
+        paused = self._paused_approval(execution_id, lock=True)
+        if paused is None or paused[1] is None or not decided_by:
+            return False
+        _, record, data = paused
+        decisions = [d for d in (data.get('decisions') or []) if isinstance(d, dict)]
+        who = decided_by.strip().lower()
+        found = False
+        for decision in decisions:
+            if (str(decision.get('decided_by') or '').strip().lower() == who
+                    and decision.get('decision') == 'approved' and 'terms' not in decision):
+                decision['terms'] = terms
+                found = True
+        if found:
+            record.result_data = json.dumps({**data, 'decisions': decisions})
+            self._db.add(record)
+            self._db.flush()
+        return found
 
     def _restored_step_results(
         self, execution_id: str, steps_by_id: Dict[str, Any],

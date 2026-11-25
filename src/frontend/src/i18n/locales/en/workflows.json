@@ -384,6 +384,13 @@
     "adjustTerms": "Adjust approval terms",
     "durationDays": "Duration (days)",
     "permissionLevel": "Permission level",
+    "accessDecision": {
+      "adminHint": "As an admin you can decide your own request and grant more than was requested. The audit log records it as an override.",
+      "failedTitle": "Decision recorded, access not updated yet",
+      "failed": "The workflow has your decision, but the access request could not be updated. It is retried automatically.",
+      "narrowedTitle": "Terms reduced by an earlier step",
+      "narrowed": "An earlier approval step granted less than you chose: {{granted_level}} for {{granted_days}} days (you sent {{sent_level}}, {{sent_days}} days)."
+    },
     "reasonLabel": "Reason for approval or rejection",
     "reasonPlaceholder": "Enter your reason...",
     "approved": "Approved",
@@ -410,6 +417,13 @@
       "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
+      "access_request_already_decided": "This access request has already been decided.",
+      "access_terms_duration_not_allowed": "{{days}} days is not an allowed duration (allowed: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "You can grant at most the requested {{requested}} days.",
+      "access_terms_exceed_requested_permission": "You can grant at most the requested level ({{requested}}).",
+      "access_terms_invalid_duration": "The duration must be between {{min}} and {{max}} days.",
+      "access_terms_invalid_permission": "This permission level can't be granted.",
+      "own_access_request_approval": "You can't decide your own access request.",
       "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
       "own_change_request_approval": "You can't approve your own change request.",
       "approval_already_decided": "You have already decided this approval.",
@@ -894,6 +908,7 @@
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
       "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
+      "forceDecisionAccessRequest": "Access requests are decided by their approvers, not forced from here.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

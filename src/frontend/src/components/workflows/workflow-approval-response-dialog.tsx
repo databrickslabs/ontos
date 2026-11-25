@@ -23,6 +23,7 @@ import {
 import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useIsOntosAdmin } from '@/hooks/use-is-ontos-admin';
 import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
@@ -215,6 +216,23 @@ function buildDetailRows(
   return rows;
 }
 
+/** Permission levels of an access grant (backend ``PermissionLevel``). */
+const ACCESS_PERMISSION_LEVELS = ['READ', 'WRITE', 'MANAGE'] as const;
+
+/**
+ * The levels an approver may grant: the requested one or a narrower one. An admin may
+ * grant any level (the backend audits it as an override).
+ */
+export function grantableLevels(requested?: string, admin = false): string[] {
+  const index = ACCESS_PERMISSION_LEVELS.indexOf(requested as never);
+  return admin || index < 0
+    ? [...ACCESS_PERMISSION_LEVELS]
+    : ACCESS_PERMISSION_LEVELS.slice(0, index + 1);
+}
+
+/** The longest grant an admin may give past the request (backend ``MAX_GRANT_DAYS``). */
+export const MAX_GRANT_DAYS = 365;
+
 export default function WorkflowApprovalResponseDialog({
   isOpen,
   onOpenChange,
@@ -225,6 +243,8 @@ export default function WorkflowApprovalResponseDialog({
   const { t } = useTranslation(['workflows', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
+  const isAdmin = useIsOntosAdmin();
+  const maxRequestedDays = payload?.requested_duration_days ?? MAX_GRANT_DAYS;
   const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
   const [stepConfig, setStepConfig] = useState<DefaultResponseWorkflowStep | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
@@ -307,7 +327,9 @@ export default function WorkflowApprovalResponseDialog({
         toast({
           title: t('common:toast.error'),
           description: response.errorCode
-            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, { defaultValue: response.error })
+            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, {
+              ...(response.errorParams ?? {}), defaultValue: response.error,
+            })
             : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
@@ -316,7 +338,33 @@ export default function WorkflowApprovalResponseDialog({
       // require_all: the decision is recorded and other approvers still decide.
       // Only then is there a count: a step that moves on to another approval
       // step is 'paused' too, but this decision was the step's.
-      const decision = response.data as { status?: string; pending_approvers?: number } | null;
+      const decision = response.data as {
+        status?: string; pending_approvers?: number;
+        warning?: { code?: string; params?: Record<string, string | number> };
+      } | null;
+      if (decision?.warning?.code === 'access_terms_narrowed_by_earlier_step') {
+        // The decision is recorded; an earlier approval step had granted less
+        toast({
+          title: t('workflows:approvalResponse.accessDecision.narrowedTitle'),
+          description: t('workflows:approvalResponse.accessDecision.narrowed', {
+            ...decision.warning.params,
+          }),
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
+        return;
+      }
+      if (decision?.warning?.code === 'access_decision_failed') {
+        // The workflow has the decision; the access request gets it on a later pass
+        toast({
+          title: t('workflows:approvalResponse.accessDecision.failedTitle'),
+          description: t('workflows:approvalResponse.accessDecision.failed'),
+          variant: 'destructive',
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
+        return;
+      }
       const pendingApprovers = decision?.pending_approvers;
       if (typeof pendingApprovers === 'number' && pendingApprovers > 0) {
         toast({
@@ -402,6 +450,11 @@ export default function WorkflowApprovalResponseDialog({
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   {t('workflows:approvalResponse.adjustTerms')}
                 </div>
+                {isAdmin && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('workflows:approvalResponse.accessDecision.adminHint')}
+                  </p>
+                )}
                 {payload.requested_duration_days != null && (
                   <div className="space-y-1">
                     <Label htmlFor="granted-days" className="text-sm">{t('workflows:approvalResponse.durationDays')}</Label>
@@ -409,6 +462,7 @@ export default function WorkflowApprovalResponseDialog({
                       id="granted-days"
                       type="number"
                       min={1}
+                      max={isAdmin ? MAX_GRANT_DAYS : maxRequestedDays}
                       value={grantedDays}
                       onChange={(e) => setGrantedDays(e.target.value === '' ? '' : Number(e.target.value))}
                       disabled={submitting}
@@ -424,10 +478,13 @@ export default function WorkflowApprovalResponseDialog({
                         <SelectValue placeholder={t('common:placeholders.selectPermission')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CAN_READ">CAN_READ</SelectItem>
-                        <SelectItem value="CAN_USE">CAN_USE</SelectItem>
-                        <SelectItem value="CAN_EDIT">CAN_EDIT</SelectItem>
-                        <SelectItem value="CAN_MANAGE">CAN_MANAGE</SelectItem>
+                        {/* The access request's levels (READ / WRITE / MANAGE): the
+                            requested one must be an option to show selected (#1615) */}
+                        {grantableLevels(payload.permission_level, isAdmin).map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {t(`access-grants:permissionOptions.${level}`)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

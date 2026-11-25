@@ -404,6 +404,11 @@
     "errorAssigning": "Error assigning owner",
     "ownerUserAria": "Owner user"
   },
+  "assignOwnerRole": {
+    "noRoles": "No business roles are configured. Ask an admin to add one.",
+    "ownerBadge": "Owner",
+    "notOwnerHint": "Owners with this role don't receive owner approvals or owner notifications. Pick Data Owner or Owner for that."
+  },
   "versionFamily": {
     "countBadge_one": "{{count}} version",
     "countBadge_other": "{{count}} versions"

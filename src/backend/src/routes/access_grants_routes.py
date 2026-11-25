@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
 
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, is_ontos_admin
 from src.common.dependencies import (
     AuditCurrentUserDep,
     AuditManagerDep,
@@ -19,7 +19,12 @@ from src.common.dependencies import (
 )
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
-from src.controller.access_grants_manager import AccessGrantsManager, get_access_grants_manager
+from src.controller.access_grants_manager import (
+    AccessGrantsManager,
+    AccessRequestAlreadyDecidedError,
+    OwnAccessRequestError,
+    get_access_grants_manager,
+)
 from src.models.access_grants import (
     AccessGrantCreateDirect,
     AccessGrantDurationConfigCreate,
@@ -135,7 +140,11 @@ async def create_access_request(
     response_model=dict,
     status_code=status.HTTP_200_OK,
     summary="Handle Access Request",
-    description="Approve or deny an access grant request (admin only)."
+    description=(
+        "Approve or deny an access grant request. As on the workflow path, only an Ontos "
+        "admin may decide their own request or grant more than was requested (audited as "
+        "an override)."
+    ),
 )
 async def handle_access_request(
     request: Request,
@@ -153,7 +162,8 @@ async def handle_access_request(
     details = {
         "request_id": str(payload.request_id),
         "approved": payload.approved,
-        "granted_duration_days": payload.granted_duration_days
+        "granted_duration_days": payload.granted_duration_days,
+        "permission_level": payload.permission_level.value if payload.permission_level else None,
     }
     
     try:
@@ -162,23 +172,38 @@ async def handle_access_request(
         
         manager = get_manager(request, notifications)
         
-        request_response, grant_response = manager.handle_request(
-            db=db,
-            admin_email=current_user.email,
-            payload=payload
+        decision = manager.decide_request(
+            db,
+            current_user.email,
+            payload,
+            admin=is_ontos_admin(request, current_user),
+            caller_ids=(current_user.username,),
         )
+        if decision.overridden:
+            details.update({"override": True, "overridden": decision.overridden})
         
         success = True
         
         result = {
-            "request": request_response.model_dump(),
+            "request": decision.request.model_dump(),
             "message": "Request approved" if payload.approved else "Request denied"
         }
-        if grant_response:
-            result["grant"] = grant_response.model_dump()
+        if decision.grant:
+            result["grant"] = decision.grant.model_dump()
         
         return result
         
+    except OwnAccessRequestError as e:
+        # code: translated by the UI (workflows:approvalResponse.errors.*)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": e.code, "message": str(e)},
+        )
+    except AccessRequestAlreadyDecidedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": e.code, "message": str(e), "params": e.params},
+        )
     except ValueError as e:
         logger.warning(f"Invalid handle request: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

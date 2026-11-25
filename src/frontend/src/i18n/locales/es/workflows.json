@@ -384,6 +384,13 @@
     "adjustTerms": "Ajustar los términos de aprobación",
     "durationDays": "Duración (días)",
     "permissionLevel": "Nivel de permiso",
+    "accessDecision": {
+      "adminHint": "Como administrador puede decidir su propia solicitud y conceder más de lo solicitado. El registro de auditoría lo registra como una anulación.",
+      "failedTitle": "Decisión registrada, acceso aún no actualizado",
+      "failed": "El flujo de trabajo tiene su decisión, pero no se pudo actualizar la solicitud de acceso. Se reintentará automáticamente.",
+      "narrowedTitle": "Condiciones reducidas por un paso anterior",
+      "narrowed": "Un paso de aprobación anterior concedió menos de lo que elegiste: {{granted_level}} durante {{granted_days}} días (enviaste {{sent_level}}, {{sent_days}} días)."
+    },
     "reasonLabel": "Motivo de la aprobación o el rechazo",
     "reasonPlaceholder": "Introduce tu motivo...",
     "approved": "Aprobado",
@@ -410,6 +417,13 @@
       "waitingForApprovers_other": "Faltan {{count}} aprobadores más."
     },
     "errors": {
+      "access_request_already_decided": "Esta solicitud de acceso ya se decidió.",
+      "access_terms_duration_not_allowed": "{{days}} días no es una duración permitida (permitidas: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Puedes conceder como máximo los {{requested}} días solicitados.",
+      "access_terms_exceed_requested_permission": "Puedes conceder como máximo el nivel solicitado ({{requested}}).",
+      "access_terms_invalid_duration": "La duración debe estar entre {{min}} y {{max}} días.",
+      "access_terms_invalid_permission": "Este nivel de permiso no se puede conceder.",
+      "own_access_request_approval": "No puedes decidir tu propia solicitud de acceso.",
       "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
       "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
       "approval_already_decided": "Ya has decidido esta aprobación.",
@@ -894,6 +908,7 @@
       "rejectResumeSuccess": "Flujo de trabajo rechazado y reanudado",
       "rejectFailed": "No se pudo rechazar el flujo de trabajo",
       "forceDecisionRequireAll": "Solo los aprobadores pueden decidir este paso (todos deben decidir). En su lugar, puedes cancelar la ejecución.",
+      "forceDecisionAccessRequest": "Las solicitudes de acceso las deciden sus aprobadores; no se fuerzan desde aquí.",
       "noChanges": "Sin cambios",
       "allAlreadyEnabled": "Todos los flujos de trabajo seleccionados ya están habilitados.",
       "allAlreadyDisabled": "Todos los flujos de trabajo seleccionados ya están deshabilitados.",

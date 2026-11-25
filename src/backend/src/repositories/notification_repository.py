@@ -159,6 +159,18 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
         ).order_by(*newest_first).limit(history_limit).all()
         return pending + history
 
+    def pending_approvals_not_marked(self, db: Session, marker: str) -> List[NotificationDb]:
+        """The pending ``workflow_approval`` rows whose payload has no ``marker`` key yet.
+
+        One query, whatever the number of executions (the overdue reminders, #1119).
+        """
+        payload = _without_json_whitespace(func.coalesce(NotificationDb.action_payload, ''))
+        return db.query(NotificationDb).filter(
+            NotificationDb.action_type == 'workflow_approval',
+            _is_pending_actionable(),
+            not_(payload.contains(f'"{marker}":')),
+        ).all()
+
     def get_by_action_type(
         self, db: Session, action_type: str, *, unread_only: bool = False,
     ) -> List[NotificationDb]:

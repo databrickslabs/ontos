@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Status Change Approved",
+    "approved": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been approved by '{{approver}}'.",
+    "approvedWithMessage": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been approved by '{{approver}}'.\n\nApprover message: {{message}}",
+    "deniedTitle": "Status Change Denied",
+    "denied": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been denied by '{{approver}}'.",
+    "deniedWithMessage": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been denied by '{{approver}}'.\n\nApprover message: {{message}}",
+    "clarificationTitle": "Status Change - Clarification Needed",
+    "clarification": "Your request to change the status of '{{name}}' to '{{toStatus}}' requires clarification from '{{approver}}'.",
+    "clarificationWithMessage": "Your request to change the status of '{{name}}' to '{{toStatus}}' requires clarification from '{{approver}}'.\n\nApprover message: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Metric view definition changed",
     "description": "The definition of the metric view {{fqn}} in Unity Catalog no longer matches its baseline in Ontos."
@@ -142,9 +153,7 @@
         "notify-rejected": "Your access request has been denied. Please contact an administrator for more information."
       },
       "status-change-request": {
-        "notify-requester": "Your status change request has been submitted for approval.",
-        "notify-approved": "Your status change request has been approved.",
-        "notify-rejected": "Your status change request has been denied."
+        "notify-requester": "Your status change request has been submitted for approval."
       },
       "data-asset-review-request": {
         "notify-reviewer": "A new data asset review request has been assigned to you.",

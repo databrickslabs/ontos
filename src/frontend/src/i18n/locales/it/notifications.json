@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Modifica dello stato approvata",
+    "approved": "La tua richiesta di modificare lo stato di '{{name}}' in '{{toStatus}}' è stata approvata da '{{approver}}'.",
+    "approvedWithMessage": "La tua richiesta di modificare lo stato di '{{name}}' in '{{toStatus}}' è stata approvata da '{{approver}}'.\n\nMessaggio dell'approvatore: {{message}}",
+    "deniedTitle": "Modifica dello stato negata",
+    "denied": "La tua richiesta di modificare lo stato di '{{name}}' in '{{toStatus}}' è stata negata da '{{approver}}'.",
+    "deniedWithMessage": "La tua richiesta di modificare lo stato di '{{name}}' in '{{toStatus}}' è stata negata da '{{approver}}'.\n\nMessaggio dell'approvatore: {{message}}",
+    "clarificationTitle": "Modifica dello stato: chiarimento necessario",
+    "clarification": "La tua richiesta di modificare lo stato di '{{name}}' in '{{toStatus}}' richiede un chiarimento da parte di '{{approver}}'.",
+    "clarificationWithMessage": "La tua richiesta di modificare lo stato di '{{name}}' in '{{toStatus}}' richiede un chiarimento da parte di '{{approver}}'.\n\nMessaggio dell'approvatore: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definizione della metric view modificata",
     "description": "La definizione della metric view {{fqn}} in Unity Catalog non corrisponde più alla sua baseline in Ontos."
@@ -142,9 +153,7 @@
         "notify-rejected": "La tua richiesta di accesso è stata negata. Contatta un amministratore per maggiori informazioni."
       },
       "status-change-request": {
-        "notify-requester": "La tua richiesta di cambio di stato è stata inviata per l'approvazione.",
-        "notify-approved": "La tua richiesta di cambio di stato è stata approvata.",
-        "notify-rejected": "La tua richiesta di cambio di stato è stata negata."
+        "notify-requester": "La tua richiesta di cambio di stato è stata inviata per l'approvazione."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Ti è stata assegnata una nuova richiesta di revisione di asset di dati.",

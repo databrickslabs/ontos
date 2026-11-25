@@ -673,16 +673,20 @@ workflows:
           approvers: "Admin"
           timeout_days: 5
           require_all: false
+          # "Request clarification": the approver asks the requester for more
+          # information; the product keeps its status
+          on_clarify: "notify-clarify"
         on_pass: "notify-approved"
         on_fail: "notify-rejected"
 
+      # The decision notices are built from the product, target status,
+      # approver and the approver's message (no custom_message)
       - id: "notify-approved"
         name: "Notify Status Change Approved"
         type: "notification"
         config:
           recipients: "requester"
-          template: "request_approved"
-          custom_message: "Your status change request has been approved."
+          template: "status_change_approved"
         on_pass: "success"
 
       - id: "notify-rejected"
@@ -690,12 +694,23 @@ workflows:
         type: "notification"
         config:
           recipients: "requester"
-          template: "request_rejected"
-          custom_message: "Your status change request has been denied."
+          template: "status_change_denied"
         on_pass: "fail-rejected"
+
+      - id: "notify-clarify"
+        name: "Notify Status Change Clarification Needed"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "status_change_clarification"
+        on_pass: "clarification-requested"
 
       - id: "success"
         name: "Status Change Approved"
+        type: "pass"
+
+      - id: "clarification-requested"
+        name: "Clarification Requested"
         type: "pass"
 
       - id: "fail-rejected"

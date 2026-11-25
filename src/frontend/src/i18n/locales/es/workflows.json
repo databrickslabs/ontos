@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Solicitar aclaración",
+    "messageRequiredTitle": "Mensaje obligatorio",
+    "messageRequiredDesc": "Escribe qué necesita aclarar el solicitante.",
+    "requestedTitle": "Aclaración solicitada",
+    "requestedDesc": "Se pidió al solicitante más información sobre '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Este paso de aprobación no admite aclaración.",
+      "clarification_message_required": "Una aclaración necesita un mensaje para el solicitante."
+    }
+  },
   "designer": {
     "newWorkflow": "Nuevo flujo de trabajo",
     "newStepName": "Nuevo paso de {{type}}",

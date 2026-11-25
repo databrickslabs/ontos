@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Verduidelijking vragen",
+    "messageRequiredTitle": "Bericht vereist",
+    "messageRequiredDesc": "Schrijf wat de aanvrager moet verduidelijken.",
+    "requestedTitle": "Verduidelijking gevraagd",
+    "requestedDesc": "De aanvrager is gevraagd om meer informatie over '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Deze goedkeuringsstap accepteert geen verduidelijking.",
+      "clarification_message_required": "Een verduidelijking heeft een bericht voor de aanvrager nodig."
+    }
+  },
   "designer": {
     "newWorkflow": "Nieuwe Workflow",
     "newStepName": "Nieuwe {{type}}-stap",

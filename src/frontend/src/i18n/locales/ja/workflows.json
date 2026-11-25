@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "確認を依頼",
+    "messageRequiredTitle": "メッセージが必要です",
+    "messageRequiredDesc": "申請者に確認してほしい内容を入力してください。",
+    "requestedTitle": "確認を依頼しました",
+    "requestedDesc": "'{{name}}' について、申請者に追加情報を依頼しました。",
+    "errors": {
+      "clarify_not_supported": "この承認ステップでは確認依頼は使用できません。",
+      "clarification_message_required": "確認依頼には申請者宛てのメッセージが必要です。"
+    }
+  },
   "designer": {
     "newWorkflow": "新規ワークフロー",
     "newStepName": "新規 {{type}} ステップ",

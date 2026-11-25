@@ -7,6 +7,15 @@ from typing import Any, Callable, Dict, NoReturn, Optional
 
 from databricks import sql
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import (
+    DatabricksError,
+    DeadlineExceeded,
+    InternalError,
+    RequestLimitExceeded,
+    ResourceExhausted,
+    TemporarilyUnavailable,
+    TooManyRequests,
+)
 from fastapi import Depends, Header, Request
 from typing import Optional as OptionalType
 
@@ -35,13 +44,15 @@ def _cleanup_client_cache():
         return
 
     _LAST_CLEANUP_TIME = current_time
+    # Snapshot + pop: sync routes/dependencies call this from FastAPI's threadpool, so another
+    # thread may add or remove entries meanwhile
     stale_keys = [
-        key for key, (_, _, last_access) in _CLIENT_CACHE.items()
+        key for key, (_, _, last_access) in list(_CLIENT_CACHE.items())
         if current_time - last_access > _CACHE_MAX_AGE
     ]
 
     for key in stale_keys:
-        del _CLIENT_CACHE[key]
+        _CLIENT_CACHE.pop(key, None)
         logger.info(f"Cleaned up stale workspace client for user: {key}")
 
 def _get_token_hash(token: str) -> str:
@@ -50,6 +61,35 @@ def _get_token_hash(token: str) -> str:
 
 class TimeoutError(Exception):
     """Exception raised when a function times out."""
+
+# SDK failures worth riding out with the last good result, for at most _STALE_MAX_AGE seconds
+_TRANSIENT_SDK_ERRORS = (
+    DeadlineExceeded,
+    InternalError,
+    RequestLimitExceeded,
+    ResourceExhausted,
+    TemporarilyUnavailable,
+    TooManyRequests,
+)
+_STALE_MAX_AGE = 300
+_MISSING = object()
+
+
+def _is_transient(error: Exception) -> bool:
+    """Whether a failed listing may fall back to stale cached data.
+
+    Anything else (permission revoked, auth failure, bad request) must surface instead of
+    serving a listing the user may no longer be allowed to see. ``DatabricksError`` derives
+    from ``OSError``, so SDK errors are classified before the network-error check.
+    """
+    if isinstance(error, DatabricksError):
+        # A bare DatabricksError is a response the SDK could not map (e.g. a gateway 502 or a
+        # non-JSON proxy page); every mapped 4xx is a subclass and stays non-transient
+        return type(error) is DatabricksError or isinstance(error, _TRANSIENT_SDK_ERRORS)
+    # Network failures (requests' exceptions and the builtin TimeoutError are OSErrors) and
+    # this module's TimeoutError
+    return isinstance(error, (OSError, TimeoutError))
+
 
 class CachingWorkspaceClient(WorkspaceClient):
     def __init__(self, client: WorkspaceClient, timeout: int = 30):
@@ -103,14 +143,13 @@ class CachingWorkspaceClient(WorkspaceClient):
             @wraps(func)
             def wrapper(*args, **kwargs):
                 current_time = time.time()
+                # Single .get() reads: other threadpool threads may evict the entry meanwhile
+                cached = self._cache.get(key, _MISSING)
+                age = current_time - self._cache_times.get(key, float('-inf'))
                 # Check if we have a cached result that's still valid
-                if (
-                    key in self._cache
-                    and key in self._cache_times
-                    and current_time - self._cache_times[key] < self._cache_duration
-                ):
-                    logger.info(f"Cache hit for {key} (age: {current_time - self._cache_times[key]:.1f}s)")
-                    return self._cache[key]
+                if cached is not _MISSING and age < self._cache_duration:
+                    logger.info(f"Cache hit for {key} (age: {age:.1f}s)")
+                    return cached
 
                 # Call the actual function and cache the result
                 logger.info(f"Cache miss for {key}, calling Databricks workspace")
@@ -119,19 +158,14 @@ class CachingWorkspaceClient(WorkspaceClient):
                     self._cache[key] = result
                     self._cache_times[key] = current_time
                     return result
-                except TimeoutError as e:
-                    logger.error(f"Timeout while fetching {key}: {e}")
-                    # Return cached data if available, even if expired
-                    if key in self._cache:
-                        logger.warning(f"Returning stale cached data for {key}")
-                        return self._cache[key]
-                    raise
                 except Exception as e:
                     logger.error(f"Error fetching {key}: {e}")
-                    # Return cached data if available, even if expired
-                    if key in self._cache:
-                        logger.warning(f"Returning stale cached data for {key}")
-                        return self._cache[key]
+                    if _is_transient(e) and cached is not _MISSING and age < _STALE_MAX_AGE:
+                        logger.warning(f"Returning stale cached data for {key} (age: {age:.1f}s)")
+                        return cached
+                    # Not transient, or too old to stand in: the next call must try again
+                    self._cache.pop(key, None)
+                    self._cache_times.pop(key, None)
                     raise
             return wrapper
         return decorator

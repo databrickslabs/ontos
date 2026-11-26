@@ -106,3 +106,16 @@ def test_forced_refresh_is_admin_only():
                  and "POST" in getattr(r, "methods", set()))
     checkers = [d.call for d in route.dependant.dependencies if isinstance(d.call, PermissionChecker)]
     assert checkers and all(c.required_level == FeatureAccessLevel.ADMIN for c in checkers)
+
+
+def test_snapshot_state_needs_read_access_to_the_asset(client: TestClient, dashboard, monkeypatch):
+    from fastapi import HTTPException
+    from src.routes import dashboard_snapshot_routes as routes
+
+    def deny(request, db, user, manager, asset_id):
+        raise HTTPException(status_code=403, detail="Asset is not linked to a Data Product accessible to this user.")
+
+    monkeypatch.setattr(routes, "ensure_asset_readable", deny)
+    response = client.get(f"/api/assets/{dashboard.id}/snapshot")
+    assert response.status_code == 403
+    assert "status" not in response.text

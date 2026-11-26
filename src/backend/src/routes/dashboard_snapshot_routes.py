@@ -6,11 +6,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from src.common.asset_access import ensure_asset_readable
 from src.common.authorization import PermissionChecker
 from src.common.config import get_settings
 from src.common.dependencies import AuditCurrentUserDep, DBSessionDep
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
+from src.common.manager_dependencies import get_assets_manager
 from src.common.workspace_client import get_obo_workspace_client
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.dashboard_snapshot_manager import (
@@ -67,9 +69,14 @@ def _response(asset: AssetDb) -> SnapshotResponse:
 @router.get("/{asset_id}/snapshot", response_model=SnapshotResponse)
 def get_snapshot(
     asset_id: UUID,
+    request: Request,
     db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    assets_manager=Depends(get_assets_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
+    # Same read rule as the other /assets/{id} routes: linked through a readable data product, or unscoped
+    ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
     return _response(_asset(db, asset_id))
 
 

@@ -44,7 +44,9 @@ def pg():
     engines = []
 
     def make_factory():
-        engine = create_engine(_PG_URL, future=True, connect_args={"options": f"-csearch_path={schema}"})
+        engine = create_engine(
+            _PG_URL, future=True, connect_args={"options": f"-csearch_path={schema}"},
+        )
         engines.append(engine)
         Session = sessionmaker(bind=engine, future=True)
 
@@ -150,7 +152,10 @@ def test_reconcile_does_not_rewrite_unchanged_rows(pg):
     backend = _backend(pg)
     backend.reconcile([("All", lambda: ITEMS)], is_indexable=_indexable)
     before = _updated_at(pg)
-    edited = [i.model_copy(update={"description": "edited"}) if i.id == "product::2" else i for i in ITEMS]
+    edited = [
+        i.model_copy(update={"description": "edited"}) if i.id == "product::2" else i
+        for i in ITEMS
+    ]
     backend.reconcile([("All", lambda: edited)], is_indexable=_indexable)
     after = _updated_at(pg)
     assert {i for i in after if after[i] != before[i]} == {"product::2"}
@@ -171,8 +176,10 @@ def test_a_source_returning_nothing_keeps_its_rows(pg):
 def test_changes_made_during_a_reconcile_win_over_its_snapshot(pg):
     backend = _backend(pg)
     gone, edited = ITEMS[0], ITEMS[1].model_copy(update={"title": "Edited Meanwhile"})
-    term = SearchIndexItem(id="glossary-term::live", type="glossary-term", feature_id="semantic-models",
-                           title="Live Term", description="", link="/c", tags=[], extra_data={})
+    term = SearchIndexItem(
+        id="glossary-term::live", type="glossary-term", feature_id="semantic-models",
+        title="Live Term", description="", link="/c", tags=[], extra_data={},
+    )
 
     def snapshot_then_concurrent_writes():
         # The snapshot was taken before these incremental writes landed.
@@ -185,7 +192,9 @@ def test_changes_made_during_a_reconcile_win_over_its_snapshot(pg):
     ids = _ids(pg)
     assert gone.id not in ids                                  # not resurrected
     with pg() as db:
-        title = db.execute(text("SELECT title FROM search_documents WHERE id = :i"), {"i": edited.id}).scalar()
+        title = db.execute(
+            text("SELECT title FROM search_documents WHERE id = :i"), {"i": edited.id},
+        ).scalar()
     assert title == "Edited Meanwhile"                         # not rolled back
     assert {i for i in ids if i.startswith("glossary")} == {"glossary-term::live"}
     assert PostgresBackend._dirty is None                      # tracking ends with the run
@@ -200,15 +209,18 @@ def test_only_one_replica_reconciles_at_a_time(pg):
             assert _ids(pg) == set()
         finally:
             repo.release_reconcile_lock(holder)
-    assert _backend(pg).reconcile([("All", lambda: ITEMS)], is_indexable=_indexable)["status"] == "done"
+    result = _backend(pg).reconcile([("All", lambda: ITEMS)], is_indexable=_indexable)
+    assert result["status"] == "done"
 
 
 def test_replace_type_swaps_only_that_type(pg):
     backend = _backend(pg)
     with pg() as db:
         repo.upsert_documents(db, ITEMS)
-    term = SearchIndexItem(id="glossary-term::new", type="glossary-term", feature_id="semantic-models",
-                           title="Net Revenue", description="", link="/c", tags=[], extra_data={})
+    term = SearchIndexItem(
+        id="glossary-term::new", type="glossary-term", feature_id="semantic-models",
+        title="Net Revenue", description="", link="/c", tags=[], extra_data={},
+    )
     backend.replace_type("glossary-term", [term])
     ids = _ids(pg)
     assert "glossary::6" not in ids and "glossary-term::new" in ids
@@ -296,7 +308,8 @@ def test_incremental_lifecycle_without_restart(pg, pg_manager_factory):
     assert mgr.query_index("lifecycle")["results"][0]["status"] == "draft"
     mgr.upsert_item(item.model_copy(update={"description": "second"}))  # update
     assert mgr.query_index("lifecycle")["results"][0]["description"] == "second"
-    mgr.upsert_item(item.model_copy(update={"extra_data": {"status": "active"}}))  # status transition
+    # status transition
+    mgr.upsert_item(item.model_copy(update={"extra_data": {"status": "active"}}))
     assert mgr.query_index("lifecycle")["results"][0]["status"] == "active"
     mgr.remove_item(item.id)                                            # delete
     assert mgr.query_index("lifecycle")["total_count"] == 0

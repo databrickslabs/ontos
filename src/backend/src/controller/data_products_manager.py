@@ -4041,7 +4041,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 if product:
                     self._update_search_index(product)
             except Exception as e:  # the tag is gone either way; the next reconcile catches up
-                logger.warning(f"Search reindex after removing tag {tag_id} from {product_id} failed: {e}")
+                logger.warning(
+                    f"Search reindex after removing tag {tag_id} from {product_id} failed: {e}"
+                )
         return removed
 
     def get_product_tags(self, product_id: str) -> List[Dict[str, Any]]:

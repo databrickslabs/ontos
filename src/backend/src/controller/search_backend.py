@@ -161,7 +161,9 @@ class PostgresBackend(SearchBackend):
             except SearchEngineUnavailable:
                 raise
             except Exception as e:
-                logger.warning(f"Search engine detection failed; continuing without engine extras: {e}")
+                logger.warning(
+                    f"Search engine detection failed; continuing without engine extras: {e}"
+                )
                 self.engine = None
             PostgresBackend._prepared_engines[key] = self.engine
             self._prepared = True
@@ -293,7 +295,9 @@ class PostgresBackend(SearchBackend):
         """
         from src.repositories import search_repository as repo
         started = time.monotonic()
-        stats: Dict[str, Any] = {"status": "done", "upserted": 0, "removed": 0, "failed_sources": []}
+        stats: Dict[str, Any] = {
+            "status": "done", "upserted": 0, "removed": 0, "failed_sources": [],
+        }
         with PostgresBackend._reconcile_lock:
             if not self._prepared:
                 self.prepare()
@@ -363,7 +367,9 @@ class PostgresBackend(SearchBackend):
                 repo.delete_documents(db, [i for i, it in dirty.items() if it is None])
                 repo.upsert_documents(db, [it for it in dirty.values() if it is not None])
         except Exception as e:
-            logger.warning(f"Search reconcile: re-applying {len(dirty)} concurrent change(s) failed: {e}")
+            logger.warning(
+                f"Search reconcile: re-applying {len(dirty)} concurrent change(s) failed: {e}"
+            )
 
 
 def create_backend(

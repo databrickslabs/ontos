@@ -2271,7 +2271,9 @@ class SemanticModelsManager(SearchableAsset):
             if self.__dict__.get("_glossary_reindex_pending"):
                 return
             self._glossary_reindex_pending = True
-        threading.Thread(target=self._run_glossary_reindex, name="glossary-reindex", daemon=True).start()
+        threading.Thread(
+            target=self._run_glossary_reindex, name="glossary-reindex", daemon=True,
+        ).start()
 
     def _run_glossary_reindex(self, debounce: Optional[float] = None) -> None:
         time.sleep(self._GLOSSARY_REINDEX_DEBOUNCE_SECONDS if debounce is None else debounce)
@@ -2290,7 +2292,9 @@ class SemanticModelsManager(SearchableAsset):
                     # get_search_index_items() returns [] on errors too; don't let a
                     # failed read empty the glossary (an emptied graph is rare, and
                     # its leftover entries only cost a stale hit).
-                    logger.warning("Glossary search refresh returned no terms; keeping the current entries.")
+                    logger.warning(
+                        "Glossary search refresh returned no terms; keeping the current entries."
+                    )
                     return
                 search_manager.replace_type("glossary-term", items)
                 logger.info(f"Glossary search entries refreshed ({len(items)} terms).")

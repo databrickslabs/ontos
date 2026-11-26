@@ -222,7 +222,10 @@ class SearchManager:
     def replace_type(self, type_: str, items: Iterable[SearchIndexItem]) -> None:
         """Replace every indexed item of one type (bulk producers, e.g. the glossary)."""
         uses_postgres = self._uses_postgres()
-        keep = [it for it in items if it.type == type_ and self._is_item_indexable(it, uses_postgres)]
+        keep = [
+            it for it in items
+            if it.type == type_ and self._is_item_indexable(it, uses_postgres)
+        ]
         if uses_postgres:
             self._backend.replace_type(type_, keep)
         else:

@@ -95,7 +95,8 @@ def test_glossary_refresh_is_debounced_and_replaces_the_type(monkeypatch):
     mgr._run_glossary_reindex(debounce=0)  # what the thread runs
     search.replace_type.assert_called_once()
     type_, items = search.replace_type.call_args.args
-    assert type_ == "glossary-term" and [i.id for i in items] == ["glossary-term::a", "glossary-term::b"]
+    assert type_ == "glossary-term"
+    assert [i.id for i in items] == ["glossary-term::a", "glossary-term::b"]
 
     mgr._schedule_glossary_reindex()  # after the run, the next edit schedules again
     assert len(started) == 2
@@ -113,8 +114,10 @@ def test_memory_replace_type_swaps_only_that_type(monkeypatch):
     from src.controller.search_manager import SearchManager
     monkeypatch.setattr(
         "src.common.config.get_settings",
-        lambda: SimpleNamespace(SEARCH_BACKEND="memory", SEARCH_ENGINE="auto", SEARCH_TRGM_THRESHOLD=0.45,
-                                SEARCH_BACKFILL_WAIT_SECONDS=0, SEARCH_BACKFILL_BATCH_SIZE=500),
+        lambda: SimpleNamespace(
+            SEARCH_BACKEND="memory", SEARCH_ENGINE="auto", SEARCH_TRGM_THRESHOLD=0.45,
+            SEARCH_BACKFILL_WAIT_SECONDS=0, SEARCH_BACKFILL_BATCH_SIZE=500,
+        ),
     )
 
     class Src:

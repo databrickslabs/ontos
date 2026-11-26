@@ -57,7 +57,10 @@ def _aux_text(item: SearchIndexItem) -> str:
     return " ".join(p for p in parts if p)
 
 
-_UPSERT_COLS = ("id", "entity_id", "type", "feature_id", "title", "description", "aux_text", "tags", "extra_data", "link")
+_UPSERT_COLS = (
+    "id", "entity_id", "type", "feature_id", "title", "description", "aux_text",
+    "tags", "extra_data", "link",
+)
 _CONTENT_COLS = _UPSERT_COLS[1:]
 
 
@@ -579,7 +582,9 @@ def delete_missing(db: Session, types: Iterable[str], keep_ids: Iterable[str]) -
 def try_reconcile_lock(db: Session) -> bool:
     """Session-level advisory lock; held until ``release_reconcile_lock`` or the
     connection closes, so a crashed replica never leaves it stuck."""
-    return bool(db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": RECONCILE_LOCK_KEY}).scalar())
+    return bool(
+        db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": RECONCILE_LOCK_KEY}).scalar()
+    )
 
 
 def release_reconcile_lock(db: Session) -> None:

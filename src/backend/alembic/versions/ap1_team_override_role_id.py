@@ -1,7 +1,7 @@
 """Store team member role overrides by role id
 
 Revision ID: ap1_team_override_role_id
-Revises: o4_shared_library_documents
+Revises: t1_contract_tag_backfill
 Create Date: 2026-11-12
 
 Team entries stored the role name, so renaming or deleting a role dropped its
@@ -21,7 +21,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'ap1_team_override_role_id'
-down_revision: Union[str, None] = 'o4_shared_library_documents'
+down_revision: Union[str, None] = 't1_contract_tag_backfill'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

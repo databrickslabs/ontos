@@ -51,7 +51,7 @@ def _ids(conn):
 
 def test_revision_chains_onto_the_development_head(migration):
     assert migration.revision == _NAME
-    assert migration.down_revision == 'o4_shared_library_documents'
+    assert migration.down_revision == 't1_contract_tag_backfill'
     assert len(migration.revision) <= 32
 
 

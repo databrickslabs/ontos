@@ -147,7 +147,9 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
   };
 
   const ucEmpty = !!preview && !preview.uc_comment;
-  const canConfirm = !!preview && !preview.in_sync && !ucEmpty && !saving;
+  // A description that already matches can still be confirmed: it clears an earlier
+  // "not in sync" mark (the server changes nothing else)
+  const canConfirm = !!preview && !ucEmpty && !saving;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -197,7 +199,7 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
                 {t(`${PREFIX}.ucEmpty`)}
               </p>
             )}
-            {canConfirm && (
+            {canConfirm && !preview.in_sync && (
               <p className="text-sm text-muted-foreground">{t(`${PREFIX}.replaceNote`)}</p>
             )}
           </div>
@@ -209,7 +211,7 @@ export function DescriptionResetDialog({ assetId, open, onOpenChange, onReset }:
           </Button>
           <Button onClick={confirm} disabled={!canConfirm}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t(`${PREFIX}.confirm`)}
+            {t(preview?.in_sync ? `${PREFIX}.confirmInSync` : `${PREFIX}.confirm`)}
           </Button>
         </DialogFooter>
       </DialogContent>

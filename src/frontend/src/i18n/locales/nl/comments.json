@@ -50,6 +50,15 @@
     "operationLinked": "gekoppeld",
     "operationUnlinked": "ontkoppeld"
   },
+  "descriptionChange": {
+    "title": "Beschrijving gewijzigd",
+    "name": "Naam:",
+    "location": "Locatie:",
+    "before": "Voor:",
+    "after": "Na:",
+    "source": "Bron:",
+    "empty": "(leeg)"
+  },
   "validation": {
     "commentRequired": "Inhoud van opmerking is vereist"
   },

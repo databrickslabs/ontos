@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog non ha un commento su questo oggetto, quindi non c'è nulla da importare. La descrizione di Ontos viene mantenuta.",
     "replaceNote": "La descrizione precedente resta nel registro delle modifiche.",
     "confirm": "Sostituisci descrizione",
+    "confirmInSync": "Segna come sincronizzata",
     "toast": {
       "done": "Descrizione sostituita",
       "unchanged": "Descrizione invariata"

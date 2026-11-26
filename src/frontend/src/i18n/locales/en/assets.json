@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog has no comment on this object, so there is nothing to bring. The Ontos description is kept.",
     "replaceNote": "The previous description is kept in the change log.",
     "confirm": "Replace description",
+    "confirmInSync": "Mark as in sync",
     "toast": {
       "done": "Description replaced",
       "unchanged": "Description unchanged"

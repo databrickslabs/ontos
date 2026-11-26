@@ -130,9 +130,14 @@ class UcDescriptionResetManager:
         the caller commits. ``expected_uc_comment``: the comment the user saw;
         another one now is ``UcCommentChangedError``.
         """
-        asset = self.lock(db, asset_id)
-        target = self.target_of(asset)
+        # Read Unity Catalog first (up to 10 s), lock afterwards: the row is not held during
+        # the read, and the asset is read again under the lock
+        target = self.target_of(self.get_asset(db, asset_id))
         _table_type, uc_comment = self._read(user_client, target)
+        asset = self.lock(db, asset_id)
+        if self.target_of(asset) != target:
+            raise UcCommentChangedError(
+                f"{_label(target)} changed while Unity Catalog was read.", _label(target))
         return self.apply_comment(
             db, asset, _label(target), uc_comment, username=username,
             expected_uc_comment=expected_uc_comment)

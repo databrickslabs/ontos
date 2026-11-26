@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog heeft geen opmerking bij dit object, dus er valt niets over te nemen. De Ontos-beschrijving blijft behouden.",
     "replaceNote": "De vorige beschrijving blijft bewaard in het wijzigingslogboek.",
     "confirm": "Beschrijving vervangen",
+    "confirmInSync": "Markeren als gesynchroniseerd",
     "toast": {
       "done": "Beschrijving vervangen",
       "unchanged": "Beschrijving ongewijzigd"

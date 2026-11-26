@@ -68,6 +68,7 @@
     "ucEmpty": "このオブジェクトには Unity Catalog のコメントがないため、取り込むものはありません。Ontos の説明は保持されます。",
     "replaceNote": "以前の説明は変更履歴に残ります。",
     "confirm": "説明を置き換える",
+    "confirmInSync": "同期済みにする",
     "toast": {
       "done": "説明を置き換えました",
       "unchanged": "説明は変更されていません"

@@ -75,7 +75,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
   showHeader = true,
   showFilters = true,
 }) => {
-  const { t } = useTranslation(['comments', 'common']);
+  const { t } = useTranslation(['comments', 'common', 'assets']);
   const { get, post, put, delete: deleteApi, loading } = useApi();
   const { toast } = useToast();
   const { currentProject } = useProjectContext();
@@ -482,6 +482,39 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
         );
       }
 
+      if (action === 'description_changed') {
+        const empty = (
+          <span className="italic text-muted-foreground">
+            {t('comments:descriptionChange.empty')}
+          </span>
+        );
+        const source = typeof obj?.source === 'string' ? obj.source : undefined;
+        return (
+          <div className="text-sm space-y-1">
+            {obj.name && (
+              <div><span className="text-muted-foreground">{t('comments:descriptionChange.name')}</span> {String(obj.name)}</div>
+            )}
+            {obj.location && (
+              <div><span className="text-muted-foreground">{t('comments:descriptionChange.location')}</span> {String(obj.location)}</div>
+            )}
+            <div className="whitespace-pre-wrap break-words">
+              <span className="text-muted-foreground">{t('comments:descriptionChange.before')}</span>{' '}
+              {obj.before ? String(obj.before) : empty}
+            </div>
+            <div className="whitespace-pre-wrap break-words">
+              <span className="text-muted-foreground">{t('comments:descriptionChange.after')}</span>{' '}
+              {obj.after ? String(obj.after) : empty}
+            </div>
+            {source && (
+              <div>
+                <span className="text-muted-foreground">{t('comments:descriptionChange.source')}</span>{' '}
+                {t(`assets:descriptionHistory.sources.${source}`, { defaultValue: source })}
+              </div>
+            )}
+          </div>
+        );
+      }
+
       if (action.startsWith('SEMANTIC_LINK_')) {
         const operation = action === 'SEMANTIC_LINK_ADD'
           ? t('comments:change.operationLinked')
@@ -527,7 +560,10 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
             <Clock className="w-4 h-4 text-blue-600" />
           )}
           {entry.title && (
-            <h4 className="font-medium text-sm">{entry.title}</h4>
+            <h4 className="font-medium text-sm">
+              {entry.metadata?.action === 'description_changed'
+                ? t('comments:descriptionChange.title') : entry.title}
+            </h4>
           )}
           <Badge variant={entry.type === 'change' ? 'secondary' : 'outline'} className="text-xs">
             {entry.type}

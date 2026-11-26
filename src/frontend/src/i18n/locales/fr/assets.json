@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog n'a pas de commentaire sur cet objet, il n'y a donc rien à récupérer. La description d'Ontos est conservée.",
     "replaceNote": "La description précédente est conservée dans le journal des modifications.",
     "confirm": "Remplacer la description",
+    "confirmInSync": "Marquer comme synchronisée",
     "toast": {
       "done": "Description remplacée",
       "unchanged": "Description inchangée"

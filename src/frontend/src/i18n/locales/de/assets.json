@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog hat zu diesem Objekt keinen Kommentar, es gibt also nichts zu übernehmen. Die Ontos-Beschreibung bleibt erhalten.",
     "replaceNote": "Die bisherige Beschreibung bleibt im Änderungsprotokoll erhalten.",
     "confirm": "Beschreibung ersetzen",
+    "confirmInSync": "Als synchron markieren",
     "toast": {
       "done": "Beschreibung ersetzt",
       "unchanged": "Beschreibung unverändert"

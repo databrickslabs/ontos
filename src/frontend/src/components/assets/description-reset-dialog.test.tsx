@@ -87,14 +87,20 @@ describe('DescriptionResetDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('does not offer to replace a description that already matches', async () => {
+  it('lets a description that already matches be confirmed, to clear a not-in-sync mark', async () => {
     getMock.mockResolvedValue({
       data: { ...preview, description: 'Same', uc_comment: 'Same', in_sync: true },
     });
+    postMock.mockResolvedValue({ data: { changed: false, warnings: [] } });
     renderDialog();
 
     expect(await screen.findByText(/already matches/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Replace description' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as in sync' }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith(
+      '/api/assets/a1/description/reset-to-uc', { expected_uc_comment: 'Same' }));
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Description unchanged' }));
   });
 
   it('does not offer to replace the description with an empty comment', async () => {

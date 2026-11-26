@@ -1,3 +1,4 @@
+import { DialogSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
@@ -304,10 +305,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
             >
               <SelectTrigger>
                 {loading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('common:states.loading')}
-                  </span>
+                  <SkeletonLine height="h-4" width="w-1/2" />
                 ) : (
                   <SelectValue placeholder={t('mdm:config.selectMasterContract')} />
                 )}
@@ -336,10 +334,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
           {selectedContractId && (
             <div className="space-y-2 pt-2 border-t">
               {loadingContract ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('mdm:config.loadingRules')}
-                </div>
+                <DialogSkeleton rows={3} />
               ) : (
                 <>
                   <Alert>

@@ -1,3 +1,4 @@
+import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -472,9 +473,7 @@ export function WorkflowExecutionDialog({
             </div>
             <ScrollArea className="h-[350px]">
               {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                </div>
+                <WorkflowCanvasSkeleton showSidebar={false} height="h-[350px]" />
               ) : workflow ? (
                 <SimpleWorkflowFlow
                   workflow={workflow}

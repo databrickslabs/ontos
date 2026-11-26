@@ -304,11 +304,7 @@ export default function EntityInfoDialog({
                   {t('metadata:info.ratingsAndReviews')}
                 </div>
 
-                {ratingsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> {t('metadata:info.loadingRatings')}
-                  </div>
-                ) : (
+                <ContentSkeleton loading={ratingsLoading}>
                   <div className="space-y-4">
                     {/* Rating Summary */}
                     <RatingSummary 
@@ -360,7 +356,7 @@ export default function EntityInfoDialog({
                       </Button>
                     </div>
                   </div>
-                )}
+                </ContentSkeleton>
               </div>
             </div>
             </ContentSkeleton>

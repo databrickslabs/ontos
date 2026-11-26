@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
+import { SkeletonBlock } from '@/components/common/list-view-skeleton';
 import type { RatingAggregation } from '@/types/comments';
 
 export interface RatingBadgeProps {
@@ -55,7 +56,12 @@ export function RatingBadge({
     fetchRating();
   }, [entityType, entityId, get]);
 
-  // Don't show anything until loaded or if no ratings
+  // Bone of the badge size until loaded; nothing if no ratings
+  // Without an entity there's nothing to load
+  if (!loaded && entityType && entityId) {
+    return <SkeletonBlock width={size === 'sm' ? 'w-12' : 'w-14'} height={size === 'sm' ? 'h-4' : 'h-5'} className="inline-block rounded-full" />;
+  }
+
   if (!loaded || !rating || rating.total_ratings === 0) {
     return null;
   }

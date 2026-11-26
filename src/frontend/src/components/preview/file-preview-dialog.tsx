@@ -1,7 +1,7 @@
+import { SkeletonBlock } from '@/components/common/list-view-skeleton';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2 } from 'lucide-react';
 
 type FilePreviewSource = {
   title?: string;
@@ -105,8 +105,8 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
             </div>
           ) : null}
           {(fetching || loading) && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="absolute inset-0 p-4">
+              <SkeletonBlock height="h-full" />
             </div>
           )}
           {!fetching && !loading && errorMsg && (

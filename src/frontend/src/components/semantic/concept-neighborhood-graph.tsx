@@ -1,3 +1,4 @@
+import { SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactFlow, {
@@ -11,7 +12,6 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Card } from '@/components/ui/card'
-import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useApi } from '@/hooks/use-api'
 import { OntologyConcept } from '@/types/ontology'
@@ -381,11 +381,8 @@ function ConceptNeighborhoodGraphInner({
 
   if (isLoading && !layout) {
     return (
-      <div className="flex items-center justify-center text-sm text-muted-foreground py-3 gap-2">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        {t('semantic-models:neighborhood.loading', {
-          defaultValue: 'Loading neighbourhood...',
-        })}
+      <div className="py-3">
+        <SkeletonBlock height="h-40" />
       </div>
     )
   }

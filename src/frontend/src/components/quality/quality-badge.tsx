@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { scoreColor, type EntityKind, type QualitySummary } from '@/types/quality';
 
@@ -64,6 +65,11 @@ export function QualityBadge({
       cancelled = true;
     };
   }, [entityType, entityId, productAggregation, get]);
+
+  // Without an entity there's nothing to load
+  if (!loaded && entityType && entityId) {
+    return <SkeletonBlock width={size === 'sm' ? 'w-12' : 'w-14'} height={size === 'sm' ? 'h-4' : 'h-5'} className="inline-block rounded-full" />;
+  }
 
   if (!loaded || !summary || summary.items_count === 0) {
     return null;

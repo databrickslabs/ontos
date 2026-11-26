@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -386,9 +387,8 @@ export default function MdmMatchReview({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">{t('mdm:matchReview.loadingDetails')}</span>
+      <div className="p-4">
+        <ListItemSkeleton count={4} height="h-16" className="space-y-3" />
       </div>
     );
   }

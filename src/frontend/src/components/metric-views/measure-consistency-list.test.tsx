@@ -78,14 +78,12 @@ describe('MeasureConsistencyList', () => {
     it('renders nothing when no measure has a match or the request fails', async () => {
         getMock.mockResolvedValueOnce({ data: { ...data, measures: [data.measures[1]] } });
         const first = renderList();
-        await vi.waitFor(() => expect(getMock).toHaveBeenCalled());
-        expect(first.container).toBeEmptyDOMElement();
+        await vi.waitFor(() => expect(first.container).toBeEmptyDOMElement());
         first.unmount();
 
         getMock.mockResolvedValueOnce({ data: {}, error: 'boom' });
         const second = renderList();
-        await vi.waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
-        expect(second.container).toBeEmptyDOMElement();
+        await vi.waitFor(() => expect(second.container).toBeEmptyDOMElement());
     });
 
     it('is translated', async () => {

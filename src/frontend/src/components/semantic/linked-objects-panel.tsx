@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -42,7 +43,6 @@ import {
   FolderOpen,
   Globe,
   Link2,
-  Loader2,
   Package,
   Plus,
   Shapes,
@@ -600,12 +600,7 @@ export default function LinkedObjectsPanel({
             data-testid="linked-objects-list"
           >
             {isLoading && links.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('semantic-models:linkedObjects.loading', {
-                  defaultValue: 'Loading linked entities...',
-                })}
-              </div>
+              <ListItemSkeleton count={3} height="h-6" className="space-y-2 py-2 px-2" />
             ) : links.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2 px-2">
                 {t('semantic-models:linkedObjects.empty', {

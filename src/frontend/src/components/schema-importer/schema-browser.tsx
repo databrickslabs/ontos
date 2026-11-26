@@ -18,6 +18,7 @@ import {
   Search,
   AlertCircle,
 } from 'lucide-react';
+import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -494,12 +495,7 @@ export default function SchemaBrowser({
   }
 
   if (isInitialLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <span className="ml-2 text-sm text-muted-foreground">{t('common:states.loading')}</span>
-      </div>
-    );
+    return <HierarchyTreeSkeleton />;
   }
 
   if (roots.length === 0) {

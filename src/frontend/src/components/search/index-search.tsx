@@ -1,10 +1,11 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
-  Search, FileText, Database, Book, Shield, Loader2,
+  Search, FileText, Database, Book, Shield,
   BookOpen, Shapes, Tag, Send, Server, Table2, Eye, Columns2,
   LayoutDashboard, Globe, FileCode, Brain, Activity, Package,
 } from 'lucide-react';
@@ -31,7 +32,7 @@ export default function IndexSearch({ initialQuery = '' }: IndexSearchProps) {
 
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<IndexSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => Boolean(initialQuery.trim()));
 
   // Update URL with query param (simple - only manages its own params)
   const updateUrl = (q: string) => {
@@ -144,10 +145,7 @@ export default function IndexSearch({ initialQuery = '' }: IndexSearchProps) {
         </div>
         <div className="space-y-2 text-sm">
           {loading ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('common:labels.loading')}
-            </div>
+            <ListItemSkeleton count={3} height="h-9" className="space-y-1" />
           ) : results.length === 0 ? (
             <div className="text-xs text-muted-foreground">{t('search:noResults')}</div>
           ) : (

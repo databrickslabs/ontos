@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy } from 'lucide-react';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface TurtleSerializationPanelProps {
   conceptIri: string;
@@ -113,9 +114,10 @@ export function TurtleSerializationPanel({ conceptIri }: TurtleSerializationPane
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {t('common:actions.loading')}
+        <div className="space-y-1.5 py-2" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonLine key={i} height="h-3" width={i === 3 ? "w-1/3" : "w-full"} />
+          ))}
         </div>
       )}
 

@@ -1,3 +1,4 @@
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
@@ -384,10 +385,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
             >
               <SelectTrigger>
                 {loading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('common:states.loading')}
-                  </span>
+                  <SkeletonLine height="h-4" width="w-1/2" />
                 ) : (
                   <SelectValue placeholder={t('mdm:link.selectSourceContract')} />
                 )}
@@ -423,10 +421,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                 >
                   <SelectTrigger>
                     {loadingSchema ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {t('common:states.loading')}
-                      </span>
+                      <SkeletonLine height="h-4" width="w-1/2" />
                     ) : (
                       <SelectValue placeholder={t('mdm:link.selectKeyColumn')} />
                     )}

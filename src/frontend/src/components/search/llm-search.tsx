@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, Bot, User, Loader2, AlertCircle, Trash2, MessageSquare, Plus, ChevronDown, Sparkles, RefreshCw, Pencil, Bug, ChevronRight, Clock, Wrench, CheckCircle2, XCircle } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -328,6 +329,7 @@ interface SessionListProps {
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onNewSession: () => void;
+  loading?: boolean;
 }
 
 function SessionList({ 
@@ -335,9 +337,14 @@ function SessionList({
   currentSessionId, 
   onSelectSession, 
   onDeleteSession,
-  onNewSession 
+  onNewSession,
+  loading,
 }: SessionListProps) {
   const { t } = useTranslation(['search', 'common']);
+
+  if (loading) {
+    return <ListItemSkeleton count={3} height="h-12" className="space-y-2" />;
+  }
 
   if (sessions.length === 0) {
     return null;
@@ -449,6 +456,7 @@ export default function LLMSearch() {
   const shortName = useUICustomizationStore((s) => s.getShortName());
   const [status, setStatus] = useState<LLMSearchStatus | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -508,6 +516,8 @@ export default function LLMSearch() {
       } catch (err) {
         console.error('Failed to load LLM search data:', err);
         setError(t('search:llm.messages.loadFailed'));
+      } finally {
+        setSessionsLoading(false);
       }
     }
     loadInitialData();
@@ -748,6 +758,7 @@ export default function LLMSearch() {
           </div>
           <SessionList
             sessions={sessions}
+            loading={sessionsLoading}
             currentSessionId={currentSessionId}
             onSelectSession={handleSelectSession}
             onDeleteSession={handleDeleteSession}

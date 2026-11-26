@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -6,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   Link as LinkIcon,
-  Loader2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -273,10 +273,7 @@ export default function ConceptRelationsPanel({
       data-testid="concept-relations-list"
     >
       {isLoading && relations.length === 0 ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {t('semantic-models:relations.loading', { defaultValue: 'Loading relations...' })}
-        </div>
+        <ListItemSkeleton count={3} height="h-6" className="space-y-2 py-2 px-2" />
       ) : relations.length === 0 ? (
         <p className="text-sm text-muted-foreground py-2 px-2">
           {t('semantic-models:relations.empty', {

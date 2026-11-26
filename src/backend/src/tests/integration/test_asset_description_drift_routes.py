@@ -336,6 +336,59 @@ class TestResetSelected:
         assert body['changed'] == 3
         assert scheduled == [tree.table.id]
 
+    def test_nothing_is_committed_before_the_one_commit_of_the_request(
+            self, client, tree, user_ws, monkeypatch):
+        from sqlalchemy.orm import Session
+        from src.routes import assets_routes
+
+        commits = []
+        real_commit = Session.commit
+        monkeypatch.setattr(
+            Session, 'commit', lambda self: (commits.append(1), real_commit(self))[1])
+        seen = []
+        monkeypatch.setattr(
+            assets_routes, '_schedule_maturity_evaluation',
+            lambda db, tasks, request, asset_id, email: (seen.append(len(commits)), db.commit()))
+        user_ws.tables.get.return_value = _info(
+            'Orders (UC)', {'order_id': 'Key (UC)', 'note': 'Note (UC)'})
+
+        body = self._post(client, tree.table, [
+            {'asset_id': str(a.id)} for a in (tree.table, tree.key, tree.note)]).json()
+
+        assert body['changed'] == 3
+        assert seen == [0]
+
+    def test_a_failure_commits_nothing_of_the_fields_before_it(
+            self, client, tree, user_ws, monkeypatch):
+        from sqlalchemy.orm import Session
+        from src.controller.assets_manager import AssetsManager
+
+        commits = []
+        real_commit = Session.commit
+        monkeypatch.setattr(
+            Session, 'commit', lambda self: (commits.append(1), real_commit(self))[1])
+        real = AssetsManager.update_asset
+        calls = []
+
+        def failing(self, db, **kwargs):
+            calls.append(1)
+            if len(calls) == 2:
+                before_failure.append(len(commits))
+                raise RuntimeError('boom')
+            return real(self, db, **kwargs)
+
+        before_failure = []
+        monkeypatch.setattr(AssetsManager, 'update_asset', failing)
+        user_ws.tables.get.return_value = _info(
+            'Orders (UC)', {'order_id': 'Key (UC)', 'note': 'Note (UC)'})
+
+        response = self._post(client, tree.table, [
+            {'asset_id': str(tree.table.id)}, {'asset_id': str(tree.key.id)}])
+
+        assert response.status_code == 500
+        # The first field was not committed on its own (the audit entry commits later)
+        assert before_failure == [0]
+
     def test_an_unexpected_failure_is_a_coded_error_without_its_text(
             self, client, tree, user_ws, monkeypatch):
         from src.controller.assets_manager import AssetsManager

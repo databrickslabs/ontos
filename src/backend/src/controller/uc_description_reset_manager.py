@@ -201,7 +201,7 @@ class UcDescriptionResetManager:
         with description_source(SOURCE_UC_RESET):
             self._assets.update_asset(
                 db, asset_id=asset_id, asset_in=AssetUpdate(description=uc_comment),
-                current_user_id=username)
+                current_user_id=username, commit=False)
         asset = db.get(AssetDb, asset_id)
         if snapshot:
             AssetsManager.update_table_column_snapshot(db, asset)

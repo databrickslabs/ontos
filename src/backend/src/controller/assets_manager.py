@@ -510,7 +510,11 @@ class AssetsManager(SearchableAsset):
                     kept.append(row.id)
         return sorted(kept, key=str)
 
-    def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
+    def update_asset(
+        self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str,
+        commit: bool = True,
+    ) -> AssetRead:
+        """Update an asset. ``commit=False``: only flushed, the caller's transaction decides."""
         db_asset = self._asset_repo.get(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
@@ -584,6 +588,7 @@ class AssetsManager(SearchableAsset):
                     action="updated",
                     username=current_user_id,
                     details={"name": updated.name, "changed_fields": list(update_data.keys())},
+                    commit=commit,
                 )
             except Exception as e:
                 logger.warning(f"Failed to log change for asset update: {e}")

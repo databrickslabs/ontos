@@ -1022,7 +1022,7 @@ class SchemaImportManager:
                     existing = asset_repo.get_by_identity(
                         db, name=metadata.name, asset_type_id=at_db.id,
                         platform=platform, location=path,
-                    )
+                    ) or _asset_at_location(db, asset_type_id=at_db.id, platform=platform, location=path)
                 if existing is None and ontos_type_name == METRIC_VIEW_ASSET_TYPE:
                     # A metric view imported as a View before the Metric View type
                     # existed is reused, and execute_import converts it. Without the
@@ -1044,8 +1044,9 @@ class SchemaImportManager:
                     existing_asset_id=existing.id if existing else None,
                     parent_path=parent_path,
                     is_ancestor=_is_ancestor,
+                    # A renamed item keeps its location, so it is refreshed even if its change time did not move
                     needs_refresh=walk is not None and existing is not None
-                    and self._changed_since_import(existing, metadata.updated_at),
+                    and (existing.name != metadata.name or self._changed_since_import(existing, metadata.updated_at)),
                 ))
                 seen_paths.add(path)
 
@@ -1166,10 +1167,11 @@ class SchemaImportManager:
         if listed_at is None or not mapped:
             return False
         type_db = get_asset_type_db(mapped[0])
-        existing = type_db and asset_repo.get_by_identity(
+        existing = type_db and (asset_repo.get_by_identity(
             db, name=listed.name, asset_type_id=type_db.id, platform=connector.connector_type, location=path,
-        )
-        if not existing:
+        ) or _asset_at_location(db, asset_type_id=type_db.id, platform=connector.connector_type, location=path))
+        # A renamed item is not unchanged: its name must be refreshed
+        if not existing or existing.name != listed.name:
             return False
         stored_at = _as_utc((existing.properties or {}).get("source_updated_at"))
         if stored_at is None or listed_at > stored_at:
@@ -1327,6 +1329,8 @@ class SchemaImportManager:
         asset = asset_repo.get(db, id=item.existing_asset_id)
         if asset is None:
             raise ValueError(f"Asset {item.existing_asset_id} no longer exists")
+        if item.name and asset.name != item.name:
+            asset.name = item.name
         description, fresh = self._source_properties(connector, item, metadata_cache, connection_id=connection_id)
         current = dict(asset.properties or {})
         kept = {k: v for k, v in current.items() if k not in set(current.get(IMPORTED_KEYS_PROPERTY) or [])}
@@ -1425,6 +1429,21 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.TABLEAU_SHEET.value: "sheet",
     UnifiedAssetType.TABLEAU_DATASOURCE.value: "datasource",
 }
+
+
+def _asset_at_location(db: Session, *, asset_type_id: UUID, platform: str, location: str) -> Optional[AssetDb]:
+    """The asset of this type at this location, under any name.
+
+    Connectors whose paths carry stable ids (Tableau LUIDs) keep the location when
+    the source renames an item, so a match on name alone would create a duplicate
+    and leave the original to be retired.
+    """
+    return (
+        db.query(AssetDb)
+        .filter(AssetDb.asset_type_id == asset_type_id, AssetDb.platform == platform, AssetDb.location == location)
+        .order_by(AssetDb.created_at)
+        .first()
+    )
 
 
 def _connector_hook(connector: Any, name: str, *args: Any, default: Any) -> Any:

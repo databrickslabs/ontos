@@ -491,3 +491,22 @@ def test_only_administrators_set_up_tableau_connections(monkeypatch):
     monkeypatch.setattr(routes, "user_has_feature_level", lambda *a, **k: True)
     routes._require_admin_for_tableau(request, auth, MagicMock(), "tableau")
 
+
+def test_a_renamed_workbook_is_one_asset_renamed_and_never_retired(db_session, sync, importer, source):
+    """Tableau locations are LUID paths: a rename keeps the location, so the asset must follow it (#1524 review 2)."""
+    _run(db_session, sync, importer)
+    assert _asset(db_session, WB).name == "Orders Overview"
+    # Worst case: the rename does not move the change time
+    source.workbooks[0] = {**source.workbooks[0], "name": "Orders Overview 2026"}
+
+    summary = _run(db_session, sync, importer)
+    assert summary["status"] == STATUS_COMPLETED
+    workbook = _asset(db_session, WB)  # .one(): exactly one asset at this location
+    assert workbook.name == "Orders Overview 2026"
+    assert workbook.status == "active" and MISSED_PROPERTY not in workbook.properties
+
+    for _ in range(3):
+        summary = _run(db_session, sync, importer)
+    assert summary["retired"] == 0
+    assert _asset(db_session, WB).status == "active"
+    assert db_session.query(AssetDb).filter(AssetDb.platform == "tableau", AssetDb.location == WB).count() == 1

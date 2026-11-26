@@ -42,6 +42,7 @@ ON_FAIL action
 | `LENGTH(str)` | String length | `LENGTH(obj.name) <= 64` |
 | `UPPER(str)` | Convert to uppercase | `UPPER(obj.name)` |
 | `LOWER(str)` | Convert to lowercase | `LOWER(obj.name) = obj.name` |
+| `HAS_CONCEPT(iri_or_label)` | Check a linked semantic concept (products, contracts, domains) | `HAS_CONCEPT('Customer')` |
 
 On data products, data contracts and domains, a tag key is the tag's
 `namespace/name` or its name; the name alone only works while no other namespace
@@ -220,6 +221,80 @@ ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
 
 ---
 
+### Example 8: Classified Tables With Known Sources
+
+**Scenario**: Every production table carries a classification tag and has at least one
+upstream table in lineage.
+
+```
+MATCH (t:table)
+WHERE t.catalog = 'production'
+ASSERT
+  HAS_TAG('data_classification') AND
+  t.upstream_count > 0
+ON_FAIL FAIL 'Tag the table with data_classification and make sure its sources are in lineage'
+```
+
+**What it checks**:
+- `HAS_TAG` reads the table's governed tags from `system.information_schema.table_tags`
+- `upstream_count` counts the distinct tables the table was written from in the last 90 days
+  (`system.access.table_lineage`). A table last written longer ago reads `0` and fails this
+  check: leave tables loaded less than quarterly out in the `WHERE`
+- Both are read through the app's SQL warehouse, in a few statements per catalog and only
+  for the schemas the `WHERE` selects. Without a warehouse or access to these system tables, the tables are
+  reported as *not evaluated* and the run shows a warning, instead of failing them as untagged
+
+---
+
+### Example 9: Maturity Gates for Table and View Assets
+
+**Scenario**: A maturity level for table assets requires a real description and documented
+columns. Like the default gates, it is a bare `ASSERT`: the maturity evaluator runs it
+against one asset at a time, as `obj`.
+
+```
+ASSERT LENGTH(obj.description) >= 50 AND obj.column_comment_ratio >= 0.5
+```
+
+**What it checks**:
+- The asset's own fields: `has_owner`, `owner_count`, `has_domain`, `description`,
+  `has_description`, `business_term_count`, `tag_count`, `HAS_TAG('x')`,
+  `effective_certification`, `is_certification_expired`, `quality_check_count`, and one
+  `prop_<key>` per custom property
+- The column fields of the Unity Catalog table it points to (`column_count`,
+  `columns_without_comment_count`, `column_comment_ratio`, the partition fields); they
+  are missing when the table can't be read, so the gate fails
+- **Load default asset levels** (Settings → Maturity Levels) adds a ladder built from these
+  fields; the *Unity Catalog Tag Sync* job can publish the level reached as a table tag
+  (`{ASSET.MATURITY}`, `{ASSET.MATURITY_ORDER}`). See the User Guide, *Maturity Levels for
+  Tables and Views*
+
+---
+
+### Example 10: Concept Coverage for Data Products
+
+**Scenario**: Active data products must be linked to at least one business concept.
+
+```
+MATCH (prod:data_product)
+WHERE prod.status = 'active'
+ASSERT HAS_CONCEPT('Customer') OR prod.concept_count > 0
+ON_FAIL FAIL 'Active data products must be linked to a business concept'
+ON_FAIL ASSIGN_TAG needs_attention: 'missing_concept'
+```
+
+Link a concept to the product; the next run reads the link. To require one
+specific concept, compare its IRI (`HAS_CONCEPT('https://example.com/ontology#Customer')`) or its
+label. To check the domain and owner together:
+
+```
+MATCH (contract:data_contract)
+ASSERT contract.has_owner = True AND LENGTH(contract.domain_name) > 0
+ON_FAIL FAIL 'Contracts need an owning team and a domain'
+```
+
+---
+
 ## Entity Types
 
 You can write rules for these entity types:
@@ -242,6 +317,11 @@ You can write rules for these entity types:
 ### Generic
 - `Object` - Matches all entity types
 
+Type names ignore case and underscores, so `MATCH (p:DataProduct)` is the same
+as `MATCH (p:data_product)`, in compliance runs and in workflow policy checks.
+When a rule matches no entity, its run succeeds with a "no entities matched"
+warning and no results.
+
 ## Common Properties
 
 Different entities expose different properties. Here are the most common:
@@ -250,7 +330,9 @@ Different entities expose different properties. Here are the most common:
 |----------|-------------|---------|
 | `type` | Entity type | `obj.type = 'table'` |
 | `name` | Entity name | `obj.name MATCHES '^v_'` |
-| `owner` | Owner email | `obj.owner != 'unknown'` |
+| `owner` | Owning team id (data products, contracts, domains) | `obj.has_owner = True` |
+| `owner_emails` | Emails of the owning team's users | `LENGTH(obj.owner_emails) > 0` |
+| `concept_count` | Number of linked concepts | `obj.concept_count > 0` |
 | `status` | Status field | `obj.status = 'active'` |
 | `catalog` | Parent catalog | `obj.catalog = 'prod'` |
 | `schema` | Parent schema | `obj.schema = 'finance'` |

@@ -1,24 +1,31 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from databricks.sdk import WorkspaceClient
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.exc import IntegrityError
 
+from src.controller.entity_data_cleanup import remove_entity_rows
 from src.repositories.assets_repository import asset_type_repo, asset_repo, asset_relationship_repo
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.common.uc_comments import split_column_location
+from src.repositories.business_owners_repository import business_owner_repo
+from src.repositories.maturity_repository import IN_CLAUSE_CHUNK, maturity_repo
 from src.models.assets import (
+    description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteResult,
-    PHYSICAL_TABLE_ASSET_TYPES, with_internal_properties,
+    PHYSICAL_TABLE_ASSET_TYPES, public_properties, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
+from src.common.api_errors import CodedValueError
 from src.common.errors import ConflictError, NotFoundError, ValidationError
 from src.common.logging import get_logger
+from src.common.odcs_logical_types import column_logical_type, schemas_for_version
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
@@ -27,7 +34,22 @@ from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
 
+_UNSET = object()
+
 ONTOS_NS = "http://ontos.app/ontology#"
+
+
+class BelowFirstLevelNeedsOwnerError(CodedValueError):
+    """``below_first_maturity_level`` without ``owned_by_me``: refused, since it
+    reads the caller's UC grant on every candidate table."""
+
+    code = 'below_first_maturity_level_needs_owned_by_me'
+
+    def __init__(self):
+        super().__init__(
+            "below_first_maturity_level=true needs owned_by_me=true: it reads each "
+            "candidate table in Unity Catalog with your token."
+        )
 
 
 class AssetsManager(SearchableAsset):
@@ -62,6 +84,7 @@ class AssetsManager(SearchableAsset):
         if db_asset.target_relationships:
             rels.extend([AssetRelationshipRead.model_validate(r) for r in db_asset.target_relationships])
         read.relationships = rels
+        read.description_sync = description_sync_state(db_asset.properties)
         # Attach polymorphic domain assignments from the junction table.
         session = object_session(db_asset)
         if session is not None:
@@ -223,6 +246,13 @@ class AssetsManager(SearchableAsset):
         data = asset_in.model_dump()
         domain_ids = data.pop("domain_ids", None) or []
         primary_domain_id = data.pop("primary_domain_id", None)
+        # A stage of its lifecycle stage group; without one, the group's first
+        # active stage (assets were created active before stage groups)
+        from src.controller.lifecycle_service import lifecycle_service
+        data["lifecycle_stage_group_id"], data["status"] = lifecycle_service.stage_for_new(
+            db, 'asset', data.get("lifecycle_stage_group_id"), data.get("status"),
+            default_category='active',
+        )
         data["created_by"] = current_user_id
         db_asset = AssetDb(**data)
 
@@ -265,6 +295,10 @@ class AssetsManager(SearchableAsset):
             return None
         return self._asset_to_read(db_asset)
 
+    def asset_exists(self, db: Session, asset_id: UUID) -> bool:
+        """Whether an asset has this id (without loading its relationships)."""
+        return self._asset_repo.get(db, asset_id) is not None
+
     # --- Data-Product asset scoping (issue #347) ---
     #
     # Data Consumers (and other non-admin users) should only see assets linked
@@ -305,7 +339,12 @@ class AssetsManager(SearchableAsset):
         asset_ids = data_products_manager.list_linked_asset_ids_for_products(
             db, product_ids=dp_ids,
         )
-        return list(asset_ids)
+        # The tree the product page's hierarchy shows (#1614): the product's
+        # datasets, their tables and views, and those tables' and views' columns.
+        from src.repositories.entity_relationships_repository import entity_relationship_repo
+
+        tree = entity_relationship_repo.get_product_tree_asset_ids(db, product_ids=dp_ids)
+        return list(set(asset_ids) | tree)
 
     def is_asset_accessible(
         self,
@@ -336,6 +375,9 @@ class AssetsManager(SearchableAsset):
         domain_ids: Optional[List[str]] = None,
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[List[UUID]] = None,
+        owner_email: Optional[str] = None,
+        below_first_maturity_level: bool = False,
+        uc_workspace_client: Optional[Callable[[], Any]] = None,
     ) -> PaginatedAssetSummary:
         """Gets a paginated page of asset summaries.
 
@@ -343,7 +385,28 @@ class AssetsManager(SearchableAsset):
         UUIDs — used by role-aware Data Product scoping. An empty list
         intentionally yields zero results. Domain filtering (``domain_id`` /
         ``domain_ids``) is any-of via the junction table.
+
+        ``owner_email`` (when not None) keeps only the assets with an active
+        business-owner assignment for that user. It intersects with
+        ``restrict_to_ids``, so it can only narrow the result.
+
+        ``below_first_maturity_level`` keeps only the assets whose latest maturity
+        evaluation reached no level (tables and views; never-evaluated assets are
+        left out). It narrows the same way, and needs ``owner_email``
+        (``BelowFirstLevelNeedsOwnerError`` without it): it reads a UC table per
+        candidate. A stored level comes from the Unity Catalog read of whoever
+        evaluated it, so an asset whose snapshot was evaluated against a UC table
+        is kept only when ``uc_workspace_client`` (the caller's own client factory)
+        reads that table now; without one, such assets are left out.
         """
+        if below_first_maturity_level and owner_email is None:
+            raise BelowFirstLevelNeedsOwnerError()
+        if owner_email is not None:
+            restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
+        if below_first_maturity_level:
+            restrict_to_ids = self._narrow_to_below_first_level(
+                db, restrict_to_ids, uc_workspace_client,
+            )
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
@@ -372,6 +435,74 @@ class AssetsManager(SearchableAsset):
             limit=limit,
         )
 
+    @staticmethod
+    def _narrow_to_owned(
+        db: Session, owner_email: str, restrict_to_ids: Optional[List[UUID]],
+    ) -> List[UUID]:
+        """Asset IDs the user actively owns, intersected with ``restrict_to_ids`` if set."""
+        owned: set = set()
+        if owner_email:
+            for ownership in business_owner_repo.get_by_user(
+                db, user_email=owner_email, active_only=True,
+            ):
+                if ownership.object_type != "asset":
+                    continue
+                try:
+                    owned.add(UUID(str(ownership.object_id)))
+                except ValueError:
+                    logger.warning("Skipping ownership with a non-UUID asset id")
+        if restrict_to_ids is not None:
+            owned &= {UUID(str(i)) for i in restrict_to_ids}
+        return sorted(owned, key=str)
+
+    @staticmethod
+    def _narrow_to_below_first_level(
+        db: Session, restrict_to_ids: Optional[List[UUID]],
+        uc_workspace_client: Optional[Callable[[], Any]] = None,
+    ) -> List[UUID]:
+        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``.
+
+        The latest snapshot of an asset is kept only when ``uc_workspace_client``
+        reads the UC table it was evaluated against (the history's rule: that
+        table, or the asset's current one when the snapshot doesn't record it;
+        one ``tables.get`` per table; fails closed).
+        """
+        from src.controller.entity_dict_builder import (
+            SNAPSHOT_UC_TABLE_UNKNOWN, snapshot_uc_table, uc_table_name, uc_table_name_readable,
+        )
+
+        snapshot_of: Dict[UUID, Optional[str]] = {}
+        candidates = None if restrict_to_ids is None else [str(i) for i in restrict_to_ids]
+        for entity_id, gate_results_json in maturity_repo.latest_snapshots_below_first_level(
+            db, entity_type="Asset", entity_ids=candidates,
+        ):
+            try:
+                snapshot_of[UUID(str(entity_id))] = gate_results_json
+            except ValueError:
+                logger.warning("Skipping a maturity snapshot with a non-UUID asset id")
+        below = sorted(snapshot_of, key=str)
+        if restrict_to_ids is not None:
+            allowed = {UUID(str(i)) for i in restrict_to_ids}
+            below = [i for i in below if i in allowed]
+        readable: Dict[Any, bool] = {}
+        kept: List[UUID] = []
+        # Chunked like the candidate list (bind-parameter limits)
+        for start in range(0, len(below), IN_CLAUSE_CHUNK):
+            chunk = below[start:start + IN_CLAUSE_CHUNK]
+            for row in db.query(AssetDb).filter(AssetDb.id.in_(chunk)).all():
+                table = snapshot_uc_table(
+                    snapshot_of[row.id], uc_table_name(row.platform, row.location),
+                )
+                if table is SNAPSHOT_UC_TABLE_UNKNOWN:
+                    continue
+                if table not in readable:
+                    readable[table] = uc_table_name_readable(
+                        table, uc_workspace_client, asset_id=str(row.id),
+                    )
+                if readable[table]:
+                    kept.append(row.id)
+        return sorted(kept, key=str)
+
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)
         if not db_asset:
@@ -384,13 +515,38 @@ class AssetsManager(SearchableAsset):
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
-            self._validate_properties(db, effective_type_id, asset_in.properties)
+            # Only what the update changes: a stored legacy value that doesn't fit the
+            # schema doesn't block an edit of another field (the dialog sends them back).
+            # A type change checks them all: none was checked against the new type.
+            checked = asset_in.properties
+            if str(effective_type_id) == str(db_asset.asset_type_id):
+                stored = db_asset.properties or {}
+                checked = {k: v for k, v in checked.items() if stored.get(k, _UNSET) != v}
+            self._validate_properties(db, effective_type_id, checked)
+        elif ('properties' not in asset_in.model_fields_set
+              and str(effective_type_id) != str(db_asset.asset_type_id)):
+            # Omitted, the stored properties are kept: on a type change they must fit
+            # the new type (null clears them, so there is nothing to check)
+            self._validate_properties(
+                db, effective_type_id, public_properties(db_asset.properties))
 
         update_data = asset_in.model_dump(exclude_unset=True)
-        if update_data.get('properties') is not None:
-            # Clients never see the internal keys, so they can't send them back
+        # A status change is a move its lifecycle stage group must allow
+        # (coded invalid_status_transition otherwise); repeating it is no change
+        from src.controller.lifecycle_service import lifecycle_service
+        if 'status' in update_data:
+            requested = (update_data.get('status') or '').strip().lower()
+            if not requested or requested == (db_asset.status or '').lower():
+                update_data.pop('status')
+            else:
+                _from, update_data['status'] = lifecycle_service.check_transition(
+                    db, 'asset', db_asset, requested,
+                )
+        if 'properties' in update_data:
+            # Clients never see the internal keys, so they can't send them back; null
+            # clears the public properties like {} and keeps the internal ones
             update_data['properties'] = with_internal_properties(
-                update_data['properties'], db_asset.properties)
+                update_data['properties'] or {}, db_asset.properties)
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.pop('domain_ids', None) or []
         primary_domain_id = update_data.pop('primary_domain_id', None)
@@ -425,6 +581,43 @@ class AssetsManager(SearchableAsset):
             if "unique constraint" in str(e).lower():
                 raise ConflictError("Asset identity conflict.")
             raise
+
+    @staticmethod
+    def update_table_column_snapshot(db: Session, column: AssetDb) -> None:
+        """Copy a Column asset's new description into its table's ``properties.schema``.
+
+        An imported table or view keeps a snapshot of its columns; the table is
+        the asset on the same platform located at the column's location minus
+        the column name. Called once the column's description is in Unity Catalog.
+        """
+        if getattr(column.asset_type, 'name', None) != 'Column':
+            return
+        split = split_column_location(column.location or '')
+        if split is None:
+            return
+        table_location, column_name = split
+        tables = db.query(AssetDb).filter(
+            AssetDb.location == table_location, AssetDb.platform == column.platform,
+            AssetDb.id != column.id,
+        ).all()
+        for table in tables:
+            schema = (table.properties or {}).get('schema')
+            columns = schema.get('columns') if isinstance(schema, dict) else None
+            if not isinstance(columns, list):
+                continue
+            changed = False
+            new_columns = []
+            for entry in columns:
+                if isinstance(entry, dict) and entry.get('name') == column_name \
+                        and entry.get('description') != column.description:
+                    entry = {**entry, 'description': column.description}
+                    changed = True
+                new_columns.append(entry)
+            if changed:
+                # New dicts, so the JSON column is seen as changed
+                new_schema = {**schema, 'columns': new_columns}
+                table.properties = {**table.properties, 'schema': new_schema}
+        db.flush()
 
     def retype_asset(
         self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,
@@ -508,13 +701,8 @@ class AssetsManager(SearchableAsset):
                     db, entity_type="asset", entity_id=entity_id,
                 ),
             }
-            metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
-                db, entity_type="asset", entity_id=entity_id,
-            )
-            removed.update(metadata_counts)
-            removed["cost_items"] = self._costs_manager.remove_all_for_entity(
-                db, entity_type="asset", entity_id=entity_id,
-            )
+            entity_rows, paths = remove_entity_rows(db, entity_type="asset", entity_id=entity_id)
+            removed.update(entity_rows)
             self._asset_repo.remove(db=db, id=asset_id)
         self._metadata_manager.delete_document_files_after_commit(db, paths, ws)
         return removed
@@ -701,7 +889,9 @@ class AssetsManager(SearchableAsset):
         junction lookup once instead of querying per asset (avoids N+1); when omitted the
         single-item path queries via the object's session.
         """
-        if asset_db_obj.status == 'retired':
+        # A retired-category stage leaves the search index
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of_row(asset_db_obj) == 'retired':
             return None
         type_name = asset_db_obj.asset_type.name if asset_db_obj.asset_type else 'Asset'
         tags = list(asset_db_obj.tags) if isinstance(asset_db_obj.tags, list) else []
@@ -738,6 +928,35 @@ class AssetsManager(SearchableAsset):
         item = self._build_search_index_item(asset_db_obj)
         if item is not None:
             self._notify_index_upsert(item)
+        else:
+            # Retired assets have no item: drop any entry an earlier version indexed.
+            self._notify_index_remove(f"asset::{asset_db_obj.id}")
+
+    def upsert_search_index_for(self, db: Session, asset_ids: List[UUID]) -> None:
+        """Upsert the given assets in the search index with one batch call.
+
+        For writers that commit later (bulk import): call after the DB commit, so a
+        rolled-back write never leaves index entries behind.
+        """
+        if not asset_ids:
+            return
+        assets = db.query(AssetDb).filter(AssetDb.id.in_(list(asset_ids))).all()
+        if not assets:
+            return
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="asset", entity_ids=[str(a.id) for a in assets]
+        )
+        items = []
+        for a in assets:
+            item = self._build_search_index_item(
+                a, preloaded_domains=domains_map.get(str(a.id), []),
+            )
+            if item is not None:
+                items.append(item)
+            else:
+                # Retired: drop an entry indexed while the asset was active.
+                self._notify_index_remove(f"asset::{a.id}")
+        self._notify_index_upsert_many(items)
 
     def get_search_index_items(self) -> List[SearchIndexItem]:
         """Index all active assets for unified search."""
@@ -750,7 +969,9 @@ class AssetsManager(SearchableAsset):
                 return []
 
             with session_factory() as db:
-                all_assets = db.query(AssetDb).filter(AssetDb.status != 'retired').all()
+                from src.controller.lifecycle_service import lifecycle_service
+                retired = lifecycle_service.category_filter(db, AssetDb, 'asset', ['retired'])
+                all_assets = db.query(AssetDb).filter(~retired).all()
                 # Batch-load domains once for the whole index build (avoids N+1).
                 domains_map = entity_domain_repo.get_domains_for_entities(
                     db, entity_type="asset", entity_ids=[str(a.id) for a in all_assets]
@@ -774,7 +995,7 @@ class AssetsManager(SearchableAsset):
     _CONTAINER_TYPES = {"Schema", "Catalog"}
 
     def infer_schema_from_asset(
-        self, db: Session, asset_id: UUID
+        self, db: Session, asset_id: UUID, api_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Extract ODCS-compatible schema objects from an asset and its children.
@@ -784,7 +1005,12 @@ class AssetsManager(SearchableAsset):
         - Catalog: returns schema objects for all Table/View descendants.
 
         Each returned dict has: name, physicalName, description, physicalType, properties.
+        ``api_version`` is the target contract's ODCS version: below v3.1.0 the logical
+        types are those that version lists (``timestamp`` -> ``date``, ``time`` -> ``string``).
         """
+        return schemas_for_version(self._infer_schemas(db, asset_id), api_version)
+
+    def _infer_schemas(self, db: Session, asset_id: UUID) -> List[Dict[str, Any]]:
         db_asset = self._asset_repo.get_with_relationships(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found")
@@ -812,7 +1038,9 @@ class AssetsManager(SearchableAsset):
                     {
                         "name": c.get("name", ""),
                         "physicalType": c.get("data_type", ""),
-                        "logicalType": c.get("logical_type", "string"),
+                        "logicalType": column_logical_type(
+                            c.get("logical_type"), c.get("data_type")
+                        ),
                         "required": not c.get("nullable", True),
                         "description": c.get("description", ""),
                         "partitioned": c.get("is_partition_key", False),
@@ -844,7 +1072,9 @@ class AssetsManager(SearchableAsset):
             columns.append({
                 "name": child.name,
                 "physicalType": props.get("data_type", ""),
-                "logicalType": props.get("logical_type", "string"),
+                "logicalType": column_logical_type(
+                    props.get("logical_type"), props.get("data_type")
+                ),
                 "required": not props.get("nullable", True),
                 "description": child.description or "",
                 "partitioned": props.get("is_partition_key", False),

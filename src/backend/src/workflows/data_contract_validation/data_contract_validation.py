@@ -12,7 +12,7 @@ import os
 import json
 import argparse
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from pyspark.sql import SparkSession
@@ -144,7 +144,7 @@ def create_validation_run(engine: Engine, contract_id: str) -> str:
             "id": run_id,
             "contract_id": contract_id,
             "status": "running",
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "checks_passed": 0,
             "checks_failed": 0,
             "score": 0.0
@@ -182,7 +182,7 @@ def store_validation_result(
             "passed": passed,
             "message": message,
             "details_json": details_json,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         })
         conn.commit()
 
@@ -212,7 +212,7 @@ def complete_validation_run(
         conn.execute(sql, {
             "id": run_id,
             "status": status,
-            "finished_at": datetime.utcnow(),
+            "finished_at": datetime.now(timezone.utc),
             "checks_passed": checks_passed,
             "checks_failed": checks_failed,
             "score": score,
@@ -398,8 +398,13 @@ def check_table_freshness(
         # Calculate age
         if isinstance(last_modified, str):
             last_modified = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
-
-        age = datetime.now() - last_modified.replace(tzinfo=None)
+            if last_modified.tzinfo is None:
+                last_modified = last_modified.replace(tzinfo=timezone.utc)
+        elif last_modified.tzinfo is None:
+            # collect() returns a TimestampType as a naive datetime in the driver's
+            # local zone, not in UTC
+            last_modified = last_modified.astimezone()
+        age = datetime.now(timezone.utc) - last_modified
         age_hours = age.total_seconds() / 3600
 
         passed = age_hours <= max_age_hours

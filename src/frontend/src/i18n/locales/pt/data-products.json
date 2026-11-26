@@ -1,4 +1,8 @@
 {
+  "productAccess": {
+    "notOwnerTitle": "Não é proprietário",
+    "notOwnerMessage": "Você pode ver este produto, mas não editá-lo. Só a equipe proprietária, os membros do projeto, o dono do rascunho ou um administrador de produtos de dados podem editá-lo."
+  },
   "title": "Produtos de dados",
   "subtitle": "Gerencie seus produtos de dados",
   "newProduct": "Novo produto de dados",
@@ -795,7 +799,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Como este entregável fornece dados aos consumidores (ex.: acesso a tabelas, endpoint de serving)",
-      "onlyActiveContracts": "Mostrando apenas contratos ativos/aprovados/certificados",
+      "onlyActiveContracts": "Mostrando apenas contratos ativos/aprovados",
       "containsPiiHint": "Este entregável contém informações de identificação pessoal?",
       "autoApproveHint": "Aprovar automaticamente as solicitações de acesso para este entregável?",
       "afterCreation": "Após criar este entregável, você pode vincular ativos (tabelas, views, conjuntos de dados etc.) a ele na página de detalhes."
@@ -1010,7 +1014,28 @@
     "required": "Obrigatório",
     "advisory": "Recomendado",
     "overTime": "Maturidade ao longo do tempo",
-    "retry": "Tentar novamente"
+    "retry": "Tentar novamente",
+    "currentLevel": "Nível atual",
+    "nextLevel": "Próximo nível",
+    "belowFirstLevel": "Abaixo do primeiro nível",
+    "topLevelReached": "Nível mais alto alcançado",
+    "noLevels": "Ainda não há níveis de maturidade definidos para este tipo.",
+    "gateStatus": {
+      "pass": "Aprovado",
+      "fail": "Reprovado",
+      "warn": "Não atendido"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Não foi possível acessar o Unity Catalog, então faltam os campos da tabela {{tableName}}.",
+    "maturity_uc_table_unreadable": "A tabela {{tableName}} não pode ser lida do Unity Catalog, por isso os campos dela estão ausentes.",
+    "maturity_uc_table_read_failed": "Não foi possível ler a tabela {{tableName}} do Unity Catalog, então faltam os campos dela.",
+    "maturity_gate_error": "Não foi possível avaliar o gate {{gateName}}. Os detalhes estão no log do servidor.",
+    "maturity_level_partial": "O nível conta apenas as verificações que não precisam da tabela {{tableName}}; o ativo pode atingir um nível mais alto."
+  },
+  "maturityResult": {
+    "notStored": "Calculado agora e não salvo: o histórico mostra as avaliações salvas. Reavalie para salvar este resultado.",
+    "notEvaluated": "Não avaliado"
   },
   "createDialog": {
     "editTitle": "Editar metadados do produto de dados",
@@ -1062,7 +1087,7 @@
     "contractLabel": "Contrato:",
     "productNameLabel": "Nome do produto *",
     "productNamePlaceholder": "ex.: Produto de análise de clientes",
-    "productTypeLabel": "Tipo de produto *",
+    "productTypeLabel": "Tipo de produto",
     "productTypePlaceholder": "Selecione o tipo de produto",
     "versionLabel": "Versão *",
     "versionPlaceholder": "ex.: v1.0.0",
@@ -1074,8 +1099,8 @@
     "errors": {
       "nameRequired": "O nome do produto é obrigatório",
       "versionRequired": "A versão é obrigatória",
-      "typeRequired": "O tipo de produto é obrigatório",
-      "createError": "Falha ao criar produto a partir do contrato"
+      "createError": "Falha ao criar produto a partir do contrato",
+      "unknown_data_product_type": "O tipo de produto \"{{key}}\" não existe ou foi desativado. Escolha outro tipo."
     },
     "messages": {
       "productCreated": "Produto criado",
@@ -1127,8 +1152,8 @@
     "exportSuccessfulDesc": "{{filename}} baixado",
     "exportFailed": "Falha na exportação",
     "exportFailedDesc": "Falha ao exportar produto de dados",
-    "exportDescription": "Clicar em \"Exportar\" fará o download deste produto como um arquivo JSON compatível com ODPS v1.0.0. Campos de auditoria (created_at, updated_at) serão excluídos para portabilidade.",
-    "exportAsJson": "Exportar como JSON",
+    "exportDescription": "Clicar em \"Exportar\" fará o download deste produto como um arquivo YAML ODPS v1.0.0, gerado a partir do produto armazenado para que uma reimportação o restaure.",
+    "exportAsJson": "Exportar como YAML",
     "currentProduct": "Produto atual",
     "unnamed": "Sem nome",
     "noProductDesc": "Nenhum produto selecionado. Abra esta caixa de diálogo em uma página de detalhes do produto para exportar."
@@ -1183,5 +1208,12 @@
     "colSubscriber": "Assinante",
     "colSubscribed": "Assinado em",
     "colReason": "Motivo"
+  },
+  "dataProductType": {
+    "source-aligned": "Alinhado à origem",
+    "aggregate": "Agregado",
+    "consumer-aligned": "Alinhado ao consumidor",
+    "source": "Origem",
+    "sink": "Destino"
   }
 }

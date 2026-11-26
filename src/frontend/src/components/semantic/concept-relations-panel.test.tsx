@@ -114,6 +114,26 @@ describe('ConceptRelationsPanel', () => {
     return { ...render(<ConceptRelationsPanel {...props} />), props }
   }
 
+  it('announces a skeleton while the initial relation request is pending', async () => {
+    let resolveRequest: (value: { data: typeof sampleNeighbors }) => void
+    mockGet.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve
+      }),
+    )
+
+    renderPanel()
+
+    expect(screen.getByTestId('concept-relations-loading')).toHaveAttribute('role', 'status')
+    expect(screen.getByText('semantic-models:relations.loading')).toHaveClass('sr-only')
+    expect(screen.queryByText(/No concept-to-concept relations/)).not.toBeInTheDocument()
+
+    resolveRequest!({ data: sampleNeighbors })
+    await waitFor(() => {
+      expect(screen.queryByTestId('concept-relations-loading')).not.toBeInTheDocument()
+    })
+  })
+
   it('renders only meaningful relations (drops rdf:type, label, predicate-direction)', async () => {
     renderPanel()
 
@@ -172,5 +192,38 @@ describe('ConceptRelationsPanel', () => {
     await waitFor(() => {
       expect(screen.getByText(/No concept-to-concept relations yet/i)).toBeInTheDocument()
     })
+  })
+
+  it('shows prefLabel / rdfs:label instead of IRI local names (#1616)', async () => {
+    mockGet.mockResolvedValue({
+      data: [
+        {
+          direction: 'outgoing',
+          predicate: 'http://example.org/onto#containsSubstance',
+          predicateLabels: { rdfsLabel: { en: 'contains substance' } },
+          display: 'http://example.org/onto#BiogenicCarbon',
+          displayLabels: { prefLabel: { pt: 'Carbono biogenico' } },
+          displayType: 'resource',
+          stepIri: 'http://example.org/onto#BiogenicCarbon',
+          stepIsResource: true,
+        },
+        {
+          direction: 'outgoing',
+          predicate: 'http://example.org/onto#unlabelled',
+          display: 'http://example.org/onto#NoLabel',
+          displayType: 'resource',
+          stepIri: 'http://example.org/onto#NoLabel',
+          stepIsResource: true,
+        },
+      ],
+    })
+    renderPanel()
+
+    expect(await screen.findByText('Carbono biogenico')).toBeInTheDocument()
+    expect(screen.getByText('contains substance')).toBeInTheDocument()
+    expect(screen.queryByText('BiogenicCarbon')).not.toBeInTheDocument()
+    expect(screen.queryByText('containsSubstance')).not.toBeInTheDocument()
+    // No label: the local name is still the fallback
+    expect(screen.getByText('NoLabel')).toBeInTheDocument()
   })
 })

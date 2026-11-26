@@ -1,11 +1,12 @@
 import uuid
-from datetime import datetime
 from typing import Any, Callable, List, Optional, Dict
 import json
 
 from sqlalchemy.orm import Session # Import Session for type hinting
 from pydantic import ValidationError # Import for error handling
 
+from src.common.timestamps import utc_now
+from src.common.workflow_approvals import has_decided
 from src.models.notifications import Notification, NotificationType # Import the enum too
 # Import SettingsManager for role lookups
 from typing import TYPE_CHECKING
@@ -14,27 +15,60 @@ if TYPE_CHECKING:
 # Import UserInfo type hint
 from src.models.users import UserInfo
 # Import the repository
-from src.repositories.notification_repository import notification_repo, NotificationRepository
+from src.repositories.notification_repository import (
+    RecipientKeys, notification_repo, NotificationRepository,
+)
 
 # Set up logging
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
+# The bell's history: the newest this many notifications that are not pending actionable items
+# (informational ones, and decided approvals/requests). Pending ones are never capped (#1526).
+BELL_HISTORY_LIMIT = 500
+
+# Explicit principals of the workflow resolver (``_resolve_role_to_users``):
+# ``user:<x>`` / ``group:<name>`` never name an app role. A notification stores
+# them with their prefix; they match only that user or that group's members.
+_EXPLICIT_PREFIXES = ('user:', 'group:')
+
+
 class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
 
 
+# Explicit principals of the workflow resolver (``_resolve_role_to_users``,
+# #1151): a notification stores them with their prefix.
+USER_PRINCIPAL_PREFIX = 'user:'
+GROUP_PRINCIPAL_PREFIX = 'group:'
+EXPLICIT_PRINCIPAL_PREFIXES = (USER_PRINCIPAL_PREFIX, GROUP_PRINCIPAL_PREFIX)
+
+
+def principal_identity(recipient: str) -> str:
+    """``recipient`` without a ``user:`` prefix, lowercased: the form compared
+    with a user's email and username."""
+    value = recipient.strip()
+    if value.startswith(USER_PRINCIPAL_PREFIX):
+        value = value[len(USER_PRINCIPAL_PREFIX):].strip()
+    return value.lower()
+
+
 class _RecipientMembership:
     """Which notification recipients one user is: the user (email or
-    username, ignoring case), a member of a group, or a member of an app role
-    through its groups or its individually assigned users (``assigned_users``,
-    #760). A role with neither falls back to the admins. Built once per user
-    and check, so the roles are loaded once.
+    username, ignoring case), a member of a group (ignoring case), or a member
+    of an app role through its groups or its individually assigned users
+    (``assigned_users``, #760). A role with neither falls back to the admins.
+    Built once per user and check, so the roles are loaded once.
+
+    The explicit forms of the workflow resolver (#1151) never name a role:
+    ``user:<x>`` is only that email or username, ``group:<name>`` only the
+    members of that group.
     """
 
     def __init__(self, user_info: UserInfo, roles: List[Any], roles_loaded: bool = True):
         self.roles_loaded = roles_loaded
         self._groups = set(user_info.groups or [])
+        self._group_names = {str(g).strip().lower() for g in self._groups}
         self._identities = {
             str(v).strip().lower() for v in (user_info.email, user_info.username) if v
         }
@@ -62,14 +96,42 @@ class _RecipientMembership:
         return self.is_admin
 
     def is_user(self, recipient: Optional[str]) -> bool:
-        """Whether the recipient names the user (email or username)."""
-        return bool(recipient) and recipient.strip().lower() in self._identities
+        """Whether the recipient names the user (email or username, bare or
+        as ``user:<x>``)."""
+        return bool(recipient) and principal_identity(recipient) in self._identities
+
+    def in_group(self, name: Optional[str]) -> bool:
+        """Whether the user is a member of the group ``name`` (ignoring case)."""
+        return bool(name) and name.strip().lower() in self._group_names
 
     def role_of(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> Optional[Any]:
-        """The app role a recipient names: by id, else by name (legacy)."""
+        """The app role a recipient names: by id, else by name (legacy). An
+        explicit ``user:`` / ``group:`` recipient names none."""
         if recipient_role_id and str(recipient_role_id) in self.role_by_id:
             return self.role_by_id[str(recipient_role_id)]
-        return self._role_by_name.get(recipient) if recipient else None
+        if not recipient or recipient.startswith(EXPLICIT_PRINCIPAL_PREFIXES):
+            return None
+        return self._role_by_name.get(recipient)
+
+    def recipient_keys(self) -> RecipientKeys:
+        """What this user can match in the recipient fields, for the SQL prefilter."""
+        names = set(self._groups)
+        names.update(key for key, role in self._role_by_name.items() if self.member_of(role))
+        return RecipientKeys(
+            identities=frozenset(
+                self._identities | {f'{USER_PRINCIPAL_PREFIX}{i}' for i in self._identities}
+            ),
+            names=frozenset(names),
+            # Groups are matched ignoring case, bare or as ``group:<name>``
+            groups=frozenset(
+                value for name in self._group_names
+                for value in (name, f'{GROUP_PRINCIPAL_PREFIX}{name}')
+            ),
+            role_ids=frozenset(
+                role_id for role_id, role in self.role_by_id.items() if self.member_of(role)
+            ),
+            known_role_ids=frozenset(self.role_by_id),
+        )
 
     def is_recipient(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> bool:
         """Whether the user is this recipient, without the broadcast and admin
@@ -78,12 +140,15 @@ class _RecipientMembership:
             return False
         if self.is_user(recipient):
             return True
+        if recipient and recipient.startswith(GROUP_PRINCIPAL_PREFIX):
+            return self.in_group(recipient[len(GROUP_PRINCIPAL_PREFIX):])
+        if recipient and recipient.startswith(USER_PRINCIPAL_PREFIX):
+            return False
         role = self.role_of(recipient, recipient_role_id)
         if role is not None:
             return self.member_of(role)
-        # Group picked as a recipient / approver (the Workflow Designer's
-        # principal picker stores the group name)
-        return bool(not recipient_role_id and recipient in self._groups)
+        # A bare group name (stored before the designer sent ``group:``)
+        return bool(not recipient_role_id and self.in_group(recipient))
 
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
@@ -108,10 +173,17 @@ class NotificationsManager:
             return None
 
     def get_notifications(self, db: Session, user_info: Optional[UserInfo] = None) -> List[Notification]:
-        """Get notifications from the database, filtered for the user."""
-        
-        # Fetch all notifications from the repository
-        all_notifications_db = self._repo.get_multi(db=db, limit=1000) # Adjust limit if needed
+        """Get the notifications addressed to the user, newest first.
+
+        The repository selects the user's rows in SQL: every pending actionable one, and the
+        newest BELL_HISTORY_LIMIT of the rest. The row-by-row check below is the final word (#1526).
+        """
+        membership = self._membership(user_info, "notification filtering") if user_info else None
+        all_notifications_db = self._repo.get_addressed_to(
+            db=db,
+            keys=membership.recipient_keys() if membership else None,
+            history_limit=BELL_HISTORY_LIMIT,
+        )
         
         # Convert DB models to Pydantic models (handling potential errors)
         all_notifications_api: List[Notification] = []
@@ -122,12 +194,10 @@ class NotificationsManager:
                  logger.error(f"Error validating Notification DB object (ID: {db_obj.id}): {e}")
                  continue # Skip this notification
 
-        # --- Filtering logic (similar to before, but uses API models and SettingsManager) ---
-        if not user_info:
+        if membership is None:
             # Return only broadcast notifications if no user info
             return [n for n in all_notifications_api if not n.recipient]
 
-        membership = self._membership(user_info, "notification filtering")
         filtered_notifications = []
         for n in all_notifications_api:
             target_role = membership.role_of(n.recipient, n.recipient_role_id)
@@ -136,14 +206,18 @@ class NotificationsManager:
                 n.recipient_role_name = target_role.name
             # Broadcast: no recipient and no known role
             broadcast = not n.recipient and membership.role_of(None, n.recipient_role_id) is None
+            # A role or group approval shared with others: not this user's once they
+            # decided its step through another target (one decision per person, #1552)
+            if n.action_type == 'workflow_approval' and has_decided(n, user_info):
+                continue
             if broadcast or membership.is_recipient(n.recipient, n.recipient_role_id):
                 # Admins can delete any notification they can see
                 if membership.is_admin:
                     n.can_delete = True
                 filtered_notifications.append(n)
 
-        # Sort by created_at descending (using datetime objects)
-        filtered_notifications.sort(key=lambda x: x.created_at, reverse=True)
+        # Newest first, id breaking a tie, as the repository orders each part
+        filtered_notifications.sort(key=lambda x: (x.created_at, x.id), reverse=True)
 
         return filtered_notifications
 
@@ -244,7 +318,7 @@ class NotificationsManager:
         notification was silently lost.
         """
         try:
-            now = datetime.utcnow()
+            now = utc_now()
             notification_id = str(uuid.uuid4())
             
             # Construct the Notification Pydantic model internally
@@ -300,18 +374,18 @@ class NotificationsManager:
             raise
 
     def has_unhandled_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
-        """Return True if an unread notification already matches this action type/payload.
+        """Return True if a notification not decided yet already matches this action
+        type/payload.
 
         Used to deduplicate user-triggered requests (e.g. asking an admin to enable a
         background job) so repeated clicks don't flood the admin notification bell.
         Matching mirrors handle_actionable_notification: the provided payload must be a
-        subset of the stored payload.
+        subset of the stored payload. Decided means the ``handled`` (or ``completed``)
+        marker, as in the list: a request only opened in the bell (read) is still pending,
+        so it still deduplicates (#1527 review).
         """
         try:
-            for notification_db in self._repo.get_multi(db, limit=5000):
-                if notification_db.action_type != action_type or notification_db.read:
-                    continue
-
+            for notification_db in self._repo.get_by_action_type(db, action_type):
                 payload_db = {}
                 if notification_db.action_payload:
                     try:
@@ -319,6 +393,10 @@ class NotificationsManager:
                     except json.JSONDecodeError:
                         logger.warning("Could not parse action_payload for notification %s", notification_db.id)
                         continue
+                if not isinstance(payload_db, dict):
+                    continue
+                if payload_db.get('handled') is True or payload_db.get('completed') is True:
+                    continue
 
                 if all(item in payload_db.items() for item in action_payload.items()):
                     return True
@@ -332,17 +410,13 @@ class NotificationsManager:
     def handle_actionable_notification(
         self, db: Session, action_type: str, action_payload: Dict,
     ) -> bool:
-        """Finds notifications by action type/payload and marks them as read."""
+        """Finds notifications by action type/payload and marks them handled (read, and the
+        ``handled`` marker in the payload)."""
         logger.debug(f"Attempting to handle notification: type={action_type}, payload={action_payload}")
         try:
-            # Assuming repo has a method to find by action (might need creating)
-            # Alternatively, get all matching type and filter here
-            # Example: Fetch notifications matching action_type (needs repo method)
-            # matching_notifications = self._repo.get_by_action_type(db, action_type=action_type)
-            
-            # Simplified: Get all and filter (less efficient for many notifications)
-            all_notifications = self._repo.get_multi(db, limit=5000) 
-            
+            # Every row of the type, not capped: an old pending request must be handled (#1526)
+            all_notifications = self._repo.get_by_action_type(db, action_type)
+
             found_and_handled = False
             for notification_db in all_notifications:
                  # Convert payload string from DB back to dict for comparison
@@ -355,23 +429,29 @@ class NotificationsManager:
                          continue
 
                  # Check for match
-                 if (notification_db.action_type == action_type and
-                     payload_db is not None and
+                 if (payload_db is not None and
                      # Check if provided payload is subset of DB payload
                      all(item in payload_db.items() for item in action_payload.items())):
                     
-                    if not notification_db.read:
-                        # Mark as read using the update method
-                        self._repo.update(db=db, db_obj=notification_db, obj_in={"read": True})
-                        logger.info(f"Marked actionable notification as read: ID={notification_db.id}, Type={action_type}")
-                        found_and_handled = True
-                        # Optional: break if only one notification should match
-                        # break 
+                    # Decided: read, and the handled marker the decision paths share (#1526).
+                    # The marker records the decision; read alone may only mean opened.
+                    if not notification_db.read or payload_db.get('handled') is not True:
+                        self._repo.update(db=db, db_obj=notification_db, obj_in={
+                            "read": True,
+                            "action_payload": {**payload_db, "handled": True},
+                        })
+                        logger.info(
+                            "Marked actionable notification as handled: ID=%s, Type=%s",
+                            notification_db.id, action_type,
+                        )
                     else:
-                        logger.info(f"Actionable notification already read: ID={notification_db.id}, Type={action_type}")
-                        # Still count as found
-                        found_and_handled = True 
-                        # break 
+                        logger.info(
+                            "Actionable notification already handled: ID=%s, Type=%s",
+                            notification_db.id, action_type,
+                        )
+                    found_and_handled = True
+                    # Optional: break if only one notification should match
+                    # break
             
             if not found_and_handled:
                 logger.warning(f"Could not find actionable notification to handle: type={action_type}, payload={action_payload}")
@@ -537,7 +617,7 @@ class NotificationsManager:
                     "entity_id": entity_id,
                     "data": data,
                 },
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 read=False,
                 can_delete=True,
             )
@@ -580,7 +660,7 @@ class NotificationsManager:
             # Update the notification
             update_data = {
                 'read': True,
-                'updated_at': datetime.utcnow(),
+                'updated_at': utc_now(),
             }
             
             # Update action_payload with completion details
@@ -593,7 +673,7 @@ class NotificationsManager:
             
             existing_payload['completed'] = True
             existing_payload['completed_by'] = completed_by
-            existing_payload['completed_at'] = datetime.utcnow().isoformat()
+            existing_payload['completed_at'] = utc_now().isoformat()
             if notes:
                 existing_payload['completion_notes'] = notes
             
@@ -627,15 +707,12 @@ class NotificationsManager:
             List of pending delivery notifications
         """
         try:
-            all_notifications = self._repo.get_multi(db=db, limit=1000)
-            
+            all_notifications = self._repo.get_by_action_type(
+                db, "delivery_manual", unread_only=True,
+            )
+
             pending = []
             for db_obj in all_notifications:
-                if db_obj.action_type != "delivery_manual":
-                    continue
-                if db_obj.read:
-                    continue
-                
                 # Parse action_payload to check change_type filter
                 if change_type:
                     payload = {}
@@ -657,3 +734,4 @@ class NotificationsManager:
         except Exception as e:
             logger.error(f"Error getting pending delivery notifications: {e}", exc_info=True)
             return []
+

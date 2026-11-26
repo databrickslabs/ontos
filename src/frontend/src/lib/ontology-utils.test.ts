@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type { OntologyConcept } from '@/types/ontology';
 import {
   resolveLabel,
+  resolveLabelFromMap,
+  resolveLabelFromMaps,
+  iriLocalName,
   resolveComment,
   getAvailableLanguages,
   getLanguageDisplayName,
@@ -69,6 +72,88 @@ describe('ontology-utils', () => {
       // guard; falls through to the IRI local name.
       const c = concept({ iri: 'http://example.org/onto#Widget' });
       expect(resolveLabel(c, 'fr')).toBe('Widget');
+    });
+  });
+
+  describe('label precedence (issue #1616)', () => {
+    const iri = 'http://example.org/onto#BiogenicCarbon';
+
+    it('prefers a label in any other language over the IRI local name', () => {
+      const c = concept({ iri, label: 'BiogenicCarbon', labels: { pt: 'Carbono biogenico' } });
+      expect(resolveLabel(c, 'en')).toBe('Carbono biogenico');
+    });
+
+    it('prefers the UI language label over other languages', () => {
+      const labels = { en: 'Biogenic carbon', pt: 'Carbono biogenico' };
+      expect(resolveLabelFromMap(labels, iri, 'pt')).toBe('Carbono biogenico');
+      expect(resolveLabelFromMap(labels, iri, 'en')).toBe('Biogenic carbon');
+    });
+
+    it('falls to the local name only when there is no label at all', () => {
+      expect(resolveLabelFromMap({}, iri, 'pt')).toBe('BiogenicCarbon');
+      expect(resolveLabelFromMap(undefined, iri, 'pt')).toBe('BiogenicCarbon');
+    });
+
+    it('prefLabel in any language beats rdfs:label in the UI language', () => {
+      const maps = { prefLabel: { en: 'Pref en' }, rdfsLabel: { pt: 'Rdfs pt' } };
+      expect(resolveLabelFromMaps(maps, iri, 'pt')).toBe('Pref en');
+    });
+
+    it('prefLabel: UI language, then en, then untagged, then any', () => {
+      expect(resolveLabelFromMaps({ prefLabel: { en: 'E', pt: 'P' } }, iri, 'pt')).toBe('P');
+      expect(resolveLabelFromMaps({ prefLabel: { en: 'E', de: 'D' } }, iri, 'pt')).toBe('E');
+      expect(resolveLabelFromMaps({ prefLabel: { '': 'U', de: 'D' } }, iri, 'pt')).toBe('U');
+      expect(resolveLabelFromMaps({ prefLabel: { de: 'D' } }, iri, 'pt')).toBe('D');
+    });
+
+    it('uses rdfs:label only when there is no prefLabel, then legacy, then local name', () => {
+      expect(resolveLabelFromMaps({ rdfsLabel: { de: 'R' } }, iri, 'pt')).toBe('R');
+      expect(resolveLabelFromMaps({}, iri, 'pt', 'Legacy')).toBe('Legacy');
+      expect(resolveLabelFromMaps(null, iri, 'pt')).toBe('BiogenicCarbon');
+    });
+
+    it('title: prefLabel@en beats rdfs:label@pt for a pt UI (label_maps)', () => {
+      const c = concept({
+        iri,
+        label: 'RdfsPT',
+        labels: { en: 'PrefEN', pt: 'RdfsPT' },
+        label_maps: { prefLabel: { en: 'PrefEN' }, rdfsLabel: { pt: 'RdfsPT' } },
+      });
+      expect(resolveLabel(c, 'pt')).toBe('PrefEN');
+    });
+
+    it('old payloads without label_maps still use the merged labels', () => {
+      const c = concept({ iri, labels: { pt: 'Merged' } });
+      expect(resolveLabel(c, 'pt')).toBe('Merged');
+    });
+
+    it('skips whitespace-only labels', () => {
+      expect(resolveLabelFromMaps({ prefLabel: { pt: '   ', en: 'E' } }, iri, 'pt')).toBe('E');
+      expect(resolveLabelFromMaps({ prefLabel: { pt: ' ' } }, iri, 'pt')).toBe('BiogenicCarbon');
+    });
+
+    it('compares language tags case-insensitively', () => {
+      const maps = { prefLabel: { de: 'D', PT: 'Upper' } };
+      expect(resolveLabelFromMaps(maps, iri, 'pt')).toBe('Upper');
+      expect(resolveLabelFromMaps({ prefLabel: { 'pt-BR': 'BR', en: 'E' } }, iri, 'pt')).toBe('BR');
+      expect(resolveLabelFromMaps({ prefLabel: { EN: 'E', de: 'D' } }, iri, 'pt')).toBe('E');
+    });
+
+    it('is stable regardless of key order for ties', () => {
+      const a = resolveLabelFromMaps({ prefLabel: { de: 'D', fr: 'F' } }, iri, 'pt');
+      const b = resolveLabelFromMaps({ prefLabel: { fr: 'F', de: 'D' } }, iri, 'pt');
+      expect(a).toBe(b);
+    });
+
+    it('iriLocalName ignores a trailing / or #', () => {
+      expect(iriLocalName('http://x/o#')).toBe('o');
+      expect(iriLocalName('http://x/a/')).toBe('a');
+    });
+
+    it('iriLocalName handles fragment, path and empty IRIs', () => {
+      expect(iriLocalName('http://a/b#c')).toBe('c');
+      expect(iriLocalName('http://a/b/c')).toBe('c');
+      expect(iriLocalName('')).toBe('');
     });
   });
 

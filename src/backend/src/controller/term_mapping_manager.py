@@ -17,11 +17,12 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.notifications import Notification, NotificationType
@@ -890,7 +891,7 @@ class TermMappingManager:
 # ---------- module-private helpers ----------
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return utc_now()
 
 
 def _stats_from(targets: List[TargetEntity], drafts: List[SuggestionDraft]) -> Dict[str, Any]:

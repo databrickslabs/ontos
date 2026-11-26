@@ -92,6 +92,19 @@ def _sqlite_begin(connection):
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
+@pytest.fixture
+def seeded_product_types(db_session):
+    """The built-in data product types, which startup and the b11 migration seed.
+
+    A plain product create or update only accepts an existing, active type
+    (only imports add new ones), so tests that send ``productType`` need them.
+    """
+    from src.repositories.data_product_types_repository import data_product_types_repo
+
+    data_product_types_repo.seed_defaults(db_session)
+    db_session.flush()
+
+
 @pytest.fixture(scope="session")
 def temp_audit_log_dir():
     # Create a temporary directory for audit logs
@@ -114,6 +127,17 @@ def setup_test_database(temp_audit_log_dir): # Add temp_audit_log_dir dependency
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine) # Clean up after tests
+
+
+@pytest.fixture(autouse=True)
+def _fresh_lifecycle_cache():
+    """The lifecycle service caches the stage groups per process: a group another
+    test stored (and rolled back) must not leak into the next test."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    lifecycle_service.invalidate()
+    yield
+    lifecycle_service.invalidate()
 
 
 @pytest.fixture(scope="function", autouse=True)

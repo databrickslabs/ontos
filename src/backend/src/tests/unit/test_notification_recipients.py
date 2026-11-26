@@ -22,6 +22,7 @@ from src.common.compliance_dsl import parse_rule
 from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.features import FeatureAccessLevel
 from src.common.notification_audience import audience_for, violations
+from src.common.run_identity import RunIdentity
 from src.controller.compliance_manager import ComplianceManager
 from src.controller.notification_recipients_manager import (
     NotificationRecipientNameTakenError,
@@ -118,7 +119,11 @@ def _run(db, policy, current_user=None, entities=None):
         patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator),
         patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()),
     ):
-        return ComplianceManager().run_policy_inline(db, policy=policy, current_user=current_user)
+        # A run a user starts reads as them: it carries their RunIdentity (scheduled runs have none)
+        identity = RunIdentity(lambda: MagicMock(), on_behalf_of_user=True) if current_user else None
+        return ComplianceManager().run_policy_inline(
+            db, policy=policy, current_user=current_user, run_identity=identity,
+        )
 
 
 def _rule(*notify_targets):
@@ -197,8 +202,10 @@ class TestAudience:
                                feature_permissions=json.dumps({'compliance': 'Admin'}))
         db_session.add(team_admin)
         db_session.flush()
-        with patch('src.controller.teams_manager.TeamsManager.get_teams_for_user', return_value=[]), \
-                patch('src.common.team_role_override.pick_team_role_override', return_value=team_admin.name):
+        member = SimpleNamespace(member_type='user', member_identifier='member@example.com',
+                                 app_role_override=team_admin.name)
+        team = SimpleNamespace(members=[member])
+        with patch('src.controller.teams_manager.TeamsManager.get_team_rows_for_user', return_value=[team]):
             audience = audience_for(db_session, 'member@example.com', [])
         assert audience.is_admin
         assert violations(db_session, "Anyone Else", audience) == []

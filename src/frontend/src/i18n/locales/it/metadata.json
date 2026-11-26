@@ -106,8 +106,11 @@
     },
     "messages": {
       "deleteFailed": "Eliminazione fallita",
-      "uploadFailed": "Caricamento fallito"
-    }
+      "uploadFailed": "Caricamento fallito",
+      "volume_invalid": "«{{value}}» non indica un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o il nome di un volume; un nome semplice richiede un catalogo e uno schema senza punti, barre o spazi. Chiedi a un amministratore di correggerlo in Impostazioni > Generale.",
+      "volume_not_configured": "Nessun volume è impostato per i documenti. Chiedi a un amministratore di impostarne uno in Impostazioni > Generale."
+    },
+    "importedFrom": "Importato da {{path}}"
   },
   "sharedAssets": {
     "selectDescription": "Seleziona un asset condiviso da allegare a questa entità",
@@ -176,7 +179,10 @@
       "updated": "Costo aggiornato",
       "deleted": "Costo eliminato",
       "deleteFailed": "Eliminazione non riuscita",
-      "saveFailed": "Salvataggio non riuscito"
+      "saveFailed": "Salvataggio non riuscito",
+      "requestFailed": "Impossibile completare la richiesta.",
+      "validationFailed": "Controlla i valori inseriti e riprova.",
+      "invalidResponse": "Il server ha restituito una risposta non valida."
     }
   },
   "quality": {
@@ -251,5 +257,83 @@
     "goToDetails": "Vai ai Dettagli",
     "alreadySubscribed": "Già Iscritto",
     "subscribe": "Iscriviti"
+  },
+  "markdownImport": {
+    "open": "Importa Markdown",
+    "title": "Importa Markdown da un volume",
+    "description": "Importa i file .md di una cartella di un volume Unity Catalog (e delle sue sottocartelle) come documenti dei domini, asset e concetti indicati nel loro front matter. Un nuovo avvio aggiorna solo i file modificati.",
+    "pathLabel": "Cartella o file del volume",
+    "frontMatterHint": "Ogni file è collegato tramite il suo front matter: domain:, assets: e concepts:, per nome, id o FQN. I file senza una destinazione nota sono elencati come non collegati; i termini di glossario restano testo del documento.",
+    "submit": "Importa",
+    "importing": "Importazione…",
+    "close": "Chiudi",
+    "summary": {
+      "added": "Aggiunti: {{count}}",
+      "updated": "Aggiornati: {{count}}",
+      "unchanged": "Invariati: {{count}}",
+      "unlinked": "Non collegati: {{count}}",
+      "failed": "Non riusciti: {{count}}",
+      "removed": "Rimossi: {{count}}"
+    },
+    "status": {
+      "added": "Aggiunto",
+      "updated": "Aggiornato",
+      "unchanged": "Invariato",
+      "unlinked": "Non collegato",
+      "failed": "Non riuscito",
+      "removed": "Rimosso"
+    },
+    "linkedTo": "Collegato a: {{targets}}",
+    "removed": "Rimosso dalle entità che non indica più: {{count}}",
+    "noTargets": "Il front matter non indica alcun dominio, asset o concetto.",
+    "noFiles": "Nessun file Markdown trovato in questo percorso.",
+    "kinds": {
+      "domain": "Dominio",
+      "asset": "Asset",
+      "concept": "Concetto"
+    },
+    "unresolved": {
+      "notFound": "{{kind}} \"{{value}}\" non trovato",
+      "ambiguous": "{{kind}} \"{{value}}\" corrisponde a più entità",
+      "forbidden": "{{kind}} \"{{value}}\": non puoi modificare questo tipo di entità",
+      "lookupFailed": "Impossibile cercare {{kind}} \"{{value}}\"; i documenti sono stati mantenuti"
+    },
+    "reasons": {
+      "too_large": "Il file supera 1 MB.",
+      "not_utf8": "Il file non è testo UTF-8.",
+      "front_matter_invalid": "Il front matter non è una mappa YAML valida.",
+      "read_failed": "Impossibile leggere il file.",
+      "gone": "Il file non è più nella cartella: i suoi documenti sono stati rimossi da {{count}} entità.",
+      "not_text": "Il file contiene caratteri NUL; non è testo.",
+      "import_error": "Impossibile importare il file; gli altri sono stati importati.",
+      "too_many_targets": "Il front matter nomina più di 50 entità.",
+      "path_too_long": "Il percorso del file è troppo lungo per l'importazione."
+    },
+    "errors": {
+      "markdown_import_path_invalid": "\"{{path}}\" non è un percorso all'interno di un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>/<folder>.",
+      "markdown_import_path_not_found": "Non è stato trovato nulla in \"{{path}}\".",
+      "markdown_import_access_denied": "Non puoi leggere \"{{path}}\". Richiedi READ VOLUME sul volume.",
+      "markdown_import_too_many_files": "\"{{path}}\" contiene più di {{max}} file Markdown. Importa una cartella più piccola.",
+      "failed": "Importazione non riuscita.",
+      "markdown_import_in_progress": "È in corso un'altra importazione Markdown. Riprova al termine.",
+      "user_token_required": "Questa importazione richiede il token utente Databricks, e la richiesta non ne ha uno."
+    },
+    "warnings": {
+      "empty_folder": "Nessun file Markdown trovato qui: i documenti importati in precedenza da questa cartella sono stati mantenuti."
+    },
+    "preview": "Anteprima",
+    "previewing": "Anteprima in corso…",
+    "previewNote": "Solo anteprima: ecco cosa farebbe Importa. Non è stato salvato nulla."
+  },
+  "inherited": {
+    "title": "Ereditato",
+    "description": "Metadati di sola lettura ereditati dai contratti e dagli asset di questa entità. Modificali all'origine.",
+    "refresh": "Aggiorna i metadati ereditati",
+    "fromContract": "dal contratto {{name}}",
+    "fromAsset": "dall'asset {{name}}",
+    "shared": "condiviso",
+    "table": {
+      "source": "Origine"
+    }
   }
 }

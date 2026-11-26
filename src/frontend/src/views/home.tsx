@@ -18,10 +18,12 @@ import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
 import { tileRegistry, tileOrder } from '@/tiles';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import EssentialsHome, { readsApprovalQueue } from '@/components/home/essentials/essentials-home';
 
 export default function Home() {
   const { t } = useTranslation(['home', 'common']);
   const appName = useUICustomizationStore((s) => s.getAppName());
+  const appTagline = useUICustomizationStore((s) => s.appTagline?.trim() || null);
   const { permissions, isLoading: permissionsLoading, hasPermission, requestableRoles, appliedRoleId } = usePermissions();
 
   // Get available tiles based on permissions
@@ -43,6 +45,8 @@ export default function Home() {
   const userGroups = (userInfo as any)?.groups || [];
 
   const configuredSections: HomeSection[] = useMemo(() => {
+    // Roles and the applied role may still be arriving: no sections until permissions are loaded.
+    if (permissionsLoading) return [];
     if (appliedRoleId) {
       const r = availableRoles.find(role => role.id === appliedRoleId);
       return (r?.home_sections || []) as HomeSection[];
@@ -52,19 +56,49 @@ export default function Home() {
       const matched = availableRoles.filter(r => Array.isArray(r.assigned_groups) && r.assigned_groups.some(g => groupSet.has(g)));
       const union = new Set<HomeSection>();
       matched.forEach(r => (r.home_sections || []).forEach(s => union.add(s as HomeSection)));
-      const order: HomeSection[] = [HomeSection.REQUIRED_ACTIONS, HomeSection.DATA_CURATION, HomeSection.DISCOVERY];
+      const order: HomeSection[] = [
+        HomeSection.JOURNEY,
+        HomeSection.REQUIRED_ACTIONS,
+        HomeSection.DATA_CURATION,
+        HomeSection.DISCOVERY,
+      ];
       const result = order.filter(s => union.has(s));
       return result.length > 0 ? result : [HomeSection.DISCOVERY];
     }
     return [];
-  }, [availableRoles, appliedRoleId, userGroups]);
+  }, [permissionsLoading, availableRoles, appliedRoleId, userGroups]);
 
   const defaultSections: HomeSection[] = [HomeSection.DISCOVERY];
   const orderedSections = configuredSections.length > 0 ? configuredSections : defaultSections;
+  // The journey home (#1347) replaces the Full overview for the roles that have it.
+  const journeyHome = orderedSections.includes(HomeSection.JOURNEY);
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {hasAnyAccess && (
+      {!permissionsLoading && hasAnyAccess && journeyHome && (
+        <>
+          <EssentialsHome />
+          {/* A group union can add sections the role editor keeps off a journey role itself. */}
+          {orderedSections.includes(HomeSection.DATA_CURATION) && <DataCurationSection />}
+          {orderedSections.includes(HomeSection.DISCOVERY) && <DiscoverySection />}
+          {/* A group union can add REQUIRED_ACTIONS. The journey's approvals card shows it
+              for users who read contracts or products; the others get the role-request
+              actions here, without the queue they can't read. */}
+          {orderedSections.includes(HomeSection.REQUIRED_ACTIONS)
+            && !readsApprovalQueue(hasPermission) && (
+            <Card className="mb-8" data-testid="journey-required-actions">
+              <div className="px-6 py-4 border-b bg-muted/30">
+                <h3 className="font-semibold text-sm">{t('home:myActions.approvals')}</h3>
+              </div>
+              <CardContent className="p-0 max-h-[400px] overflow-auto">
+                <RequiredActionsSection fetchQueue={false} />
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {!permissionsLoading && hasAnyAccess && !journeyHome && (
         <>
           <div className="max-w-2xl mx-auto text-center mb-8">
             <div className="flex items-center justify-center mb-4">
@@ -73,6 +107,16 @@ export default function Home() {
                 {t('home:title', { appName })}
               </h1>
             </div>
+            {appTagline && (
+              <p
+                data-brand="tagline"
+                className={
+                  '-mt-2 mb-3 text-sm font-medium tracking-[0.2em] text-muted-foreground'
+                }
+              >
+                {appTagline}
+              </p>
+            )}
             <p className="text-lg text-muted-foreground mb-6">
               {t('home:tagline')}
             </p>

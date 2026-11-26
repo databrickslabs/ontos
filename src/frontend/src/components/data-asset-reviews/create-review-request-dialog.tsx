@@ -350,6 +350,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                             <PrincipalPicker
                                 id="reviewer-email"
                                 accepts={['user']}
+                                suggestKnownUsers
                                 value={reviewerEmail || null}
                                 onChange={(next) => {
                                     setReviewerEmail(next ?? '');

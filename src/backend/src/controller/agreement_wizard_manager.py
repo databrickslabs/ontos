@@ -8,11 +8,11 @@ and on completion creates an agreement record and writes to entity change log
 
 import json
 import uuid
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.change_log_manager import ChangeLogManager
 from src.models.process_workflows import ProcessWorkflow, WorkflowStep, StepType, WorkflowType
@@ -869,7 +869,7 @@ class AgreementWizardManager:
                                 "entity_type": session.entity_type,
                                 "entity_id": session.entity_id,
                             },
-                            created_at=datetime.utcnow(),
+                            created_at=utc_now(),
                             read=False,
                             can_delete=True,
                         )
@@ -1003,9 +1003,15 @@ class AgreementWizardManager:
         except (json.JSONDecodeError, TypeError, AttributeError):
             return False
 
-    def list_sessions(self, limit: int = 50) -> Dict[str, Any]:
-        """List recent approval wizard sessions, newest first."""
-        sessions = agreement_wizard_sessions_repo.list_recent(self._db, limit=limit)
+    def list_sessions(self, limit: int = 50, created_by: Optional[str] = None) -> Dict[str, Any]:
+        """List recent approval wizard sessions, newest first.
+
+        ``created_by`` limits the list to that user's sessions; ``None`` lists
+        everyone's (callers decide who may see that).
+        """
+        sessions = agreement_wizard_sessions_repo.list_recent(
+            self._db, limit=limit, created_by=created_by
+        )
         return {"sessions": sessions, "total": len(sessions)}
 
     def list_agreements(

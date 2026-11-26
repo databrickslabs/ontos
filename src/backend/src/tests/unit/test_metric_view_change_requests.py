@@ -436,6 +436,34 @@ class TestDecisionAndDelivery:
         assert audits[-1]['details']['base_digest'] == row.base_digest
         assert audits[-1]['details']['proposed_digest'] == row.proposed_digest
 
+    def test_a_clarified_review_returns_the_request_to_a_draft_without_delivering(
+        self, db_session, manager, asset, ws, review, delivery, audits
+    ):
+        from src.common.workflow_executor import WorkflowExecutor
+        from src.models.process_workflows import TriggerContext, TriggerType
+        request = _in_review(db_session, manager, asset, ws)
+        context = TriggerContext(
+            entity_type='metric_view', entity_id=str(asset.id), entity_name='orders_mv',
+            trigger_type=TriggerType.ON_REQUEST_DEFINITION_CHANGE, user_email=REQUESTER,
+            entity_data={'request_id': str(request.id)},
+        )
+        workflow = SimpleNamespace(
+            name='Metric View Change', trigger=SimpleNamespace(
+                type=TriggerType.ON_REQUEST_DEFINITION_CHANGE),
+        )
+
+        WorkflowExecutor(db_session)._handle_workflow_completion(
+            trigger_context=context, workflow=workflow, succeeded=True, approved=False,
+            responded_by=APPROVER, execution_id='exec-1', clarified=True,
+        )
+
+        row = db_session.get(MetricViewChangeRequestDb, request.id)
+        # Not rejected: the requester answers and submits it again
+        assert row.status == 'draft' and row.submitted_at is None
+        assert row.delivered_at is None and row.error_code is None
+        assert row.decided_by == APPROVER
+        assert audits[-1]['action'] == 'METRIC_VIEW_CHANGE_REQUEST_CLARIFIED'
+
     def test_indirect_delivery_writes_the_yaml_and_the_ddl(
         self, db_session, manager, asset, ws, review, delivery
     ):
@@ -601,6 +629,24 @@ class TestDecisionAndDelivery:
 
         assert db_session.get(MetricViewChangeRequestDb, request.id).status == 'cancelled'
         assert _notifications(db_session, module.MANUAL_TITLE_KEY) == []
+
+    def test_cancelling_closes_the_approvals_an_approver_already_opened(
+        self, db_session, manager, asset, ws, review, delivery
+    ):
+        request = _in_review(db_session, manager, asset, ws)
+        opened = NotificationDb(
+            id=str(uuid.uuid4()), type='action_required', title='Approval Required',
+            recipient='approver@example.com', read=True, action_type='workflow_approval',
+            action_payload=json.dumps({'execution_id': 'exec-1', 'step_id': 'approve'}),
+        )
+        db_session.add(opened)
+        db_session.flush()
+
+        manager.cancel(asset.id, request.id, REQUESTER)
+
+        db_session.refresh(opened)
+        payload = json.loads(opened.action_payload)
+        assert payload['handled'] is True and payload['decision'] == 'cancelled'
 
 
 class TestBaselineOnReadBack:

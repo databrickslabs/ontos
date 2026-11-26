@@ -5,7 +5,7 @@ Tools for searching, creating, updating, and deleting data contracts.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from src.common.features import FeatureAccessLevel
 from src.tools.write_audit import audit_change, audited, caller_email
 from src.tools import read_access
@@ -105,8 +105,17 @@ def _transition_status(
 
     ``kwargs`` go to ``transition_status``.
     """
+    from src.controller.lifecycle_service import lifecycle_service
+    from src.repositories.data_contracts_repository import data_contract_repo
+
     details = {"contract_id": contract_id, "from": from_status}
-    action = LIFECYCLE_AUDIT_ACTIONS.get(status.lower(), "CHANGE_STATUS")
+    # By the target's Stage Category in the contract's lifecycle stage group
+    contract = data_contract_repo.get(ctx.db, id=contract_id)
+    category = (
+        lifecycle_service.group_for(ctx.db, 'data_contract', contract).category(status)
+        if contract is not None else None
+    )
+    action = LIFECYCLE_AUDIT_ACTIONS.get(category or status.lower(), "CHANGE_STATUS")
     with audited(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, action, details) as outcome:
         updated = ctx.data_contracts_manager.transition_status(
             db=ctx.db, contract_id=contract_id, new_status=status,
@@ -117,19 +126,51 @@ def _transition_status(
     return updated
 
 
+def _check_transition(
+    ctx: ToolContext, tool_name: str, contract_id: str, from_status: str, status: str,
+    deprecation: Any,
+) -> None:
+    """A status change's checks and gates before the call writes its fields
+    (``check_transition_gates``); a refusal is audited as ``_transition_status``
+    audits it, and raised."""
+    try:
+        ctx.data_contracts_manager.check_transition_gates(
+            db=ctx.db, contract_id=contract_id, new_status=status,
+            current_user=caller_email(ctx), deprecation=deprecation,
+        )
+    except Exception:
+        action = LIFECYCLE_AUDIT_ACTIONS.get(status.lower(), "CHANGE_STATUS")
+        audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, action, False, {
+            "contract_id": contract_id, "from": from_status,
+        })
+        raise
+
+
 def _update_refusal(
     ctx: ToolContext, tool_name: str, contract: Any, changes: Dict[str, Any]
-) -> Optional[ToolResult]:
-    """The PUT route's before_update gates (``run_update_gates``); None = may update."""
-    passed, executions = ctx.data_contracts_manager.run_update_gates(
-        ctx.db, contract, changes, caller_email(ctx)
-    )
+) -> Tuple[Optional[ToolResult], List[Any]]:
+    """The PUT route's before_update gates (``run_update_gates``).
+
+    ``(refusal, executions)``: the refusal is None when the contract may be
+    updated, and the update gets the executions (their tag steps' changes are
+    written with it). A ``fail_closed`` gate that couldn't be evaluated raises
+    its coded error, audited here as a refused update.
+    """
+    contract_id = str(contract.id)
+    try:
+        passed, executions = ctx.data_contracts_manager.run_update_gates(
+            ctx.db, contract, changes, caller_email(ctx)
+        )
+    except CodedValueError as err:
+        audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "UPDATE", False, {
+            "params": {"contract_id": contract_id}, "error_code": err.code,
+        })
+        raise
     if passed:
-        return None
+        return None, executions
     from src.common.workflow_triggers import (
         describe_failed_executions, failed_execution_reasons,
     )
-    contract_id = str(contract.id)
     audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "UPDATE", False, {
         "params": {"contract_id": contract_id}, "error_code": UPDATE_BLOCKED_CODE,
     })
@@ -138,7 +179,7 @@ def _update_refusal(
         error=f"Update blocked by workflow: {describe_failed_executions(executions)}",
         error_code=UPDATE_BLOCKED_CODE,
         data={"contract_id": contract_id, "reasons": failed_execution_reasons(executions)},
-    )
+    ), executions
 
 
 class CreateDraftDataContractTool(BaseTool):
@@ -297,11 +338,11 @@ class UpdateDataContractTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
-                "transition: only an allowed transition, and status change workflows can "
-                "block it."
+                "New status: a stage key of the contract's lifecycle stage group (draft, "
+                "active, deprecated, retired, ... by default; a custom group has its own "
+                "stages). Applied as a lifecycle transition: only an allowed transition, "
+                "and status change workflows can block it."
             ),
-            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",
@@ -371,23 +412,11 @@ class UpdateDataContractTool(BaseTool):
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
 
-            # A field change runs the before_update gates of PUT
-            # /data-contracts/{id}, before the status change, so a refused call
-            # writes nothing. A status change alone runs only the
-            # before_status_change gates, as the change-status route.
-            if update_data:
-                if not target:
-                    return ToolResult(
-                        success=False,
-                        error=f"Data contract '{contract_id}' not found"
-                    )
-                refusal = _update_refusal(ctx, self.name, target, update_data)
-                if refusal:
-                    return refusal
-
             # A status change goes through the lifecycle transition (allowed
             # transitions, before_status_change gates), like the change-status
-            # route; an update can't change it.
+            # route; an update can't change it. Checked first, written last: a
+            # refused or failed field update leaves the status as it was.
+            transition = None
             updated = None
             if status is not None:
                 from src.repositories.data_contracts_repository import data_contract_repo
@@ -399,10 +428,12 @@ class UpdateDataContractTool(BaseTool):
                     )
                 current_status = (current.status or 'draft').lower()
                 if current_status != status.lower():
-                    from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
-                    allowed = DATA_CONTRACT_TRANSITIONS.get(current_status)
-                    # A status outside the map allows any transition, as in the manager
-                    if allowed is not None and status.lower() not in allowed:
+                    # The contract's lifecycle stage group, as transition_status checks it
+                    from src.controller.lifecycle_service import lifecycle_service
+                    allowed = lifecycle_service.allowed_target_keys(
+                        ctx.db, 'data_contract', current
+                    )
+                    if status.lower() not in allowed:
                         return ToolResult(
                             success=False,
                             **invalid_transition(current_status, status.lower(), allowed),
@@ -416,12 +447,27 @@ class UpdateDataContractTool(BaseTool):
                             success=False, error=INVALID_SUNSET_DATE,
                             error_code=INVALID_SUNSET_DATE_CODE,
                         )
-                    updated = _transition_status(
-                        ctx, self.name, contract_id, current_status, status.lower(),
-                        deprecation=deprecation,
-                    )
+                    transition = (current_status, status.lower(), deprecation)
                 else:
                     updated = current
+
+            # With fields, the status change's checks and before_status_change gates
+            # run first (a refusal writes nothing), then the before_update gates of
+            # PUT /data-contracts/{id} and the update, then the status write, so a
+            # refused or failed update writes no status either. A status change
+            # alone runs only the before_status_change gates, as change-status.
+            if transition is not None and update_data:
+                _check_transition(ctx, self.name, contract_id, *transition)
+            gate_executions: List[Any] = []
+            if update_data:
+                if not target:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data contract '{contract_id}' not found"
+                    )
+                refusal, gate_executions = _update_refusal(ctx, self.name, target, update_data)
+                if refusal:
+                    return refusal
 
             # Update the contract
             if update_data:
@@ -434,6 +480,7 @@ class UpdateDataContractTool(BaseTool):
                         contract_id=contract_id,
                         contract_data=update_data,
                         current_user=caller_email(ctx),
+                        gate_executions=gate_executions,
                     )
                     if updated is not None:
                         details["updated_resource_id"] = contract_id
@@ -444,6 +491,13 @@ class UpdateDataContractTool(BaseTool):
                     ctx.data_contracts_manager.fire_update_trigger(
                         ctx.db, contract_id, updated, update_data, caller_email(ctx)
                     )
+
+            if transition is not None:
+                from_status, to_status, deprecation = transition
+                updated = _transition_status(
+                    ctx, self.name, contract_id, from_status, to_status,
+                    deprecation=deprecation, gates_checked=bool(update_data),
+                )
             
             if not updated:
                 return ToolResult(
@@ -511,8 +565,10 @@ class SearchDataContractsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["draft", "active", "deprecated"],
-            "description": "Optional filter by status."
+            "description": (
+                "Optional filter by status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            )
         },
         "limit": {
             "type": "integer",
@@ -793,8 +849,10 @@ class ListDataContractsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["draft", "active", "deprecated"],
-            "description": "Optional filter by status",
+            "description": (
+                "Optional filter by status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            ),
         },
         "limit": {
             "type": "integer",

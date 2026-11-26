@@ -30,10 +30,10 @@ from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
-from src.common.authorization import has_feature_permission
+from src.common.authorization import effective_permissions_for_request, has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, VersioningRequiredError
 from src.controller.lifecycle_fields import (
     LifecycleFieldError, deprecation_audit_details, product_status_audit,
 )
@@ -345,7 +345,11 @@ async def publish_product(
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error publishing product %s: %s", product_id, e)
-        error_status = 409 if "Invalid transition" in str(e) else 400
+        # 409: the lifecycle has no (or no single) publish move from this stage
+        from src.common.api_errors import InvalidStatusTransitionError
+        from src.controller.lifecycle_service import LifecycleActionUnresolvedError
+        refused_move = isinstance(e, (InvalidStatusTransitionError, LifecycleActionUnresolvedError))
+        error_status = 409 if refused_move or "Invalid transition" in str(e) else 400
         raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise
@@ -565,7 +569,8 @@ async def handle_certify_product(
         if certification_level is None:
             raise HTTPException(status_code=422, detail="certification_level is required when approved is true")
 
-        if product_db.status not in ("active",):
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to certify. Current status: {product_db.status}",
@@ -716,9 +721,11 @@ async def request_publish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        # Same rule as set-publication-scope: only active products are published.
+        # Same rule as set-publication-scope: only active-category products are published.
+        from src.controller.lifecycle_service import lifecycle_service
         current_status = (product_db.status or "").lower()
-        if scope != "none" and current_status != "active":
+        if scope != "none" and \
+                lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to publish. Current status: {product_db.status}"
@@ -794,7 +801,8 @@ async def certify_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        if product_db.status not in ("active",):
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to certify. Current status: {product_db.status}"
@@ -1008,8 +1016,8 @@ async def request_product_review(
 async def create_product_from_contract(
     contract_id: str = Body(..., embed=True),
     product_name: str = Body(..., embed=True),
-    product_type: Optional[str] = Body(None, embed=True, deprecated=True),
     version: str = Body(..., embed=True),
+    product_type: Optional[str] = Body(None, embed=True),
     output_port_name: Optional[str] = Body(None, embed=True),
     request: Request = None,
     db: DBSessionDep = None,
@@ -1022,16 +1030,15 @@ async def create_product_from_contract(
     Create a new Data Product from an existing Data Contract.
 
     The contract governs one output port of the product. Inherits domain_id,
-    owner_team_id, and project_id from the contract.
-
-    ``product_type`` is accepted and ignored: ODPS products have no type, and
-    older clients still send it.
+    owner_team_id, and project_id from the contract. ``product_type`` must be
+    an active type key; when omitted, the default type is used.
     """
     try:
         # Create product via manager
         created_product = manager.create_from_contract(
             contract_id=contract_id,
             product_name=product_name,
+            product_type=product_type,
             version=version,
             output_port_name=output_port_name,
             user_email=current_user.email if current_user else None,
@@ -1049,19 +1056,24 @@ async def create_product_from_contract(
                 'product_id': created_product.id,
                 'contract_id': contract_id,
                 'product_name': product_name,
+                'product_type': product_type,
             }
         )
 
-        logger.info(f"Created Data Product {created_product.id} from contract {contract_id}")
+        logger.info("Created Data Product %s from contract %s", created_product.id, contract_id)
         return created_product
 
+    except CodedValueError as e:
+        # Unknown or inactive product type; the message is safe to show
+        logger.warning("Rejected product type for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error creating product from contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid contract data for product creation")
     except HTTPException:
         raise
     except Exception:
-        logger.exception(f"Error creating product from contract {contract_id}")
+        logger.exception("Error creating product from contract %s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to create product from contract")
 
 
@@ -1153,87 +1165,23 @@ async def get_product_linked_assets(
     current_user: CurrentUserDep,
     skip: int = 0,
     limit: int = 200,
-    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    product: Any = Depends(readable_product),
 ):
     """Return the assets linked to this Data Product via entity relationships.
 
     Issue #347 — gated by ``data-products`` only (NOT ``assets``), so Data
     Consumers can see Linked Assets in the DP detail view even when the
     ``assets`` feature is not granted to them. The caller's access to the
-    Data Product itself is the implicit authorization here.
+    Data Product itself is the authorization: the read rule of the product
+    page (``readable_product``: published, admin, owner or pending reviewer),
+    a product the caller can't read answering 404 like a missing one. It
+    used the owned-products listing, which answered 403 to a consumer on a
+    published product.
     """
-    from src.controller.assets_manager import assets_manager
+    from src.routes.assets_routes import get_assets_manager
 
-    # The PermissionChecker decorator above already verifies the caller has
-    # data-products:READ_ONLY at minimum. To prevent a Consumer from peeking
-    # at a DP they have no listing access to, additionally check that the
-    # DP is in the user's accessible set — unless they have admin-level
-    # data-products access (admins / data-product admins see all).
-    auth_manager = getattr(request.app.state, "authorization_manager", None)
-    settings_manager = getattr(request.app.state, "settings_manager", None)
-    is_dp_admin = False
-    try:
-        if auth_manager and current_user:
-            applied_role_id = None
-            if settings_manager:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    current_user.email
-                )
-            if applied_role_id and settings_manager:
-                eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                eff = auth_manager.get_user_effective_permissions(current_user.groups or [], None)
-            is_dp_admin = auth_manager.has_permission(
-                eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
-            )
-    except Exception:
-        logger.exception("Failed to determine data-products admin level for DP-assets scoping")
-        is_dp_admin = False
-
-    if not is_dp_admin:
-        dpm = getattr(request.app.state, "data_products_manager", None)
-        if dpm is None:
-            raise HTTPException(status_code=503, detail="Data Products service unavailable")
-        # Compute caller's ownership scope so list_products returns the
-        # accessible set (instead of empty, which would 403 every DP for
-        # non-admins after the repository scoping change).
-        caller_email = current_user.email if current_user else None
-        user_groups = current_user.groups if current_user else []
-        caller_team_ids: list = []
-        caller_project_ids: list = []
-        try:
-            from src.controller.teams_manager import teams_manager
-            from src.controller.projects_manager import projects_manager
-
-            user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-            caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
-            user_projects = projects_manager.get_user_projects(
-                db, caller_email, user_groups
-            )
-            caller_project_ids = [
-                p.id for p in user_projects.projects if getattr(p, "id", None)
-            ]
-        except Exception:
-            logger.exception(
-                f"Failed to resolve ownership scope for {caller_email} in DP-asset access; "
-                f"will fall back to draft-owner branch only"
-            )
-
-        try:
-            accessible = dpm.list_products(
-                is_admin=False,
-                caller_email=caller_email,
-                caller_team_ids=caller_team_ids,
-                caller_project_ids=caller_project_ids,
-            )
-            accessible_ids = {str(p.id) for p in accessible if getattr(p, "id", None)}
-        except Exception:
-            logger.exception("Failed to list products for DP-asset scoping")
-            raise HTTPException(status_code=500, detail="Failed to authorize DP access")
-        if product_id not in accessible_ids:
-            raise HTTPException(status_code=403, detail="Data Product not accessible")
-
-    # The DP membership check above is the authorization here, not the assets
+    # The product read rule above is the authorization here, not the assets
     # feature — so we ask the data-products manager for the asset linkage and
     # then list via AssetsManager with an explicit restriction.
     dpm = getattr(request.app.state, "data_products_manager", None)
@@ -1242,7 +1190,7 @@ async def get_product_linked_assets(
     asset_ids = list(dpm.list_linked_asset_ids_for_products(
         db, product_ids=[product_id],
     ))
-    return assets_manager.get_all_assets(
+    return get_assets_manager(request).get_all_assets(
         db=db, skip=skip, limit=limit, restrict_to_ids=asset_ids,
     )
 
@@ -1535,7 +1483,7 @@ async def upload_data_products(
 
     try:
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1554,7 +1502,7 @@ async def upload_data_products(
         # Feature-admins may see the existing row's id/name on a skipped duplicate;
         # others get a generic skip so the response isn't an existence oracle.
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, request
         )
         capped = await read_uploads_capped(
             files,
@@ -1659,8 +1607,12 @@ async def get_data_products(
                 )
                 caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
 
+                from src.common.authorization import is_user_admin
+                from src.common.config import get_settings
+
                 user_projects = projects_manager.get_user_projects(
-                    db, caller_email, user_groups
+                    db, caller_email, user_groups,
+                    is_admin=is_user_admin(user_groups, get_settings()),
                 )
                 caller_project_ids = [
                     p.id for p in user_projects.projects if getattr(p, "id", None)
@@ -1737,7 +1689,7 @@ async def create_data_product(
             validated_model = DataProduct(**validation_payload)
         except ValidationError as e:
             logger.error(f"Validation failed for payload (ID: {payload.get('id', 'N/A_Validation')}): {e}")
-            error_details = e.errors() if hasattr(e, 'errors') else str(e)
+            error_details = e.errors(include_context=False) if hasattr(e, 'errors') else str(e)
             details_for_audit["validation_error"] = error_details
             raise HTTPException(status_code=422, detail=error_details)
 
@@ -2074,7 +2026,7 @@ async def update_data_product(
         raise HTTPException(status_code=400, detail="Invalid JSON body.")
     except ValidationError as e:
         logger.error(f"Validation failed for PUT request body (ID: {product_id}): {e}")
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=e.errors(include_context=False))
 
     # Validate path ID matches body ID
     if product_id != product_update.id:
@@ -2097,53 +2049,6 @@ async def update_data_product(
 
     try:
         logger.info(f"Updating data product ID: {product_id}")
-
-        # Check if versioning is required for non-draft products
-        current_product_db = manager.get_product(product_id)
-        if current_product_db and current_product_db.status and current_product_db.status.lower() != 'draft':
-            # Check if caller explicitly forced the update
-            force_update = request.headers.get('X-Force-Update') == 'true'
-            
-            if not force_update:
-                # Analyze the impact of proposed changes
-                product_dict = product_update.model_dump(by_alias=True)
-                impact_analysis = manager.analyze_update_impact(
-                    product_id=product_id,
-                    proposed_changes=product_dict,
-                    db=db
-                )
-                
-                # Check if user is admin
-                from src.common.authorization import is_user_admin
-                from src.common.config import get_settings
-                settings = get_settings()
-                user_is_admin = is_user_admin(current_user.groups, settings)
-                
-                if impact_analysis['requires_versioning']:
-                    # If breaking changes and not admin, force new version
-                    if not user_is_admin:
-                        raise HTTPException(
-                            status_code=409,
-                            detail={
-                                "message": "Breaking changes detected - new version required",
-                                "requires_versioning": True,
-                                "change_analysis": impact_analysis['change_analysis'],
-                                "user_can_override": False,
-                                "recommended_action": "clone"
-                            }
-                        )
-                    else:
-                        # Admin can choose - return recommendation
-                        raise HTTPException(
-                            status_code=409,
-                            detail={
-                                "message": "Breaking changes detected - recommend new version",
-                                "requires_versioning": True,
-                                "change_analysis": impact_analysis['change_analysis'],
-                                "user_can_override": True,
-                                "recommended_action": "clone"
-                            }
-                        )
 
         # Delegate to manager (includes auth check)
         user_groups = current_user.groups or []
@@ -2179,16 +2084,10 @@ async def update_data_product(
         is_feature_admin = False
         try:
             auth_manager = getattr(request.app.state, "authorization_manager", None)
-            settings_manager = getattr(request.app.state, "settings_manager", None)
             if auth_manager and current_user:
-                applied_role_id = (
-                    settings_manager.get_applied_role_override_for_user(current_user.email)
-                    if settings_manager else None
+                eff = effective_permissions_for_request(
+                    request, current_user.email, user_groups or [], auth_manager,
                 )
-                if applied_role_id and settings_manager:
-                    eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-                else:
-                    eff = auth_manager.get_user_effective_permissions(user_groups, None)
                 is_feature_admin = auth_manager.has_permission(
                     eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
                 )
@@ -2197,6 +2096,14 @@ async def update_data_product(
                 "Failed to resolve data-products admin level for product update; "
                 "falling back to ownership cascade"
             )
+
+        # The manager refuses a breaking edit of a non-draft product (409 below)
+        # unless an admin forces it: an app admin or a data-products Admin, the
+        # same admins who may edit any product. Others get a new version.
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        user_is_admin = is_feature_admin or is_user_admin(current_user.groups, get_settings())
+        force_update = request.headers.get('X-Force-Update') == 'true' and user_is_admin
 
         # Fires the on_update workflows (update_product)
         updated_product_response = manager.update_product_with_auth(
@@ -2208,6 +2115,8 @@ async def update_data_product(
             background_tasks=background_tasks,
             caller_team_ids=caller_team_ids,
             is_feature_admin=is_feature_admin,
+            force_update=force_update,
+            user_is_admin=user_is_admin,
         )
 
         if not updated_product_response:
@@ -2230,6 +2139,20 @@ async def update_data_product(
         details_for_audit["exception"] = {"type": "PermissionError", "message": str(e)}
         logger.warning(f"Permission denied updating product {product_id}: {e}")
         raise HTTPException(status_code=403, detail=str(e))
+    except VersioningRequiredError as e:
+        success = False
+        response_status_code = 409
+        details_for_audit["exception"] = {"type": "VersioningRequiredError", "message": str(e)}
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(e),
+                "requires_versioning": True,
+                "change_analysis": e.change_analysis,
+                "user_can_override": e.user_can_override,
+                "recommended_action": "clone",
+            },
+        )
     except ValueError as e:
         # Validation errors from manager
         success = False
@@ -2330,6 +2253,46 @@ async def delete_data_product(
             success=success,
             details=details_for_audit,
         )
+
+@router.get('/data-products/{product_id}/my-access')
+async def get_my_product_access(
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    # The feature check first: without data-products the answer is 403 whether
+    # the id exists or not (no existence probe through the 404 of readable_product)
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    product: Any = Depends(readable_product),
+) -> Dict[str, bool]:
+    """What the caller may do with a product they can read (#1613).
+
+    ``can_write``: data-products READ_WRITE plus the ownership rule of
+    ``PUT /data-products/{id}`` (an app admin, a data-products admin, the draft
+    owner, a member of the owning team or of the product's project). A reviewer who reads a
+    product under review without owning it gets ``false``. A UI hint only: the
+    write routes still check. Fails closed. A product the caller can't read
+    answers 404, like the product page.
+    """
+    can_write = False
+    try:
+        if user_has_feature_level(
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID,
+            FeatureAccessLevel.READ_WRITE, request=request,
+        ):
+            # As update_product_with_auth: configured app admins pass the ownership rule
+            from src.common.authorization import is_user_admin
+            from src.common.config import get_settings
+
+            can_write = is_user_admin(current_user.groups or [], get_settings()) or (
+                _caller_owns_product_or_denies(request, db, current_user, product)
+            )
+    except Exception:
+        logger.exception(
+            "Access check failed for product %s; denying", getattr(product, "id", None),
+        )
+    return {"can_write": bool(can_write)}
+
 
 @router.get('/data-products/{product_id}', response_model=Any)
 async def get_data_product(
@@ -2774,7 +2737,8 @@ async def change_product_status(
         )
         
         audit_action, audit_details = product_status_audit(
-            product_id, payload.new_status, payload.deprecation_details()
+            product_id, payload.new_status, payload.deprecation_details(),
+            updated_product.status_category,
         )
         audit_manager.log_action(
             db=db,
@@ -2867,18 +2831,64 @@ async def handle_status_change_response(
     a certified product this way needs Admin on data products (certified guard).
     """
     from src.controller.certified_deprecation_guard import (
-        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
+        NO_PENDING_REQUEST,
+        NOT_ADMIN,
+        SELF_APPROVAL,
+        TARGET_MISMATCH,
+        approved_status_change,
+        handle_decision_refusal,
+        pending_request,
+        record_decision,
     )
     by_admin = await has_feature_permission(
         DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, current_user, request,
     )
-    # Counts for the certified guard only as an admin's approval of a pending
-    # request made by someone else
-    refusal = handle_decision_refusal(
-        db, 'data_product', product_id, payload.target_status, by_admin,
-        current_user.email, current_user.username,
+    try:
+        refusal = handle_decision_refusal(
+            db, 'data_product', product_id, payload.target_status, by_admin,
+            current_user.email, current_user.username,
+        )
+        status_request = pending_request(db, 'data_product', product_id)
+    except Exception as e:
+        logger.exception(
+            "Failed to read pending status change request for product %s",
+            product_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to read pending status change request",
+        ) from e
+    from src.db_models.data_products import DataProductDb
+
+    product = db.get(DataProductDb, product_id)
+    is_certified_deprecation_approval = (
+        payload.decision.lower() == 'approve'
+        and payload.target_status.lower() == 'deprecated'
+        and product is not None
+        and product.certification_level is not None
     )
-    request_id = pending_request_id(db, 'data_product', product_id)
+    # Certified deprecation approvals keep the guard's established coded 400
+    # refusals. Other direct decisions fail here before manager side effects.
+    if refusal and not is_certified_deprecation_approval:
+        refusal_responses = {
+            NOT_ADMIN: (403, "Admin permission required"),
+            NO_PENDING_REQUEST: (409, "No pending status change request"),
+            TARGET_MISMATCH: (409, "Target status does not match the pending request"),
+            SELF_APPROVAL: (403, "Requesters cannot decide their own status change request"),
+        }
+        status_code, detail = refusal_responses.get(
+            refusal, (403, "Status change decision refused"),
+        )
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    requester = str((status_request or {}).get('requester_email') or '').strip()
+    payload_requester = str(payload.requester_email or '').strip()
+    if requester and payload_requester and requester.lower() != payload_requester.lower():
+        logger.warning(
+            "Ignoring requester mismatch for product status change %s; using stored requester",
+            product_id,
+        )
+    request_id = (status_request or {}).get('request_id')
     try:
         with approved_status_change('data_product', product_id, refusal):
             result = manager.handle_status_change_response(
@@ -2889,7 +2899,7 @@ async def handle_status_change_response(
                 decision=payload.decision,
                 target_status=payload.target_status,
                 message=payload.message,
-                current_user=current_user.username
+                current_user=current_user.username,
             )
         # The decision ends the request it was about
         record_decision(

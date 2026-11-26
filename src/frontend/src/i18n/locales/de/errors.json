@@ -24,6 +24,11 @@
     "message": "Ein unerwarteter Fehler ist aufgetreten.",
     "retry": "Erneut versuchen"
   },
+  "assetAccess": {
+    "readDenied": "Sie haben keinen Zugriff auf dieses Asset. Zum Anzeigen benötigen Sie Lese-/Schreibzugriff auf Assets oder Zugriff auf ein Datenprodukt, zu dem es gehört.",
+    "writeDenied": "Zum Ändern der Notizen, Links, Dokumente und Kosten eines Assets benötigen Sie Lese-/Schreibzugriff auf Assets.",
+    "notFound": "Asset '{{assetId}}' nicht gefunden."
+  },
   "internalError": "Ein unerwarteter Fehler ist aufgetreten. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}}).",
   "userTokenRequired": "Diese Anfrage benötigt Ihr Databricks-Zugriffstoken, es wurde aber keines empfangen. Laden Sie die Seite neu; wenn das Problem bleibt, bitten Sie einen Administrator, die Benutzerautorisierung für die App zu aktivieren.",
   "subscription": {

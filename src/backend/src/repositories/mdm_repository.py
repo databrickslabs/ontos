@@ -5,10 +5,10 @@ Database operations for MDM entities.
 """
 
 from typing import List, Optional
-from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
+from src.common.timestamps import utc_now
 from src.db_models.mdm import (
     MdmConfigDb,
     MdmSourceLinkDb,
@@ -178,7 +178,7 @@ class MdmMatchRunRepository:
         if run:
             run.status = status
             if status == 'completed' or status == 'failed':
-                run.completed_at = datetime.utcnow()
+                run.completed_at = utc_now()
             if error_message:
                 run.error_message = error_message
             db.commit()
@@ -265,11 +265,11 @@ class MdmMatchCandidateRepository:
         if candidate:
             candidate.status = status
             if status in ('approved', 'rejected'):
-                candidate.reviewed_at = datetime.utcnow()
+                candidate.reviewed_at = utc_now()
                 if reviewed_by:
                     candidate.reviewed_by = reviewed_by
             if status == 'merged':
-                candidate.merged_at = datetime.utcnow()
+                candidate.merged_at = utc_now()
             if merged_record_data:
                 candidate.merged_record_data = merged_record_data
             db.commit()

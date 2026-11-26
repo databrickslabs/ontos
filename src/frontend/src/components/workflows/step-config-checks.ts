@@ -1,7 +1,10 @@
 import type { TFunction } from 'i18next';
 
-import type { EntityType, TriggerType, WorkflowStepCreate } from '@/types/process-workflow';
-import { getEntityTypeLabel, getTriggerTypeLabel } from '@/lib/workflow-labels';
+import type {
+  EntityType, StepType, TriggerType, WorkflowStepCreate,
+} from '@/types/process-workflow';
+import { getEntityTypeLabel, getStepTypeLabel, getTriggerTypeLabel } from '@/lib/workflow-labels';
+import { isScheduleIssue, scheduleIssueText } from './trigger-schedule-fields';
 
 // Checks of Conditional and Script step configs the designer runs before it
 // saves (#943, #942). The codes match src/backend/src/common/workflow_step_config.py.
@@ -97,12 +100,30 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         source: params.source,
         defaultValue: fallback,
       });
+    // A step that commits or acts outside the app as the gate runs (#1403)
+    case 'update_gate_step_not_allowed':
+      return t('workflows:designer.validationIssues.updateGate.stepNotAllowed', {
+        step: params.step,
+        type: getStepTypeLabel(String(params.stepType) as StepType, t),
+        defaultValue: fallback,
+      });
     case 'policy_check_policy_missing':
       return t('workflows:designer.validationIssues.policyCheckPolicyMissing', {
         step: params.step,
         defaultValue: fallback,
       });
+    case 'policy_check_policy_uses_llm_check':
+      return t('workflows:designer.llmCheckIssues.policyCheckUsesLlmCheck', {
+        step: params.step,
+        defaultValue: fallback,
+      });
+    case 'validation_rule_uses_llm_check':
+      return t('workflows:designer.llmCheckIssues.validationRuleUsesLlmCheck', {
+        step: params.step,
+        defaultValue: fallback,
+      });
     default:
+      if (isScheduleIssue(issue.code)) return scheduleIssueText(issue, t);
       if (!(issue.code.startsWith('condition_') || issue.code.startsWith('script_'))) {
         // An error the designer has no text for: the backend's English text.
         return fallback;

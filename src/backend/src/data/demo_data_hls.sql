@@ -138,7 +138,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- patients table
 ('00600001-0001-4000-8000-000000000001', '00500001-0001-4000-8000-000000000001', 'patient_id', 'string', true, true, true, false, 1, -1, true, 'De-identified patient identifier (hash of MRN)'),
 ('00600002-0001-4000-8000-000000000002', '00500001-0001-4000-8000-000000000001', 'date_of_birth', 'date', true, false, false, false, -1, -1, true, 'Patient date of birth (shifted per Safe Harbor)'),
@@ -846,9 +846,9 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
-('01400101-0001-4000-8000-000000000001', 'data_product', '00700001-0001-4000-8000-000000000001', 'Compute (DBU)',          'Monthly Databricks compute for Patient 360 pipelines.',     'infrastructure', NULL, 1820000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400102-0001-4000-8000-000000000002', 'data_product', '00700002-0001-4000-8000-000000000002', 'CDISC Validator Tooling','Annual license for CDISC SDTM/ADaM validation tooling.',    'tools',          NULL,  650000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
-('01400103-0001-4000-8000-000000000003', 'data_product', '00700003-0001-4000-8000-000000000003', 'Pharmacovigilance FTE',  'Two FTE pharmacovigilance analysts allocated to signal review.', 'hr',          NULL, 4500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+('01400101-0001-4000-8000-000000000001', 'data_product', '00700001-0001-4000-8000-000000000001', 'Compute (DBU)',          'Monthly Databricks compute for Patient 360 pipelines.',     'INFRASTRUCTURE', NULL, 1820000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0001-4000-8000-000000000002', 'data_product', '00700002-0001-4000-8000-000000000002', 'CDISC Validator Tooling','Annual license for CDISC SDTM/ADaM validation tooling.',    'OTHER',          'Tools',  650000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0001-4000-8000-000000000003', 'data_product', '00700003-0001-4000-8000-000000000003', 'Pharmacovigilance FTE',  'Two FTE pharmacovigilance analysts allocated to signal review.', 'HR',          NULL, 4500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Statusänderung genehmigt",
+    "approved": "Ihre Anfrage, den Status von '{{name}}' auf '{{toStatus}}' zu ändern, wurde von '{{approver}}' genehmigt.",
+    "approvedWithMessage": "Ihre Anfrage, den Status von '{{name}}' auf '{{toStatus}}' zu ändern, wurde von '{{approver}}' genehmigt.\n\nNachricht des Genehmigers: {{message}}",
+    "deniedTitle": "Statusänderung abgelehnt",
+    "denied": "Ihre Anfrage, den Status von '{{name}}' auf '{{toStatus}}' zu ändern, wurde von '{{approver}}' abgelehnt.",
+    "deniedWithMessage": "Ihre Anfrage, den Status von '{{name}}' auf '{{toStatus}}' zu ändern, wurde von '{{approver}}' abgelehnt.\n\nNachricht des Genehmigers: {{message}}",
+    "clarificationTitle": "Statusänderung: Klärung erforderlich",
+    "clarification": "Ihre Anfrage, den Status von '{{name}}' auf '{{toStatus}}' zu ändern, erfordert eine Klärung durch '{{approver}}'.",
+    "clarificationWithMessage": "Ihre Anfrage, den Status von '{{name}}' auf '{{toStatus}}' zu ändern, erfordert eine Klärung durch '{{approver}}'.\n\nNachricht des Genehmigers: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definition der Metric View geändert",
     "description": "Die Definition der Metric View {{fqn}} in Unity Catalog stimmt nicht mehr mit ihrer Baseline in Ontos überein."
@@ -8,6 +19,14 @@
     "statusChanged": "Die Anfrage, den Status von „{{fromStatus}}“ auf „{{toStatus}}“ zu ändern, wurde genehmigt, aber der Status ist jetzt „{{currentStatus}}“, daher wurde die Änderung nicht übernommen. Stellen Sie die Anfrage erneut, wenn sie noch benötigt wird.",
     "refused": "Ihre Anfrage, den Status auf „{{toStatus}}“ zu ändern, wurde genehmigt, aber die Änderung konnte nicht übernommen werden: {{reason}}",
     "reviewNotApplied": "Über das Review des Datenprodukts wurde entschieden, aber die Änderung auf „{{toStatus}}“ konnte nicht angewendet werden: {{reason}}"
+  },
+  "approvalOverdue": {
+    "approverTitle": "Genehmigung überfällig",
+    "approverDescription_one": "Die Genehmigung von '{{name}}' wartet seit mehr als {{count}} Tag. Entscheiden Sie sie unter Meine Aktionen.",
+    "approverDescription_other": "Die Genehmigung von '{{name}}' wartet seit mehr als {{count}} Tagen. Entscheiden Sie sie unter Meine Aktionen.",
+    "requesterTitle": "Ihre Anfrage wartet noch",
+    "requesterDescription_one": "Ihre Anfrage für '{{name}}' wartet seit mehr als {{count}} Tag auf eine Entscheidung. Die Genehmigenden wurden erinnert.",
+    "requesterDescription_other": "Ihre Anfrage für '{{name}}' wartet seit mehr als {{count}} Tagen auf eine Entscheidung. Die Genehmigenden wurden erinnert."
   },
   "contractStatusNotChanged": {
     "title": "Vertragsstatus nicht geändert",
@@ -134,9 +153,7 @@
         "notify-rejected": "Ihre Zugriffsanfrage wurde abgelehnt. Bitte wenden Sie sich für weitere Informationen an einen Administrator."
       },
       "status-change-request": {
-        "notify-requester": "Ihre Anfrage zur Statusänderung wurde zur Genehmigung eingereicht.",
-        "notify-approved": "Ihre Anfrage zur Statusänderung wurde genehmigt.",
-        "notify-rejected": "Ihre Anfrage zur Statusänderung wurde abgelehnt."
+        "notify-requester": "Ihre Anfrage zur Statusänderung wurde zur Genehmigung eingereicht."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Ihnen wurde eine neue Prüfanfrage für Daten-Assets zugewiesen.",

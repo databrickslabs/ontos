@@ -259,7 +259,8 @@ class TestContractApproveFromProposed:
     """
 
     def test_lifecycle_map_allows_proposed_to_approved(self):
-        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
+        from src.common.lifecycle_defaults import default_transitions
+        DATA_CONTRACT_TRANSITIONS = default_transitions('data_contract')
         assert 'approved' in DATA_CONTRACT_TRANSITIONS['proposed']
 
     def test_transition_proposed_to_approved_succeeds(self, db_session):

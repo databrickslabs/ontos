@@ -17,6 +17,13 @@ vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get: api.get, post: api.pos
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: api.toast }) }));
 vi.mock('./template-vars-inspector', () => ({ default: () => null }));
 
+// The designer's own fitView hook: spied on, so the tests can see when the view is fitted
+const rf = vi.hoisted(() => ({ fitView: vi.fn() }));
+vi.mock('reactflow', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('reactflow')>();
+  return { ...actual, useReactFlow: () => ({ fitView: rf.fitView }) };
+});
+
 type Pos = { x: number; y: number } | null;
 
 function workflow(positions: Record<string, Pos>) {
@@ -59,6 +66,7 @@ async function save() {
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
+  rf.fitView.mockReset();
   api.put.mockResolvedValue({ data: workflow({}) });
   api.post.mockResolvedValue({ data: { valid: true, errors: [], warnings: [] } });
 });
@@ -147,5 +155,28 @@ describe('WorkflowDesigner layout', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: /rearrange/i }));
 
     expect(await screen.findByRole('button', { name: /^save \*/i })).toBeInTheDocument();
+  });
+
+  it('fits the view once after Rearrange is confirmed', async () => {
+    renderDesigner({ notify: { x: 400, y: 40 }, done: { x: -250, y: 520 } });
+
+    fireEvent.click(await screen.findByRole('button', { name: /rearrange/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /rearrange/i }));
+
+    // Fitted with the options of the first load, after the new positions are in place
+    await waitFor(() => expect(rf.fitView).toHaveBeenCalledTimes(1));
+    expect(rf.fitView).toHaveBeenCalledWith({ maxZoom: 1, padding: 0.2 });
+  });
+
+  it('does not fit the view when Rearrange is cancelled', async () => {
+    renderDesigner({ notify: { x: 400, y: 40 }, done: { x: -250, y: 520 } });
+
+    fireEvent.click(await screen.findByRole('button', { name: /rearrange/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(rf.fitView).not.toHaveBeenCalled();
   });
 });

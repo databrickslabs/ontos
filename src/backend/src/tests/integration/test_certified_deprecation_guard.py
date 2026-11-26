@@ -237,6 +237,22 @@ def _assert_approval_refused(response, reason: str) -> None:
 
 
 class TestApprovedRequest:
+    def test_a_non_admin_cannot_approve_a_certified_product_request(
+        self, client, db_session, monkeypatch,
+    ):
+        product_id = _product(db_session)
+        _request(client, 'data-products', product_id)
+
+        async def _not_admin(*args, **kwargs):
+            return False
+
+        monkeypatch.setattr(
+            'src.routes.data_product_routes.has_feature_permission', _not_admin,
+        )
+        refused = _decide(client, 'data-products', product_id)
+
+        _assert_approval_refused(refused, 'not_admin')
+
     def test_an_approved_product_request_deprecates_it(self, client, db_session):
         WorkflowsManager(db=db_session).load_from_yaml()
         product_id = _product(db_session)
@@ -546,8 +562,8 @@ class TestContractRequestWorkflow:
         assert _status(db_session, DataContractDb, contract_id) == 'active'
         keys = [json.loads(n.data)['i18n'].get('description')
                 for n in _requester_notices(db_session, contract_id)]
-        assert 'notifications:workflowDefaults.messages.status-change-request.notify-rejected' \
-            in keys
+        # The default workflow's decision notice (#1321), not the old custom text
+        assert 'notifications:statusChangeDecision.deniedWithMessage' in keys
         _act_as('second_admin')
         _assert_approval_refused(_decide(client, 'data-contracts', contract_id),
                                  'no_pending_request')

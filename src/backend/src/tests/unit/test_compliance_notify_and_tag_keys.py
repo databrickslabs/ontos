@@ -334,7 +334,10 @@ def _run(db, rule, entities, current_user='steward@example.com'):
         patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator),
         patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()),
     ):
-        return ComplianceManager().run_policy_inline(db, policy=policy, current_user=current_user)
+        from src.common.run_identity import RunIdentity
+        return ComplianceManager().run_policy_inline(
+            db, policy=policy, current_user=current_user, run_identity=RunIdentity.app(),
+        )
 
 
 PRODUCTS = [

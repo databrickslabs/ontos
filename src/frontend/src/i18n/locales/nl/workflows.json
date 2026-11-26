@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Verduidelijking vragen",
+    "messageRequiredTitle": "Bericht vereist",
+    "messageRequiredDesc": "Schrijf wat de aanvrager moet verduidelijken.",
+    "requestedTitle": "Verduidelijking gevraagd",
+    "requestedDesc": "De aanvrager is gevraagd om meer informatie over '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Deze goedkeuringsstap accepteert geen verduidelijking.",
+      "clarification_message_required": "Een verduidelijking heeft een bericht voor de aanvrager nodig."
+    }
+  },
   "designer": {
     "newWorkflow": "Nieuwe Workflow",
     "newStepName": "Nieuwe {{type}}-stap",
@@ -115,6 +126,10 @@
       "descriptionPlaceholder": "Workflowbeschrijving",
       "failClosed": "De overgang weigeren als deze poort niet kan worden geëvalueerd",
       "failClosedHint": "Fail closed: als het evalueren van deze poort een fout geeft (geen normale mislukking), wordt de statuswijziging geweigerd. Uit (fail open) gaat de wijziging door en wordt de fout gelogd en geaudit.",
+      "updateGate": {
+        "failClosed": "De update weigeren als deze poort niet kan worden geëvalueerd",
+        "failClosedHint": "Fail closed: als het evalueren van deze poort een fout geeft (geen normale mislukking), wordt de update geweigerd. Uit (fail open) gaat de update door en wordt de fout gelogd en geaudit."
+      },
       "disabledFor": {
         "title": "Uitgeschakeld voor",
         "hint": "Deze gate draait niet voor de hier vermelde domeinen, dataproducten en datacontracten (een domein omvat zijn producten en contracten). Elke keer dat de gate wordt overgeslagen, wordt dat gelogd en geaudit.",
@@ -337,6 +352,9 @@
       "stepConfigMissing": "Stap \"{{step}}\" mist verplichte instellingen: {{fields}}.",
       "assignTagValueSourceUnknown": "Stap \"{{step}}\" gebruikt de onbekende waardebron \"{{source}}\".",
       "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
+      "updateGate": {
+        "stepNotAllowed": "Stap \"{{step}}\" ({{type}}) kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow."
+      },
       "branch": {
         "on_pass": "succes",
         "on_fail": "fout"
@@ -361,8 +379,13 @@
       "terminalStepHasNext": "Stap \"{{step}}\" beëindigt de workflow, dus de koppeling naar \"{{target}}\" wordt genegeerd en bij opslaan verwijderd.",
       "conditionalBranchMissing": "Voorwaarde \"{{step}}\" heeft geen stap op de {{branch}}-tak. Als de voorwaarde {{branch}} is, eindigt de workflow als geslaagd.",
       "unreachableSteps": "Deze stappen zijn niet bereikbaar vanaf de eerste stap: {{steps}}.",
+      "assignTagKeyUnknown": "Stap \"{{step}}\" wijst de tag \"{{key}}\" toe, die niet in de tagcatalogus staat. De stap mislukt totdat de tag is aangemaakt.",
       "storedEntityTypeUnknown": "De trigger bevat \"{{entityType}}\", een entiteitstype dat niet meer bestaat. Hij wordt daarvoor nooit geactiveerd.",
       "storedEntityTypeUnsupported": "De trigger {{trigger}} wordt nooit geactiveerd voor {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Stap \"{{step}}\" controleert een beleid dat LLM_CHECK gebruikt. LLM_CHECK wordt alleen in compliance-runs geëvalueerd, dus de stap zou elke entiteit laten mislukken. Selecteer een beleid zonder LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Stap \"{{step}}\" heeft een regel met LLM_CHECK. LLM_CHECK wordt alleen in compliance-runs geëvalueerd, dus de stap zou voor elke entiteit mislukken. Verwijder LLM_CHECK uit de regel."
     }
   },
   "approvalResponse": {
@@ -372,6 +395,13 @@
     "adjustTerms": "Goedkeuringsvoorwaarden aanpassen",
     "durationDays": "Duur (dagen)",
     "permissionLevel": "Machtigingsniveau",
+    "accessDecision": {
+      "adminHint": "Als beheerder kunt u over uw eigen aanvraag beslissen en meer toekennen dan is aangevraagd. Het auditlogboek legt dit vast als overschrijving.",
+      "failedTitle": "Beslissing vastgelegd, toegang nog niet bijgewerkt",
+      "failed": "De workflow heeft uw beslissing, maar de toegangsaanvraag kon niet worden bijgewerkt. Dit wordt automatisch opnieuw geprobeerd.",
+      "narrowedTitle": "Voorwaarden verkleind door een eerdere stap",
+      "narrowed": "Een eerdere goedkeuringsstap heeft minder toegekend dan u koos: {{granted_level}} voor {{granted_days}} dagen (verzonden: {{sent_level}}, {{sent_days}} dagen)."
+    },
     "reasonLabel": "Reden voor goedkeuring of afwijzing",
     "reasonPlaceholder": "Voer je reden in...",
     "approved": "Goedgekeurd",
@@ -398,6 +428,13 @@
       "waitingForApprovers_other": "Wacht nog op {{count}} goedkeurders."
     },
     "errors": {
+      "access_request_already_decided": "Over deze toegangsaanvraag is al beslist.",
+      "access_terms_duration_not_allowed": "{{days}} dagen is geen toegestane duur (toegestaan: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "U kunt hoogstens de aangevraagde {{requested}} dagen toekennen.",
+      "access_terms_exceed_requested_permission": "U kunt hoogstens het aangevraagde niveau ({{requested}}) toekennen.",
+      "access_terms_invalid_duration": "De duur moet tussen {{min}} en {{max}} dagen liggen.",
+      "access_terms_invalid_permission": "Dit machtigingsniveau kan niet worden toegekend.",
+      "own_access_request_approval": "U kunt niet beslissen over uw eigen toegangsaanvraag.",
       "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren.",
       "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren.",
       "approval_already_decided": "U hebt al over deze goedkeuring beslist.",
@@ -542,6 +579,8 @@
     "removedStepsHint": "Deze stappen zijn in deze uitvoering uitgevoerd en later uit de workflow verwijderd.",
     "stepErrors": {
       "rule_where_evaluation_failed": "De WHERE-clausule van beleid '{{policyName}}' kon niet worden geëvalueerd op {{entityType}} {{entityId}}",
+      "tag_not_found": "Tag '{{tag}}' is niet gevonden in de tagcatalogus, dus die is niet toegekend",
+      "update_gate_step_not_allowed": "Een {{stepType}}-stap kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow.",
       "approval_rejected": "Verzoek afgewezen",
       "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
       "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",
@@ -700,6 +739,33 @@
       "suffix": "of hoger nodig om deze workflow te zien en uit te voeren. Stel dit in bij Instellingen → Rollen."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Planning (Quartz-cron)",
+    "cronHint": "6 of 7 velden: seconde minuut uur dag-van-de-maand maand dag-van-de-week [jaar]. Voorbeeld: {{example}} draait elke dag om 06:00. De seconden moeten 0 zijn en runs moeten minstens 5 minuten uit elkaar liggen.",
+    "timezoneLabel": "Tijdzone",
+    "timezoneHint": "Een IANA-naam zoals Europe/Berlin of America/Sao_Paulo. Leeg betekent UTC.",
+    "fields": {
+      "second": "seconde",
+      "minute": "minuut",
+      "hour": "uur",
+      "day_of_month": "dag-van-de-maand",
+      "month": "maand",
+      "day_of_week": "dag-van-de-week",
+      "year": "jaar"
+    },
+    "errors": {
+      "schedule_required": "Een geplande trigger heeft een cron-expressie nodig.",
+      "cron_field_count": "Een Quartz-cron-expressie heeft 6 of 7 velden; deze heeft er {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" is niet geldig in het veld {{field}}.",
+      "cron_day_fields_conflict": "Zet \"?\" in precies één van de velden dag-van-de-maand en dag-van-de-week.",
+      "cron_seconds_not_zero": "Het secondenveld moet 0 zijn: runs starten op de hele minuut.",
+      "cron_unsupported_character": "\"{{character}}\" in het veld {{field}} wordt niet ondersteund in workflowplanningen.",
+      "cron_invalid": "Dit is geen geldige Quartz-cron-expressie.",
+      "cron_no_upcoming_runs": "Deze cron-expressie heeft geen komende run.",
+      "cron_interval_too_short": "Geplande runs moeten minstens {{minutes}} minuten uit elkaar liggen.",
+      "timezone_invalid": "Onbekende tijdzone \"{{timezone}}\": gebruik een IANA-naam zoals Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configureer geautomatiseerde workflows voor validatie, goedkeuring en meldingen.",
     "readOnlyAccess": "(Alleen-lezen toegang)",
@@ -853,6 +919,7 @@
       "rejectResumeSuccess": "Workflow afgewezen en hervat",
       "rejectFailed": "Kon workflow niet afwijzen",
       "forceDecisionRequireAll": "Alleen de goedkeurders kunnen over deze stap beslissen (iedereen moet beslissen). Je kunt de uitvoering in plaats daarvan annuleren.",
+      "forceDecisionAccessRequest": "Toegangsaanvragen worden door hun goedkeurders beslist, niet hier geforceerd.",
       "noChanges": "Geen Wijzigingen",
       "allAlreadyEnabled": "Alle geselecteerde workflows zijn al ingeschakeld.",
       "allAlreadyDisabled": "Alle geselecteerde workflows zijn al uitgeschakeld.",

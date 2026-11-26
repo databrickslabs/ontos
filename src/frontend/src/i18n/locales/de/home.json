@@ -1,6 +1,69 @@
 {
   "title": "Willkommen bei {{appName}}",
   "tagline": "Verwalten Sie Konzepte, Datenverträge, Datenprodukte, Personas und mehr",
+  "essentials": {
+    "tagline": "Finden, verstehen und vertrauen Sie Ihren Daten, und veröffentlichen und pflegen Sie dann, was Ihnen gehört.",
+    "consumer": {
+      "title": "Daten nutzen",
+      "description": "Beginnen Sie mit den Tabellen, die Ihr Team bereits in Unity Catalog hat."
+    },
+    "producer": {
+      "title": "Daten teilen",
+      "description": "Dokumentieren Sie Ihre Assets und lassen Sie sie prüfen."
+    },
+    "find": {
+      "title": "Finden",
+      "description": "Suchen Sie Assets und Konzepte oder durchsuchen Sie den Katalog.",
+      "placeholder": "Tabellen, Assets und Glossarbegriffe suchen...",
+      "browseCatalog": "Data Catalog durchsuchen"
+    },
+    "understand": {
+      "title": "Verstehen",
+      "description": "Sehen Sie, was ein Asset ist und was seine Begriffe bedeuten.",
+      "assets": "Assets",
+      "assetsDescription": "Tabellen, Views und andere Assets mit ihren Metadaten."
+    },
+    "trust": {
+      "title": "Vertrauen",
+      "description": "Prüfstatus der Assets und wo die Daten heute liegen.",
+      "empty": "Es wurde noch kein Asset geprüft.",
+      "openReviews": "Asset-Prüfungen öffnen"
+    },
+    "publish": {
+      "title": "Veröffentlichen",
+      "description": "Ihre Assets, denen noch Dokumentation oder eine Prüfung fehlt.",
+      "noAssets": "Ihnen gehört noch kein Asset.",
+      "allDone": "Alle Ihre Assets sind dokumentiert und haben eine Prüfanfrage.",
+      "noGapsLoaded": "Keine Lücken in den bisher geladenen Assets.",
+      "noDescription": "Keine Beschreibung",
+      "noReview": "Keine Prüfanfrage",
+      "more": "{{shown}} von Ihren {{total}} Assets angezeigt.",
+      "loadMore": "Mehr laden",
+      "pageSize": "Pro Seite",
+      "requestReview": "Prüfung anfordern"
+    },
+    "maturity": {
+      "title": "Tabellen unter der ersten Stufe",
+      "description": "Ihre Tabellen und Views, deren letzte Reifegradbewertung keine Stufe erreicht hat.",
+      "empty": "Keine Ihrer bewerteten Tabellen liegt unter der ersten Stufe.",
+      "more": "{{shown}} von {{total}} angezeigt.",
+      "error": "Ihre Tabellen unterhalb der ersten Stufe konnten nicht geladen werden."
+    },
+    "maintain": {
+      "title": "Pflegen",
+      "description": "Ihre offenen Anfragen und Prüfungen.",
+      "myRequests": "Meine offenen Anfragen ({{count}})",
+      "noRequests": "Keine offenen Anfragen.",
+      "openMyRequests": "Meine Anfragen öffnen",
+      "myReviews": "Meine offenen Asset-Prüfungen ({{count}})",
+      "noReviews": "Keine offenen Asset-Prüfungen."
+    },
+    "notices": {
+      "reviewsTruncated": "Es werden nur die {{count}} zuletzt erstellten Prüfanfragen gelesen, daher können diese Zahlen und Lücken unvollständig sein.",
+      "loadError": "Diese Daten konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
+    }
+  },
   "search": {
     "placeholder": "Suche nach Datenprodukten, Glossarbegriffen, Verträgen..."
   },
@@ -66,6 +129,10 @@
   "myActions": {
     "title": "Meine Aktionen",
     "approvals": "Genehmigungen"
+  },
+  "approvalOverdue": {
+    "badge": "Überfällig",
+    "hint": "Wartet über die Frist hinaus; die Genehmigenden und der Antragsteller wurden erinnert."
   },
   "quickActions": {
     "title": "Schnellzugriff",
@@ -206,9 +273,9 @@
     },
     "products": {
       "available": "{{count}} Produkt verfügbar",
-      "available_plural": "{{count}} Produkte verfügbar",
+      "available_other": "{{count}} Produkte verfügbar",
       "subscribed": "{{count}} abonniertes Produkt",
-      "subscribed_plural": "{{count}} abonnierte Produkte",
+      "subscribed_other": "{{count}} abonnierte Produkte",
       "noProducts": "Keine Datenprodukte gefunden.",
       "adjustFilters": "Versuchen Sie, Ihre Suche oder Filter anzupassen.",
       "noSubscriptions": "Sie haben noch keine Datenprodukte abonniert.",
@@ -221,9 +288,9 @@
     },
     "datasets": {
       "available": "{{count}} Datensatz verfügbar",
-      "available_plural": "{{count}} Datensätze verfügbar",
+      "available_other": "{{count}} Datensätze verfügbar",
       "subscribed": "{{count}} abonnierter Datensatz",
-      "subscribed_plural": "{{count}} abonnierte Datensätze",
+      "subscribed_other": "{{count}} abonnierte Datensätze",
       "noDatasets": "Keine Datensätze gefunden.",
       "adjustFilters": "Versuchen Sie, Ihre Suche anzupassen.",
       "noSubscriptions": "Sie haben noch keine Datensätze abonniert.",
@@ -244,7 +311,7 @@
     "domainInfo": {
       "parentDomain": "Übergeordnet",
       "childDomains": "{{count}} untergeordnete Domain",
-      "childDomains_plural": "{{count}} untergeordnete Domains"
+      "childDomains_other": "{{count}} untergeordnete Domains"
     },
     "tilesPerRow": {
       "placeholder": "Kacheln",

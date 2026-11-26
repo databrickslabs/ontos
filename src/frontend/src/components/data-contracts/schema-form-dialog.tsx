@@ -18,11 +18,15 @@ type SchemaFormProps = {
   onOpenChange: (open: boolean) => void
   onSubmit: (schema: SchemaObject) => Promise<void>
   initial?: SchemaObject
+  /** The contract's ODCS apiVersion (limits the logical types offered) */
+  apiVersion?: string
 }
 
 const PHYSICAL_TYPES = ['table', 'view', 'materialized_view', 'external_table', 'managed_table', 'streaming_table']
 
-export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initial }: SchemaFormProps) {
+export default function SchemaFormDialog(
+  { isOpen, onOpenChange, onSubmit, initial, apiVersion }: SchemaFormProps,
+) {
   const { toast } = useToast()
   const { t } = useTranslation(['data-contracts', 'common'])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -295,6 +299,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
               ref={propertyEditorRef}
               properties={properties}
               onChange={setProperties}
+              apiVersion={apiVersion}
             />
           </div>
 

@@ -14,6 +14,15 @@ class EntitySemanticLinksRepository(CRUDBase[EntitySemanticLinkDb, EntitySemanti
             self.model.entity_type == entity_type
         ).all()
 
+    def list_for_entities(self, db: Session, entity_ids: List[str], entity_type: str) -> List[EntitySemanticLinkDb]:
+        """Links of many entities of one type, in one query (empty ids give no query)."""
+        if not entity_ids:
+            return []
+        return db.query(self.model).filter(
+            self.model.entity_id.in_(entity_ids),
+            self.model.entity_type == entity_type,
+        ).all()
+
     def list_for_iri(self, db: Session, iri: str) -> List[EntitySemanticLinkDb]:
         return db.query(self.model).filter(self.model.iri == iri).all()
 

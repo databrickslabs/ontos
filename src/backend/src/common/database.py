@@ -5,7 +5,7 @@ import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TypeVar
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
@@ -414,6 +414,12 @@ def get_db_url(settings: Settings) -> str:
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
     
+    # Timestamp columns are timestamptz: a naive datetime written into one is read in the
+    # session's time zone, so pin it to UTC. Naive UTC values (datetime.utcnow(), column
+    # defaults) are then stored as what they are instead of shifted by the server's offset
+    # (#1449). The schema has no timestamp-without-time-zone columns.
+    options_list.append("-ctimezone=UTC")
+
     # Add statement timeout to prevent indefinite locks (30 seconds)
     # This helps prevent stuck transactions when operations fail
     options_list.append("-cstatement_timeout=30000")
@@ -686,6 +692,44 @@ def get_current_db_revision(engine_connection: Connection, alembic_cfg: AlembicC
     return context.get_current_revision()
 
 
+def _install_connection_hooks(target_engine, settings: Settings) -> None:
+    """Inject the Lakebase OAuth token into new connections and set the search_path.
+
+    Used for the app's engine and for the dedicated engines
+    (``create_dedicated_session_factory``), so their connections behave the same.
+    """
+    if not _use_password_auth(settings):
+        # Use 'do_connect' event to inject password at connection creation time
+        @event.listens_for(target_engine, "do_connect")
+        def inject_token_on_connect(dialect, conn_rec, cargs, cparams):
+            if _oauth_token:
+                cparams["password"] = _oauth_token
+                logger.debug("Injected OAuth token into new database connection")
+
+    # Explicitly enforce search_path at connection time to ensure correct schema usage
+    # in environments where connection options may be ignored.
+    if settings.PGSCHEMA:
+        # Validate schema name to prevent SQL injection in SET command
+        try:
+            target_schema = sanitize_postgres_identifier(settings.PGSCHEMA)
+        except ValueError as e:
+            logger.error(f"Invalid PostgreSQL schema name in PGSCHEMA: {e}")
+            raise ValueError(
+                f"Invalid PostgreSQL schema identifier in PGSCHEMA: {e}. "
+                "Please check configuration."
+            ) from e
+
+        @event.listens_for(target_engine, "connect")
+        def set_search_path(dbapi_connection, connection_record):
+            try:
+                with dbapi_connection.cursor() as cursor:
+                    # SET command cannot be parameterized, but identifier is validated
+                    cursor.execute(f'SET search_path TO "{target_schema}"')
+            except Exception as e:
+                # Log and continue; the app can still operate using default schema if necessary
+                logger.warning(f"Failed to set search_path to '{target_schema}': {e}")
+
+
 def init_db() -> None:
     """Initializes the database connection, checks/creates catalog/schema, and runs migrations."""
     global _engine, _SessionLocal, engine
@@ -730,43 +774,14 @@ def init_db() -> None:
             # Generate initial token
             refresh_oauth_token(settings)
             
-            # Register event handler to inject tokens for new connections
-            # Use 'do_connect' event to inject password at connection creation time
-            @event.listens_for(_engine, "do_connect")
-            def inject_token_on_connect(dialect, conn_rec, cargs, cparams):
-                global _oauth_token
-                if _oauth_token:
-                    cparams["password"] = _oauth_token
-                    logger.debug("Injected OAuth token into new database connection")
-            
             # Start background refresh thread
             start_token_refresh_background(settings)
             logger.info("OAuth authentication configured successfully")
         else:
             logger.info("Password authentication configured for LOCAL mode")
 
-        # Explicitly enforce search_path at connection time to ensure correct schema usage in environments
-        # where connection options may be ignored.
-        if settings.PGSCHEMA:
-            # Validate schema name to prevent SQL injection in SET command
-            try:
-                target_schema = sanitize_postgres_identifier(settings.PGSCHEMA)
-            except ValueError as e:
-                logger.error(f"Invalid PostgreSQL schema name in PGSCHEMA: {e}")
-                raise ValueError(
-                    f"Invalid PostgreSQL schema identifier in PGSCHEMA: {e}. "
-                    "Please check configuration."
-                ) from e
-
-            @event.listens_for(_engine, "connect")
-            def set_search_path(dbapi_connection, connection_record):
-                try:
-                    with dbapi_connection.cursor() as cursor:
-                        # SET command cannot be parameterized, but identifier is validated
-                        cursor.execute(f'SET search_path TO "{target_schema}"')
-                except Exception as e:
-                    # Log and continue; the app can still operate using default schema if necessary
-                    logger.warning(f"Failed to set search_path to '{target_schema}': {e}")
+        # OAuth token injection and search_path, shared with the dedicated engines
+        _install_connection_hooks(_engine, settings)
 
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
         logger.info("Database engine and session factory initialized.")
@@ -966,6 +981,30 @@ def init_db() -> None:
         engine = None # Reset public engine on failure
         raise ConnectionError("Failed to initialize database connection or run migrations.") from e
 
+# Called (no arguments) when a request's session first touches the database, i.e.
+# while the database is awake anyway; e.g. the workflow scheduler then checks for
+# schedule changes made through other app instances (#941).
+_request_db_use_listeners: List[Callable[[], None]] = []
+
+
+def add_request_db_use_listener(listener: Callable[[], None]) -> None:
+    """Call ``listener`` whenever a request session begins a database transaction.
+
+    It runs in the request's thread, so it must be cheap and must not use the
+    database itself; exceptions are logged and swallowed.
+    """
+    if listener not in _request_db_use_listeners:
+        _request_db_use_listeners.append(listener)
+
+
+def _notify_request_db_use(*_args) -> None:
+    for listener in list(_request_db_use_listeners):
+        try:
+            listener()
+        except Exception as e:
+            logger.warning(f"Request database-use listener failed: {e}")
+
+
 def get_db():
     global _SessionLocal
     if _SessionLocal is None:
@@ -974,6 +1013,8 @@ def get_db():
         raise RuntimeError("Database session factory is not available. Database might not have been initialized correctly.")
     
     db = _SessionLocal()
+    if _request_db_use_listeners and isinstance(db, SQLAlchemySession):
+        event.listen(db, 'after_begin', _notify_request_db_use, once=True)
     try:
         yield db
         db.commit()  # Commit the transaction on successful completion of the request
@@ -1024,6 +1065,34 @@ def get_session_factory():
     if _SessionLocal is None:
         raise RuntimeError("Database session factory not initialized.")
     return _SessionLocal
+
+
+def create_dedicated_session_factory(pool_size: int, name: str):
+    """A session factory on a small engine of its own, or None.
+
+    For background work that holds a session for long (the workflow scheduler's
+    runs, #941), so it can't take the request pool's connections: same database,
+    authentication and search_path as the app's engine, ``pool_size``
+    connections and no overflow. Returns ``(factory, engine)``; the caller
+    disposes the engine when it stops. None when the app's engine isn't set up
+    or the session factory was replaced (tests inject one): the caller uses
+    ``get_session_factory()`` then.
+    """
+    if _engine is None or _SessionLocal is None:
+        return None
+    if getattr(_SessionLocal, 'kw', {}).get('bind') is not _engine:
+        return None
+    settings = get_settings()
+    dedicated = create_engine(
+        _engine.url, echo=settings.DB_ECHO, poolclass=pool.QueuePool,
+        pool_size=max(1, int(pool_size)), max_overflow=0,
+        pool_timeout=settings.DB_POOL_TIMEOUT, pool_recycle=settings.DB_POOL_RECYCLE,
+        pool_pre_ping=True,
+    )
+    _install_connection_hooks(dedicated, settings)
+    logger.info(f"Created the dedicated database engine '{name}' (pool size {pool_size})")
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=dedicated)
+    return factory, dedicated
 
 
 def set_session_factory(factory):

@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Solicitar esclarecimento",
+    "messageRequiredTitle": "Mensagem obrigatória",
+    "messageRequiredDesc": "Escreva o que o solicitante precisa esclarecer.",
+    "requestedTitle": "Esclarecimento solicitado",
+    "requestedDesc": "O solicitante foi questionado sobre mais informações sobre '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Esta etapa de aprovação não aceita pedido de esclarecimento.",
+      "clarification_message_required": "Um pedido de esclarecimento precisa de uma mensagem para o solicitante."
+    }
+  },
   "designer": {
     "newWorkflow": "Novo fluxo de trabalho",
     "newStepName": "Nova etapa {{type}}",
@@ -115,6 +126,10 @@
       "descriptionPlaceholder": "Descrição do fluxo de trabalho",
       "failClosed": "Recusar a transição se este gate não puder ser avaliado",
       "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a mudança de status é recusada. Desligado (fail open), a mudança acontece e o erro é registrado no log e na auditoria.",
+      "updateGate": {
+        "failClosed": "Recusar a atualização se este gate não puder ser avaliado",
+        "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a atualização é recusada. Desligado (fail open), a atualização acontece e o erro é registrado no log e na auditoria."
+      },
       "disabledFor": {
         "title": "Desligado para",
         "hint": "Este gate não roda para os domínios, produtos de dados e contratos de dados listados aqui (um domínio cobre seus produtos e contratos). Cada vez que ele é pulado, isso fica no log e na auditoria.",
@@ -337,6 +352,9 @@
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
       "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
+      "updateGate": {
+        "stepNotAllowed": "A etapa \"{{step}}\" ({{type}}) não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update."
+      },
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
@@ -361,8 +379,13 @@
       "terminalStepHasNext": "A etapa \"{{step}}\" encerra o fluxo, então o seu link para \"{{target}}\" é ignorado e removido ao salvar.",
       "conditionalBranchMissing": "A condição \"{{step}}\" não tem uma etapa no ramo {{branch}}. Se a condição for {{branch}}, o fluxo termina como bem-sucedido.",
       "unreachableSteps": "Estas etapas não são alcançáveis a partir da primeira etapa: {{steps}}.",
+      "assignTagKeyUnknown": "A etapa \"{{step}}\" atribui a tag \"{{key}}\", que não está no catálogo de tags. A etapa falha até que a tag seja criada.",
       "storedEntityTypeUnknown": "O gatilho lista \"{{entityType}}\", um tipo de entidade que não existe mais. Ele nunca dispara para ele.",
       "storedEntityTypeUnsupported": "O gatilho {{trigger}} nunca dispara para {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "A etapa \"{{step}}\" verifica uma política que usa LLM_CHECK. LLM_CHECK só é avaliado em execuções de conformidade, então a etapa reprovaria todas as entidades. Selecione uma política sem LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "A etapa \"{{step}}\" tem uma regra que usa LLM_CHECK. LLM_CHECK só é avaliado nas execuções de conformidade, então a etapa reprovaria todas as entidades. Remova LLM_CHECK da regra."
     }
   },
   "approvalResponse": {
@@ -372,6 +395,13 @@
     "adjustTerms": "Ajustar termos da aprovação",
     "durationDays": "Duração (dias)",
     "permissionLevel": "Nível de permissão",
+    "accessDecision": {
+      "adminHint": "Como administrador, você pode decidir sua própria solicitação e conceder mais do que foi solicitado. O log de auditoria registra isso como uma substituição.",
+      "failedTitle": "Decisão registrada, acesso ainda não atualizado",
+      "failed": "O workflow tem sua decisão, mas a solicitação de acesso não pôde ser atualizada. Isso será tentado novamente de forma automática.",
+      "narrowedTitle": "Termos reduzidos por uma etapa anterior",
+      "narrowed": "Uma etapa de aprovação anterior concedeu menos do que você escolheu: {{granted_level}} por {{granted_days}} dias (você enviou {{sent_level}}, {{sent_days}} dias)."
+    },
     "reasonLabel": "Motivo da aprovação ou rejeição",
     "reasonPlaceholder": "Digite seu motivo...",
     "approved": "Aprovado",
@@ -398,6 +428,13 @@
       "waitingForApprovers_other": "Aguardando mais {{count}} aprovadores."
     },
     "errors": {
+      "access_request_already_decided": "Esta solicitação de acesso já foi decidida.",
+      "access_terms_duration_not_allowed": "{{days}} dias não é uma duração permitida (permitidas: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Você pode conceder no máximo os {{requested}} dias solicitados.",
+      "access_terms_exceed_requested_permission": "Você pode conceder no máximo o nível solicitado ({{requested}}).",
+      "access_terms_invalid_duration": "A duração deve ser de {{min}} a {{max}} dias.",
+      "access_terms_invalid_permission": "Este nível de permissão não pode ser concedido.",
+      "own_access_request_approval": "Você não pode decidir sua própria solicitação de acesso.",
       "own_owner_approval": "Esta aprovação cabe aos proprietários; você não pode aprovar a sua própria solicitação.",
       "own_change_request_approval": "Você não pode aprovar a sua própria solicitação de alteração.",
       "approval_already_decided": "Você já decidiu esta aprovação.",
@@ -542,6 +579,8 @@
     "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "Não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
+      "tag_not_found": "A tag '{{tag}}' não foi encontrada no catálogo de tags, então não foi atribuída",
+      "update_gate_step_not_allowed": "Uma etapa {{stepType}} não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.",
       "approval_rejected": "Solicitação negada",
       "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
       "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",
@@ -700,6 +739,33 @@
       "suffix": "ou superior para ver e executar este fluxo de trabalho. Defina isso em Configurações → Papéis."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Agendamento (cron Quartz)",
+    "cronHint": "6 ou 7 campos: segundo minuto hora dia-do-mês mês dia-da-semana [ano]. Exemplo: {{example}} roda todo dia às 06:00. Os segundos devem ser 0, e as execuções devem ter pelo menos 5 minutos de intervalo.",
+    "timezoneLabel": "Fuso horário",
+    "timezoneHint": "Um nome IANA como Europe/Berlin ou America/Sao_Paulo. Vazio significa UTC.",
+    "fields": {
+      "second": "segundo",
+      "minute": "minuto",
+      "hour": "hora",
+      "day_of_month": "dia-do-mês",
+      "month": "mês",
+      "day_of_week": "dia-da-semana",
+      "year": "ano"
+    },
+    "errors": {
+      "schedule_required": "Um gatilho agendado precisa de uma expressão cron.",
+      "cron_field_count": "Uma expressão cron Quartz tem 6 ou 7 campos; esta tem {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" não é válido no campo {{field}}.",
+      "cron_day_fields_conflict": "Coloque \"?\" em exatamente um dos campos dia-do-mês e dia-da-semana.",
+      "cron_seconds_not_zero": "O campo de segundos deve ser 0: as execuções começam no minuto cheio.",
+      "cron_unsupported_character": "\"{{character}}\" no campo {{field}} não é suportado em agendamentos de workflow.",
+      "cron_invalid": "Esta não é uma expressão cron Quartz válida.",
+      "cron_no_upcoming_runs": "Esta expressão cron não tem nenhuma execução futura.",
+      "cron_interval_too_short": "As execuções agendadas devem ter pelo menos {{minutes}} minutos de intervalo.",
+      "timezone_invalid": "Fuso horário desconhecido \"{{timezone}}\": use um nome IANA como Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configure fluxos de trabalho automatizados para validação, aprovação e notificações.",
     "readOnlyAccess": "(Acesso somente leitura)",
@@ -853,6 +919,7 @@
       "rejectResumeSuccess": "Fluxo de trabalho rejeitado e retomado",
       "rejectFailed": "Falha ao rejeitar fluxo de trabalho",
       "forceDecisionRequireAll": "Somente os aprovadores podem decidir esta etapa (todos precisam decidir). Em vez disso, você pode cancelar a execução.",
+      "forceDecisionAccessRequest": "Solicitações de acesso são decididas pelos aprovadores, não forçadas daqui.",
       "noChanges": "Nenhuma alteração",
       "allAlreadyEnabled": "Todos os fluxos de trabalho selecionados já estão habilitados.",
       "allAlreadyDisabled": "Todos os fluxos de trabalho selecionados já estão desabilitados.",

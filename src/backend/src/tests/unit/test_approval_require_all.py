@@ -77,6 +77,16 @@ def _record(db, execution, approved=True, *names, user='u@example.com'):
 
 
 class TestTally:
+    def test_decision_time_carries_the_utc_offset(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None)),
+        })
+
+        _record(db_session, execution, True, 'a@x.com', user='a@x.com')
+
+        at = datetime.fromisoformat(_stored(db_session, execution)['decisions'][0]['at'])
+        assert at.utcoffset() is not None and at.utcoffset().total_seconds() == 0
+
     def test_pending_until_everyone_approved(self, db_session):
         execution = _paused(db_session, pause_data={
             'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
@@ -699,7 +709,7 @@ class TestRoleAssignedUsers:
             title='Approval Required', recipient='Reviewers', recipient_role_id='r-rev',
         )
         manager._repo = MagicMock()
-        manager._repo.get_multi.return_value = [notification]
+        manager._repo.get_addressed_to.return_value = [notification]
 
         listed = manager.get_notifications(db=None, user_info=_user('eve@x.com'))
         hidden = manager.get_notifications(db=None, user_info=_user('ana@x.com'))
@@ -716,3 +726,93 @@ class TestRoleAssignedUsers:
             ('Reviewers', 'r-rev'), ('Mixed', 'r-mixed'), ('a@x.com', None),
         )] == [True, True, False]
         assert manager._settings_manager.list_app_roles.call_count == 1
+
+
+class TestOnePersonSeveralUserTargets:
+    """``user:alice``, ``alice`` and ``alice@x.com`` are one person: one decision
+    fills them all, or the step waits for a second decision she can't give."""
+
+    def _decide(self, db, execution, approved=True):
+        user = UserInfo(
+            email='alice@x.com', username='alice', user='alice', ip='127.0.0.1', groups=['team'],
+        )
+        matcher = NotificationsManager(settings_manager=MagicMock(
+            list_app_roles=MagicMock(return_value=[]),
+        )).recipient_matcher(user)
+        return WorkflowExecutor(db).record_required_approval(
+            execution.id, approved, decides_for=matcher,
+            user_email=user.email, username=user.username,
+        )
+
+    def test_one_decision_fills_every_user_target_naming_her(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_targets': _users(
+                ('user:Alice', None), ('team', None), ('alice@x.com', None), ('b@x.com', None),
+            ),
+        })
+
+        result = self._decide(db_session, execution)
+
+        # Her two user targets; the group and Bob still decide
+        assert (result['outcome'], result['pending_approvers']) == ('pending', 2)
+        assert [(d['target'], d['decided_by']) for d in result['decisions']] == [
+            ('user:Alice', 'alice@x.com'), ('alice@x.com', 'alice@x.com'),
+        ]
+
+    def test_her_targets_alone_are_approved_at_once(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True,
+            'resolved_targets': _users(('user:alice', None), ('ALICE@x.com', None)),
+        })
+
+        assert self._decide(db_session, execution)['outcome'] == 'approved'
+
+    def test_a_group_target_fills_by_prefix(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True,
+            'resolved_targets': _users(('group:Team', None), ('b@x.com', None)),
+        })
+
+        result = self._decide(db_session, execution)
+
+        assert (result['outcome'], result['pending_approvers']) == ('pending', 1)
+        assert [d['target'] for d in result['decisions']] == ['group:Team']
+
+
+class TestClarificationOfARequireAllStep:
+    """A step that needs every approver is not resumed by one clarification: the
+    pause record's ``require_all`` decides, even if the step's config lacks it."""
+
+    @staticmethod
+    def _execution(db_session):
+        execution = _paused(
+            db_session,
+            pause_data={'require_all': True, 'resolved_targets': _users(('a@x.com', None))},
+            config={'approvers': 'x', 'on_clarify': 'ok'},
+        )
+        return execution
+
+    def test_the_route_check_refuses_it(self, db_session):
+        execution = self._execution(db_session)
+
+        assert WorkflowExecutor(db_session).clarify_refusal(execution.id) == 'clarify_not_supported'
+
+    def test_resume_refuses_it_and_leaves_the_execution_paused(self, db_session):
+        from src.common.workflow_executor import ClarifyNotSupportedError
+        execution = self._execution(db_session)
+
+        with pytest.raises(ClarifyNotSupportedError):
+            WorkflowExecutor(db_session).resume_workflow(
+                execution.id, False, result_data={'message': 'Why?'}, clarify=True,
+            )
+
+        db_session.refresh(execution)
+        assert execution.status == 'paused'
+
+    def test_a_step_without_require_all_still_takes_it(self, db_session):
+        execution = _paused(
+            db_session, pause_data={'approvers': ['x']},
+            config={'approvers': 'x', 'on_clarify': 'ok'},
+        )
+
+        assert WorkflowExecutor(db_session).clarify_refusal(execution.id) is None

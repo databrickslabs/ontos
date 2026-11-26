@@ -65,30 +65,32 @@ Violation = Tuple[str, Dict[str, str]]
 def feature_admin_offline(db: Session, email: Optional[str], groups: Optional[Iterable[str]]) -> bool:
     """Whether a user holds compliance ADMIN, resolved without a request (the run path).
 
-    Mirrors ``authorization.resolve_effective_permissions`` step by step: an applied role
-    override, else the team role override and the roles matching the groups or the email.
-    The request-bound pieces are read from the database directly: the teams and the settings
-    managers take the session.
+    The same steps as ``authorization.effective_permissions_for_request``: an applied role
+    override replaces everything; otherwise the group and email roles and every team role
+    override that applies (``team_role_overrides``) combine by highest level. The team rows
+    are read from the database directly, since there is no request to cache them on.
     """
+    from src.common.authorization import effective_permissions_for
     from src.common.config import get_settings
-    from src.common.team_role_override import pick_team_role_override
+    from src.common.team_role_override import team_role_overrides
     from src.controller.authorization_manager import AuthorizationManager
     from src.controller.settings_manager import SettingsManager
     from src.controller.teams_manager import TeamsManager
 
     group_list = list(groups or [])
+    user = email or ''
     settings_manager = SettingsManager(db, get_settings())
-    applied_role_id = settings_manager.get_applied_role_override_for_user(email)
-    if applied_role_id:
-        permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-    else:
-        team_role = None
-        if email:
-            teams = TeamsManager().get_teams_for_user(db, email)
-            team_role = pick_team_role_override(teams, email, group_list)
-        permissions = AuthorizationManager(settings_manager).get_user_effective_permissions(
-            group_list, team_role, user_email=email,
-        )
+    team_roles: List[str] = []
+    if user or group_list:
+        try:
+            team_roles = team_role_overrides(
+                TeamsManager().get_team_rows_for_user(db, user, group_list), user, group_list,
+            )
+        except Exception:
+            team_roles = []  # as the request path: a failed lookup grants no team role
+    permissions = effective_permissions_for(
+        AuthorizationManager(settings_manager), settings_manager, email, group_list, team_roles,
+    )
     return permissions.get(NOTIFY_FEATURE) == FeatureAccessLevel.ADMIN
 
 

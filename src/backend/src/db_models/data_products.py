@@ -28,6 +28,12 @@ class DataProductDb(Base):
     api_version = Column(String, nullable=False, default="v1.0.0")
     kind = Column(String, nullable=False, default="DataProduct")
     status = Column(String, nullable=False, index=True)  # proposed, draft, active, deprecated, retired
+    # Lifecycle Stage Group (#1213); ``status`` holds a stage key of it. NULL = the
+    # entity type's default group.
+    lifecycle_stage_group_id = Column(
+        String, ForeignKey('lifecycle_stage_groups.id', ondelete='RESTRICT'),
+        nullable=True, index=True,
+    )
 
     # ==================== ODPS v1.0.0 Optional Fields ====================
     name = Column(String, nullable=True, index=True)
@@ -92,6 +98,17 @@ class DataProductDb(Base):
     sunset_date = Column(Date, nullable=True)
     replacement_product_id = Column(String, nullable=True)
     deprecated_at = Column(DateTime(timezone=True), nullable=True)
+
+    # ==================== Product Type ====================
+    # Optional; RESTRICT keeps a type from being deleted while products use it.
+    product_type_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey('data_product_types.id', ondelete='RESTRICT'),
+        nullable=True,
+        index=True,
+    )
+    # Loaded with the product so reads (API, ODPS export) don't query per product.
+    product_type = relationship("DataProductTypeDb", lazy="selectin")
 
     # ==================== Maturity ====================
     maturity_level_order = Column(Integer, nullable=True)

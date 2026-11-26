@@ -62,10 +62,23 @@ def test_update_management_port_keeps_type():
     assert [m.port_type for m in product.management_ports] == ["topic"]
 
 
-def test_update_management_port_without_type_defaults_to_rest():
+def test_update_management_port_without_type_keeps_stored_type():
     product, _ = _product()
     _update(product, {"management_ports": [{"name": "m", "content": "discoverability"}]})
+    assert [m.port_type for m in product.management_ports] == ["topic"]
+
+
+def test_update_management_port_with_a_type_replaces_the_stored_one():
+    product, _ = _product()
+    _update(product, {"management_ports": [
+        {"name": "m", "content": "discoverability", "type": "rest"}]})
     assert [m.port_type for m in product.management_ports] == ["rest"]
+
+
+def test_update_new_management_port_without_type_defaults_to_rest():
+    product, _ = _product()
+    _update(product, {"management_ports": [{"name": "new", "content": "control"}]})
+    assert [(m.name, m.port_type) for m in product.management_ports] == [("new", "rest")]
 
 
 def test_update_without_ports_leaves_port_types_alone():

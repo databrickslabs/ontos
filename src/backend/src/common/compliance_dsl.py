@@ -13,6 +13,11 @@ Syntax Overview:
 Supported Operators:
     =, !=, >, <, >=, <=, MATCHES (regex), IN, CONTAINS, HAS_TAG, TAG
 
+Functions:
+    HAS_TAG, TAG, LENGTH, UPPER, LOWER,
+    LLM_CHECK(<text>, '<criterion>') (the serving endpoint's verdict on the text;
+    see compliance_llm_check)
+
 Actions:
     PASS
     FAIL <message>
@@ -69,9 +74,11 @@ class TokenType(Enum):
     # Functions
     HAS_TAG = "HAS_TAG"
     TAG = "TAG"
+    HAS_CONCEPT = "HAS_CONCEPT"
     LENGTH = "LENGTH"
     UPPER = "UPPER"
     LOWER = "LOWER"
+    LLM_CHECK = "LLM_CHECK"
 
     # Actions
     PASS = "PASS"
@@ -117,7 +124,7 @@ class Lexer:
         'MATCH', 'WHERE', 'ASSERT', 'ON_PASS', 'ON_FAIL',
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'MATCHES', 'IN', 'CONTAINS', 'AND', 'OR', 'NOT',
-        'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER',
+        'HAS_TAG', 'TAG', 'HAS_CONCEPT', 'LENGTH', 'UPPER', 'LOWER', 'LLM_CHECK',
         'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY',
         'TRUE', 'FALSE'
     }
@@ -424,8 +431,9 @@ class Parser:
             return self.parse_case_expression()
 
         # Function call
-        if token.type in (TokenType.HAS_TAG, TokenType.TAG, TokenType.LENGTH,
-                          TokenType.UPPER, TokenType.LOWER):
+        if token.type in (TokenType.HAS_TAG, TokenType.TAG, TokenType.HAS_CONCEPT,
+                          TokenType.LENGTH, TokenType.UPPER, TokenType.LOWER,
+                          TokenType.LLM_CHECK):
             return self.parse_function_call()
 
         # Property access or identifier
@@ -552,11 +560,35 @@ class Parser:
         return self.parse_or_expression()
 
 
-class Evaluator:
-    """Evaluate AST against an object."""
+def llm_check_criterion(node: 'FunctionCall') -> Optional[str]:
+    """The criterion of an LLM_CHECK call: its 2nd argument if a non-empty string literal."""
+    if len(node.args) != 2:
+        return None
+    arg = node.args[1]
+    if isinstance(arg, Literal) and isinstance(arg.value, str) and arg.value.strip():
+        return arg.value.strip()
+    return None
 
-    def __init__(self, obj: Dict[str, Any]):
+
+class LlmCheckCriterionError(CodedValueError):
+    """An LLM_CHECK whose criterion isn't a string literal (rejected on save)."""
+
+    code = 'llm_check_criterion_not_literal'
+
+
+class Evaluator:
+    """Evaluate AST against an object.
+
+    ``llm_checker`` (a ``compliance_llm_check.LlmChecker``) evaluates
+    ``LLM_CHECK``; without one, LLM_CHECK fails the rule with
+    ``llm_check_not_available``. The outcome of every LLM_CHECK evaluated is
+    kept in ``llm_checks``, in order.
+    """
+
+    def __init__(self, obj: Dict[str, Any], llm_checker: Optional[Any] = None):
         self.obj = obj
+        self.llm_checker = llm_checker
+        self.llm_checks: List[Any] = []
 
     def error(self, msg: str) -> Exception:
         return ValueError(f"Evaluation error: {msg}")
@@ -602,6 +634,15 @@ class Evaluator:
             tags = self.obj.get('tags', {})
             return tags.get(key)
 
+        if node.name == 'HAS_CONCEPT':
+            # The entity's semantic links (``concepts``): matched by IRI or by label
+            if len(node.args) != 1:
+                raise self.error("HAS_CONCEPT expects 1 argument")
+            key = self.evaluate(node.args[0])
+            if key is None:
+                return False
+            return any(key in (c.get('iri'), c.get('label')) for c in self.obj.get('concepts') or [])
+
         if node.name == 'LENGTH':
             if len(node.args) != 1:
                 raise self.error("LENGTH expects 1 argument")
@@ -620,7 +661,38 @@ class Evaluator:
             value = self.evaluate(node.args[0])
             return str(value).lower() if value else ''
 
+        if node.name == 'LLM_CHECK':
+            return self.evaluate_llm_check(node)
+
         raise self.error(f"Unknown function: {node.name}")
+
+    def evaluate_llm_check(self, node: FunctionCall) -> bool:
+        """LLM_CHECK(<text>, '<criterion>'): the model's verdict on the text.
+
+        A check without a verdict raises ``LlmCheckError``, so the rule fails
+        whatever the expression around it is (``NOT LLM_CHECK(...)`` too).
+        """
+        from src.common.compliance_llm_check import (
+            NOT_AVAILABLE, LlmCheckError, LlmCheckResult,
+        )
+
+        if len(node.args) != 2:
+            raise self.error("LLM_CHECK expects 2 arguments: a text and a criterion")
+        criterion = llm_check_criterion(node)
+        if criterion is None:
+            # Only the rule author writes the criterion: it goes in the system
+            # prompt, so it can't come from entity data (an expression)
+            raise self.error("LLM_CHECK expects the criterion as a non-empty string literal")
+        text = self.evaluate(node.args[0])
+        try:
+            if self.llm_checker is None:
+                raise LlmCheckError(LlmCheckResult(criterion, False, code=NOT_AVAILABLE))
+            result = self.llm_checker.check(text, criterion)
+        except LlmCheckError as e:
+            self.llm_checks.append(e.result)
+            raise
+        self.llm_checks.append(result)
+        return result.passed
 
     def evaluate_unary_op(self, node: UnaryOp) -> Any:
         """Evaluate unary operation."""

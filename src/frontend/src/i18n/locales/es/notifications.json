@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Cambio de estado aprobado",
+    "approved": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue aprobada por '{{approver}}'.",
+    "approvedWithMessage": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue aprobada por '{{approver}}'.\n\nMensaje del aprobador: {{message}}",
+    "deniedTitle": "Cambio de estado denegado",
+    "denied": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue denegada por '{{approver}}'.",
+    "deniedWithMessage": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue denegada por '{{approver}}'.\n\nMensaje del aprobador: {{message}}",
+    "clarificationTitle": "Cambio de estado: se necesita aclaración",
+    "clarification": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' requiere aclaración de '{{approver}}'.",
+    "clarificationWithMessage": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' requiere aclaración de '{{approver}}'.\n\nMensaje del aprobador: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definición de la metric view modificada",
     "description": "La definición de la metric view {{fqn}} en Unity Catalog ya no coincide con su línea base en Ontos."
@@ -8,6 +19,14 @@
     "statusChanged": "La solicitud de cambiar el estado de «{{fromStatus}}» a «{{toStatus}}» se aprobó, pero el estado ahora es «{{currentStatus}}», por lo que el cambio no se aplicó. Vuelva a solicitarlo si todavía es necesario.",
     "refused": "Su solicitud de cambiar el estado a «{{toStatus}}» se aprobó, pero el cambio no se pudo aplicar: {{reason}}",
     "reviewNotApplied": "La revisión del producto de datos se decidió, pero no se pudo aplicar el cambio a «{{toStatus}}»: {{reason}}"
+  },
+  "approvalOverdue": {
+    "approverTitle": "Aprobación vencida",
+    "approverDescription_one": "La aprobación de '{{name}}' lleva más de {{count}} día esperando. Decídela en Mis acciones.",
+    "approverDescription_other": "La aprobación de '{{name}}' lleva más de {{count}} días esperando. Decídela en Mis acciones.",
+    "requesterTitle": "Tu solicitud sigue esperando",
+    "requesterDescription_one": "Tu solicitud para '{{name}}' lleva más de {{count}} día esperando una decisión. Se recordó a los aprobadores.",
+    "requesterDescription_other": "Tu solicitud para '{{name}}' lleva más de {{count}} días esperando una decisión. Se recordó a los aprobadores."
   },
   "contractStatusNotChanged": {
     "title": "Estado del contrato sin cambios",
@@ -134,9 +153,7 @@
         "notify-rejected": "Su solicitud de acceso ha sido denegada. Póngase en contacto con un administrador para más información."
       },
       "status-change-request": {
-        "notify-requester": "Su solicitud de cambio de estado se ha enviado para aprobación.",
-        "notify-approved": "Su solicitud de cambio de estado ha sido aprobada.",
-        "notify-rejected": "Su solicitud de cambio de estado ha sido denegada."
+        "notify-requester": "Su solicitud de cambio de estado se ha enviado para aprobación."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Se le ha asignado una nueva solicitud de revisión de activos de datos.",

@@ -385,22 +385,6 @@
     "path": "/Users/lars.george/Documents/dev/dbapp/ucapp/src/frontend/node_modules/@floating-ui/utils",
     "licenseFile": "/Users/lars.george/Documents/dev/dbapp/ucapp/src/frontend/node_modules/@floating-ui/utils/LICENSE"
   },
-  "@headless-tree/core@1.4.0": {
-    "licenses": "MIT",
-    "repository": "https://github.com/lukasbach/headless-tree",
-    "publisher": "Lukas Bach",
-    "email": "npm@lukasbach.com",
-    "path": "/Users/lars.george/Documents/dev/dbapp/ucapp/src/frontend/node_modules/@headless-tree/core",
-    "licenseFile": "/Users/lars.george/Documents/dev/dbapp/ucapp/src/frontend/node_modules/@headless-tree/core/readme.md"
-  },
-  "@headless-tree/react@1.4.0": {
-    "licenses": "MIT",
-    "repository": "https://github.com/lukasbach/headless-tree",
-    "publisher": "Lukas Bach",
-    "email": "npm@lukasbach.com",
-    "path": "/Users/lars.george/Documents/dev/dbapp/ucapp/src/frontend/node_modules/@headless-tree/react",
-    "licenseFile": "/Users/lars.george/Documents/dev/dbapp/ucapp/src/frontend/node_modules/@headless-tree/react/readme.md"
-  },
   "@hookform/resolvers@5.0.1": {
     "licenses": "MIT",
     "repository": "https://github.com/react-hook-form/resolvers",

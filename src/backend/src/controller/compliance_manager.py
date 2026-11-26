@@ -1,11 +1,13 @@
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
-
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import json
+import re
 import uuid
 import yaml
 from sqlalchemy.orm import Session
 
+from src.controller.entity_data_cleanup import remove_entity_data
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.repositories.compliance_repository import (
@@ -13,7 +15,14 @@ from src.repositories.compliance_repository import (
     compliance_run_repo,
     compliance_result_repo,
 )
-from ..models.compliance import CompliancePolicy, CompliancePolicyCreate, ComplianceRun, ComplianceResult
+from ..models.compliance import (
+    CompliancePolicy,
+    CompliancePolicyCreate,
+    ComplianceResult,
+    ComplianceRun,
+    LlmCheckOutcome,
+    LlmCheckTestResponse,
+)
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl, parse_rule, Evaluator
 from src.common.compliance_actions import (
     APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
@@ -21,17 +30,62 @@ from src.common.compliance_actions import (
 from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.notification_audience import NotifyAudience, audience_for
 from src.repositories.notification_recipient_repository import json_list
+from src.common.api_errors import CodedValueError, UserTokenRequiredError
+from src.common.run_identity import RunIdentity
+from src.common.compliance_llm_check import (
+    BUDGET_EXCEEDED, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
+    LlmCheckError, LlmChecker, counts_as_failure, served_model_of,
+)
 from src.common.compliance_entities import (
     create_entity_iterator,
+    llm_check_calls,
+    llm_check_tag_actions,
     parse_entity_filter,
     EntityFilter,
+    TableEnrichment,
 )
+from src.common.uc_table_enrichment import (
+    FIELD_GROUP,
+    NOT_EVALUATED_CODE,
+    StatementCache,
+    WarehouseSqlRunner,
+    conditions_without,
+    fields_read,
+    groups_for_fields,
+    unavailable_fields_read,
+)
+
+if TYPE_CHECKING:
+    from src.common.compliance_result_visibility import ViewerReadChecks
 
 
 logger = get_logger(__name__)
 
 
 TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+# Rule test (test_rule_on_sample): entities scanned for the named one, and model calls
+SAMPLE_SCAN_LIMIT = 200
+TEST_MAX_CALLS = 5
+
+
+class SampleEntityNotFoundError(CodedValueError):
+    """A rule test found no entity to try the rule on."""
+
+    code = 'sample_entity_not_found'
+
+
+def _str_or_none(value) -> Optional[str]:
+    return None if value is None else str(value)
+
+
+def _result_details(action_outcomes, llm_checks) -> Optional[str]:
+    """The result's details_json: the actions' outcomes and the LLM_CHECK outcomes."""
+    details: Dict[str, object] = {}
+    if action_outcomes:
+        details['actions'] = action_outcomes
+    if llm_checks:
+        details['llm_checks'] = [c.to_dict() for c in llm_checks]
+    return json.dumps(details) if details else None
 
 
 def _author_columns(author: Optional[Tuple[Optional[str], List[str]]]) -> dict:
@@ -63,6 +117,61 @@ def notify_targets_of(parsed: Optional[dict]) -> List[str]:
 def rule_notify_targets(rule: Optional[str]) -> List[str]:
     """The recipients of each NOTIFY action of a rule (empty if it doesn't parse)."""
     return notify_targets_of(_parse_or_none(rule))
+
+
+def _yaml_rule_refusal(rule: Optional[str]) -> Optional[str]:
+    """Why a policy rule from the YAML file is not loaded, or None to load it.
+
+    The YAML load checks what the API save refuses for a run's writes: tag actions on
+    a rule with LLM_CHECK. A rule that doesn't parse is loaded as before (its runs fail
+    with ``rule_parse_failed``).
+    """
+    if not rule:
+        return None
+    try:
+        refused = llm_check_tag_actions(parse_rule(rule))
+    except Exception:
+        return None
+    if refused:
+        return f"llm_check_tag_action: a rule with LLM_CHECK can't use {', '.join(refused)}"
+    return None
+
+
+def _yaml_mapping_refusal(raw: Dict[str, Any], mapping: Any) -> Optional[str]:
+    """Why a YAML policy with LLM_CHECK is not loaded: the self-service mapping lists it.
+
+    Self-service evaluates the mapping's policies without a model, so the policy
+    would fail every object there. The policy save and the mapping save refuse the
+    same pair (``refuse_llm_check_where_it_cannot_run``).
+    """
+    from types import SimpleNamespace
+
+    from src.controller.self_service_manager import mapping_object_types_of
+
+    if not rule_uses_llm_check(raw.get('rule')):
+        return None
+    policy = SimpleNamespace(id=raw.get('id'), slug=raw.get('slug'), name=raw.get('name'))
+    object_types = mapping_object_types_of(mapping, policy)
+    if object_types:
+        return (
+            "llm_check_policy_in_self_service: the self-service compliance mapping "
+            f"lists it for {', '.join(object_types)}"
+        )
+    return None
+
+
+def rule_uses_llm_check(rule: Optional[str]) -> bool:
+    """Whether a rule calls LLM_CHECK.
+
+    A rule that doesn't parse counts when its text names LLM_CHECK, so the gates
+    that use this err on the safe side.
+    """
+    if not rule:
+        return False
+    try:
+        return bool(llm_check_calls(parse_rule(rule)))
+    except Exception:
+        return re.search(r'\bLLM_CHECK\s*\(', rule, re.IGNORECASE) is not None
 
 
 def rule_changes_tags(rule: Optional[str]) -> bool:
@@ -232,6 +341,57 @@ def _action_outcomes(action_results) -> List[Dict[str, object]]:
     return outcomes
 
 
+def _run_scored(run: ComplianceRunDb) -> bool:
+    """Whether a run's score measures anything: it succeeded and evaluated at
+    least one entity (passed or failed). A failed run, or one whose entities
+    were all not evaluated (or that matched none), has no score."""
+    return run.status == 'succeeded' and bool(
+        (run.success_count or 0) + (run.failure_count or 0)
+    )
+
+
+def run_score_fields(
+    run: ComplianceRunDb, not_evaluated: Optional[int] = None,
+) -> Dict[str, object]:
+    """``score`` (None when the run has none, see ``_run_scored``) and ``coverage``.
+
+    ``coverage``: entities evaluated (passed or failed) and not evaluated (by
+    default the run's ``not_evaluated_count``), so a score measured on a few of
+    many entities says so. A run without a score stores None
+    (``o3_compliance_run_score_nullable``).
+    """
+    if not_evaluated is None:
+        not_evaluated = getattr(run, 'not_evaluated_count', None)
+    evaluated = (run.success_count or 0) + (run.failure_count or 0)
+    return {
+        'score': run.score if _run_scored(run) else None,
+        'coverage': {'evaluated': evaluated, 'not_evaluated': int(not_evaluated or 0)},
+    }
+
+
+def viewer_run_fields(run: ComplianceRunDb, counts: Dict[str, int]) -> Dict[str, object]:
+    """A run's counts, ``score`` and ``coverage`` over the results one viewer can
+    read (``counts``: ``ComplianceManager.viewer_run_counts``), and ``hidden_count``.
+
+    Without a hidden result they are the stored ones (``run_score_fields``). With
+    some, the score is recomputed from the visible passes and failures, so it
+    says nothing about the objects the viewer can't read.
+    """
+    success, failure = counts['success'], counts['failure']
+    hidden = counts['hidden']
+    fields = run_score_fields(run, counts['not_evaluated'])
+    if hidden:
+        evaluated = success + failure
+        fields['score'] = (
+            round(100.0 * success / evaluated, 2)
+            if run.status == 'succeeded' and evaluated else None
+        )
+        fields['coverage']['evaluated'] = evaluated
+    return {
+        'success_count': success, 'failure_count': failure, **fields, 'hidden_count': hidden,
+    }
+
+
 class ComplianceManager:
     def __init__(self):
         # Stateless; uses DB via repositories
@@ -239,10 +399,20 @@ class ComplianceManager:
 
     # --- Policy CRUD ---
     def load_from_yaml(self, db: Session, yaml_path: str) -> None:
+        from src.controller.self_service_manager import load_compliance_mapping
+
+        mapping = load_compliance_mapping()
         with open(yaml_path) as f:
             data = yaml.safe_load(f) or []
             for raw in data:
                 model = CompliancePolicy(**{k: v for k, v in raw.items() if k not in {'examples', 'sample_runs'}})
+                refused = _yaml_rule_refusal(model.rule) or _yaml_mapping_refusal(raw, mapping)
+                if refused:
+                    # Not stored (a stored one stays as it is): runs would refuse it anyway
+                    logger.warning(
+                        "Skipped compliance policy %s from %s: %s", model.id, yaml_path, refused,
+                    )
+                    continue
                 # Upsert by id
                 existing = db.get(CompliancePolicyDb, str(model.id))
                 if existing:
@@ -256,7 +426,7 @@ class ComplianceManager:
                     existing.category = model.category
                     existing.severity = model.severity
                     existing.is_active = model.is_active
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = utc_now()
                     policy_db = existing
                 else:
                     policy_db = CompliancePolicyDb(
@@ -285,9 +455,11 @@ class ComplianceManager:
                                 if not val:
                                     return None
                                 try:
-                                    return datetime.fromisoformat(val.replace('Z', '+00:00'))
+                                    parsed = datetime.fromisoformat(val.replace('Z', '+00:00'))
                                 except Exception:
-                                    return datetime.utcnow()
+                                    return utc_now()
+                                # Seeded times without an offset are UTC
+                                return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
                             results_defs = rdef.get('results') or []
                             success_count = rdef.get('success_count')
                             failure_count = rdef.get('failure_count')
@@ -305,7 +477,7 @@ class ComplianceManager:
                                 id=run_id,
                                 policy_id=policy_db.id,
                                 status=str(rdef.get('status') or 'succeeded'),
-                                started_at=_parse_dt(rdef.get('started_at')) or datetime.utcnow(),
+                                started_at=_parse_dt(rdef.get('started_at')) or utc_now(),
                                 finished_at=_parse_dt(rdef.get('finished_at')),
                                 success_count=int(success_count or 0),
                                 failure_count=int(failure_count or 0),
@@ -437,7 +609,7 @@ class ComplianceManager:
         existing.category = policy.category
         existing.severity = policy.severity
         existing.is_active = policy.is_active
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         
         # Log to change log for timeline
         try:
@@ -481,23 +653,43 @@ class ComplianceManager:
         except Exception as log_err:
             logger.warning(f"Failed to log change for policy deletion: {log_err}")
         
+        remove_entity_data(db, entity_type='compliance_policy', entity_id=policy_id)
         db.delete(existing)
         db.commit()
         return True
 
     # --- Stats ---
-    def get_compliance_stats(self, db: Session) -> Dict[str, float]:
+    @staticmethod
+    def _latest_score(db: Session, policy_id: str) -> Optional[float]:
+        """Score of the policy's latest run that has one; None if no recent run has one.
+
+        A failed run, or one whose entities were all not evaluated (a source
+        could not be read), has no score of its own; it keeps the one before it.
+        """
+        runs = compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=20)
+        return next((r.score for r in runs if _run_scored(r)), None)
+
+    def get_compliance_stats(self, db: Session) -> Dict[str, Optional[float]]:
+        """Overall compliance, active policies and critical issues.
+
+        ``overall_compliance`` averages the policies that have a score (see
+        ``_latest_score``); a policy without one is left out, not counted as 0,
+        and with none at all it is None. ``critical_issues`` counts the critical
+        policies whose score is below 70: one without a score is not an issue
+        found, so it isn't counted.
+        """
         policies = self.list_policies(db)
         # Use latest run score per policy
         scores: List[float] = []
         critical_issues = 0
         for p in policies:
-            runs = compliance_run_repo.list_for_policy(db, policy_id=p.id, limit=1)
-            score = runs[0].score if runs else 0.0
+            score = self._latest_score(db, p.id)
+            if score is None:
+                continue
             scores.append(score)
             if (p.severity or '').lower() == 'critical' and score < 70:
                 critical_issues += 1
-        overall = sum(scores) / len(scores) if scores else 0.0
+        overall = sum(scores) / len(scores) if scores else None
         active = len([p for p in policies if p.is_active])
         return {
             "overall_compliance": overall,
@@ -533,8 +725,7 @@ class ComplianceManager:
         policies = []
         for r in rows:
             # Get latest run score for this policy
-            runs = compliance_run_repo.list_for_policy(db, policy_id=r.id, limit=1)
-            compliance_score = runs[0].score if runs else 0.0
+            compliance_score = self._latest_score(db, r.id)
             
             policies.append({
                 'id': r.id,
@@ -605,30 +796,29 @@ class ComplianceManager:
             'examples': examples,
         }
 
-    def get_compliance_trend(self, db: Session, days: int = 30) -> List[Dict[str, float]]:
+    def get_compliance_trend(
+        self, db: Session, days: int = 30
+    ) -> List[Dict[str, Optional[float]]]:
         end = datetime.utcnow().date()
         start = end - timedelta(days=days - 1)
         # Gather runs within the window
         runs = db.query(ComplianceRunDb).all()
         by_date: Dict[str, List[float]] = {}
         for r in runs:
-            if not r.started_at:
+            if not r.started_at or not _run_scored(r):
                 continue
             d = r.started_at.date()
             if d < start or d > end:
                 continue
             key = d.isoformat()
             by_date.setdefault(key, []).append(float(r.score or 0.0))
-        # Construct time series, filling missing days with previous or 0
-        trend: List[Dict[str, float]] = []
+        # One point per day; a day without a scored run has no score (None), not 0 %
+        trend: List[Dict[str, Optional[float]]] = []
         for i in range(days - 1, -1, -1):
             d = (end - timedelta(days=i)).isoformat()
             vals = by_date.get(d, [])
-            if vals:
-                avg = sum(vals) / len(vals)
-            else:
-                avg = 0.0
-            trend.append({"date": d, "compliance": round(avg, 2)})
+            avg = round(sum(vals) / len(vals), 2) if vals else None
+            trend.append({"date": d, "compliance": avg})
         return trend
 
     # --- Runs ---
@@ -637,7 +827,7 @@ class ComplianceManager:
             id=str(uuid.uuid4()),
             policy_id=policy_id,
             status='running',
-            started_at=datetime.utcnow(),
+            started_at=utc_now(),
         )
         db.add(run)
         db.commit()
@@ -646,14 +836,18 @@ class ComplianceManager:
 
     def complete_run(
         self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int,
-        score: float, error_message: Optional[str] = None, error_code: Optional[str] = None,
-        error_params: Optional[dict] = None, warning_code: Optional[str] = None,
-        warning_params: Optional[dict] = None,
+        score: Optional[float], error_message: Optional[str] = None,
+        error_code: Optional[str] = None, error_params: Optional[dict] = None,
+        warning_code: Optional[str] = None,
+        warning_params: Optional[dict] = None, llm_calls: Optional[int] = None,
+        llm_cache_hits: Optional[int] = None, not_evaluated_count: Optional[int] = None,
     ) -> ComplianceRunDb:
         run.success_count = success_count
+        run.llm_calls, run.llm_cache_hits = llm_calls, llm_cache_hits
+        run.not_evaluated_count = not_evaluated_count
         run.failure_count = failure_count
         run.score = score
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         run.status = 'succeeded' if error_message is None else 'failed'
         run.error_message = error_message
         # A code the UI translates (see common/compliance_errors.py); the message is the fallback
@@ -671,8 +865,79 @@ class ComplianceManager:
     def list_runs(self, db: Session, *, policy_id: str, limit: int = 50) -> List[ComplianceRunDb]:
         return compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=limit)
 
+    def not_evaluated_counts(self, db: Session, run_ids: List[str]) -> Dict[str, int]:
+        """Results not evaluated, per run id (for the runs' coverage)."""
+        return compliance_result_repo.not_evaluated_counts(db, run_ids)
+
     def list_results(self, db: Session, *, run_id: str, only_failed: bool = False, limit: int = 1000) -> List[ComplianceResultDb]:
         return compliance_result_repo.list_for_run(db, run_id=run_id, only_failed=only_failed, limit=limit)
+
+    def viewer_run_counts(
+        self, db: Session, runs: List[ComplianceRunDb], checks: 'ViewerReadChecks',
+    ) -> Dict[str, Dict[str, int]]:
+        """Per run id: ``success``, ``failure`` and ``not_evaluated`` over the results
+        the viewer can read (``checks``), and ``hidden``, how many they can't.
+
+        The stored counts less the hidden results: only results on Unity Catalog
+        objects are checked (app entities are visible to compliance readers), and
+        runs seeded without results keep their counts.
+        """
+        from src.common.compliance_result_visibility import (
+            UC_RESULT_TYPES, hidden_result_tallies,
+        )
+
+        ids = [r.id for r in runs]
+        not_evaluated = self.not_evaluated_counts(db, ids)
+        hidden = hidden_result_tallies(
+            compliance_result_repo.typed_result_rows(db, ids, UC_RESULT_TYPES), checks,
+        )
+        counts: Dict[str, Dict[str, int]] = {}
+        for run in runs:
+            h = hidden.get(run.id, {})
+            counts[run.id] = {
+                'success': max(0, (run.success_count or 0) - h.get('passed', 0)),
+                'failure': max(0, (run.failure_count or 0) - h.get('failed', 0)),
+                'not_evaluated': max(0, not_evaluated.get(run.id, 0) - h.get('not_evaluated', 0)),
+                'hidden': sum(h.values()),
+            }
+        return counts
+
+    def viewer_results_page(
+        self, db: Session, *, run_id: str, checks: 'ViewerReadChecks',
+        only_failed: bool = False, offset: int = 0, limit: int = 500,
+    ) -> Tuple[List[ComplianceResultDb], int, int]:
+        """One page of the run's results the viewer can read, newest first.
+
+        Returns ``(page, total, hidden)``: ``total`` counts every visible result
+        (all pages), ``hidden`` the results left out, both under ``only_failed``.
+        """
+        from src.common.compliance_result_visibility import (
+            UC_RESULT_TYPES, hidden_result_tallies,
+        )
+
+        hidden_by_outcome = hidden_result_tallies(
+            compliance_result_repo.typed_result_rows(db, [run_id], UC_RESULT_TYPES), checks,
+        ).get(run_id, {})
+        hidden = (hidden_by_outcome.get('failed', 0) if only_failed
+                  else sum(hidden_by_outcome.values()))
+        total = compliance_result_repo.count_for_run(
+            db, run_id=run_id, only_failed=only_failed,
+        ) - hidden
+        page: List[ComplianceResultDb] = []
+        skipped = 0
+        if limit > 0:
+            for r in compliance_result_repo.iter_for_run(
+                db, run_id=run_id, only_failed=only_failed,
+            ):
+                if not checks.can_read(r.object_type, r.object_id):
+                    continue
+                if skipped < offset:
+                    skipped += 1
+                    continue
+                page.append(r)
+                if len(page) >= limit:
+                    break
+        return page, max(0, total), hidden
 
     # --- DSL evaluation (minimal): iterate over UC and app objects ---
     def _evaluate_rule_on_object(self, rule: str, obj: Dict[str, any]) -> Tuple[bool, Optional[str]]:
@@ -713,32 +978,181 @@ class ComplianceManager:
                 })
         return objs
 
-    def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
+    @staticmethod
+    def policy_gate_uses(db: Session, policy_id: str) -> Dict[str, int]:
+        """Where a policy is evaluated without a model: policy_check steps of ACTIVE
+        workflows and maturity gates (counts). ``LLM_CHECK`` always fails there.
+
+        An inactive workflow isn't counted: it saves with a warning, and can't be
+        activated while its step uses an ``LLM_CHECK`` policy.
+        """
+        from src.common.workflow_step_config import policy_id_of
+        from src.db_models.maturity import MaturityGateDb
+        from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
+
+        steps = 0
+        active_steps = (
+            db.query(WorkflowStepDb)
+            .join(ProcessWorkflowDb, WorkflowStepDb.workflow_id == ProcessWorkflowDb.id)
+            .filter(
+                WorkflowStepDb.step_type == 'policy_check',
+                ProcessWorkflowDb.is_active.is_(True),
+            )
+        )
+        for step in active_steps:
+            try:
+                config = json.loads(step.config) if isinstance(step.config, str) else step.config
+            except (TypeError, ValueError):
+                continue
+            if isinstance(config, dict) and policy_id_of(config) == policy_id:
+                steps += 1
+        gates = db.query(MaturityGateDb).filter(
+            MaturityGateDb.compliance_policy_id == policy_id,
+        ).count()
+        return {'workflowSteps': steps, 'maturityGates': gates}
+
+    @staticmethod
+    def _settings():
+        from src.common.config import get_settings
+
+        try:
+            return get_settings()
+        except RuntimeError:
+            # Not initialized: LLM_CHECK then fails closed (llm_check_disabled)
+            return None
+
+    @classmethod
+    def llm_quota(cls, db: Session, user: str) -> DbLlmCallQuota:
+        """The daily LLM_CHECK calls of ``user``.
+
+        The limit is COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.
+        """
+        limit = getattr(
+            cls._settings(), 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY', 400,
+        )
+        return DbLlmCallQuota(db, user, limit)
+
+    @classmethod
+    def llm_checker(
+        cls, db: Session, max_calls: Optional[int] = None, *, purge_expired: bool = False,
+        quota_user: Optional[str] = None,
+    ) -> LlmChecker:
+        """The LLM_CHECK runner of a run: the configured endpoint and budget, the DB cache.
+
+        ``purge_expired`` deletes the cached verdicts past their max age first
+        (when a run starts). A Compliance Checks job run makes one and passes it
+        to every policy run, so the budget covers the whole job run.
+        ``quota_user``: the user who started the run or test, whose daily calls
+        it counts against (see ``DbLlmCallQuota``); None for scheduled runs.
+        """
+        settings = cls._settings()
+        cache = DbLlmCheckCache(
+            db, max_age_days=getattr(settings, 'COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS', 30),
+        )
+        if purge_expired:
+            try:
+                cache.purge_expired()
+            except Exception as e:
+                logger.warning("Could not delete expired LLM_CHECK verdicts: %s", e)
+        quota = cls.llm_quota(db, quota_user) if quota_user else None
+        return LlmChecker(
+            settings, cache=cache, max_calls=max_calls, quota=quota,
+            model_resolver=served_model_of,
+        )
+
+    def test_rule_on_sample(
+        self, db: Session, *, rule: str, entity: Optional[str] = None,
+        run_identity: Optional[RunIdentity] = None, quota_user: Optional[str] = None,
+    ) -> LlmCheckTestResponse:
+        """Evaluate a rule's ASSERT on one entity it matches, LLM_CHECKs included.
+
+        For trying a criterion in the rule editor before the rule is saved: no
+        run, result or action is written, only the verdicts to the cache. The
+        entity is the one named ``entity`` (name, id or full name) among the
+        first ``SAMPLE_SCAN_LIMIT`` the rule matches, else the first match.
+        ``run_identity``: whose permissions Unity Catalog is read with (the
+        caller's own, see ``run_policy_inline``); default: the app's.
+        ``quota_user``: the user whose daily LLM_CHECK calls the test counts against.
+
+        Raises:
+            ValueError: the rule doesn't parse.
+            SampleEntityNotFoundError: no entity matches.
+        """
+        from types import SimpleNamespace
+
+        parsed = parse_rule(rule)
+        entity_filter = parse_entity_filter(rule, parsed=parsed)
+        source = SimpleNamespace(name='rule test', id='unsaved')
+        ws = self._workspace_client_for(entity_filter.entity_types, source, run_identity)
+        iterator = create_entity_iterator(db=db, workspace_client=ws)
+        wanted = (entity or '').strip()
+        sample = None
+        for obj in iterator.iterate(
+            entity_filter, limit=SAMPLE_SCAN_LIMIT if wanted else 1, source='a rule test',
+        ):
+            names = {str(obj.get(k)) for k in ('name', 'id', 'full_name') if obj.get(k) is not None}
+            if not wanted or wanted in names:
+                sample = obj
+                break
+        if sample is None:
+            named = f" with the name '{wanted}'" if wanted else ""
+            raise SampleEntityNotFoundError(
+                f"No entity the rule matches was found{named}", entity=wanted,
+            )
+
+        evaluator = Evaluator(sample, llm_checker=self.llm_checker(
+            db, max_calls=TEST_MAX_CALLS, quota_user=quota_user,
+        ))
+        passed, error_code = True, None
+        if parsed.get('assert_clause') is not None:
+            try:
+                passed = bool(evaluator.evaluate(parsed['assert_clause']))
+            except LlmCheckError as e:
+                passed, error_code = False, e.code
+            except Exception as e:
+                logger.warning("Rule test evaluation failed: %s", e)
+                passed, error_code = False, 'rule_evaluation_failed'
+        db.commit()
+        return LlmCheckTestResponse(
+            entity_type=str(sample.get('type') or 'object'),
+            entity_id=_str_or_none(sample.get('id') or sample.get('full_name')),
+            entity_name=_str_or_none(sample.get('name')),
+            passed=passed,
+            error_code=error_code,
+            llm_checks=[LlmCheckOutcome(**c.to_dict()) for c in evaluator.llm_checks],
+        )
+
+    def _workspace_client_for(
+        self, entity_types: List[str], policy: CompliancePolicyDb,
+        identity: Optional[RunIdentity] = None,
+    ):
         """Workspace client for a run, or None when the rule doesn't need one.
 
         Rules whose MATCH covers Unity Catalog types (including ``Object``,
         which covers every type) need the client: without it the run fails
         instead of passing after evaluating only part of its scope. Rules on
-        app entities alone run without it.
+        app entities alone run without it. The client is the identity's: the
+        user's own for a run they start, the app's for a scheduled run.
         """
         from src.common.compliance_entities import UnityCatalogLoader
-        from src.common.workspace_client import get_workspace_client
 
+        identity = identity or RunIdentity.app()
         needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
-        try:
-            ws = get_workspace_client()
-        except Exception as e:
-            if needs_uc:
-                # A code the UI translates; the exception text stays in the
-                # stored message and the log, not in what the UI shows
-                e.error_code, e.error_params = 'workspace_client_unavailable', {}
-                raise
-            logger.warning(
-                "Workspace client unavailable, policy '%s' (%s) only matches app entities "
-                "and runs without it: %s", policy.name, policy.id, e,
-            )
+        if not needs_uc:
+            # Only the Unity Catalog loader uses the client. Building one a run on
+            # app entities doesn't use waits on the SDK's retries (5 minutes)
+            # where no workspace answers
             return None
-        if ws is None and needs_uc:
+        try:
+            ws = identity.workspace_client()
+        except Exception as e:
+            # A code the UI translates; the exception text stays in the
+            # stored message and the log, not in what the UI shows
+            code = ('user_token_required' if isinstance(e, UserTokenRequiredError)
+                    else 'workspace_client_unavailable')
+            e.error_code, e.error_params = code, {}
+            raise
+        if ws is None:
             error = RuntimeError(
                 "Databricks workspace client unavailable; this rule matches Unity Catalog "
                 "objects and cannot be evaluated without it"
@@ -763,6 +1177,36 @@ class ComplianceManager:
             )
             return False
 
+    def _table_enrichment_for(
+        self, parsed_rule: Dict, entity_types: List[str], ws,
+        statement_cache: Optional[StatementCache] = None,
+    ) -> Optional[TableEnrichment]:
+        """Tags / lineage to load for a run, or None when the rule reads neither.
+
+        They come from system tables through the SQL warehouse, so they are read
+        only for rules on tables or views that use them, and only for the tables
+        selected by the parts of the rule's WHERE that don't read them.
+        """
+        if ws is None or not any(t in ('table', 'view') for t in entity_types):
+            return None
+        where = parsed_rule.get('where_clause')
+        groups = groups_for_fields(fields_read(where, parsed_rule.get('assert_clause')))
+        if not groups:
+            return None
+        try:
+            from src.common.config import get_settings
+            warehouse_id = (get_settings().DATABRICKS_WAREHOUSE_ID or '').strip()
+        except Exception:
+            logger.warning("Settings unavailable; no SQL warehouse for tags and lineage")
+            warehouse_id = ''
+        runner = None
+        if warehouse_id:
+            cache = statement_cache or StatementCache()
+            runner = cache.runner(WarehouseSqlRunner(ws, warehouse_id))
+        return TableEnrichment(
+            groups=groups, runner=runner, scope=conditions_without(where, FIELD_GROUP),
+        )
+
     def run_policy_inline(
         self, 
         db: Session, 
@@ -770,15 +1214,42 @@ class ComplianceManager:
         policy: CompliancePolicyDb, 
         limit: Optional[int] = None,
         current_user: Optional[str] = None,
+        run_identity: Optional[RunIdentity] = None,
+        statement_cache: Optional[StatementCache] = None,
+        llm_checker: Optional[LlmChecker] = None,
+        quota_user: Optional[str] = None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
 
         This method supports both the old simple DSL syntax and the new enhanced syntax
         with MATCH, WHERE, ASSERT, ON_PASS, and ON_FAIL clauses.
+
+        ``run_identity``: whose permissions Unity Catalog is read with (the
+        tables listed, their tags and lineage). Required with ``current_user``:
+        a run a user starts passes theirs (``ValueError`` without it). Without a
+        user, the default is the app's, for scheduled runs.
+
+        ``statement_cache``: the warehouse statements (tags, lineage), shared by
+        the policies of one job run; each policy run gets its own statement count
+        and deadline (``StatementCache.start_run``). A new one by default.
+
+        ``quota_user``: the user who started the run, whose daily LLM_CHECK calls
+        it counts against; None for scheduled runs (per-run budget only).
         """
+        if run_identity is None and current_user:
+            # A run a user starts reads as the user; the app's identity is for
+            # scheduled runs, and is never taken by omission
+            raise ValueError("a run started by a user needs their RunIdentity")
+        if statement_cache is not None:
+            # A job's policies share the cached rows, not the count or the deadline
+            statement_cache.start_run()
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
+        # Entities not evaluated because a field the rule reads could not be loaded
+        not_evaluated = 0
+        unavailable_sources: Dict[str, str] = {}
+        skipped = 0  # not evaluated: an LLM_CHECK without a verdict
         # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
         # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
@@ -789,6 +1260,21 @@ class ComplianceManager:
             audience=NotifyAudience(email=None, is_admin=False, role_ids=frozenset()),
             run_user=current_user,
         )
+        # LLM_CHECK calls: one budget for this run (or the job run that passes
+        # its checker), verdicts cached across runs
+        if llm_checker is None:
+            llm_checker = self.llm_checker(db, purge_expired=True, quota_user=quota_user)
+        budget_exceeded_before = llm_checker.budget_exceeded
+        quota_exceeded_before = llm_checker.quota_exceeded
+        calls_before, hits_before = llm_checker.calls, llm_checker.cache_hits
+
+        def llm_usage() -> dict:
+            # This run's share, also when a job run passes one checker to every policy run
+            return {
+                'llm_calls': llm_checker.calls - calls_before,
+                'llm_cache_hits': llm_checker.cache_hits - hits_before,
+                'not_evaluated_count': skipped + not_evaluated,
+            }
 
         try:
             # Parse the rule using enhanced DSL
@@ -799,13 +1285,31 @@ class ComplianceManager:
                     db, getattr(policy, 'rule_author_email', None),
                     json_list(getattr(policy, 'rule_author_groups', None)),
                 ))
+            refused = llm_check_tag_actions(parsed_rule)
+            if refused:
+                # Also refused on save and in the YAML load; a rule stored another way
+                # (an older save, the database) fails here before any entity is read,
+                # so a model's verdict writes no tag
+                from src.common.compliance_errors import ComplianceRunError
+                raise ComplianceRunError(
+                    f"A rule with LLM_CHECK can't use {', '.join(refused)}",
+                    'llm_check_tag_action', actions=', '.join(refused),
+                )
 
             # Parse entity filter
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
 
             # Create entity iterator
-            ws = self._workspace_client_for(entity_filter.entity_types, policy)
-            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
+            ws = self._workspace_client_for(entity_filter.entity_types, policy, run_identity)
+            entity_iterator = create_entity_iterator(
+                db=db, workspace_client=ws,
+                table_enrichment=self._table_enrichment_for(
+                    parsed_rule, entity_filter.entity_types, ws, statement_cache,
+                ),
+            )
+            rule_fields = fields_read(
+                parsed_rule.get('where_clause'), parsed_rule.get('assert_clause'),
+            )
 
             # Iterate over entities
             for obj in entity_iterator.iterate(
@@ -814,20 +1318,49 @@ class ComplianceManager:
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
+                details = None
+                missing = unavailable_fields_read(obj, rule_fields)
+                no_verdict = llm_not_evaluated = False
+                evaluator = Evaluator(obj, llm_checker=llm_checker)
 
-                if parsed_rule.get('assert_clause'):
+                if missing:
+                    # Neither pass nor a real failure: the result says which
+                    # source is missing, and no ON_PASS / ON_FAIL action runs
+                    ok = False
+                    fields = ', '.join(sorted(missing))
+                    sources = ', '.join(sorted({m['source'] for m in missing.values()}))
+                    reasons = ', '.join(sorted({m['reason'] for m in missing.values()}))
+                    for m in missing.values():
+                        unavailable_sources[m['source']] = m['reason']
+                    not_evaluated += 1
+                    msg = (f"Not evaluated: {fields} could not be read from {sources} "
+                           f"({reasons})")
+                    details = json.dumps({
+                        'code': NOT_EVALUATED_CODE,
+                        'params': {'fields': fields, 'sources': sources, 'reason': reasons},
+                    })
+                elif parsed_rule.get('assert_clause'):
                     try:
-                        evaluator = Evaluator(obj)
                         result = evaluator.evaluate(parsed_rule['assert_clause'])
                         ok = bool(result)
                         if not ok:
                             msg = f"Assertion failed for {obj.get('type')} {obj.get('name')}"
+                    except LlmCheckError as e:
+                        # Failed closed without a model verdict (no endpoint,
+                        # budget, refusal...): the entity doesn't pass, its actions
+                        # don't run, and unless the text was empty it is not evaluated
+                        # (left out of the counts and the score)
+                        ok, no_verdict = False, True
+                        llm_not_evaluated = not counts_as_failure(e.code)
+                        msg = f"Evaluation error: {str(e)}"
                     except Exception as e:
                         ok = False
                         msg = f"Evaluation error: {str(e)}"
 
                 # Execute actions
-                actions = parsed_rule.get('on_pass_actions' if ok else 'on_fail_actions', [])
+                actions = [] if missing or no_verdict else parsed_rule.get(
+                    'on_pass_actions' if ok else 'on_fail_actions', [],
+                )
                 action_outcomes = None
                 if actions:
                     action_context = ActionContext(
@@ -851,6 +1384,12 @@ class ComplianceManager:
                     ]
                     if fail_messages:
                         msg = "; ".join(fail_messages)
+                if not missing:
+                    # The actions' outcomes, and the outcome of each LLM_CHECK: the model's
+                    # reason, or the code of why there is no verdict (the UI shows them by
+                    # the message). Actions run only on evaluated entities, so this never
+                    # replaces the not-evaluated details above
+                    details = _result_details(action_outcomes, evaluator.llm_checks)
 
                 # Store result
                 res = ComplianceResultDb(
@@ -860,32 +1399,63 @@ class ComplianceManager:
                     object_id=obj.get('id') or obj.get('full_name') or obj.get('name') or 'unknown',
                     object_name=obj.get('name'),
                     passed=bool(ok),
+                    not_evaluated=bool(missing) or llm_not_evaluated,
                     message=msg,
-                    details_json=json.dumps({'actions': action_outcomes}) if action_outcomes else None,
+                    details_json=details,
                 )
                 db.add(res)
 
-                if ok:
+                if llm_not_evaluated:
+                    skipped += 1
+                elif ok:
                     success += 1
-                else:
+                elif not missing:
+                    # Not evaluated is neither: out of the counts and the score
                     failure += 1
 
             notified = self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
 
-            total = max(1, success + failure)
-            score = round(100.0 * (success / total), 2)
+            # No score without an evaluated entity (all not evaluated, or none matched)
+            evaluated = success + failure
+            score = round(100.0 * (success / evaluated), 2) if evaluated else None
             # A stored rule with trailing input keeps running with its tail ignored;
-            # the run says so, so the policies that need a fix can be found. A failed
-            # notification flush is the other warning (the tail is what to fix first).
+            # the run says so, so the policies that need a fix can be found.
             trailing = parsed_rule.get('trailing_input')
+            # One warning per run: the rule's tail is what to fix first, then the
+            # entities that failed because the run reached its LLM_CHECK budget, then
+            # those past the user's daily quota, then the entities whose fields could
+            # not be read, then a failed notification flush
             warning_code, warning_params = None, None
             if trailing:
                 warning_code, warning_params = 'rule_trailing_input', trailing
+            elif llm_checker.budget_exceeded > budget_exceeded_before:
+                warning_code, warning_params = BUDGET_EXCEEDED, {
+                    'count': llm_checker.budget_exceeded - budget_exceeded_before,
+                    'budget': llm_checker.max_calls,
+                }
+            elif llm_checker.quota_exceeded > quota_exceeded_before:
+                warning_code, warning_params = QUOTA_EXCEEDED, {
+                    'count': llm_checker.quota_exceeded - quota_exceeded_before,
+                    'limit': llm_checker.quota.limit,
+                }
+            elif not_evaluated:
+                # Not in the counts or the score; the warning says how many and which source
+                warning_code = 'rule_fields_unavailable'
+                warning_params = {
+                    'count': not_evaluated,
+                    'sources': ', '.join(sorted(unavailable_sources)),
+                    'reasons': ', '.join(sorted(set(unavailable_sources.values()))),
+                }
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}
+            elif success + failure + skipped == 0:
+                # Not a failure: the rule ran but selected nothing (#1150).
+                # The warning says why the run has no results. An LLM_CHECK
+                # without a verdict (skipped) means an entity was selected.
+                warning_code = 'no_entities_matched'
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
-                warning_code=warning_code, warning_params=warning_params,
+                warning_code=warning_code, warning_params=warning_params, **llm_usage(),
             )
             
             # Log to change log for timeline
@@ -912,11 +1482,12 @@ class ComplianceManager:
             logger.exception("Compliance inline run failed")
             # The entities evaluated before the error stored NOTIFY as done; send those.
             self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
-            from src.common.compliance_errors import run_error_code
+            from src.common.compliance_errors import public_run_error, run_error_code
             error_code, error_params = run_error_code(e)
             self.complete_run(
-                db, run, success_count=success, failure_count=failure, score=0.0,
+                db, run, success_count=success, failure_count=failure, score=None,
                 error_message=str(e), error_code=error_code, error_params=error_params,
+                **llm_usage(),
             )
             
             # Log failed run to change log
@@ -928,7 +1499,11 @@ class ComplianceManager:
                     entity_id=policy.id,
                     action='RUN',
                     username=current_user,
-                    details={"run_id": run.id, "status": run.status, "score": run.score, "error": str(e)}
+                    # The code, not the exception text: the timeline has other readers
+                    details={
+                        "run_id": run.id, "status": run.status, "score": run.score,
+                        "error_code": public_run_error(run.status, error_code, None)[0],
+                    }
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for failed policy run: {log_err}")

@@ -195,6 +195,10 @@ describe('RequestProductActionDialog approval-wizard launch (Path B)', () => {
     const [endpoint, body] = mockPost.mock.calls[0];
     expect(endpoint).toBe('/api/access-grants/request');
     expect((body as Record<string, unknown>).wizard_data).toBeUndefined();
+    // #1615: the product's name, so My Requests and the notifications don't show its id
+    expect(body).toEqual(expect.objectContaining({
+      entity_id: 'prod-1', entity_name: 'Test Product', permission_level: 'READ',
+    }));
   });
 
   it('launches the wizard when a for_request_access workflow is configured, then submits with merged wizard fields', async () => {

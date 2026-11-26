@@ -384,6 +384,8 @@ class MetricViewChangeRequestsManager:
         row.warnings = warnings
         row.status = 'in_review'
         row.submitted_at = now
+        # A resubmitted draft starts a new review: an earlier clarification no longer shows
+        row.decided_by = row.decided_at = row.decision_message = None
         self._db.flush()
         self._db.commit()
         _audit('METRIC_VIEW_CHANGE_REQUEST_SUBMITTED', row, user_email,
@@ -531,16 +533,16 @@ class MetricViewChangeRequestsManager:
     def _cancel_execution(self, execution_id: str, user_email: str) -> None:
         """Cancel the paused review and close its approval notifications."""
         import json
-        from src.db_models.notifications import NotificationDb
         from src.db_models.process_workflows import WorkflowExecutionDb
+        from src.common.workflow_approvals import open_execution_approvals
 
         execution = self._db.get(WorkflowExecutionDb, execution_id)
         if execution is not None and execution.status == 'paused':
             execution.status = 'cancelled'
             execution.finished_at = _now()
-        for notification in self._db.query(NotificationDb).filter(
-            NotificationDb.action_type == 'workflow_approval', NotificationDb.read.is_(False),
-        ).all():
+        # Read ones too: an approver who opened the notification still sees it
+        # in My actions until it is handled (same rule as the workflow routes)
+        for notification in open_execution_approvals(self._db, execution_id):
             try:
                 payload = notification.action_payload
                 payload = json.loads(payload) if isinstance(payload, str) else (payload or {})
@@ -558,6 +560,7 @@ class MetricViewChangeRequestsManager:
     def on_workflow_completed(
         self, request_id: Optional[str], *, approved: Optional[bool],
         responded_by: Optional[str], execution_id: Optional[str] = None,
+        clarified: bool = False,
     ) -> None:
         """Record the review's decision and deliver an approved request.
 
@@ -577,6 +580,16 @@ class MetricViewChangeRequestsManager:
         now = _now()
         values: Dict[str, Any] = {'decided_by': responded_by, 'decided_at': now,
                                   'decision_message': self._decision_message(execution_id)}
+        if clarified:
+            # A clarification is no decision, but no workflow is left to decide: the
+            # request goes back to a draft (not rejected) with the approver's message,
+            # and the requester answers it by submitting it again
+            if self._repo.set_status_if(self._db, row, 'in_review',
+                                        {**values, 'status': 'draft', 'submitted_at': None}):
+                self._db.commit()
+                _audit('METRIC_VIEW_CHANGE_REQUEST_CLARIFIED', row, responded_by,
+                       execution_id=execution_id)
+            return
         own = bool(responded_by) and responded_by.lower() == row.requested_by.lower()
         if approved and not own:
             if self._repo.set_status_if(self._db, row, 'in_review',

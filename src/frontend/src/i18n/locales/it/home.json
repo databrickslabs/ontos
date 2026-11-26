@@ -1,6 +1,69 @@
 {
   "title": "Benvenuto in {{appName}}",
   "tagline": "Gestisci glossario aziendale, contratti dati, prodotti dati, personas e altro ancora",
+  "essentials": {
+    "tagline": "Trova, comprendi e fidati dei tuoi dati, poi pubblica e mantieni ciò che possiedi.",
+    "consumer": {
+      "title": "Usare i dati",
+      "description": "Parti dalle tabelle che il tuo team ha già in Unity Catalog."
+    },
+    "producer": {
+      "title": "Condividere i dati",
+      "description": "Documenta gli asset di cui sei proprietario e falli revisionare."
+    },
+    "find": {
+      "title": "Trovare",
+      "description": "Cerca asset e concetti, o sfoglia il catalogo.",
+      "placeholder": "Cerca tabelle, asset e termini del glossario...",
+      "browseCatalog": "Sfoglia il Data Catalog"
+    },
+    "understand": {
+      "title": "Comprendere",
+      "description": "Scopri cos'è un asset e cosa significano i suoi termini.",
+      "assets": "Asset",
+      "assetsDescription": "Tabelle, viste e altri asset con i loro metadati."
+    },
+    "trust": {
+      "title": "Fidarsi",
+      "description": "Stato di revisione degli asset e dove si trovano oggi i dati.",
+      "empty": "Nessun asset è stato ancora revisionato.",
+      "openReviews": "Apri Revisioni degli asset"
+    },
+    "publish": {
+      "title": "Pubblicare",
+      "description": "I tuoi asset che non hanno ancora documentazione o revisione.",
+      "noAssets": "Non possiedi ancora alcun asset.",
+      "allDone": "Tutti i tuoi asset sono documentati e hanno una richiesta di revisione.",
+      "noGapsLoaded": "Nessuna lacuna negli asset caricati finora.",
+      "noDescription": "Nessuna descrizione",
+      "noReview": "Nessuna richiesta di revisione",
+      "more": "Visualizzati {{shown}} dei tuoi {{total}} asset.",
+      "loadMore": "Carica altri",
+      "pageSize": "Per pagina",
+      "requestReview": "Richiedi una revisione"
+    },
+    "maturity": {
+      "title": "Tabelle sotto il primo livello",
+      "description": "Le tue tabelle e viste la cui ultima valutazione di maturità non ha raggiunto alcun livello.",
+      "empty": "Nessuna delle tue tabelle valutate è sotto il primo livello.",
+      "more": "Visualizzate {{shown}} di {{total}}.",
+      "error": "Impossibile caricare le tue tabelle sotto il primo livello."
+    },
+    "maintain": {
+      "title": "Mantenere",
+      "description": "Le tue richieste e revisioni aperte.",
+      "myRequests": "Le mie richieste in sospeso ({{count}})",
+      "noRequests": "Nessuna richiesta in sospeso.",
+      "openMyRequests": "Apri Le mie richieste",
+      "myReviews": "Le mie revisioni di asset aperte ({{count}})",
+      "noReviews": "Nessuna revisione di asset aperta."
+    },
+    "notices": {
+      "reviewsTruncated": "Vengono lette solo le {{count}} richieste di revisione create più di recente, quindi questi conteggi e lacune potrebbero essere incompleti.",
+      "loadError": "Impossibile caricare questi dati.",
+      "retry": "Riprova"
+    }
+  },
   "search": {
     "placeholder": "Cerca prodotti dati, termini del glossario, contratti..."
   },
@@ -66,6 +129,10 @@
   "myActions": {
     "title": "Le mie azioni",
     "approvals": "Approvazioni"
+  },
+  "approvalOverdue": {
+    "badge": "Scaduta",
+    "hint": "In attesa oltre il termine; approvatori e richiedente sono stati sollecitati."
   },
   "quickActions": {
     "title": "Azioni rapide",
@@ -206,9 +273,9 @@
     },
     "products": {
       "available": "{{count}} prodotto disponibile",
-      "available_plural": "{{count}} prodotti disponibili",
+      "available_other": "{{count}} prodotti disponibili",
       "subscribed": "{{count}} prodotto sottoscritto",
-      "subscribed_plural": "{{count}} prodotti sottoscritti",
+      "subscribed_other": "{{count}} prodotti sottoscritti",
       "noProducts": "Nessun prodotto dati trovato.",
       "adjustFilters": "Prova a modificare la ricerca o il filtro.",
       "noSubscriptions": "Non sei ancora iscritto a nessun prodotto dati.",
@@ -221,9 +288,9 @@
     },
     "datasets": {
       "available": "{{count}} dataset disponibile",
-      "available_plural": "{{count}} dataset disponibili",
+      "available_other": "{{count}} dataset disponibili",
       "subscribed": "{{count}} dataset sottoscritto",
-      "subscribed_plural": "{{count}} dataset sottoscritti",
+      "subscribed_other": "{{count}} dataset sottoscritti",
       "noDatasets": "Nessun dataset trovato.",
       "adjustFilters": "Prova a modificare la ricerca.",
       "noSubscriptions": "Non sei ancora iscritto a nessun dataset.",
@@ -244,7 +311,7 @@
     "domainInfo": {
       "parentDomain": "Genitore",
       "childDomains": "{{count}} dominio figlio",
-      "childDomains_plural": "{{count}} domini figli"
+      "childDomains_other": "{{count}} domini figli"
     },
     "tilesPerRow": {
       "placeholder": "Riquadri",

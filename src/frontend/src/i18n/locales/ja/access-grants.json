@@ -20,11 +20,11 @@
       "helpText": "選択した期間後にアクセスは期限切れになります。期限前に更新をリクエストできます。",
       "help": "アクセス権はこの期間の経過後に自動的に失効します。",
       "days": "{{count}}日",
-      "days_plural": "{{count}}日",
+      "days_other": "{{count}}日",
       "months": "{{count}}ヶ月",
-      "months_plural": "{{count}}ヶ月",
+      "months_other": "{{count}}ヶ月",
       "years": "{{count}}年",
-      "years_plural": "{{count}}年"
+      "years_other": "{{count}}年"
     },
     "submit": "リクエストを送信",
     "submitting": "リクエストを送信中...",

@@ -52,7 +52,11 @@ jobs:
           DATABRICKS_VOLUME: test_volume
           APP_AUDIT_LOG_DIR: /tmp/audit_logs
         run: |
+          # -n auto: one xdist worker per core; pytest-cov combines the
+          # workers' data, so coverage.xml/htmlcov and the threshold below
+          # see the same totals as a serial run.
           hatch -e dev run pytest \
+            -n auto \
             --cov=backend/src \
             --cov-report=xml \
             --cov-report=term \
@@ -96,8 +100,13 @@ jobs:
           # quarantined modules in tests/unit/conftest.py are fixed.
           hatch -e dev run coverage report --fail-under=30
 
-  frontend-tests:
-    name: Frontend Tests
+  # Vitest runs in 3 shards (one job each, blob reporter + raw V8 coverage), then
+  # the "Frontend Tests" job below merges the blobs, applies the coverage
+  # thresholds from vitest.config.ts and uploads the reports. The shard jobs are
+  # NOT required checks; "Frontend Tests" keeps its name and fails when any shard
+  # fails, is cancelled or is skipped.
+  frontend-tests-shard:
+    name: Frontend Tests (shard ${{ matrix.shard }}/3)
     runs-on:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
@@ -105,6 +114,10 @@ jobs:
     permissions:
       contents: read
       id-token: write # JFrog OIDC
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout code
@@ -118,9 +131,75 @@ jobs:
         working-directory: ./src/frontend
         run: npm ci
 
-      - name: Run tests with coverage
+      # The coverage thresholds are global: a third of the suite can't meet them,
+      # so they're zeroed here and enforced on the merged report in the
+      # "Frontend Tests" job (the values live in vitest.config.ts).
+      - name: Run tests with coverage (shard ${{ matrix.shard }}/3)
         working-directory: ./src/frontend
-        run: npm run test:coverage
+        run: |
+          npx vitest run --coverage \
+            --coverage.thresholds.lines=0 \
+            --coverage.thresholds.functions=0 \
+            --coverage.thresholds.branches=0 \
+            --coverage.thresholds.statements=0 \
+            --shard=${{ matrix.shard }}/3 \
+            --reporter=default --reporter=blob \
+            --outputFile.blob=blob-reports/blob-${{ matrix.shard }}.json
+
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: frontend-vitest-blob-${{ matrix.shard }}
+          path: ./src/frontend/blob-reports/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  # The required check. Same name as before the sharding, so branch protection
+  # and the merge queue are untouched.
+  frontend-tests:
+    name: Frontend Tests
+    needs: frontend-tests-shard
+    if: always()
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
+
+    steps:
+      - name: Check the shards
+        if: needs.frontend-tests-shard.result != 'success'
+        env:
+          SHARDS_RESULT: ${{ needs.frontend-tests-shard.result }}
+        run: |
+          echo "::error::Frontend test shards did not all succeed (${SHARDS_RESULT})"
+          exit 1
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: ./src/frontend
+        run: npm ci
+
+      - name: Download blob reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: frontend-vitest-blob-*
+          merge-multiple: true
+          path: ./src/frontend/blob-reports
+
+      # Fails when the merged coverage is under the thresholds in vitest.config.ts.
+      - name: Merge reports and check coverage
+        working-directory: ./src/frontend
+        run: npx vitest run --merge-reports=blob-reports --coverage
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -139,12 +218,7 @@ jobs:
         with:
           name: frontend-coverage-html
           path: ./src/frontend/coverage/
-
-      - name: Check coverage threshold
-        working-directory: ./src/frontend
-        run: |
-          # vitest already fails if thresholds not met (configured in vitest.config.ts)
-          echo "Coverage thresholds checked by vitest"
+          if-no-files-found: ignore
 
   playwright-cache:
     name: Playwright Browser Cache
@@ -523,6 +597,11 @@ jobs:
           # In the merge queue the base is the commit the queued batch sits on
           # (an ancestor of the checked-out queue commit, so no extra fetch).
           BASE_REF: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.event.pull_request.base.ref) }}
+          # On PRs, merge the base's CURRENT tip into the checkout first. The
+          # pull_request checkout (refs/pull/N/merge) is a snapshot from the
+          # PR's last update, so a head merged into the base since then is
+          # missing from it and two PRs on one parent each pass on their own.
+          MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: |
           hatch -e dev run python ../scripts/check-alembic-heads.py
 

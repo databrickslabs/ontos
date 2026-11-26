@@ -111,6 +111,7 @@
     "uiCustomization": "Personalización UI",
     "connectors": "Conectores",
     "schemaImporter": "Importador de esquemas",
+    "dataProductTypes": "Tipos de producto de datos",
     "certificationLevels": "Niveles de certificación",
     "maturityLevels": "Niveles de madurez",
     "notificationRecipients": "Destinatarios de notificación"
@@ -138,7 +139,18 @@
       },
       "volume": {
         "label": "Volumen",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "«{{value}}» no indica un volumen de Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o el nombre de un volumen; un nombre simple necesita un catálogo y un esquema sin puntos, barras ni espacios."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Descripciones de activos",
+      "adminOnly": "Solo un administrador puede activar esto.",
+      "label": "Escribir las descripciones de activos en Unity Catalog",
+      "help": "Al guardar la descripción de una tabla, vista o columna de Databricks también se establece su comentario en Unity Catalog, como el usuario que la guarda. Sin los permisos SELECT y MODIFY, la descripción se guarda solo en Ontos y el activo indica que no está sincronizado.",
+      "importLimit": {
+        "label": "Máximo de filas intentadas en Unity Catalog por importación masiva",
+        "help": "Una importación CSV/XLSX intenta como máximo este número de descripciones en Unity Catalog (1–10000), ya sea que las escriba, conserve otro comentario u omita una vista de métricas; las filas por encima del límite se guardan en Ontos con una advertencia."
       }
     },
     "instanceIdentity": {
@@ -191,6 +203,10 @@
     "messages": {
       "saveSuccess": "Configuración guardada con éxito",
       "saveError": "Error al guardar la configuración"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "No se pudo actualizar el job Compliance Checks con la configuración de LLM (puede que la app no tenga permiso sobre el job). Las reglas LLM_CHECK programadas usan la configuración anterior hasta que se reinstale el job.",
+      "compliance_job_shape_unexpected": "El job Compliance Checks se modificó en Databricks, así que solo se actualizaron sus parámetros. Si las reglas LLM_CHECK programadas fallan con \"funciones de LLM desactivadas\", reinstala el job."
     }
   },
   "databricks": {
@@ -407,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Secciones de inicio",
-        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol."
+        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
+        "labels": {
+          "JOURNEY": "Inicio por recorrido"
+        },
+        "descriptions": {
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegios de aprobación",
@@ -652,11 +674,14 @@
       "urlLabel": "URL del logo",
       "urlPlaceholder": "https://ejemplo.com/logo.svg",
       "help": "Ingrese la URL de su logo personalizado. Formatos soportados: SVG, PNG, JPG.",
-      "invalidUrl": "Por favor ingrese una URL HTTP o HTTPS válida",
       "preview": "Vista previa:",
       "loadError": "Error al cargar la imagen",
       "openInNewTab": "Abrir en nueva pestaña",
-      "previewAlt": "Vista previa del logotipo"
+      "previewAlt": "Vista previa del logotipo",
+      "darkUrlLabel": "URL del logotipo para el modo oscuro (opcional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Se usa en el modo oscuro. Déjelo vacío para usar el logotipo anterior en ambos modos.",
+      "invalidUrlOrPath": "Introduzca una URL HTTP o HTTPS, o una ruta de la aplicación que empiece por /"
     },
     "about": {
       "title": "Contenido personalizado de la página Acerca de",
@@ -675,6 +700,13 @@
       "help": "Ingrese CSS personalizado para sobrescribir el tema predeterminado."
     },
     "saveButton": "Guardar configuración UI",
+    "errorCodes": {
+      "brandingPathTraversal": "La ruta no puede contener segmentos \"..\""
+    },
+    "loadFailed": {
+      "title": "No se pudo cargar la configuración actual",
+      "description": "No se cargó la marca guardada, por lo que se desactivó el guardado para no sobrescribirla con valores predeterminados. Recargue la página para intentarlo de nuevo."
+    },
     "messages": {
       "saveSuccess": "Configuración de personalización guardada",
       "saveError": "Error al guardar la configuración",
@@ -687,18 +719,38 @@
       "shortNameHelp": "Se usa en espacios reducidos (p. ej., \"Pregunta a {{shortName}}\"). Se recurre al nombre para mostrar cuando está vacío. Máximo {{max}} caracteres.",
       "displayNameLabel": "Nombre para mostrar",
       "shortNameLabel": "Nombre corto (opcional)",
-      "title": "Marca"
+      "title": "Marca",
+      "taglineLabel": "Eslogan (opcional)",
+      "taglineHelp": "Subtítulo breve que se muestra bajo el nombre en la barra lateral y en la página de inicio. Máximo {{max}} caracteres.",
+      "poweredByLabel": "Mostrar \"Powered by {{name}}\" en la barra lateral",
+      "poweredByHelp": "Se muestra en el pie de la barra lateral solo mientras haya un nombre visible o un logotipo personalizado."
     },
     "favicon": {
       "previewAlt": "Vista previa del favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Se aplica en tiempo de ejecución a la pestaña del navegador. El <link rel=\"icon\"> estático del index.html incluido y el manifiesto de la PWA no se actualizan con esta configuración.",
-      "invalidUrl": "Introduce una URL HTTP o HTTPS válida",
       "loadError": "No se pudo cargar la imagen",
       "openInNewTab": "Abrir en una pestaña nueva",
       "preview": "Vista previa:",
       "title": "Favicon del navegador",
       "urlLabel": "URL del favicon"
+    },
+    "theme": {
+      "title": "Colores del tema",
+      "help": "Elija el color principal (botones, enlaces, anillo de foco) y el color de acento (fondos al pasar el cursor y de elementos seleccionados). Los colores del texto se eligen automáticamente para garantizar el contraste, y un color del modo oscuro vacío se deriva del claro.",
+      "primaryLight": "Color principal",
+      "primaryDark": "Color principal (modo oscuro)",
+      "accentLight": "Color de acento",
+      "accentDark": "Color de acento (modo oscuro)",
+      "pickerLabel": "{{field}}: selector de color",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Introduzca un color hexadecimal como #2563eb",
+      "auto": "Automático: {{color}} (derivado del color claro)",
+      "contrast": "Texto {{text}}, contraste {{ratio}}:1",
+      "textLight": "claro",
+      "textDark": "oscuro",
+      "meetsAA": "AA",
+      "belowAA": "Por debajo de AA"
     }
   },
   "connectors": {
@@ -985,6 +1037,24 @@
         "descriptionContract": "Etiqueta cada tabla con el estado del ciclo de vida del contrato de datos que la usa. En una tabla usada por varios contratos, gana el mejor estado (active primero, retired al final).",
         "valueLabel": "Valor de la etiqueta:",
         "sharedKeyHint": "Cuando las etiquetas de estado del producto y del contrato están activadas con la misma clave, se escribe el estado del producto."
+      },
+      "maturityThreshold": {
+        "variable": "true o false: el número del nivel es al menos <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<orden>} con un número de nivel, por ejemplo {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "UUID del activo",
+        "assetType": "Nombre del tipo de activo (Table, View, ...)",
+        "assetFqn": "Nombre de la tabla en Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nombre del nivel de madurez de un activo tabla o vista (última evaluación)",
+        "assetMaturityOrder": "Número del nivel de madurez de un activo tabla o vista (1 = primer nivel)"
+      },
+      "maturity": {
+        "title": "Etiqueta de nivel de madurez",
+        "description": "Etiqueta cada activo tabla o vista con su nivel de madurez (última evaluación). Las tablas sin nivel no reciben etiqueta.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} o {ASSET.MATURITY_ORDER} en la clave o en el valor.",
+        "tablesOnlyHint": "Solo se etiquetan tablas y vistas con nombre en Unity Catalog; los esquemas y catálogos no. La salida de la ejecución cuenta los activos omitidos y el motivo.",
+        "prefixHint": "Empiece la clave con el mismo prefijo que las otras claves activas (ontos_ por defecto), para que el job pueda quitar la etiqueta cuando una tabla pierde su nivel."
       }
     },
     "entityPatterns": {
@@ -1168,6 +1238,71 @@
     "saveButton": "Configuración de entrega guardada correctamente",
     "title": "Modos de entrega"
   },
+  "dataProductTypes": {
+    "title": "Tipos de producto de datos",
+    "description": "Defina los tipos que puede tener un producto de datos. Los tipos integrados se pueden renombrar o desactivar, pero no eliminar.",
+    "addType": "Añadir tipo",
+    "table": {
+      "label": "Etiqueta",
+      "key": "Clave",
+      "products": "Productos",
+      "active": "Activo"
+    },
+    "badges": {
+      "default": "Predeterminado",
+      "builtIn": "Integrado",
+      "imported": "Importado"
+    },
+    "actions": {
+      "moveUp": "Subir {{name}}",
+      "moveDown": "Bajar {{name}}",
+      "toggleActive": "Activo: {{name}}",
+      "makeDefault": "Establecer como predeterminado",
+      "makeDefaultFor": "Establecer {{name}} como predeterminado",
+      "edit": "Editar {{name}}",
+      "delete": "Eliminar {{name}}"
+    },
+    "emptyState": "Aún no hay tipos de producto de datos. Haga clic en \"Añadir tipo\" para crear uno.",
+    "defaultCannotBeInactive": "El tipo predeterminado no se puede desactivar. Establezca primero otro tipo como predeterminado.",
+    "dialog": {
+      "editTitle": "Editar tipo de producto de datos",
+      "createTitle": "Añadir tipo de producto de datos",
+      "editDescription": "Cambie cómo se muestra este tipo. La clave no cambia.",
+      "createDescription": "Cree un tipo que los productores puedan elegir para sus productos de datos."
+    },
+    "form": {
+      "label": "Etiqueta",
+      "labelPlaceholder": "p. ej., Golden Record",
+      "seededLabelHint": "Los tipos integrados se muestran traducidos hasta que cambie la etiqueta.",
+      "key": "Clave",
+      "keyHint": "Palabras en minúsculas unidas por guiones, p. ej. golden-record. No se puede cambiar después y es el valor usado en los archivos ODPS.",
+      "keyImmutable": "La clave no se puede cambiar.",
+      "color": "Color"
+    },
+    "delete": {
+      "title": "¿Eliminar el tipo de producto de datos?",
+      "description": "¿Seguro que desea eliminar \"{{name}}\"? Esta acción no se puede deshacer."
+    },
+    "deleteBlocked": {
+      "seeded": "Los tipos integrados no se pueden eliminar. Desactívelo en su lugar.",
+      "inUse_one": "Lo usa {{count}} producto de datos. Desactívelo en su lugar.",
+      "inUse_other": "Lo usan {{count}} productos de datos. Desactívelo en su lugar."
+    },
+    "messages": {
+      "updated": "Tipo de producto de datos \"{{name}}\" actualizado.",
+      "created": "Tipo de producto de datos \"{{name}}\" creado.",
+      "deleted": "Tipo de producto de datos \"{{name}}\" eliminado.",
+      "reorderFailed": "No se pudo reordenar"
+    },
+    "errors": {
+      "data_product_type_not_found": "Este tipo de producto de datos ya no existe.",
+      "data_product_type_key_exists": "Ya existe un tipo de producto de datos con la clave \"{{key}}\".",
+      "data_product_type_in_use_one": "\"{{key}}\" lo usa {{count}} producto de datos. Desactívelo en lugar de eliminarlo.",
+      "data_product_type_in_use_other": "\"{{key}}\" lo usan {{count}} productos de datos. Desactívelo en lugar de eliminarlo.",
+      "data_product_type_seeded": "\"{{key}}\" es un tipo integrado y no se puede eliminar. Desactívelo en su lugar.",
+      "data_product_type_default_inactive": "\"{{key}}\" no puede ser predeterminado e inactivo a la vez. Establezca primero otro tipo como predeterminado."
+    }
+  },
   "certificationLevels": {
     "title": "Niveles de certificación",
     "description": "Define los niveles de certificación disponibles para los productos de datos, los contratos y los activos.",
@@ -1202,11 +1337,44 @@
       "reorderFailed": "No se pudo reordenar"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Evaluar todos los assets de tabla, vista y vista de métricas",
+    "description": "Evalúa cada asset de tabla, vista y vista de métricas del alcance con los niveles de Asset actuales. Se omite un asset evaluado desde el inicio de la ejecución y solo hay una ejecución a la vez.",
+    "catalog": "Catálogo (opcional)",
+    "schema": "Esquema (opcional)",
+    "start": "Evaluar assets",
+    "running": "Evaluando: {{processed}} de {{total}} assets",
+    "noAssetLevels": "Cree primero los niveles de Asset: sin ellos no se evalúa nada.",
+    "lastRun": "Última ejecución",
+    "none": "Aún no ha terminado ninguna ejecución.",
+    "scope": "Alcance: {{scope}}",
+    "allCatalogs": "Todos los catálogos",
+    "startedBy": "Iniciada por {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} evaluados, {{changed}} con nivel cambiado, {{errors}} errores.",
+    "skipped": "Omitidos",
+    "errors": "Errores",
+    "state": {
+      "running": "En ejecución",
+      "completed": "Completada",
+      "failed": "Fallida"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Evaluado desde el inicio de la ejecución",
+      "maturity_bulk_skipped_not_found": "Asset no encontrado",
+      "maturity_bulk_skipped_no_levels": "Sin niveles de Asset",
+      "maturity_bulk_skipped_asset_type": "No es tabla, vista ni vista de métricas",
+      "maturity_bulk_skipped_not_stored": "No guardado: no se pudo leer la tabla",
+      "maturity_bulk_evaluation_failed": "Fallo en la evaluación (vea el log del servidor)",
+      "maturity_bulk_run_failed": "La ejecución se detuvo (vea el log del servidor)",
+      "maturity_bulk_run_in_progress": "Ya hay una evaluación masiva en curso.",
+      "maturity_bulk_scope_invalid": "El alcance no es válido."
+    }
+  },
   "maturityLevels": {
     "title": "Niveles de madurez",
     "description": "Define la escala de madurez para los productos de datos y los contratos. Cada nivel está condicionado por políticas de cumplimiento.",
     "addLevel": "Añadir nivel",
-    "allTypes": "Todos los tipos",
+    "allTypes": "Productos y contratos",
     "gateCount_one": "{{count}} puerta",
     "gateCount_other": "{{count}} puertas",
     "complianceGates": "Puertas de política de cumplimiento",
@@ -1233,7 +1401,8 @@
       "levelNamePreview": "Nombre del nivel"
     },
     "entityTypes": {
-      "all": "Todos los tipos de entidad",
+      "all": "Productos y contratos de datos",
+      "Asset": "Activos (tablas, vistas y vistas de métricas)",
       "DataProduct": "Productos de datos",
       "DataContract": "Contratos de datos"
     },
@@ -1246,6 +1415,18 @@
       "created": "Nivel de madurez \"{{name}}\" creado.",
       "deleted": "Nivel de madurez \"{{name}}\" eliminado.",
       "cannotDeleteTitle": "No se puede eliminar"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Esta política usa LLM_CHECK, que solo se evalúa en ejecuciones de cumplimiento, así que una puerta de madurez haría fallar todas las entidades. Selecciona una política sin LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Cargar niveles predeterminados de activos",
+      "hint": "Añade una escala predeterminada para activos tabla y vista (Prerequisite, 1 star, 2 stars, 3 stars) con políticas de gate de ejemplo",
+      "loadedTitle": "Niveles de activos cargados",
+      "loaded_one": "{{count}} nivel de activo creado",
+      "loaded_other": "{{count}} niveles de activo creados",
+      "alreadyLoaded": "Ya existen niveles de activos: no se cambió nada",
+      "loadFailed": "No se pudieron cargar los niveles predeterminados de activos"
     }
   },
   "directory": {

@@ -7,7 +7,8 @@ from databricks.sdk.errors import BadRequest, NotFound, PermissionDenied, Unauth
 from databricks.sdk.service.catalog import TableType
 from sqlalchemy.orm import Session
 
-from src.common.api_errors import CodedValueError
+# One UserTokenRequiredError for the app; re-exported for this module's importers
+from src.common.api_errors import CodedValueError, UserTokenRequiredError  # noqa: F401
 from src.common.logging import get_logger
 from src.common.metric_views import parse_metric_view_definition
 from src.controller.metric_view_baselines_manager import MetricViewBaselinesManager
@@ -25,12 +26,6 @@ class MetricViewNotFoundError(CodedValueError):
     """The asset is not a Unity Catalog metric view the app can read."""
 
     code = 'metric_view_not_found'
-
-
-class UserTokenRequiredError(CodedValueError):
-    """The request has no user (OBO) token to read Unity Catalog with."""
-
-    code = 'user_token_required'
 
 
 class UserClientUnavailableError(CodedValueError):

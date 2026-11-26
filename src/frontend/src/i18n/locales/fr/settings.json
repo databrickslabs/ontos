@@ -111,6 +111,7 @@
     "uiCustomization": "Personnalisation UI",
     "connectors": "Connecteurs",
     "schemaImporter": "Importateur de schémas",
+    "dataProductTypes": "Types de produit de données",
     "certificationLevels": "Niveaux de certification",
     "maturityLevels": "Niveaux de maturité",
     "notificationRecipients": "Destinataires de notification"
@@ -138,7 +139,18 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "« {{value}} » ne désigne pas un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou un nom de volume ; un nom simple nécessite un catalogue et un schéma sans point, barre oblique ni espace."
+      }
+    },
+    "ucDescriptionWriteback": {
+      "title": "Descriptions des actifs",
+      "adminOnly": "Seul un administrateur peut activer cette option.",
+      "label": "Écrire les descriptions des actifs dans Unity Catalog",
+      "help": "L'enregistrement de la description d'une table, d'une vue ou d'une colonne Databricks définit aussi son commentaire Unity Catalog, en tant qu'utilisateur qui l'enregistre. Sans les permissions SELECT et MODIFY, la description est enregistrée uniquement dans Ontos et l'actif indique qu'il n'est pas synchronisé.",
+      "importLimit": {
+        "label": "Nombre max. de lignes tentées dans Unity Catalog par import en masse",
+        "help": "Un import CSV/XLSX tente au plus ce nombre de descriptions dans Unity Catalog (1–10000), qu'il les écrive, conserve un autre commentaire ou ignore une vue de métriques ; les lignes au-delà de la limite sont enregistrées dans Ontos avec un avertissement."
       }
     },
     "instanceIdentity": {
@@ -191,6 +203,10 @@
     "messages": {
       "saveSuccess": "Paramètres enregistrés avec succès",
       "saveError": "Échec de l'enregistrement des paramètres"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Le job Compliance Checks n'a pas pu être mis à jour avec les paramètres LLM (l'app n'a peut-être pas les droits sur le job). Les règles LLM_CHECK planifiées utilisent les anciens paramètres jusqu'à la réinstallation du job.",
+      "compliance_job_shape_unexpected": "Le job Compliance Checks a été modifié dans Databricks, donc seuls ses paramètres ont été mis à jour. Si les règles LLM_CHECK planifiées échouent avec « fonctions LLM désactivées », réinstallez le job."
     }
   },
   "databricks": {
@@ -407,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sections d'accueil",
-        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle."
+        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle.",
+        "labels": {
+          "JOURNEY": "Accueil par parcours"
+        },
+        "descriptions": {
+          "JOURNEY": "Remplace la page d'accueil complète par Trouver, Comprendre, Faire confiance, Publier et Maintenir. Elle ne peut pas être combinée avec d'autres sections."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilèges d'approbation",
@@ -652,11 +674,14 @@
       "urlLabel": "URL du logo",
       "urlPlaceholder": "https://exemple.com/logo.svg",
       "help": "Entrez l'URL de votre logo personnalisé. Formats supportés: SVG, PNG, JPG. Taille recommandée: 40x40 pixels.",
-      "invalidUrl": "Veuillez entrer une URL HTTP ou HTTPS valide",
       "preview": "Aperçu:",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
-      "previewAlt": "Aperçu du logo"
+      "previewAlt": "Aperçu du logo",
+      "darkUrlLabel": "URL du logo en mode sombre (facultatif)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Utilisé en mode sombre. Laissez vide pour utiliser le logo ci-dessus dans les deux modes.",
+      "invalidUrlOrPath": "Saisissez une URL HTTP ou HTTPS, ou un chemin de l’application commençant par /"
     },
     "about": {
       "title": "Contenu personnalisé de la page À propos",
@@ -675,6 +700,13 @@
       "help": "Entrez du CSS personnalisé pour remplacer le thème par défaut."
     },
     "saveButton": "Enregistrer les paramètres UI",
+    "errorCodes": {
+      "brandingPathTraversal": "Le chemin ne doit pas contenir de segments \"..\""
+    },
+    "loadFailed": {
+      "title": "Impossible de charger les paramètres actuels",
+      "description": "L'image de marque enregistrée n'a pas été chargée ; l'enregistrement est désactivé pour éviter de l'écraser par les valeurs par défaut. Rechargez la page pour réessayer."
+    },
     "messages": {
       "saveSuccess": "Paramètres de personnalisation enregistrés",
       "saveError": "Échec de l'enregistrement des paramètres",
@@ -687,18 +719,38 @@
       "shortNameHelp": "Utilisé dans les espaces restreints (par ex. « Demander à {{shortName}} »). Utilise le nom d'affichage par défaut lorsqu'il est vide. Maximum {{max}} caractères.",
       "displayNameLabel": "Nom d'affichage",
       "shortNameLabel": "Nom court (optionnel)",
-      "title": "Image de marque"
+      "title": "Image de marque",
+      "taglineLabel": "Slogan (facultatif)",
+      "taglineHelp": "Court sous-titre affiché sous le nom dans la barre latérale et sur la page d’accueil. {{max}} caractères maximum.",
+      "poweredByLabel": "Afficher « Powered by {{name}} » dans la barre latérale",
+      "poweredByHelp": "Affiché en bas de la barre latérale uniquement lorsqu’un nom d’affichage ou un logo personnalisé est défini."
     },
     "favicon": {
       "previewAlt": "Aperçu du favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Appliqué à l'exécution à l'onglet du navigateur. La balise statique <link rel=\"icon\"> de l'index.html livré et le manifeste PWA ne sont pas mis à jour par ce paramètre.",
-      "invalidUrl": "Veuillez saisir une URL HTTP ou HTTPS valide",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
       "preview": "Aperçu :",
       "title": "Favicon du navigateur",
       "urlLabel": "URL du favicon"
+    },
+    "theme": {
+      "title": "Couleurs du thème",
+      "help": "Choisissez la couleur principale (boutons, liens, anneau de focus) et la couleur d’accent (arrière-plans au survol et des éléments sélectionnés). Les couleurs du texte sont choisies automatiquement pour le contraste, et une couleur du mode sombre laissée vide est dérivée de la couleur claire.",
+      "primaryLight": "Couleur principale",
+      "primaryDark": "Couleur principale (mode sombre)",
+      "accentLight": "Couleur d’accent",
+      "accentDark": "Couleur d’accent (mode sombre)",
+      "pickerLabel": "{{field}} : sélecteur de couleur",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Saisissez une couleur hexadécimale comme #2563eb",
+      "auto": "Automatique : {{color}} (dérivée de la couleur claire)",
+      "contrast": "Texte {{text}}, contraste {{ratio}}:1",
+      "textLight": "clair",
+      "textDark": "foncé",
+      "meetsAA": "AA",
+      "belowAA": "Inférieur à AA"
     }
   },
   "connectors": {
@@ -985,6 +1037,24 @@
         "descriptionContract": "Ajoute à chaque table le statut du cycle de vie du contrat de données qui l'utilise. Sur une table utilisée par plusieurs contrats, le meilleur statut l'emporte (active d'abord, retired en dernier).",
         "valueLabel": "Valeur du tag :",
         "sharedKeyHint": "Lorsque les tags de statut du produit et du contrat sont activés avec la même clé, c'est le statut du produit qui est écrit."
+      },
+      "maturityThreshold": {
+        "variable": "true ou false : le numéro du niveau est au moins <order>",
+        "invalid": "Utilisez {ASSET.MATURITY_AT_LEAST:<ordre>} avec un numéro de niveau, par exemple {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "UUID de l'actif",
+        "assetType": "Nom du type d'actif (Table, View, ...)",
+        "assetFqn": "Nom de la table dans Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nom du niveau de maturité d'un actif table ou vue (dernière évaluation)",
+        "assetMaturityOrder": "Numéro du niveau de maturité d'un actif table ou vue (1 = premier niveau)"
+      },
+      "maturity": {
+        "title": "Tag du niveau de maturité",
+        "description": "Ajoute à chaque actif table ou vue son niveau de maturité (dernière évaluation). Les tables sans niveau ne reçoivent pas de tag.",
+        "valueNeedsVariable": "Utilisez {ASSET.MATURITY} ou {ASSET.MATURITY_ORDER} dans la clé ou la valeur.",
+        "tablesOnlyHint": "Seules les tables et vues ayant un nom Unity Catalog reçoivent le tag, pas les schémas ni les catalogues. La sortie de l'exécution compte les actifs ignorés et la raison.",
+        "prefixHint": "Commencez la clé par le même préfixe que les autres clés actives (ontos_ par défaut), pour que le job puisse retirer le tag quand une table perd son niveau."
       }
     },
     "entityPatterns": {
@@ -1168,6 +1238,71 @@
     "saveButton": "Paramètres de livraison enregistrés avec succès",
     "title": "Modes de livraison"
   },
+  "dataProductTypes": {
+    "title": "Types de produit de données",
+    "description": "Définissez les types qu'un produit de données peut avoir. Les types intégrés peuvent être renommés ou désactivés, mais pas supprimés.",
+    "addType": "Ajouter un type",
+    "table": {
+      "label": "Libellé",
+      "key": "Clé",
+      "products": "Produits",
+      "active": "Actif"
+    },
+    "badges": {
+      "default": "Par défaut",
+      "builtIn": "Intégré",
+      "imported": "Importé"
+    },
+    "actions": {
+      "moveUp": "Monter {{name}}",
+      "moveDown": "Descendre {{name}}",
+      "toggleActive": "Actif : {{name}}",
+      "makeDefault": "Définir par défaut",
+      "makeDefaultFor": "Définir {{name}} par défaut",
+      "edit": "Modifier {{name}}",
+      "delete": "Supprimer {{name}}"
+    },
+    "emptyState": "Aucun type de produit de données pour l'instant. Cliquez sur « Ajouter un type » pour en créer un.",
+    "defaultCannotBeInactive": "Le type par défaut ne peut pas être désactivé. Définissez d'abord un autre type par défaut.",
+    "dialog": {
+      "editTitle": "Modifier le type de produit de données",
+      "createTitle": "Ajouter un type de produit de données",
+      "editDescription": "Modifiez l'affichage de ce type. La clé ne change pas.",
+      "createDescription": "Créez un type que les producteurs pourront choisir pour leurs produits de données."
+    },
+    "form": {
+      "label": "Libellé",
+      "labelPlaceholder": "p. ex. Golden Record",
+      "seededLabelHint": "Les types intégrés s'affichent traduits tant que vous ne modifiez pas le libellé.",
+      "key": "Clé",
+      "keyHint": "Mots en minuscules reliés par des tirets, p. ex. golden-record. Elle ne peut pas être modifiée ensuite et sert de valeur dans les fichiers ODPS.",
+      "keyImmutable": "La clé ne peut pas être modifiée.",
+      "color": "Couleur"
+    },
+    "delete": {
+      "title": "Supprimer le type de produit de données ?",
+      "description": "Voulez-vous vraiment supprimer « {{name}} » ? Cette action est irréversible."
+    },
+    "deleteBlocked": {
+      "seeded": "Les types intégrés ne peuvent pas être supprimés. Désactivez-le plutôt.",
+      "inUse_one": "Utilisé par {{count}} produit de données. Désactivez-le plutôt.",
+      "inUse_other": "Utilisé par {{count}} produits de données. Désactivez-le plutôt."
+    },
+    "messages": {
+      "updated": "Type de produit de données « {{name}} » mis à jour.",
+      "created": "Type de produit de données « {{name}} » créé.",
+      "deleted": "Type de produit de données « {{name}} » supprimé.",
+      "reorderFailed": "Échec de la réorganisation"
+    },
+    "errors": {
+      "data_product_type_not_found": "Ce type de produit de données n'existe plus.",
+      "data_product_type_key_exists": "Un type de produit de données avec la clé « {{key}} » existe déjà.",
+      "data_product_type_in_use_one": "« {{key}} » est utilisé par {{count}} produit de données. Désactivez-le au lieu de le supprimer.",
+      "data_product_type_in_use_other": "« {{key}} » est utilisé par {{count}} produits de données. Désactivez-le au lieu de le supprimer.",
+      "data_product_type_seeded": "« {{key}} » est un type intégré et ne peut pas être supprimé. Désactivez-le plutôt.",
+      "data_product_type_default_inactive": "« {{key}} » ne peut pas être à la fois par défaut et inactif. Définissez d'abord un autre type par défaut."
+    }
+  },
   "certificationLevels": {
     "title": "Niveaux de certification",
     "description": "Définissez les niveaux de certification disponibles pour les produits de données, les contrats et les actifs.",
@@ -1202,11 +1337,44 @@
       "reorderFailed": "Échec de la réorganisation"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Évaluer tous les assets table, vue et vue de métriques",
+    "description": "Évalue chaque asset table, vue et vue de métriques du périmètre avec les niveaux Asset actuels. Un asset évalué depuis le début de l'exécution est ignoré, et une seule exécution à la fois.",
+    "catalog": "Catalogue (facultatif)",
+    "schema": "Schéma (facultatif)",
+    "start": "Évaluer les assets",
+    "running": "Évaluation : {{processed}} sur {{total}} assets",
+    "noAssetLevels": "Créez d'abord les niveaux Asset : sans eux, rien n'est évalué.",
+    "lastRun": "Dernière exécution",
+    "none": "Aucune exécution terminée pour l'instant.",
+    "scope": "Périmètre : {{scope}}",
+    "allCatalogs": "Tous les catalogues",
+    "startedBy": "Lancée par {{user}}",
+    "summary": "{{total}} assets : {{evaluated}} évalués, {{changed}} au niveau modifié, {{errors}} erreurs.",
+    "skipped": "Ignorés",
+    "errors": "Erreurs",
+    "state": {
+      "running": "En cours",
+      "completed": "Terminée",
+      "failed": "Échouée"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Évalué depuis le début de l'exécution",
+      "maturity_bulk_skipped_not_found": "Asset introuvable",
+      "maturity_bulk_skipped_no_levels": "Aucun niveau Asset",
+      "maturity_bulk_skipped_asset_type": "Ni table, ni vue, ni vue de métriques",
+      "maturity_bulk_skipped_not_stored": "Non enregistré : la table n'a pas pu être lue",
+      "maturity_bulk_evaluation_failed": "Échec de l'évaluation (voir le journal du serveur)",
+      "maturity_bulk_run_failed": "L'exécution s'est arrêtée (voir le journal du serveur)",
+      "maturity_bulk_run_in_progress": "Une évaluation en masse est déjà en cours.",
+      "maturity_bulk_scope_invalid": "Le périmètre n'est pas valide."
+    }
+  },
   "maturityLevels": {
     "title": "Niveaux de maturité",
     "description": "Définissez l'échelle de maturité des produits de données et des contrats. Chaque niveau est conditionné par des politiques de conformité.",
     "addLevel": "Ajouter un niveau",
-    "allTypes": "Tous les types",
+    "allTypes": "Produits et contrats",
     "gateCount_one": "{{count}} condition",
     "gateCount_other": "{{count}} conditions",
     "complianceGates": "Conditions de politique de conformité",
@@ -1233,7 +1401,8 @@
       "levelNamePreview": "Nom du niveau"
     },
     "entityTypes": {
-      "all": "Tous les types d'entités",
+      "all": "Produits et contrats de données",
+      "Asset": "Actifs (tables, vues et vues de métriques)",
       "DataProduct": "Produits de données",
       "DataContract": "Contrats de données"
     },
@@ -1246,6 +1415,18 @@
       "created": "Niveau de maturité « {{name}} » créé.",
       "deleted": "Niveau de maturité « {{name}} » supprimé.",
       "cannotDeleteTitle": "Suppression impossible"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Cette politique utilise LLM_CHECK, qui n’est évalué que dans les exécutions de conformité ; un seuil de maturité ferait donc échouer chaque entité. Sélectionnez une politique sans LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Charger les niveaux par défaut des actifs",
+      "hint": "Ajoute une échelle par défaut pour les actifs table et vue (Prerequisite, 1 star, 2 stars, 3 stars) avec des politiques de gate d'exemple",
+      "loadedTitle": "Niveaux des actifs chargés",
+      "loaded_one": "{{count}} niveau d'actif créé",
+      "loaded_other": "{{count}} niveaux d'actif créés",
+      "alreadyLoaded": "Des niveaux d'actifs existent déjà : rien n'a été modifié",
+      "loadFailed": "Les niveaux par défaut des actifs n'ont pas pu être chargés"
     }
   },
   "directory": {

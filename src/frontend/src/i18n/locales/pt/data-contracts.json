@@ -529,6 +529,10 @@
     "personal": "Pessoal",
     "requestAccess": "Solicitar Acesso ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} está vazio: envie o id de um domínio ou omita o campo para manter os domínios do contrato.",
+    "primaryDomainNotInDomains": "O domínio {{primaryDomainId}} não é um dos domínios do contrato, então não pode ser o domínio principal."
+  },
   "createInline": {
     "title": "Criar Novo Contrato",
     "description": "Crie um contrato de dados mínimo. Você pode adicionar esquemas e regras de qualidade depois.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID da equipe proprietária",
     "ownerTeamIdHint": "Opcional: Herdado do produto, se disponível",
     "creating": "Criando..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "O apiVersion {{apiVersion}} não é uma versão ODCS. Use uma das versões ODCS, por exemplo v3.1.0."
   },
   "basicForm": {
     "editTitle": "Editar Metadados do Contrato",
@@ -1204,20 +1211,21 @@
     "responseMessageLabel": "Mensagem de Resposta (opcional)",
     "responseMessagePlaceholder": "Adicione observações sobre sua decisão...",
     "messageHint": "Esta mensagem será enviada ao solicitante junto com sua decisão.",
-    "executeLabel": "Executar implantação imediatamente após aprovação",
-    "executeHint": "Se marcado, a implantação será acionada automaticamente quando você aprovar esta solicitação.",
     "warningLabel": "Aviso:",
     "warningText": "A implantação criará ativos físicos no Unity Catalog. Certifique-se de ter revisado o esquema e a configuração do contrato.",
     "deny": "Negar",
-    "approveAndDeploy": "Aprovar e Implantar",
     "toast": {
       "approvedTitle": "Implantação Aprovada",
       "deniedTitle": "Implantação Negada",
       "approvedDescription": "A solicitação de implantação foi aprovada.",
       "deniedDescription": "A solicitação de implantação foi negada.",
-      "deploymentInitiated": "A implantação foi iniciada.",
       "failedTitle": "Falha",
       "couldNotSubmit": "Não foi possível enviar a decisão"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Você não é aprovador desta solicitação de implantação, então não pode decidi-la.",
+      "deploy_request_already_decided": "Esta solicitação de implantação já foi decidida.",
+      "deploy_request_own_request": "Você não pode decidir a sua própria solicitação de implantação."
     }
   },
   "publishRequest": {

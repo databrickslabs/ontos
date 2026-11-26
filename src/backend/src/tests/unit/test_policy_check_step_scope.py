@@ -183,6 +183,35 @@ def test_the_step_agrees_with_a_compliance_run(db_session, rule, kind, purpose, 
     assert 'not_applicable' not in result.data
 
 
+# Spellings of a type that a compliance run resolves with normalize_match_type (#1150 B).
+# The step must select with the same resolution, or a gate lets through what a run fails.
+@pytest.mark.parametrize('match_type, kind', [
+    ('DataProduct', 'data_product'),
+    ('DATA_PRODUCT', 'data_product'),
+    ('dataProduct', 'data_product'),
+    ('Object', 'data_product'),
+    ('DataContract', 'data_contract'),
+])
+def test_the_step_agrees_with_a_run_on_any_spelling_of_the_type(db_session, match_type, kind):
+    policy = _policy(db_session, f"MATCH (x:{match_type}) ASSERT x.status = 'active'")
+    if kind == 'data_contract':
+        entity = _contract(db_session, 'draft-contract', 'draft', LONG)
+        payload = _on_create_payload(entity)
+    else:
+        entity = _product(db_session, 'draft-product', 'draft')
+        payload = {'product_id': entity.id, 'name': entity.name, 'status': 'draft'}
+
+    run = _run(db_session, policy)
+    result = _step(
+        db_session, policy, kind, entity.id, payload,
+        trigger_type=TriggerType.BEFORE_STATUS_CHANGE,
+    )
+
+    assert run[entity.id] is False
+    assert result.passed is False
+    assert 'not_applicable' not in result.data
+
+
 def test_before_create_evaluates_the_payload(db_session):
     policy = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('confidential')")
     # A stored entity with the id must not be read: before_create has none yet
@@ -344,53 +373,47 @@ def test_before_update_sees_the_proposed_purpose_and_status(db_session):
     assert to_draft.data['reason'] == 'where'
 
 
-def test_before_update_gates_see_only_the_proposed_change(db_session):
-    # As decided for before_update gates (#1019): no stored value fills in for
-    # a field the change clears or doesn't carry.
+def test_before_update_gates_see_the_proposed_change_over_the_stored_value(db_session):
+    # A sent value replaces the stored one; a null keeps it (the manager skips nulls)
     policy = _policy(db_session, "MATCH (c:data_contract) ASSERT LENGTH(c.owner) > 0")
     contract = _contract(db_session, 'contract', 'active', LONG)
     contract.owner_team_id = 'team-1'
     db_session.flush()
 
-    cleared = _step(
-        db_session, policy, 'data_contract', contract.id,
-        _before_update_payload(owner_team_id=None),
-        trigger_type=TriggerType.BEFORE_UPDATE,
-    )
-    kept = _step(
-        db_session, policy, 'data_contract', contract.id,
-        _before_update_payload(owner_team_id='team-2'),
-        trigger_type=TriggerType.BEFORE_UPDATE,
-    )
+    def step(owner):
+        return _step(
+            db_session, policy, 'data_contract', contract.id,
+            _before_update_payload(owner_team_id=owner),
+            trigger_type=TriggerType.BEFORE_UPDATE,
+        )
 
-    assert cleared.passed is False
-    assert kept.passed is True
+    assert step('').passed is False
+    assert step(None).passed is True
+    assert step('team-2').passed is True
 
 
-def test_before_update_needs_no_stored_entity(db_session):
-    # Without a WHERE the proposed change is all the rule sees, so nothing is loaded
+def test_a_before_update_assert_on_a_missing_entity_fails_the_step(db_session):
+    # Without a WHERE too: the ASSERT sees the stored entity under the change
     policy = _policy(
         db_session, "MATCH (c:data_contract) ASSERT LENGTH(c.description) >= 70",
     )
 
-    with patch.object(AppEntityLoader, 'load_entity') as load_entity:
-        result = _step(
-            db_session, policy, 'data_contract', str(uuid.uuid4()),
-            _before_update_payload(
-                status='active', description=ContractDescription(purpose=LONG, usage='u'),
-            ),
-            trigger_type=TriggerType.BEFORE_UPDATE,
-        )
+    result = _step(
+        db_session, policy, 'data_contract', str(uuid.uuid4()),
+        _before_update_payload(
+            status='active', description=ContractDescription(purpose=LONG, usage='u'),
+        ),
+        trigger_type=TriggerType.BEFORE_UPDATE,
+    )
 
-    assert result.passed is True
-    assert not (result.data or {}).get('error_code')
-    load_entity.assert_not_called()
+    assert result.passed is False
+    assert result.data['error_code'] == 'rule_entity_not_found'
 
 
 def test_before_update_where_sees_the_stored_entity(db_session):
     # An update that doesn't resend the status is still an update of an
     # active contract: the WHERE selects it and the ASSERT (on the proposed
-    # purpose only, #1019) decides; it doesn't pass as not applicable.
+    # purpose) decides; it doesn't pass as not applicable.
     policy = _policy(db_session, PURPOSE_RULE)
     contract = _contract(db_session, 'contract', 'active', LONG)
 

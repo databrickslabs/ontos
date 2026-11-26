@@ -53,6 +53,8 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
   const [columns, setColumns] = useState<ColumnProperty[]>([]);
   const [createContract, setCreateContract] = useState(true);
   const [loading, setLoading] = useState(false);
+  // Defaults load separately from submit, so the Create button doesn't show "Working…" meanwhile
+  const [bootstrapping, setBootstrapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workflowErrors, setWorkflowErrors] = useState<PreCreationError | null>(null);
   const [success, setSuccess] = useState<any | null>(null);
@@ -66,7 +68,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
     }
     (async () => {
       try {
-        setLoading(true);
+        setBootstrapping(true);
         const res = await fetch('/api/self-service/bootstrap');
         const data = await res.json();
         if (data?.defaults) {
@@ -76,7 +78,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
       } catch (e) {
         // ignore
       } finally {
-        setLoading(false);
+        setBootstrapping(false);
       }
     })();
   }, [isOpen]);
@@ -261,7 +263,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common:actions.close', 'Close')}</Button>
-            <Button onClick={handleSubmit} disabled={!canSubmit || loading}>
+            <Button onClick={handleSubmit} disabled={!canSubmit || loading || bootstrapping}>
               {loading ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> {t('data-contracts:selfService.working', 'Working…')}</span>) : t('common:actions.create', 'Create')}
             </Button>
           </div>

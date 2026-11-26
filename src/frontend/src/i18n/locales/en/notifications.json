@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Status Change Approved",
+    "approved": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been approved by '{{approver}}'.",
+    "approvedWithMessage": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been approved by '{{approver}}'.\n\nApprover message: {{message}}",
+    "deniedTitle": "Status Change Denied",
+    "denied": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been denied by '{{approver}}'.",
+    "deniedWithMessage": "Your request to change the status of '{{name}}' to '{{toStatus}}' has been denied by '{{approver}}'.\n\nApprover message: {{message}}",
+    "clarificationTitle": "Status Change - Clarification Needed",
+    "clarification": "Your request to change the status of '{{name}}' to '{{toStatus}}' requires clarification from '{{approver}}'.",
+    "clarificationWithMessage": "Your request to change the status of '{{name}}' to '{{toStatus}}' requires clarification from '{{approver}}'.\n\nApprover message: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Metric view definition changed",
     "description": "The definition of the metric view {{fqn}} in Unity Catalog no longer matches its baseline in Ontos."
@@ -8,6 +19,14 @@
     "statusChanged": "The request to change the status from '{{fromStatus}}' to '{{toStatus}}' was approved, but the status is now '{{currentStatus}}', so the change was not applied. Request it again if it is still needed.",
     "refused": "Your request to change the status to '{{toStatus}}' was approved, but the change could not be applied: {{reason}}",
     "reviewNotApplied": "The review of the data product was decided, but the change to '{{toStatus}}' could not be applied: {{reason}}"
+  },
+  "approvalOverdue": {
+    "approverTitle": "Approval overdue",
+    "approverDescription_one": "The approval of '{{name}}' has waited more than {{count}} day. Decide it in My Actions.",
+    "approverDescription_other": "The approval of '{{name}}' has waited more than {{count}} days. Decide it in My Actions.",
+    "requesterTitle": "Your request is still waiting",
+    "requesterDescription_one": "Your request for '{{name}}' has waited more than {{count}} day for a decision. The approvers were reminded.",
+    "requesterDescription_other": "Your request for '{{name}}' has waited more than {{count}} days for a decision. The approvers were reminded."
   },
   "contractStatusNotChanged": {
     "title": "Contract status not changed",
@@ -134,9 +153,7 @@
         "notify-rejected": "Your access request has been denied. Please contact an administrator for more information."
       },
       "status-change-request": {
-        "notify-requester": "Your status change request has been submitted for approval.",
-        "notify-approved": "Your status change request has been approved.",
-        "notify-rejected": "Your status change request has been denied."
+        "notify-requester": "Your status change request has been submitted for approval."
       },
       "data-asset-review-request": {
         "notify-reviewer": "A new data asset review request has been assigned to you.",

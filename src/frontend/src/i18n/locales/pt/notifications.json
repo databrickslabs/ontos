@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Alteração de status aprovada",
+    "approved": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi aprovado por '{{approver}}'.",
+    "approvedWithMessage": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi aprovado por '{{approver}}'.\n\nMensagem do aprovador: {{message}}",
+    "deniedTitle": "Alteração de status negada",
+    "denied": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi negado por '{{approver}}'.",
+    "deniedWithMessage": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi negado por '{{approver}}'.\n\nMensagem do aprovador: {{message}}",
+    "clarificationTitle": "Alteração de status: esclarecimento necessário",
+    "clarification": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' precisa de esclarecimento de '{{approver}}'.",
+    "clarificationWithMessage": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' precisa de esclarecimento de '{{approver}}'.\n\nMensagem do aprovador: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definição da metric view alterada",
     "description": "A definição da metric view {{fqn}} no Unity Catalog não corresponde mais à sua linha de base no Ontos."
@@ -8,6 +19,14 @@
     "statusChanged": "A solicitação para mudar o status de \"{{fromStatus}}\" para \"{{toStatus}}\" foi aprovada, mas o status agora é \"{{currentStatus}}\", então a mudança não foi aplicada. Solicite novamente se ainda for necessário.",
     "refused": "Sua solicitação para mudar o status para \"{{toStatus}}\" foi aprovada, mas a mudança não pôde ser aplicada: {{reason}}",
     "reviewNotApplied": "A revisão do produto de dados foi decidida, mas a mudança para \"{{toStatus}}\" não pôde ser aplicada: {{reason}}"
+  },
+  "approvalOverdue": {
+    "approverTitle": "Aprovação atrasada",
+    "approverDescription_one": "A aprovação de '{{name}}' aguarda há mais de {{count}} dia. Decida em Minhas ações.",
+    "approverDescription_other": "A aprovação de '{{name}}' aguarda há mais de {{count}} dias. Decida em Minhas ações.",
+    "requesterTitle": "Sua solicitação ainda aguarda",
+    "requesterDescription_one": "Sua solicitação para '{{name}}' aguarda uma decisão há mais de {{count}} dia. Os aprovadores foram lembrados.",
+    "requesterDescription_other": "Sua solicitação para '{{name}}' aguarda uma decisão há mais de {{count}} dias. Os aprovadores foram lembrados."
   },
   "contractStatusNotChanged": {
     "title": "Status do contrato não alterado",
@@ -134,9 +153,7 @@
         "notify-rejected": "Sua solicitação de acesso foi negada. Entre em contato com um administrador para mais informações."
       },
       "status-change-request": {
-        "notify-requester": "Sua solicitação de mudança de status foi enviada para aprovação.",
-        "notify-approved": "Sua solicitação de mudança de status foi aprovada.",
-        "notify-rejected": "Sua solicitação de mudança de status foi negada."
+        "notify-requester": "Sua solicitação de mudança de status foi enviada para aprovação."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Uma nova solicitação de revisão de ativo de dados foi atribuída a você.",

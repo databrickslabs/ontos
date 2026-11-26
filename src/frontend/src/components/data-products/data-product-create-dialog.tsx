@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useForm, Controller } from 'react-hook-form';
@@ -33,9 +33,16 @@ import { ConsumerPrincipal, DataProduct, DataProductStatus } from '@/types/data-
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { useTeams } from '@/hooks/use-teams';
 import TagSelector from '@/components/ui/tag-selector';
+import { tagsForCreate, tagsForUpdate } from '@/lib/tag-payload';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
+import { useDataProductTypes } from '@/hooks/use-data-product-types';
+import {
+  dataProductTypeLabel,
+  defaultDataProductTypeKey,
+  pickableDataProductTypes,
+} from '@/lib/data-product-types';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -44,7 +51,8 @@ import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
  * Complex nested entities (ports, team, support) are edited in the details view.
  */
 
-const productTypes = ['source', 'source-aligned', 'aggregate', 'consumer-aligned', 'sink'] as const;
+// Select value for "no type" (Radix Select items can't have an empty value).
+const NO_PRODUCT_TYPE = '__none__';
 
 // Schema factory so zod validation messages can be translated. The message
 // strings are the only i18n-dependent part; the shape (and thus the inferred
@@ -53,7 +61,8 @@ const buildDataProductCreateSchema = (t: TFunction) => z.object({
   name: z.string().min(1, t('data-products:createDialog.validation.nameRequired')),
   version: z.string().min(1, t('data-products:createDialog.validation.versionRequired')),
   status: z.string().min(1, t('data-products:createDialog.validation.statusRequired')),
-  productType: z.enum(productTypes).optional(),
+  // A data product type key; the options come from GET /api/data-product-types.
+  productType: z.string().optional(),
   ownerTeamId: z.string().optional(),
   projectId: z.string().optional(),
   domain_ids: z.array(z.string()).optional(),
@@ -91,6 +100,10 @@ export default function DataProductCreateDialog({
   const { currentProject, availableProjects, isLoading: projectsLoading, fetchUserProjects } = useProjectContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const { types: productTypeList, loading: productTypesLoading } = useDataProductTypes(open);
+  // Read by the reset below without making the types a reason to reset the form.
+  const defaultProductTypeKey = useRef<string | undefined>(undefined);
+  defaultProductTypeKey.current = defaultDataProductTypeKey(productTypeList);
 
   const dataProductCreateSchema = useMemo(() => buildDataProductCreateSchema(t), [t]);
 
@@ -149,7 +162,7 @@ export default function DataProductCreateDialog({
           name: '',
           version: '0.0.1',
           status: DataProductStatus.DRAFT,
-          productType: undefined,
+          productType: defaultProductTypeKey.current,
           ownerTeamId: '',
           projectId: currentProject?.id || '',
           domain_ids: [],
@@ -164,6 +177,19 @@ export default function DataProductCreateDialog({
       }
     }
   }, [open, mode, product, form, currentProject]);
+
+  // Preselect the default type once the types have loaded (they usually arrive
+  // after the reset above). resetField keeps it from counting as a user change.
+  useEffect(() => {
+    if (!open || mode !== 'create' || productTypesLoading) return;
+    const defaultKey = defaultDataProductTypeKey(productTypeList);
+    if (defaultKey && !form.getValues('productType')) {
+      form.resetField('productType', { defaultValue: defaultKey });
+    }
+  }, [open, mode, productTypesLoading, productTypeList, form]);
+
+  const selectedProductType = form.watch('productType');
+  const productTypeOptions = pickableDataProductTypes(productTypeList, selectedProductType);
 
   const handleCloseAttempt = () => {
     // Check if form has been modified
@@ -188,13 +214,6 @@ export default function DataProductCreateDialog({
 
       if (mode === 'edit' && product) {
         // Edit mode - prepare update payload
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
 
         const updateData: Partial<DataProduct> = {
           ...product,
@@ -206,7 +225,9 @@ export default function DataProductCreateDialog({
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
-          tags: normalizedTags, // Use normalized tags from form
+          // Only a changed selection is sent ([] removes every tag, #1435); the
+          // spread product's loaded tags must not be sent back as they are.
+          tags: tagsForUpdate(data.tags, product.tags) as any,
           consumer_principals: data.consumer_principals || [],
           description: {
             purpose: data.purpose || undefined,
@@ -253,13 +274,6 @@ export default function DataProductCreateDialog({
         onSuccess(updatedProduct);
       } else {
         // Create mode - construct new product
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
 
         const productData: Partial<DataProduct> = {
           apiVersion: 'v1.0.0',
@@ -272,7 +286,7 @@ export default function DataProductCreateDialog({
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
-          tags: normalizedTags.length > 0 ? normalizedTags : undefined,
+          tags: tagsForCreate(data.tags) as any,
           consumer_principals: (data.consumer_principals && data.consumer_principals.length > 0)
             ? data.consumer_principals
             : undefined,
@@ -424,21 +438,35 @@ export default function DataProductCreateDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="productType">{t('data-products:createDialog.productTypeLabel')}</Label>
-              <Select
-                value={form.watch('productType') || undefined}
-                onValueChange={(value) => form.setValue('productType', value as any)}
-              >
-                <SelectTrigger id="productType">
-                  <SelectValue placeholder={t('data-products:createDialog.productTypePlaceholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {productTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="productType"
+                control={form.control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value || NO_PRODUCT_TYPE}
+                    onValueChange={(value) => field.onChange(value === NO_PRODUCT_TYPE ? undefined : value)}
+                    disabled={productTypesLoading}
+                  >
+                    <SelectTrigger id="productType">
+                      <SelectValue placeholder={t('data-products:createDialog.productTypePlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_PRODUCT_TYPE}>{t('common:states.none')}</SelectItem>
+                      {productTypeOptions.map((type) => (
+                        <SelectItem key={type.key} value={type.key}>
+                          {dataProductTypeLabel(type, t)}
+                        </SelectItem>
+                      ))}
+                      {/* A type the list doesn't know (yet): keep it selectable */}
+                      {field.value &&
+                        !productTypesLoading &&
+                        !productTypeOptions.some((type) => type.key === field.value) && (
+                          <SelectItem value={field.value}>{field.value}</SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               <p className="text-xs text-muted-foreground">
                 {t('data-products:createDialog.productTypeHint')}
               </p>

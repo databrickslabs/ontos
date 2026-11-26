@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, Workflow } from 'lucide-react';
-import * as dagre from 'dagre';
+import dagre from 'dagre';
 import { type NavigateFunction } from 'react-router-dom';
 import { DatabaseZap } from 'lucide-react';
 import {

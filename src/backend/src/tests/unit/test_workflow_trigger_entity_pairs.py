@@ -87,10 +87,13 @@ def test_an_unknown_entity_type_has_its_own_code(db_session):
              {'triggerType': 'before_update', 'entityType': 'dataset'})]
 
 
-def test_maturity_change_fires_for_products_and_contracts_only(db_session):
+def test_maturity_change_fires_for_products_contracts_and_table_assets(db_session):
     maturity = TriggerType.ON_MATURITY_CHANGE
     assert _check(db_session, _trigger(
         maturity, known=[EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT])) == []
+    # Table, view and metric view assets fire as these types (maturity_evaluator)
+    assert _check(db_session, _trigger(
+        maturity, known=[EntityType.TABLE, EntityType.VIEW, EntityType.METRIC_VIEW])) == []
     assert _check(db_session, _trigger(maturity, known=[EntityType.DOMAIN])) == [
         ('trigger_entity_type_unsupported',
          {'triggerType': 'on_maturity_change', 'entityType': 'domain'}),

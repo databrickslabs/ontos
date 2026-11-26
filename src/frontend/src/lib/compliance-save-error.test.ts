@@ -24,9 +24,31 @@ describe('complianceSaveErrorText', () => {
     expect(text).not.toContain('unparsed');
   });
 
+  it('translates an LLM_CHECK refusal', async () => {
+    await i18n.changeLanguage('de');
+    expect(complianceSaveErrorText(i18n.t, {
+      error: 'This policy uses LLM_CHECK; ...', errorCode: 'llm_check_admin_required',
+    })).toBe(
+      'Diese Regel verwendet LLM_CHECK. Speichern, Ausführen oder Testen erfordert '
+      + 'Administratorzugriff auf Compliance.',
+    );
+  });
+
   it('shows the API message for an error without a code', () => {
     expect(complianceSaveErrorText(i18n.t, { error: 'Failed to parse rule: x' }))
       .toBe('Failed to parse rule: x');
+  });
+
+  it('translates the refusal of LLM_CHECK on a policy in the self-service mapping', async () => {
+    await i18n.changeLanguage('pt');
+    const text = complianceSaveErrorText(i18n.t, {
+      error: 'This policy is in the self-service compliance mapping',
+      errorCode: 'llm_check_policy_in_self_service',
+      errorParams: { objectTypes: 'catalog, table' },
+    });
+
+    expect(text).toContain('mapeamento de conformidade do autoatendimento para catalog, table');
+    await i18n.changeLanguage('en');
   });
 
   it('shows the API message for an unknown code', () => {

@@ -97,8 +97,9 @@ export interface InputPort {
   authoritativeDefinitions?: AuthoritativeDefinition[];
 
   // Databricks extensions
-  assetType?: string; // table, notebook, job
-  assetIdentifier?: string; // catalog.schema.table, /path/to/notebook, job_id
+  // null clears them on update (an omitted field is kept)
+  assetType?: string | null; // table, notebook, job
+  assetIdentifier?: string | null; // catalog.schema.table, /path/to/notebook, job_id
   sourceSystemId?: string;
   type?: string;
   description?: string;
@@ -125,7 +126,7 @@ export interface OutputPort {
   version: string;
 
   // ODPS optional fields
-  description?: string;
+  description?: string | null; // null clears it on update (an omitted field is kept)
   type?: string;
   contractId?: string;
   contractName?: string;
@@ -142,7 +143,7 @@ export interface OutputPort {
   // Databricks extensions
   assetType?: string;
   assetIdentifier?: string;
-  status?: string;
+  status?: string | null; // null clears it on update
   server?: Server;
   containsPii?: boolean;
   autoApprove?: boolean;
@@ -159,9 +160,10 @@ export interface ManagementPort {
 
   // ODPS optional fields
   type?: string; // rest or topic (default: "rest")
-  url?: string;
-  channel?: string;
-  description?: string;
+  // null clears these on update (an omitted field is kept)
+  url?: string | null;
+  channel?: string | null;
+  description?: string | null;
   tags?: string[];
   customProperties?: CustomProperty[];
   authoritativeDefinitions?: AuthoritativeDefinition[];
@@ -376,7 +378,6 @@ export interface NewVersionRequest {
 
 export type DataProductArchetype = string;
 export type DataProductOwner = string;
-export type DataProductType = string;
 
 // ============================================================================
 // Helper Types

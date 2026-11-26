@@ -224,7 +224,7 @@ def test_dry_run_reports_but_removes_nothing(tag_sync, uc, capsys):
 
     assert uc[("COLUMN", COLUMN)] == {OPEX_KEY: OPEX}
     out = capsys.readouterr().out
-    assert f"[DRY-RUN] COLUMN {COLUMN} remove=['{OPEX_KEY}']" in out
+    assert f"[DRY-RUN] COLUMN {COLUMN} remove (recorded, will remove)=['{OPEX_KEY}']" in out
 
 
 def test_unknown_previous_state_skips_the_cleanup(tag_sync, uc):
@@ -255,16 +255,17 @@ def test_a_failed_removal_is_reported_and_retried_next_run(tag_sync, uc,
 
 def test_an_unreadable_object_is_kept_for_the_next_run(tag_sync, uc,
                                                        monkeypatch):
-    """Unreadable object is kept for next run."""
+    """Unreadable object is kept for next run, and the run reports the failure."""
     first = _run(tag_sync, [_row("uc_column", COLUMN)], previous={})
 
     def unreadable(*_args):
-        raise RuntimeError("CATALOG_NOT_FOUND")
+        raise RuntimeError("warehouse temporarily unavailable")
 
     monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", unreadable)
     second = _run(tag_sync, [], previous=first.delivered)
 
-    assert second.errors == []
+    assert len(second.errors) == 1 and COLUMN in second.errors[0]
+    assert second.failed_objects == [f"COLUMN {COLUMN}"]
     assert second.delivered["COLUMN"] == {COLUMN: {OPEX_KEY: OPEX}}
 
 
@@ -366,10 +367,9 @@ def test_prefix_changed_between_runs_removes_recorded_keys(tag_sync, db, uc):
     removals = []
     original_remove = tag_sync.remove_delivered_tags
 
-    def track_remove(spark, obj_type, obj_name, delivered, prefix, dry_run=False):
-        removals.append((obj_type, obj_name, delivered, prefix))
-        return original_remove(spark, obj_type, obj_name, delivered, prefix,
-                               dry_run=dry_run)
+    def track_remove(spark, obj_type, obj_name, delivered, dry_run=False):
+        removals.append((obj_type, obj_name, delivered))
+        return original_remove(spark, obj_type, obj_name, delivered, dry_run=dry_run)
 
     # Patch and run with new prefix
     with patch.object(tag_sync, "remove_delivered_tags", track_remove):
@@ -478,6 +478,28 @@ def test_legacy_cleanup_already_done_skipped(tag_sync, db):
 
     assert removed == 0
     assert errors == []
+
+
+def test_legacy_scan_failure_with_the_flag_off_is_an_error(tag_sync, db, monkeypatch):
+    """The default (flag-off) scan that can't read a catalog is not a clean one: the
+    error is returned so the run fails, as it does with the flag on."""
+    def failing_bulk_read(spark, catalog, prefix):
+        raise RuntimeError("[PERMISSION_DENIED] USE CATALOG")
+
+    monkeypatch.setattr(tag_sync, "_bulk_read_prefixed_tags_per_catalog", failing_bulk_read)
+    dataset = _asset_dataset(tag_sync, "main.s.t", [OPEX])
+
+    removed, errors = tag_sync.handle_legacy_tag_cleanup(
+        MagicMock(), db, [dataset], tag_sync.DirectLinkInfos(tables=[dataset]),
+        prefix="x_ontos_",
+        previous={},
+        cleanup_enabled=False,
+        is_partial_read=False,
+        dry_run=False,
+    )
+
+    assert removed == 0
+    assert len(errors) == 1 and "main" in errors[0] and "PERMISSION_DENIED" in errors[0]
 
 
 def test_legacy_cleanup_linked_table_keeps_tag(tag_sync, uc, db, monkeypatch):
@@ -859,3 +881,61 @@ def test_legacy_cleanup_keeps_tags_this_run_delivered(tag_sync, uc, db, monkeypa
     assert uc[("SCHEMA", "main.s")] == {key: OPEX}
     assert key not in uc[("SCHEMA", "main.other")]
     assert (removed, errors) == (1, [])
+
+
+class _ReadFails:
+    """spark.sql() raising ``error`` for every information_schema read."""
+
+    def __init__(self, error):
+        self.error = error
+
+    def sql(self, _statement):
+        raise RuntimeError(self.error)
+
+
+def _raising(error):
+    def read(*_a):
+        raise RuntimeError(error)
+    return read
+
+
+def _legacy_run(tag_sync, db, spark, cleanup_enabled):
+    dataset = _asset_dataset(tag_sync, "main.s.other", [OPEX])
+    return tag_sync.handle_legacy_tag_cleanup(
+        spark, db, [dataset], tag_sync.DirectLinkInfos(tables=[dataset]),
+        prefix="x_ontos_", previous={}, cleanup_enabled=cleanup_enabled,
+        is_partial_read=False, dry_run=False,
+    )
+
+
+def test_legacy_cleanup_read_failure_is_an_error_not_done(tag_sync, db, monkeypatch):
+    """A failed information_schema read used to be swallowed: the scan looked clean and
+    the cleanup was marked done without having seen the catalog."""
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        _raising("[INTERNAL_ERROR]"))
+    _removed, errors = _legacy_run(tag_sync, db, _ReadFails("[INTERNAL_ERROR] try later"),
+                                   cleanup_enabled=True)
+
+    assert len(errors) == 1 and "main" in errors[0]
+    assert not tag_sync.read_cleanup_legacy_status(db).get("cleanup_done")
+
+
+def test_legacy_scan_read_failure_is_not_marked_checked(tag_sync, db, monkeypatch):
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        _raising("[INTERNAL_ERROR]"))
+    _legacy_run(tag_sync, db, _ReadFails("[INTERNAL_ERROR] try later"),
+                cleanup_enabled=False)
+
+    assert not tag_sync.read_cleanup_legacy_status(db).get("checked_first_run")
+
+
+def test_legacy_cleanup_of_a_missing_catalog_finds_nothing(tag_sync, db, monkeypatch):
+    """A catalog that doesn't exist: UC raises TABLE_OR_VIEW_NOT_FOUND on its
+    information_schema (checked on a workspace). No tags, no error."""
+    error = "[TABLE_OR_VIEW_NOT_FOUND] `main`.`information_schema`.`table_tags`"
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        _raising(error))
+    removed, errors = _legacy_run(tag_sync, db, _ReadFails(error), cleanup_enabled=True)
+
+    assert (removed, errors) == (0, [])
+    assert tag_sync.read_cleanup_legacy_status(db).get("cleanup_done")

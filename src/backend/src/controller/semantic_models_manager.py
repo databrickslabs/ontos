@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 import signal
 from contextlib import contextmanager
 import json
+import re
 import shutil
 import urllib.parse
 from filelock import FileLock
@@ -219,6 +220,51 @@ _TEXT_FILTER = (
 def _text_filter_bindings(text_filter: str) -> Dict[str, Any]:
     """The ``bindings`` for a query using ``_TEXT_FILTER`` (none for an empty text)."""
     return {'text_filter': Literal(text_filter)} if text_filter.strip() else {}
+
+
+class ConceptNameIndex:
+    """Concept IRIs by IRI, label and local name (see ``concept_name_index``)."""
+
+    def __init__(self, concepts: set, labels: Dict[str, set], local_names: Dict[str, set]):
+        self._concepts = concepts
+        self._labels = labels
+        self._local_names = local_names
+
+    def find(self, value: str) -> List[str]:
+        """The IRIs ``value`` names: the IRI itself, else by label, else by local name."""
+        value = (value or '').strip()
+        if not value:
+            return []
+        if value in self._concepts:
+            return [value]
+        needle = value.casefold()
+        return sorted(self._labels.get(needle) or self._local_names.get(needle) or ())
+
+
+def collect_label_maps(graph: Any, node: Any) -> Dict[str, Dict[str, str]]:
+    """Language-keyed skos:prefLabel / rdfs:label maps of a resource, kept apart.
+
+    When one language has several literals of the same kind, the smallest value
+    wins so the result does not depend on graph iteration order.
+    """
+    maps: Dict[str, Dict[str, str]] = {}
+    for name, pred in (('prefLabel', SKOS.prefLabel), ('rdfsLabel', RDFS.label)):
+        by_lang: Dict[str, str] = {}
+        for lit in graph.objects(node, pred):
+            lang = getattr(lit, 'language', None) or ''
+            value = str(lit)
+            if lang not in by_lang or value < by_lang[lang]:
+                by_lang[lang] = value
+        maps[name] = by_lang
+    return maps
+
+
+def merge_label_maps(maps: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Legacy merged dict: prefLabel first, rdfs:label fills missing languages."""
+    merged = dict(maps['prefLabel'])
+    for lang, value in maps['rdfsLabel'].items():
+        merged.setdefault(lang, value)
+    return merged
 
 
 @searchable_asset
@@ -2666,6 +2712,17 @@ class SemanticModelsManager(SearchableAsset):
         seen: set[tuple[str, str, str]] = set()  # (direction, predicate, display)
         count = 0
         uri = URIRef(resource_iri)
+        label_cache: Dict[str, Dict[str, Dict[str, str]]] = {}
+
+        def label_map(node: any) -> Dict[str, Dict[str, str]]:
+            """Language-keyed labels of a resource, skos:prefLabel kept apart from rdfs:label."""
+            if not isinstance(node, URIRef):
+                return {'prefLabel': {}, 'rdfsLabel': {}}
+            key = str(node)
+            if key not in label_cache:
+                maps = collect_label_maps(self._graph, node)
+                label_cache[key] = maps
+            return label_cache[key]
 
         def detect_type(node: any) -> str:
             if not isinstance(node, URIRef):
@@ -2694,6 +2751,8 @@ class SemanticModelsManager(SearchableAsset):
                 'predicate': str(predicate),
                 'display': display_str,
                 'displayType': detect_type(display_node),
+                'displayLabels': label_map(display_node),
+                'predicateLabels': label_map(predicate),
                 'stepIri': str(step_node) if isinstance(step_node, URIRef) else None,
                 'stepIsResource': isinstance(step_node, URIRef),
             }
@@ -3040,18 +3099,9 @@ class SemanticModelsManager(SearchableAsset):
                 for concept_iri in unique_concept_iris:
                     concept_uri = URIRef(concept_iri)
 
-                    # Build labels dictionary from all available labels with language tags
-                    labels = {}
-                    # Get skos:prefLabel values (preferred)
-                    for label_literal in context.objects(concept_uri, SKOS.prefLabel):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        labels[lang] = str(label_literal)
-                    # Get rdfs:label values (fallback, don't overwrite prefLabel)
-                    for label_literal in context.objects(concept_uri, RDFS.label):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        if lang not in labels:
-                            labels[lang] = str(label_literal)
-                    
+                    label_maps = collect_label_maps(context, concept_uri)
+                    labels = merge_label_maps(label_maps)
+
                     # Helper to find label by language with regional variant support (en-US, en-GB -> en)
                     def find_by_lang(d: dict, lang: str) -> str | None:
                         if lang in d:
@@ -3184,6 +3234,7 @@ class SemanticModelsManager(SearchableAsset):
                             iri=concept_iri,
                             label=primary_label,
                             labels=labels,
+                            label_maps=label_maps,
                             comment=comment,
                             comments=comments,
                             concept_type=concept_type,
@@ -3248,9 +3299,13 @@ class SemanticModelsManager(SearchableAsset):
                 continue
             
             # Get basic info
-            labels = list(context.objects(concept_uri, RDFS.label))
-            labels.extend(list(context.objects(concept_uri, SKOS.prefLabel)))
-            label = str(labels[0]) if labels else None
+            label_maps = collect_label_maps(context, concept_uri)
+            merged_labels = merge_label_maps(label_maps)
+            label = (
+                (merged_labels.get('en') or merged_labels.get('') or min(merged_labels.values()))
+                if merged_labels
+                else None
+            )
             
             comments = list(context.objects(concept_uri, RDFS.comment))  
             comments.extend(list(context.objects(concept_uri, SKOS.definition)))
@@ -3310,6 +3365,12 @@ class SemanticModelsManager(SearchableAsset):
             concept = OntologyConcept(
                 iri=concept_iri,
                 label=label,
+                labels=merged_labels,
+                label_maps=label_maps,
+                linked_label_maps={
+                    related: collect_label_maps(self._graph, URIRef(related))
+                    for related in {*parent_concepts, *child_concepts}
+                },
                 comment=comment,
                 concept_type=concept_type,
                 property_type=meta["property_type"],
@@ -3659,18 +3720,9 @@ class SemanticModelsManager(SearchableAsset):
 
                     prop_uri = URIRef(prop_iri)
 
-                    # Build labels dictionary with all language variants
-                    labels_dict = {}
-                    # Get skos:prefLabel values (preferred)
-                    for label_literal in context.objects(prop_uri, SKOS.prefLabel):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        labels_dict[lang] = str(label_literal)
-                    # Get rdfs:label values (fallback, don't overwrite prefLabel)
-                    for label_literal in context.objects(prop_uri, RDFS.label):
-                        lang = getattr(label_literal, 'language', None) or ""
-                        if lang not in labels_dict:
-                            labels_dict[lang] = str(label_literal)
-                    
+                    prop_label_maps = collect_label_maps(context, prop_uri)
+                    labels_dict = merge_label_maps(prop_label_maps)
+
                     # Helper to find label by language with regional variant support
                     def find_by_lang(d: dict, lang: str) -> str | None:
                         if lang in d:
@@ -3734,6 +3786,7 @@ class SemanticModelsManager(SearchableAsset):
                         "iri": prop_iri,
                         "label": primary_label,
                         "labels": labels_dict,  # All labels with language tags
+                        "label_maps": prop_label_maps,
                         "comment": primary_comment,
                         "comments": comments_dict,  # All comments with language tags
                         "concept_type": "property",  # For tree compatibility
@@ -4106,6 +4159,17 @@ class SemanticModelsManager(SearchableAsset):
         #      actually lived in this context but sit outside the prefix.
         concept_versions_repo.delete_for_collection(self._db, collection_iri)
         concept_versions_repo.delete_by_iris(self._db, subject_iris)
+
+        # Notes, links, documents, cost items and tags of the collection and of
+        # the concepts that lived only in it go with them, in the same
+        # transaction (#1431). A subject that still has triples in another
+        # collection (the same IRI loaded twice, or annotated elsewhere) keeps its.
+        from src.controller.entity_data_cleanup import remove_entities_data, remove_entity_data
+        remove_entity_data(self._db, entity_type="collection", entity_id=collection_iri)
+        remove_entities_data(
+            self._db, entity_type="concept",
+            entity_ids=rdf_triples_repo.subjects_without_triples(self._db, subject_iris),
+        )
 
         # Remove from in-memory graph
         meta_context = self._graph.get_context(URIRef(META_CONTEXT))
@@ -4600,6 +4664,35 @@ class SemanticModelsManager(SearchableAsset):
             "source_file": source_file,
             "owners": owners,
         }
+
+    def find_concept_iris(self, value: str) -> List[str]:
+        """IRIs of the concepts (OWL/RDFS classes, SKOS concepts) ``value`` names.
+
+        ``value`` is an IRI, a label (``skos:prefLabel`` / ``rdfs:label``), or,
+        when no label matches, the IRI's local name; names compare
+        case-insensitively. Several IRIs mean the name is ambiguous. To look up
+        many names, build ``concept_name_index()`` once and call its ``find``.
+        """
+        return self.concept_name_index().find(value)
+
+    def concept_name_index(self) -> 'ConceptNameIndex':
+        """The concepts by IRI, label and local name, from one pass over the graph."""
+        concept_types = (OWL.Class, RDFS.Class, SKOS.Concept)
+        concepts = {
+            str(subject)
+            for kind in concept_types
+            for subject in self._graph.subjects(RDF.type, kind)
+            if isinstance(subject, URIRef)
+        }
+        labels: Dict[str, set] = {}
+        for predicate in (SKOS.prefLabel, RDFS.label):
+            for subject, label in self._graph.subject_objects(predicate):
+                if isinstance(label, Literal) and str(subject) in concepts:
+                    labels.setdefault(str(label).strip().casefold(), set()).add(str(subject))
+        local_names: Dict[str, set] = {}
+        for iri in concepts:
+            local_names.setdefault(re.split(r'[#/:]', iri)[-1].casefold(), set()).add(iri)
+        return ConceptNameIndex(concepts, labels, local_names)
 
     def get_concept(self, concept_iri: str) -> Optional[Dict[str, Any]]:
         """Get a concept by IRI with all its properties and governance info."""
@@ -5588,6 +5681,11 @@ class SemanticModelsManager(SearchableAsset):
         # which already calls delete_for_collection for the same reason.
         from src.repositories.concept_versions_repository import concept_versions_repo
         concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
+        # And its notes, links, documents, cost items and tags (#1431). A concept
+        # migrated to another collection has moved them to its new IRI first.
+        from src.controller.entity_data_cleanup import remove_entity_data
+        remove_entity_data(self._db, entity_type="concept", entity_id=concept_iri)
 
         # Also remove any ownership records
         for owner in existing.get("owners", []):
@@ -7081,14 +7179,19 @@ class SemanticModelsManager(SearchableAsset):
         target_context.add((new_uri, ONTOS.promotionType, Literal("migrated")))
         target_context.add((new_uri, ONTOS.promotedAt, Literal(now, datatype=XSD.dateTime)))
         
-        # Delete or deprecate original
+        # Delete or deprecate original. A deleted source's notes, links, documents,
+        # cost items and tags move to the migrated concept first (#1431), so the
+        # delete doesn't remove them.
+        from src.controller.entity_data_cleanup import move_entity_data
         status = existing.get("status") or "draft"
         if delete_source:
             if status and status != "draft":
                 raise ValueError("Cannot delete non-draft concept. Will deprecate instead.")
+            move_entity_data(self._db, entity_type="concept", from_id=concept_iri, to_id=new_iri)
             self.delete_concept(concept_iri, migrated_by)
         elif status == "draft":
             # Draft concepts cannot transition to deprecated; delete instead
+            move_entity_data(self._db, entity_type="concept", from_id=concept_iri, to_id=new_iri)
             self.delete_concept(concept_iri, migrated_by)
         else:
             self.update_concept_status(concept_iri, "deprecated", migrated_by)

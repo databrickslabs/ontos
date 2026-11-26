@@ -194,6 +194,32 @@ class TestAssignTagValidation:
         assert len(result.errors) == 1 and "requires 'key'" in str(result.errors[0])
 
 
+class TestAssignTagKeyWarning:
+    def _warnings(self, db_session, key, found):
+        with patch('src.controller.tags_manager.TagsManager') as MockTM:
+            MockTM.return_value.get_tag_by_fqn.return_value = MagicMock() if found else None
+            result = TestAssignTagValidation()._validate(db_session, {'key': key})
+        return result
+
+    def test_a_key_not_in_the_catalog_is_a_coded_warning_not_an_error(self, db_session):
+        result = self._warnings(db_session, 'governance/pii_typo', found=False)
+
+        assert result.valid is True
+        assert [(w.code, w.params) for w in result.warning_issues] == [
+            ('assign_tag_key_unknown', {'step': 'tag', 'key': 'governance/pii_typo'}),
+        ]
+
+    def test_a_known_key_has_no_warning(self, db_session):
+        assert self._warnings(db_session, 'governance/pii', found=True).warning_issues == []
+
+    def test_a_failed_lookup_does_not_warn(self, db_session):
+        with patch('src.controller.tags_manager.TagsManager') as MockTM:
+            MockTM.return_value.get_tag_by_fqn.side_effect = RuntimeError('db down')
+            result = TestAssignTagValidation()._validate(db_session, {'key': 'owner'})
+
+        assert result.warning_issues == []
+
+
 class TestAssignTagKeepsStoredValues:
     def test_key_only_on_an_assigned_tag_keeps_its_value_and_writes_nothing(self, db_session, tags_manager):
         tag_id = tags_manager.get_tag_by_fqn.return_value.id

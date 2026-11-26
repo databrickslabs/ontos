@@ -1,7 +1,7 @@
 """Add notification_recipients and the policy rule author
 
 Revision ID: s3_notification_recipients
-Revises: r2_canonical_relationship_types
+Revises: t1_contract_tag_backfill
 Create Date: 2026-11-12
 
 Notification Recipients (#1450): named NOTIFY targets an admin defines in Settings,
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 
 
 revision: str = 's3_notification_recipients'
-down_revision: Union[str, None] = 'r2_canonical_relationship_types'
+down_revision: Union[str, None] = 't1_contract_tag_backfill'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

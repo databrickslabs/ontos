@@ -16,9 +16,11 @@ from src.common.features import APP_FEATURES, FeatureAccessLevel
 from src.db_models.data_products import DataProductDb
 from src.db_models.semantic_links import EntitySemanticLinkDb
 from src.routes.mcp_routes import MCPHandler
+from src.tools.caller import mcp_api_key_caller
 from src.tools.base import (
     ANY_CALLER,
     TOOL_NOT_PERMITTED_CODE,
+    USER_IDENTITY_REQUIRED_CODE,
     BaseTool,
     ToolCaller,
     ToolContext,
@@ -43,9 +45,17 @@ ANY_CALLER_TOOLS = {
     'get_project', 'search_tags', 'get_tag', 'list_entity_tags',
     # Cross-cutting.
     'global_search', 'search_ontos_handbook', 'get_app_state', 'get_current_user',
-    # Unity Catalog and analytics reads.
-    'get_table_schema', 'execute_analytics_query', 'explore_catalog_schema',
-    'list_catalogs', 'get_catalog_details', 'list_schemas',
+}
+# The Unity Catalog browse and analytics tools: Read-only on 'catalog-commander',
+# the level of GET /api/catalogs/..., and a signed-in user (they read Unity Catalog
+# as the user, so an MCP API key alone is refused).
+CATALOG_TOOLS = {
+    'get_table_schema': {'table_fqn': 'main.sales.orders'},
+    'execute_analytics_query': {'sql': 'SELECT 1', 'explanation': 'x'},
+    'explore_catalog_schema': {'catalog': 'main', 'schema': 'sales'},
+    'list_catalogs': {},
+    'get_catalog_details': {'catalog_name': 'main'},
+    'list_schemas': {'catalog_name': 'main'},
 }
 # The semantic reads whose REST routes require Read-only on 'semantic-models':
 # GET /semantic-models/search, /concepts/hierarchy, /neighbors and
@@ -253,3 +263,92 @@ class TestLinkReadsKeepTheirReadRules:
             'find_entities_by_concept', ctx, {'concept_iri': iri, 'visibility': 'readable'}))
         assert res.success is True
         assert [e['entity_id'] for e in res.data['entities']] == [entity_id]
+
+
+class TestCatalogToolsNeedCatalogCommander:
+    """Through the registry with the real tool bodies (the workspace client is a mock)."""
+
+    @pytest.mark.parametrize('name', sorted(CATALOG_TOOLS))
+    def test_each_declares_the_level_of_the_catalog_routes_and_a_user(self, name):
+        tool = create_default_registry().get(name)
+        assert tool.required_permission == ('catalog-commander', RO)
+        assert tool.requires_user_identity is True
+
+    @pytest.mark.parametrize('name', sorted(CATALOG_TOOLS))
+    def test_without_the_level_it_is_refused(self, name):
+        registry = create_default_registry()
+        ws = MagicMock()
+        for caller in (None, _caller({}), _caller({'catalog-commander': NONE}),
+                       _caller({'data-products': FeatureAccessLevel.ADMIN, 'tags': RO})):
+            ctx = _ctx(caller=caller, workspace_client=ws)
+            res = _run(registry.execute(name, ctx, CATALOG_TOOLS[name]))
+            assert res.success is False
+            assert res.error_code in (TOOL_NOT_PERMITTED_CODE, USER_IDENTITY_REQUIRED_CODE)
+            if caller is not None:
+                assert res.error_code == TOOL_NOT_PERMITTED_CODE
+                assert res.to_dict()['feature_id'] == 'catalog-commander'
+        assert ws.mock_calls == []
+
+    @pytest.mark.parametrize('name', sorted(CATALOG_TOOLS))
+    def test_an_mcp_api_key_caller_is_refused_even_with_every_scope(self, name):
+        caller = mcp_api_key_caller(SimpleNamespace(scopes=['*']))
+        # The scopes give Read-only on the semantic features only; even if a role gave
+        # the feature level, the missing identity refuses the tool.
+        caller.permissions['catalog-commander'] = FeatureAccessLevel.ADMIN
+        ws = MagicMock()
+        res = _run(create_default_registry().execute(
+            name, _ctx(caller=caller, workspace_client=ws), CATALOG_TOOLS[name]))
+        assert res.success is False
+        assert res.error_code == USER_IDENTITY_REQUIRED_CODE
+        assert 'Traceback' not in res.error and 'error id' not in res.error
+        assert ws.mock_calls == []
+
+    def test_get_current_user_still_runs_for_an_api_key_caller(self):
+        ws = MagicMock()
+        ws.current_user.me.return_value = SimpleNamespace(
+            user_name='svc', display_name='Svc', id='1', active=True, emails=[], groups=[])
+        caller = mcp_api_key_caller(SimpleNamespace(scopes=['*']))
+        res = _run(create_default_registry().execute(
+            'get_current_user', _ctx(caller=caller, workspace_client=ws), {}))
+        assert res.error_code != USER_IDENTITY_REQUIRED_CODE
+        assert res.error_code != TOOL_NOT_PERMITTED_CODE
+
+    def test_get_table_schema_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.tables.get.return_value = SimpleNamespace(
+            columns=[], full_name='main.sales.orders', comment=None, table_type='MANAGED')
+        res = _run(create_default_registry().execute(
+            'get_table_schema',
+            _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws),
+            CATALOG_TOOLS['get_table_schema']))
+        assert res.error_code is None
+        ws.tables.get.assert_called_once_with(full_name='main.sales.orders')
+
+    def test_list_catalogs_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.catalogs.list.return_value = []
+        res = _run(create_default_registry().execute(
+            'list_catalogs',
+            _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws), {}))
+        assert res.success is True
+        ws.catalogs.list.assert_called_once()
+
+    def test_explore_catalog_schema_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.tables.list.return_value = []
+        res = _run(create_default_registry().execute(
+            'explore_catalog_schema',
+            _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws),
+            CATALOG_TOOLS['explore_catalog_schema']))
+        assert res.error_code is None
+        ws.tables.list.assert_called_once()
+
+    def test_execute_analytics_query_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.statement_execution.execute_statement.return_value = MagicMock()
+        ctx = _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws)
+        ctx.settings.DATABRICKS_WAREHOUSE_ID = 'wh1'
+        res = _run(create_default_registry().execute(
+            'execute_analytics_query', ctx, CATALOG_TOOLS['execute_analytics_query']))
+        assert res.error_code not in (TOOL_NOT_PERMITTED_CODE, USER_IDENTITY_REQUIRED_CODE)
+        ws.statement_execution.execute_statement.assert_called_once()

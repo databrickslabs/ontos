@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session
 # One UserTokenRequiredError for the app; re-exported for this module's importers
 from src.common.api_errors import CodedValueError, UserTokenRequiredError  # noqa: F401
 from src.common.logging import get_logger
-from src.common.metric_views import parse_metric_view_definition
+from src.common.metric_views import metric_view_entity_id, parse_metric_view_definition
 from src.controller.metric_view_baselines_manager import MetricViewBaselinesManager
 from src.controller.metric_view_consistency_manager import store_metric_view
 from src.controller.metric_view_refresh import read_refresh_state
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.assets import METRIC_VIEW_ASSET_TYPE
-from src.models.metric_views import MetricViewRead
+from src.models.metric_views import MetricViewLinks, MetricViewRead
 from src.repositories.assets_repository import asset_repo
 
 logger = get_logger(__name__)
@@ -50,6 +50,7 @@ class MetricViewsManager:
     def get_for_asset(
         self, asset_id: UUID, ws_client: Optional[WorkspaceClient],
         user_email: Optional[str] = None,
+        include_links: bool = True,
     ) -> MetricViewRead:
         """The metric view an asset points at (its ``location`` is the view's FQN).
 
@@ -59,7 +60,9 @@ class MetricViewsManager:
         ``ws_client`` is the requesting user's client, so Unity Catalog decides
         whether they may read the definition. The definition read is checked
         for drift against the view's baseline (``MetricViewBaselinesManager``);
-        ``user_email`` is recorded on a baseline this read creates. A
+        ``user_email`` is recorded on a baseline this read creates.
+        ``include_links=False`` leaves the concept links out (an empty
+        ``MetricViewLinks``), for a caller without ``semantic-models``. A
         materialized view's refresh state is read with the same client.
 
         Raises ``MetricViewNotFoundError`` when the asset doesn't exist, isn't a
@@ -107,7 +110,10 @@ class MetricViewsManager:
         return MetricViewRead(
             definition=definition,
             metric_view=spec,
-            links=self._links.list_for_metric_view(fqn, spec),
+            links=(
+                self._links.list_for_metric_view(fqn, spec) if include_links
+                else MetricViewLinks(view_entity_id=metric_view_entity_id(fqn))
+            ),
             baseline=baseline,
             drift=drift,
             refresh=read_refresh_state(ws_client, table, spec),

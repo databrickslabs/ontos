@@ -4328,19 +4328,26 @@ async def clone_contract_for_editing(
 
 
 @router.get('/data-contracts/{contract_id}/diff-from-parent', response_model=dict)
-async def get_diff_from_parent(
+def get_diff_from_parent(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    scope: dict = Depends(contract_read_scope),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
-    _contract: DataContractDb = Depends(readable_contract),
+    contract: DataContractDb = Depends(readable_contract),
 ):
     """Compare a contract to its parent and get version suggestion.
-    
+
     Returns the diff analysis and a suggested version bump based on
-    the changes detected between the contract and its parent.
+    the changes detected between the contract and its parent. The caller must
+    be able to read the parent too (same rule as /diff/); a miss answers 404.
     """
     from src.common.entity_diff import EntityTooLarge
+
+    if contract.parent_contract_id:
+        parent = data_contract_repo.get(db, id=contract.parent_contract_id)
+        if parent is None or not manager.can_read_contract(db, parent, **scope):
+            raise HTTPException(status_code=404, detail="Contract not found")
 
     try:
         result = manager.get_diff_from_parent(db=db, contract_id=contract_id)

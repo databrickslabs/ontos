@@ -284,3 +284,93 @@ class TestDiffSizeCap:
 
         assert resp.status_code == 413, resp.text
         assert "Too many fields" in resp.json()["detail"]
+
+
+class TestDiffFromParentReadGate:
+    """diff-from-parent reads the draft and its parent, so both pass the read rule."""
+
+    def test_contract_draft_of_another_user_answers_404(self, client, db_session, diff_routes):
+        family = str(uuid.uuid4())
+        parent = _contract(db_session, family, "1.0.0")
+        draft = _contract(
+            db_session, family, "1.1.0", status="draft", draft_owner_id="someone.else@example.com"
+        )
+        draft.parent_contract_id = parent.id
+        db_session.flush()
+        _as_caller(_scope())
+
+        resp = client.get(f"/api/data-contracts/{draft.id}/diff-from-parent")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Contract not found"
+
+    def test_contract_diff_from_parent_of_readable_pair_answers_200(
+        self, client, db_session, diff_routes
+    ):
+        family = str(uuid.uuid4())
+        parent = _contract(db_session, family, "1.0.0")
+        child = _contract(db_session, family, "1.1.0")
+        child.parent_contract_id = parent.id
+        db_session.flush()
+        _as_caller(_scope())
+
+        resp = client.get(f"/api/data-contracts/{child.id}/diff-from-parent")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["parent_id"] == parent.id
+
+    def test_contract_unreadable_parent_answers_404(self, client, db_session, diff_routes):
+        family = str(uuid.uuid4())
+        parent = _contract(db_session, family, "1.0.0", status="proposed")
+        child = _contract(db_session, family, "1.1.0")
+        child.parent_contract_id = parent.id
+        db_session.flush()
+        _as_caller(_scope())
+
+        resp = client.get(f"/api/data-contracts/{child.id}/diff-from-parent")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Contract not found"
+
+    def test_product_draft_of_another_user_answers_404(
+        self, client, db_session, diff_routes, product_manager
+    ):
+        family = str(uuid.uuid4())
+        parent = _product(db_session, family, "1.0.0")
+        draft = _product(db_session, family, "1.1.0", status="draft")
+        draft.draft_owner_id = "someone.else@example.com"
+        draft.parent_product_id = parent.id
+        db_session.flush()
+
+        resp = client.get(f"/api/data-products/{draft.id}/diff-from-parent")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Data product not found"
+
+    def test_product_diff_from_parent_of_readable_pair_answers_200(
+        self, client, db_session, diff_routes, product_manager
+    ):
+        family = str(uuid.uuid4())
+        parent = _product(db_session, family, "1.0.0")
+        child = _product(db_session, family, "1.0.1")
+        child.parent_product_id = parent.id
+        db_session.flush()
+
+        resp = client.get(f"/api/data-products/{child.id}/diff-from-parent")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["parent_id"] == parent.id
+
+    def test_product_unreadable_parent_answers_404(
+        self, client, db_session, diff_routes, product_manager
+    ):
+        family = str(uuid.uuid4())
+        parent = _product(db_session, family, "1.0.0", status="proposed")
+        child = _product(db_session, family, "1.0.1")
+        child.parent_product_id = parent.id
+        db_session.flush()
+
+        resp = client.get(f"/api/data-products/{child.id}/diff-from-parent")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Data product not found"

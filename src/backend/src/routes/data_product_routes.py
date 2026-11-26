@@ -2594,18 +2594,29 @@ async def clone_product_for_editing(
 
 
 @router.get('/data-products/{product_id}/diff-from-parent', response_model=DiffFromParentResponse)
-async def get_diff_from_parent(
+def get_diff_from_parent(
     product_id: str,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
     """Compare a draft product to its parent and suggest a version bump.
-    
-    Returns diff analysis with suggested semantic version bump.
+
+    Returns diff analysis with suggested semantic version bump. The caller must
+    be able to read both the product and its parent (same rule as /diff/); a
+    miss on either answers 404.
     """
     from src.common.entity_diff import EntityTooLarge
+
+    product = manager.get_product(product_id)
+    if not product or not _caller_can_read_product(request, db, current_user, manager, product):
+        raise HTTPException(status_code=404, detail="Data product not found")
+    if product.parent_product_id:
+        parent = manager.get_product(product.parent_product_id)
+        if not parent or not _caller_can_read_product(request, db, current_user, manager, parent):
+            raise HTTPException(status_code=404, detail="Data product not found")
 
     try:
         diff_data = manager.get_diff_from_parent(db=db, product_id=product_id)

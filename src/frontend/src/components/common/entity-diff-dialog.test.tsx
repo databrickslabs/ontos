@@ -147,6 +147,19 @@ describe('EntityDiffDialog', () => {
     expect(screen.queryByText('Showing 100 of 150')).not.toBeInTheDocument();
   });
 
+  it('counts each section from the whole diff, not the page on screen', async () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({
+      path: `properties[p${i}]`, op: 'removed' as const, bump: 'major' as const,
+      rule_id: 'property-removed', message: 'Property removed', old: { name: `p${i}` },
+    }));
+    mockFetch(diffResponse({ changes: many, changes_total: 150, counts: { major: 150, minor: 0, patch: 0, none: 0 } }));
+    renderDialog();
+
+    expect(await screen.findByText('properties[p0]')).toBeInTheDocument();
+    expect(screen.getByText('150')).toBeInTheDocument();
+    expect(screen.queryByText('100')).not.toBeInTheDocument();
+  });
+
   it('says when the response cut the change list at the cap', async () => {
     mockFetch(diffResponse({ changes_total: 5000, changes_truncated: true }));
     renderDialog();

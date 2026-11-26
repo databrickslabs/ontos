@@ -24,6 +24,8 @@ def to_yaml(doc: Dict[str, Any]) -> str:
 
 # Output caps: the response carries at most this many changes and YAML lines.
 # The counts still cover every change; the flags say when a list was cut.
+# Changes are cut by severity, MAJOR first, and every MAJOR is kept even past
+# the cap, so the breaking-change list and the suggested bump never lose one.
 MAX_RESPONSE_CHANGES = 1000
 MAX_UNIFIED_DIFF_LINES = 5000
 # difflib is quadratic in the YAML line count (about 0.3 s at 4000 lines a side,
@@ -89,6 +91,17 @@ def _ref(meta: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _capped_changes(changes: list) -> list:
+    """Changes in severity order (MAJOR first, stable), cut at the response cap.
+
+    Every MAJOR stays in the list: the cap is the larger of the limit and the
+    number of MAJORs, so the cut only drops MINOR, PATCH and NONE changes.
+    """
+    ordered = sorted(changes, key=lambda c: -c.bump)
+    majors = sum(1 for c in ordered if c.bump == Bump.MAJOR)
+    return ordered[: max(MAX_RESPONSE_CHANGES, majors)]
+
+
 def build_diff_response(
     entity_type: str,
     base_meta: Dict[str, Any],
@@ -114,13 +127,14 @@ def build_diff_response(
         max_lines=MAX_UNIFIED_DIFF_LINES,
         max_input_lines=MAX_YAML_INPUT_LINES,
     )
+    shown = _capped_changes(result.changes)
     return {
         "entity_type": entity_type,
         "base": _ref(base_meta),
         "target": _ref(target_meta),
-        "changes": [c.to_dict() for c in result.changes[:MAX_RESPONSE_CHANGES]],
+        "changes": [c.to_dict() for c in shown],
         "changes_total": len(result.changes),
-        "changes_truncated": len(result.changes) > MAX_RESPONSE_CHANGES,
+        "changes_truncated": len(shown) < len(result.changes),
         "counts": result.classification.counts(),
         "suggested_bump": result.suggested_bump.label,
         "suggested_version": result.suggested_version,

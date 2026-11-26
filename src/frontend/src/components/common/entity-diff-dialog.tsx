@@ -312,7 +312,7 @@ export default function EntityDiffDialog({
                         <Badge variant="outline" className={bumpBadgeClass(bump)}>
                           {t(`entityDiff.bump.${bump}`)}
                         </Badge>
-                        <span className="text-muted-foreground font-normal">{grouped[bump].length}</span>
+                        <span className="text-muted-foreground font-normal">{diff.counts[bump]}</span>
                       </h4>
                       <ul className="space-y-1">
                         {grouped[bump].map((c) => (

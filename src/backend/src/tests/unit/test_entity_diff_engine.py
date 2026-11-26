@@ -253,7 +253,10 @@ class TestSizeCaps:
             "schema": [
                 {
                     "name": "t",
-                    "properties": [{"name": f"p{n}", "logicalType": "integer"} for n in range(10)],
+                    "properties": [
+                        {"name": f"p{n}", "logicalType": "string", "description": "added"}
+                        for n in range(10)
+                    ],
                 }
             ]
         }
@@ -283,3 +286,80 @@ class TestSizeCaps:
 
         assert cut is True
         assert len(text.splitlines()) == 20
+
+
+class TestResponseCapKeepsMajors:
+    """The response cap cuts by severity, so a MAJOR is never dropped while counts report it."""
+
+    @staticmethod
+    def _render(monkeypatch, cap, old, new):
+        from src.common.entity_diff import render
+        from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
+
+        monkeypatch.setattr(render, "MAX_RESPONSE_CHANGES", cap)
+        return render.build_diff_response(
+            "data_contract",
+            {"id": "a", "version": "1.0.0"},
+            {"id": "b", "version": "2.0.0"},
+            old,
+            new,
+            ODCS_PROFILE,
+            ODCS_RULES,
+        )
+
+    def test_a_major_last_in_the_document_survives_the_cap(self, monkeypatch):
+        old_a = [
+            {"name": f"p{n}", "logicalType": "string", "description": "old"} for n in range(10)
+        ]
+        new_a = [
+            {"name": f"p{n}", "logicalType": "string", "description": "new"} for n in range(10)
+        ]
+        old = {
+            "schema": [
+                {"name": "a", "properties": old_a},
+                {
+                    "name": "z",
+                    "properties": [
+                        {"name": "gone", "logicalType": "string"},
+                        {"name": "keep", "logicalType": "string"},
+                    ],
+                },
+            ]
+        }
+        new = {
+            "schema": [
+                {"name": "a", "properties": new_a},
+                {"name": "z", "properties": [{"name": "keep", "logicalType": "string"}]},
+            ]
+        }
+
+        out = self._render(monkeypatch, 3, old, new)
+
+        assert out["changes"][0]["bump"] == "major"
+        assert any("gone" in c["path"] for c in out["changes"])
+        assert out["counts"]["major"] == 1
+        assert out["changes_total"] == 11
+        assert out["changes_truncated"] is True
+
+        from src.common.entity_diff.render import legacy_parent_diff
+
+        legacy = legacy_parent_diff(out)
+        assert any("gone" in line for line in legacy["analysis"]["breaking_changes"])
+
+    def test_every_major_is_kept_even_past_the_cap(self, monkeypatch):
+        old_a = [
+            {"name": f"p{n}", "logicalType": "string", "description": "old"} for n in range(6)
+        ]
+        new_a = [
+            {"name": f"p{n}", "logicalType": "string", "description": "new"} for n in range(6)
+        ]
+        gone = [{"name": f"gone{n}", "logicalType": "string"} for n in range(4)]
+        old = {"schema": [{"name": "a", "properties": old_a}, {"name": "z", "properties": gone}]}
+        new = {"schema": [{"name": "a", "properties": new_a}, {"name": "z", "properties": []}]}
+
+        out = self._render(monkeypatch, 2, old, new)
+
+        majors = [c for c in out["changes"] if c["bump"] == "major"]
+        assert len(majors) == out["counts"]["major"] == 4
+        assert out["changes_total"] == 10
+        assert out["changes_truncated"] is True

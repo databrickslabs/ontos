@@ -126,3 +126,61 @@ def test_a_refused_analysis_is_audited(client, review_manager, monkeypatch, veri
     assert response.status_code == 403, response.text
     audit = verify_audit_log(feature='data-asset-reviews', action='ANALYZE_ASSET', success=False)
     assert audit.details['exception']['status_code'] == 403
+
+
+class TestReviewMetricViewLinksNeedSemanticModels:
+    """The concept links of the review's metric view need Read-only on ``semantic-models``."""
+
+    VIEW = 'main.sales.revenue'
+    IRI = 'http://example.com/glossary#NetRevenue'
+
+    @pytest.fixture
+    def view_with_link(self, db_session, review_manager, user_client, monkeypatch):
+        from src.db_models.semantic_links import EntitySemanticLinkDb
+
+        db_session.add(EntitySemanticLinkDb(
+            entity_type='uc_table', entity_id=self.VIEW, iri=self.IRI))
+        db_session.flush()
+        _reviewed(monkeypatch, review_manager, AssetType.METRIC)
+
+    @pytest.fixture
+    def act_as(self, client, mock_test_user):
+        from src.app import app
+        from src.models.settings import AppRoleCreate
+
+        manager = app.state.settings_manager
+
+        def _act_as(name, levels):
+            role = manager.get_app_role_by_name(name) or manager.create_app_role(
+                AppRoleCreate(name=name, feature_permissions=levels))
+            manager.set_applied_role_override_for_user(
+                mock_test_user.email, str(role.id), caller_is_admin=True)
+
+        yield _act_as
+        manager.set_applied_role_override_for_user(mock_test_user.email, None)
+
+    def test_without_semantic_models_the_links_are_left_out(
+        self, client, act_as, view_with_link
+    ):
+        from src.common.features import FeatureAccessLevel as L
+
+        act_as('Reviewer without concepts', {'data-asset-reviews': L.READ_ONLY})
+        response = client.get(f'{BASE}/metric-view',
+                              headers={'x-forwarded-access-token': 'user-token-1234'})
+
+        assert response.status_code == 200, response.text
+        assert response.json()['links']['view_links'] == []
+        assert self.IRI not in response.text
+
+    def test_with_read_only_on_semantic_models_the_links_are_returned(
+        self, client, act_as, view_with_link
+    ):
+        from src.common.features import FeatureAccessLevel as L
+
+        act_as('Reviewer with concepts', {
+            'data-asset-reviews': L.READ_ONLY, 'semantic-models': L.READ_ONLY})
+        response = client.get(f'{BASE}/metric-view',
+                              headers={'x-forwarded-access-token': 'user-token-1234'})
+
+        assert response.status_code == 200, response.text
+        assert [link['iri'] for link in response.json()['links']['view_links']] == [self.IRI]

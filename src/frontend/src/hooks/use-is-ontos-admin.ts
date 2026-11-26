@@ -53,5 +53,8 @@ export function useIsOntosAdmin(): boolean {
   const groups = useUserStore((state) => state.userInfo?.groups);
   const email = useUserStore((state) => state.userInfo?.email);
   const { availableRoles } = usePermissions();
-  return useMemo(() => isOntosAdmin(groups, availableRoles, email), [groups, email, availableRoles]);
+  return useMemo(
+    () => isOntosAdmin(groups, availableRoles, email),
+    [groups, email, availableRoles],
+  );
 }

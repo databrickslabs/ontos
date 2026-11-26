@@ -2,6 +2,7 @@
 import re
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError
@@ -12,6 +13,7 @@ from src.common.logging import get_logger
 from src.models.compliance_templates import (
     ComplianceFieldCreate,
     ComplianceFieldRead,
+    ComplianceFieldUpdate,
     ComplianceTemplateCreate,
     ComplianceTemplateRead,
     ComplianceValueRead,
@@ -56,6 +58,31 @@ def raise_if_incomplete(result: CompletenessResult) -> None:
         "Cannot publish: required compliance fields are incomplete. " + " ".join(result.messages),
         missing=", ".join(result.missing),
     )
+
+
+# Value types whose allowed values are the field's possible_values.
+_VOCABULARY_TYPES = frozenset({ComplianceValueType.ENUM, ComplianceValueType.MULTI_ENUM})
+
+
+def _parse_field_update(payload: dict) -> ComplianceFieldUpdate:
+    """Parse a raw field-update body; a bad body is a 400 (ComplianceTemplateError), not a 422."""
+    try:
+        return ComplianceFieldUpdate.model_validate(payload)
+    except ValidationError as e:
+        problem = e.errors()[0]
+        name = ".".join(str(part) for part in problem.get("loc", ())) or "update"
+        if name == "value_type":
+            raise ComplianceTemplateError("Unknown value type.")
+        raise ComplianceTemplateError(f"Invalid value for '{name}': {problem.get('msg', 'invalid')}.")
+
+
+def _assert_vocabulary_fits_type(value_type: str, vocabulary: list[str] | None) -> None:
+    """An enum or multi_enum field needs allowed values; no other type takes them."""
+    if ComplianceValueType(value_type) in _VOCABULARY_TYPES:
+        if not vocabulary:
+            raise ComplianceTemplateError(f"{value_type} fields need at least one allowed value (possible_values).")
+    elif vocabulary:
+        raise ComplianceTemplateError("Only enum and multi_enum fields take possible_values.")
 
 
 def _validate_reference_id(reference_id: str) -> None:
@@ -206,62 +233,61 @@ class ComplianceTemplatesManager:
         Safe (persisted): label, hint, default, mandatory, group order, adding enum values,
         and any value_type / vocabulary change while no stored values exist.
         Unsafe (``ComplianceConflictError``, 409): changing value_type, or removing enum
-        values, while stored values exist.
+        values, while stored values exist. A malformed body or an inconsistent type and
+        vocabulary is a ``ComplianceTemplateError`` (400).
+
+        The whole update is checked before anything is written, and the response model is
+        built before the commit: a value that can't be read back must never be committed.
         """
         field = compliance_templates_repo.get_field(db, field_id)
         if not field:
             raise ComplianceNotFoundError("Field not found")
 
+        changes = _parse_field_update(payload).model_dump(exclude_unset=True)
+        # Identity fields: the editor sends them, but writing them would orphan stored values.
+        changes.pop("key", None)
+        changes.pop("reference_id", None)
+        if "value_type" in changes:
+            changes["value_type"] = changes["value_type"].value
+
         # Detect destructive changes: value_type change or possible_values narrowing
         has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0
-
-        # The route passes a raw JSON dict, so value_type may be a plain string OR a ComplianceValueType enum.
-        # Validate before anything is read or written: an unknown type must be a 400, never a committed row.
-        if "value_type" in payload:
-            raw_value_type = getattr(payload["value_type"], "value", payload["value_type"])
-            try:
-                payload["value_type"] = ComplianceValueType(raw_value_type).value
-            except (ValueError, TypeError):
-                raise ComplianceTemplateError(f"Unknown value type '{raw_value_type}'.")
-
         if has_stored_values:
-            if payload.get("value_type") is not None and payload["value_type"] != field.value_type:
+            if "value_type" in changes and changes["value_type"] != field.value_type:
                 raise ComplianceConflictError(
                     f"Cannot change field value type when stored values exist. "
                     f"Either delete stored values or use a new field."
                 )
             # Removing enum values is unsafe while values exist; adding them is not.
             # An explicit null clears the whole vocabulary, which removes every value.
-            if "possible_values" in payload and field.possible_values:
-                removed = set(field.possible_values) - set(payload["possible_values"] or [])
+            if "possible_values" in changes and field.possible_values:
+                removed = set(field.possible_values) - set(changes["possible_values"] or [])
                 if removed:
                     raise ComplianceConflictError(
                         f"Cannot remove enum values {sorted(removed)} when stored values exist. "
                         f"Edit the stored values first."
                     )
 
+        if "value_type" in changes or "possible_values" in changes:
+            _assert_vocabulary_fits_type(
+                changes.get("value_type", field.value_type),
+                changes.get("possible_values", field.possible_values),
+            )
+
         # Re-coerce default if value_type or possible_values changed
-        if "value_type" in payload or "possible_values" in payload or "default_value" in payload:
-            new_value_type = payload.get("value_type", field.value_type)
-            new_possible_values = payload.get("possible_values", field.possible_values)
-            new_default = payload.get("default_value", field.default_value)
+        if "value_type" in changes or "possible_values" in changes or "default_value" in changes:
+            new_value_type = changes.get("value_type", field.value_type)
+            new_possible_values = changes.get("possible_values", field.possible_values)
+            new_default = changes.get("default_value", field.default_value)
             try:
-                coerced = coerce_value(new_value_type, new_default, new_possible_values)
-                payload["default_value"] = coerced
+                changes["default_value"] = coerce_value(new_value_type, new_default, new_possible_values)
             except ValueTypeError as e:
                 raise ComplianceTemplateError(f"Default value error: {e}")
 
-        # Apply the update: safe attributes, and value_type / vocabulary (already checked above)
-        safe_update = {
-            k: v for k, v in payload.items()
-            if k in {
-                "label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order",
-                "field_order", "value_type", "possible_values",
-            }
-        }
-        updated = compliance_templates_repo.update_field(db, field_id=field_id, update_data=safe_update)
+        updated = compliance_templates_repo.update_field(db, field_id=field_id, update_data=changes)
+        read = ComplianceFieldRead.model_validate(updated)
         db.commit()
-        return ComplianceFieldRead.model_validate(updated)
+        return read
 
     def delete_field(self, db: Session, *, field_id: UUID) -> None:
         """Delete a field. Guarded: cannot delete if stored values exist."""

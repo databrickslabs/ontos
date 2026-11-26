@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator
 
 
 class ComplianceValueType(str, Enum):
@@ -43,18 +43,56 @@ class ComplianceFieldCreate(ComplianceFieldBase):
     pass
 
 
+# A field update's attributes that can't be cleared with an explicit null.
+_NOT_NULLABLE_UPDATE_FIELDS = ('label', 'is_mandatory', 'group_title', 'group_order', 'field_order', 'value_type')
+
+
 class ComplianceFieldUpdate(BaseModel):
+    """The writable attributes of a field, checked before anything is written.
+
+    The editor sends the whole field on every save, so ``key`` and ``reference_id``
+    are accepted but never written: they identify the field and its stored values.
+    Any other unknown key is rejected.
+    """
+    model_config = ConfigDict(extra='forbid')
+
     group_title: str | None = Field(None, max_length=255)
-    group_order: int | None = Field(None, ge=0)
-    key: str | None = Field(None, min_length=1, max_length=255)
-    label: str | None = Field(None, min_length=1, max_length=255)
-    reference_id: str | None = Field(None, min_length=1, max_length=255)
+    group_order: StrictInt | None = Field(None, ge=0)
+    key: str | None = Field(None, max_length=255)
+    label: str | None = Field(None, max_length=255)
+    reference_id: str | None = Field(None, max_length=255)
     value_type: ComplianceValueType | None = None
     possible_values: list[str] | None = None
     default_value: Any | None = None
     hint_text: str | None = None
-    is_mandatory: bool | None = None
-    field_order: int | None = Field(None, ge=0)
+    is_mandatory: StrictBool | None = None
+    field_order: StrictInt | None = Field(None, ge=0)
+
+    @field_validator(*_NOT_NULLABLE_UPDATE_FIELDS, mode='before')
+    @classmethod
+    def _not_null(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError('must not be null')
+        return value
+
+    @field_validator('label', mode='after')
+    @classmethod
+    def _label_not_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError('must not be blank')
+        return value.strip() if value is not None else None
+
+    @field_validator('possible_values', mode='after')
+    @classmethod
+    def _vocabulary_entries(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        cleaned = [value.strip() for value in values]
+        if any(not value for value in cleaned):
+            raise ValueError('entries must be non-empty strings')
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError('entries must be unique')
+        return cleaned
 
 
 class ComplianceFieldRead(ComplianceFieldBase):

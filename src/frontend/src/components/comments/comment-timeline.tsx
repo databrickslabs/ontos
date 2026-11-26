@@ -489,25 +489,28 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
           </span>
         );
         const source = typeof obj?.source === 'string' ? obj.source : undefined;
+        const label = (key: string) => (
+          <span className="text-muted-foreground">{t(`comments:descriptionChange.${key}`)}</span>
+        );
         return (
           <div className="text-sm space-y-1">
             {obj.name && (
-              <div><span className="text-muted-foreground">{t('comments:descriptionChange.name')}</span> {String(obj.name)}</div>
+              <div>{label('name')} {String(obj.name)}</div>
             )}
             {obj.location && (
-              <div><span className="text-muted-foreground">{t('comments:descriptionChange.location')}</span> {String(obj.location)}</div>
+              <div>{label('location')} {String(obj.location)}</div>
             )}
             <div className="whitespace-pre-wrap break-words">
-              <span className="text-muted-foreground">{t('comments:descriptionChange.before')}</span>{' '}
+              {label('before')}{' '}
               {obj.before ? String(obj.before) : empty}
             </div>
             <div className="whitespace-pre-wrap break-words">
-              <span className="text-muted-foreground">{t('comments:descriptionChange.after')}</span>{' '}
+              {label('after')}{' '}
               {obj.after ? String(obj.after) : empty}
             </div>
             {source && (
               <div>
-                <span className="text-muted-foreground">{t('comments:descriptionChange.source')}</span>{' '}
+                {label('source')}{' '}
                 {t(`assets:descriptionHistory.sources.${source}`, { defaultValue: source })}
               </div>
             )}

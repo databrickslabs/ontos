@@ -87,7 +87,7 @@ describe('DescriptionResetDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('lets a description that already matches be confirmed, to clear a not-in-sync mark', async () => {
+  it('lets a matching description be confirmed, to clear a not-in-sync mark', async () => {
     getMock.mockResolvedValue({
       data: { ...preview, description: 'Same', uc_comment: 'Same', in_sync: true },
     });

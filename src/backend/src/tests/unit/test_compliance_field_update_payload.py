@@ -61,7 +61,7 @@ BAD_PAYLOADS = [
     {"possible_values": ["a"]},  # a string field takes no vocabulary
     {"value_type": "numeric", "default_value": "not a number"},
     {"bogus": 1},  # unknown key
-    {"id": str(uuid4())},  # not a writable attribute
+    {"id": "00000000-0000-0000-0000-000000000001"},  # not a writable attribute
 ]
 
 

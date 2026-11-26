@@ -37,6 +37,9 @@ logger = get_logger(__name__)
 # supported server answers it. 3.19 = Tableau Server 2023.1 (minimum supported).
 _DISCOVERY_API_VERSION = "3.19"
 _PAGE_SIZE = 1000
+# Largest binary (image) response read; bigger answers are refused, not truncated
+MAX_BINARY_BYTES = 10 * 1024 * 1024
+_STREAM_CHUNK_BYTES = 64 * 1024
 # Tableau Cloud sessions last 120 minutes, Server 240; refresh well before.
 _SESSION_TTL_SECONDS = 100 * 60
 _JWT_TTL_SECONDS = 5 * 60
@@ -69,6 +72,7 @@ REASON_SERVER_ERROR = "server_error"
 REASON_BAD_RESPONSE = "bad_response"
 REASON_METADATA_UNAVAILABLE = "metadata_unavailable"
 REASON_RENDER_FAILED = "render_failed"
+REASON_TOO_LARGE = "too_large"
 REASON_SECRET_UNAVAILABLE = "secret_unavailable"
 REASON_NOT_CONFIGURED = "not_configured"
 REASON_INVALID_SECRET_NAME = "invalid_secret_name"
@@ -403,6 +407,7 @@ class TableauClient:
         json_body: Optional[Dict[str, Any]] = None,
         accept: str = "application/json",
         url: Optional[str] = None,
+        stream: bool = False,
     ) -> requests.Response:
         """Authenticated request; ``site_path`` is relative to ``/api/{v}/sites/{site-id}``.
 
@@ -416,6 +421,7 @@ class TableauClient:
             resp = self._send(
                 method, target, params=params, json=json_body,
                 headers={"X-Tableau-Auth": session.token, "Accept": accept},
+                **({"stream": True} if stream else {}),
             )
             if resp.status_code == 401 and attempt == 0:
                 force_new = True
@@ -446,9 +452,27 @@ class TableauClient:
                 return
             page += 1
 
-    def get_bytes(self, site_path: str, params: Optional[Dict[str, Any]] = None) -> bytes:
-        """Binary content (images). Tableau answers 406 to ``Accept: image/png``; use ``*/*``."""
-        return self._request("GET", site_path, params=params, accept="*/*").content
+    def get_bytes(
+        self, site_path: str, params: Optional[Dict[str, Any]] = None, *, max_bytes: int = MAX_BINARY_BYTES,
+    ) -> bytes:
+        """Binary content (images), streamed and capped at ``max_bytes``.
+
+        Tableau answers 406 to ``Accept: image/png``; use ``*/*``. A larger body is
+        refused, whether the declared length or the streamed bytes exceed the cap.
+        """
+        resp = self._request("GET", site_path, params=params, accept="*/*", stream=True)
+        try:
+            declared = str(resp.headers.get("Content-Length") or "")
+            if declared.isdigit() and int(declared) > max_bytes:
+                raise TableauAPIError(f"Image is larger than {max_bytes} bytes", reason=REASON_TOO_LARGE)
+            buffer = bytearray()
+            for chunk in resp.iter_content(chunk_size=_STREAM_CHUNK_BYTES):
+                buffer.extend(chunk)
+                if len(buffer) > max_bytes:
+                    raise TableauAPIError(f"Image is larger than {max_bytes} bytes", reason=REASON_TOO_LARGE)
+            return bytes(buffer)
+        finally:
+            resp.close()
 
     def graphql(self, query: str, variables: Optional[Dict[str, Any]] = None) -> GraphQLResult:
         """Metadata API query. Errors with severity WARNING are returned as warnings."""

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Callable, Dict, Optional
 
+from databricks.sdk.errors import NotFound
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -104,13 +105,28 @@ class DashboardSnapshotManager:
         db.flush()
         return state
 
-    @staticmethod
-    def _discard(db: Session, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Remove the stored image document and preview note, so neither the asset nor
-        products inheriting from it show a snapshot that must not be shown."""
+    def _delete_image(self, path: str) -> None:
+        """Remove the PNG from the UC Volume. A failure is logged: the rows still go,
+        so nothing shows the image, but the file may remain and needs cleaning up."""
+        from src.common.config import get_settings
+        from src.common.workspace_client import get_workspace_client
+
+        try:
+            ws = self._ws_provider() if self._ws_provider else get_workspace_client(get_settings())
+            ws.files.delete(path)
+        except NotFound:
+            return
+        except Exception as exc:
+            logger.warning(f"Could not delete dashboard snapshot file {path}: {type(exc).__name__}")
+
+    def _discard(self, db: Session, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove the stored image (rows and volume file) and preview note, so neither the
+        asset nor products inheriting from it show a snapshot that must not be shown."""
         for model, key in ((DocumentMetadataDb, "document_id"), (RichTextMetadataDb, "note_id")):
             row = db.get(model, _as_uuid(state.get(key))) if state.get(key) else None
             if row is not None:
+                if model is DocumentMetadataDb and row.storage_path:
+                    self._delete_image(row.storage_path)
                 db.delete(row)
         db.flush()
         return {**state, "document_id": None, "note_id": None}

@@ -257,3 +257,30 @@ def test_risk_check_fails_closed_without_the_metadata_api():
             raise TableauAPIError("Metadata API disabled", 400)
     risks = _tableau(NoMetadata()).snapshot_risks(PATH)
     assert risks and "Metadata API unavailable" in risks[0]
+
+
+def test_opting_out_deletes_the_image_from_the_volume(db_session, manager, dashboard, ws):
+    manager.capture(db_session, asset=dashboard, connector=FakeConnector(), current_user=None)
+    [doc], _ = _doc_and_note(db_session, dashboard)
+    path = doc.storage_path
+    manager.set_opt_out(db_session, dashboard, True)
+    ws.files.delete.assert_called_once_with(path)
+    assert _doc_and_note(db_session, dashboard) == ([], [])
+
+
+def test_user_filters_found_later_delete_the_image_from_the_volume(db_session, manager, dashboard, ws):
+    manager.capture(db_session, asset=dashboard, connector=FakeConnector(), current_user=None)
+    [doc], _ = _doc_and_note(db_session, dashboard)
+    path = doc.storage_path
+    dashboard.properties = {**dashboard.properties, "source_updated_at": "2026-11-07T00:00:00+00:00"}
+    manager.capture(db_session, asset=dashboard, connector=FakeConnector(risks=["'X' uses USERNAME()"]),
+                    current_user=None)
+    ws.files.delete.assert_called_once_with(path)
+
+
+def test_a_failed_volume_delete_still_removes_the_rows(db_session, manager, dashboard, ws):
+    manager.capture(db_session, asset=dashboard, connector=FakeConnector(), current_user=None)
+    ws.files.delete.side_effect = RuntimeError("volume unavailable")
+    state = manager.set_opt_out(db_session, dashboard, True)["snapshot"]
+    assert state["document_id"] is None
+    assert _doc_and_note(db_session, dashboard) == ([], [])

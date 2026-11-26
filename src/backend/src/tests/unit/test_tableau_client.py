@@ -22,7 +22,15 @@ class FakeResponse:
         self.status_code = status
         self._body = body
         self.content = content
+        self.headers = {}
         self.text = json.dumps(body) if body is not None else ""
+
+    def iter_content(self, chunk_size=1):
+        for start in range(0, len(self.content), chunk_size):
+            yield self.content[start:start + chunk_size]
+
+    def close(self):
+        pass
 
     def json(self):
         if self._body is None:
@@ -201,3 +209,56 @@ def test_graphql_errors_with_partial_data_are_incomplete():
     result = _client(http).graphql("query { workbooks { id } }")
     assert result.errors and result.warnings == []
     assert result.is_complete is False
+
+
+class _StreamResponse:
+    """A streamed answer: records whether the body was read and whether it was closed."""
+
+    def __init__(self, chunks, headers=None):
+        self.status_code = 200
+        self.headers = headers or {}
+        self.text = ""
+        self._chunks = chunks
+        self.read = []
+        self.closed = False
+
+    def iter_content(self, chunk_size=1):
+        for chunk in self._chunks:
+            self.read.append(chunk)
+            yield chunk
+
+    def close(self):
+        self.closed = True
+
+
+def test_binary_cap_is_ten_megabytes():
+    from src.connectors import tableau_client
+    assert tableau_client.MAX_BINARY_BYTES == 10 * 1024 * 1024
+
+
+def test_get_bytes_streams_the_body_and_closes_the_response():
+    stream = _StreamResponse([b"\x89PNG", b"rest"])
+    http = FakeHttp().on("POST", "/auth/signin", _signin()).on("GET", "/views/v-1/image", stream)
+    assert _client(http).get_bytes("/views/v-1/image") == b"\x89PNGrest"
+    assert stream.closed
+    assert http.calls[-1][2]["stream"] is True
+
+
+def test_get_bytes_refuses_a_declared_length_over_the_cap_without_reading_it():
+    from src.connectors.tableau_client import REASON_TOO_LARGE
+    stream = _StreamResponse([b"x" * 4], headers={"Content-Length": "11"})
+    http = FakeHttp().on("POST", "/auth/signin", _signin()).on("GET", "/views/v-1/image", stream)
+    with pytest.raises(TableauAPIError) as info:
+        _client(http).get_bytes("/views/v-1/image", max_bytes=10)
+    assert info.value.reason == REASON_TOO_LARGE
+    assert stream.read == [] and stream.closed
+
+
+def test_get_bytes_refuses_a_streamed_body_over_the_cap():
+    from src.connectors.tableau_client import REASON_TOO_LARGE
+    stream = _StreamResponse([b"x" * 6, b"y" * 6, b"z" * 6])
+    http = FakeHttp().on("POST", "/auth/signin", _signin()).on("GET", "/views/v-1/image", stream)
+    with pytest.raises(TableauAPIError) as info:
+        _client(http).get_bytes("/views/v-1/image", max_bytes=10)
+    assert info.value.reason == REASON_TOO_LARGE
+    assert stream.closed

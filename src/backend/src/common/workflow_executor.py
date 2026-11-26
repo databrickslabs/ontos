@@ -2354,11 +2354,10 @@ class ScriptStepHandler(StepHandler):
 
         language = script_language_of(self._config)
         code = self._config.get('code', '')
-        timeout_seconds = self._config.get('timeout_seconds', 60)
-        
+
         if not code:
             return StepResult(passed=False, error="No code configured")
-        
+
         try:
             if language == 'python':
                 return _coded_step_failure(
@@ -2366,7 +2365,7 @@ class ScriptStepHandler(StepHandler):
                     "Python script steps are disabled: rewrite the step in SQL or remove it",
                 )
             elif language == 'sql':
-                result = self._execute_sql(code, context, timeout_seconds)
+                result = self._execute_sql(code, context)
             else:
                 return StepResult(passed=False, error=f"Unsupported language: {language}")
             
@@ -2375,7 +2374,7 @@ class ScriptStepHandler(StepHandler):
             logger.exception(f"Script step failed: {e}")
             return StepResult(passed=False, error=str(e))
 
-    def _execute_sql(self, code: str, context: StepContext, timeout: int) -> StepResult:
+    def _execute_sql(self, code: str, context: StepContext) -> StepResult:
         """Execute SQL via Databricks statement_execution API."""
         from src.common.workflow_sql_params import (
             bind_sql_placeholders,

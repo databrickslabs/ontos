@@ -40,6 +40,25 @@ ADMIN_FEATURE_ID = "settings-compliance-templates"
 VALUES_FEATURE_ID = "compliance-template-values"
 
 
+def _assert_can_read_values(request: Request, db, current_user, entity_type: str, entity_id: str) -> None:
+    """Reading a product's compliance values follows the product read rule.
+
+    A product the caller can't read (a draft or proposed product they don't own, or
+    a missing one) answers 404, the same as the product page. Other entity types
+    keep the feature check.
+    """
+    if entity_type != "data_product":
+        return
+    from src.repositories.data_products_repository import data_product_repo
+    # The product page's read gate (published, admin, owner, pending reviewer). It
+    # takes an unused manager argument and fails closed on error.
+    from src.routes.data_product_routes import _caller_can_read_product
+
+    product = data_product_repo.get(db=db, id=entity_id)
+    if product is None or not _caller_can_read_product(request, db, current_user, None, product):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data product not found")
+
+
 def _assert_can_edit_values(request: Request, db, current_user, entity_type: str, entity_id: str) -> None:
     """Writing a product's compliance values needs the same edit rights as editing the product.
 
@@ -260,10 +279,14 @@ async def delete_template_field(
 async def read_entity_compliance(
     entity_type: str,
     entity_id: str,
+    request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     _: None = Depends(PermissionChecker(VALUES_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    """Composed read: { template, fields, values } for an entity. Read-only allowed."""
+    """Composed read: { template, fields, values } for an entity. Read-only allowed; a product
+    the caller can't read answers 404."""
+    _assert_can_read_values(request, db, current_user, entity_type, entity_id)
     return compliance_templates_manager.read_for_entity(db, entity_type=entity_type, entity_id=entity_id)
 
 
@@ -271,10 +294,14 @@ async def read_entity_compliance(
 async def entity_completeness(
     entity_type: str,
     entity_id: str,
+    request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     _: None = Depends(PermissionChecker(VALUES_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    """Advisory completeness result for an entity. Never blocks; read-only allowed."""
+    """Advisory completeness result for an entity. Never blocks; read-only allowed. Its
+    missing-field list reveals values, so the read rule applies here too."""
+    _assert_can_read_values(request, db, current_user, entity_type, entity_id)
     applicable = compliance_templates_manager.has_active_template(db, entity_type=entity_type)
     result = compliance_templates_manager.check_completeness(db, entity_type=entity_type, entity_id=entity_id)
     return ComplianceCompletenessRead(

@@ -61,6 +61,27 @@ INCOMPLETE_RESULT_CODES = {
 REASON_INVALID_URL = "invalid_server_url"
 REASON_BLOCKED_ADDRESS = "blocked_server_address"
 REASON_REDIRECT = "redirect_refused"
+REASON_UNREACHABLE = "unreachable"
+REASON_AUTH_FAILED = "auth_failed"
+REASON_FORBIDDEN = "forbidden"
+REASON_NOT_FOUND = "not_found"
+REASON_SERVER_ERROR = "server_error"
+REASON_BAD_RESPONSE = "bad_response"
+REASON_METADATA_UNAVAILABLE = "metadata_unavailable"
+REASON_RENDER_FAILED = "render_failed"
+REASON_SECRET_UNAVAILABLE = "secret_unavailable"
+REASON_NOT_CONFIGURED = "not_configured"
+REASON_INVALID_SECRET_NAME = "invalid_secret_name"
+
+
+def _reason_for_status(status: int) -> str:
+    if status == 401:
+        return REASON_AUTH_FAILED
+    if status == 403:
+        return REASON_FORBIDDEN
+    if status == 404:
+        return REASON_NOT_FOUND
+    return REASON_SERVER_ERROR
 
 
 class TableauAPIError(Exception):
@@ -279,7 +300,9 @@ class TableauClient:
                 method, url, verify=self._verify, timeout=self._timeout, allow_redirects=False, **kwargs,
             )
         except requests.RequestException as exc:
-            raise TableauAPIError(f"Cannot reach Tableau at {self.server_url}: {exc}") from exc
+            raise TableauAPIError(
+                f"Cannot reach Tableau at {self.server_url}: {exc}", reason=REASON_UNREACHABLE,
+            ) from exc
         if 300 <= resp.status_code < 400:
             raise TableauAPIError(
                 f"Tableau answered {method} with a redirect ({resp.status_code}) to {resp.headers.get('Location', '?')}",
@@ -364,8 +387,12 @@ class TableauClient:
             code = err.get("code")
             detail = err.get("detail") or err.get("summary") or ""
         except ValueError:
+            # Non-JSON bodies can be proxy pages: keep them in the server log only
             detail = resp.text[:300]
-        raise TableauAPIError(f"Tableau {what} failed ({resp.status_code}): {detail}", resp.status_code, code)
+        raise TableauAPIError(
+            f"Tableau {what} failed ({resp.status_code}): {detail}", resp.status_code, code,
+            reason=_reason_for_status(resp.status_code),
+        )
 
     def _request(
         self,

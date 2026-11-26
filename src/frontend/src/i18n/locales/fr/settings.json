@@ -863,6 +863,24 @@
       "caBundlePathHelp": "Facultatif. Bundle PEM pour Tableau Server avec une autorité de certification privée.",
       "defaultCatalog": "Catalogue par défaut",
       "defaultCatalogHelp": "Facultatif. Catalogue Unity Catalog des tables Databricks que Tableau nomme seulement schéma.table."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Impossible de joindre Tableau. Vérifiez l'URL du serveur et le réseau.",
+      "tableau_auth_failed": "Tableau a refusé la connexion. Vérifiez le PAT ou la Connected App et la valeur du secret.",
+      "tableau_forbidden": "Tableau a refusé l'accès. Le compte doit avoir accès à ce site et à son contenu.",
+      "tableau_not_found": "Tableau ne trouve pas l'élément demandé. Il a peut-être été déplacé ou supprimé.",
+      "tableau_server_error": "Tableau a renvoyé une erreur. Réessayez plus tard.",
+      "tableau_invalid_server_url": "L'URL du serveur Tableau doit être une adresse https.",
+      "tableau_blocked_server_address": "L'adresse du serveur Tableau n'est pas autorisée, car elle correspond à une adresse privée ou interne.",
+      "tableau_redirect_refused": "Tableau a répondu par une redirection, qui n'est pas suivie. Utilisez l'URL finale du serveur.",
+      "tableau_metadata_unavailable": "L'API Metadata de Tableau n'est pas disponible ou a renvoyé des résultats incomplets.",
+      "tableau_render_failed": "Tableau n'a pas pu générer l'image du tableau de bord.",
+      "tableau_secret_unavailable": "Le secret Unity Catalog n'a pas pu être lu. Vérifiez qu'il existe et que vous avez READ_SECRET dessus.",
+      "tableau_not_configured": "La connexion ne contient pas les paramètres requis.",
+      "tableau_invalid_secret_name": "Le secret doit être un nom Unity Catalog (catalog.schema.secret).",
+      "connection_error": "Le système source est injoignable.",
+      "import_failed": "Cet élément n'a pas pu être importé.",
+      "connection_test_failed": "Le test de connexion a échoué. Consultez le journal du serveur pour les détails."
     }
   },
   "schemaImporter": {

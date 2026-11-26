@@ -38,7 +38,14 @@ from src.connectors.base import (
     LineageLink,
     ListAssetsOptions,
 )
+from src.connectors.base import client_error_code
 from src.connectors.tableau_client import (
+    REASON_INVALID_SECRET_NAME,
+    REASON_METADATA_UNAVAILABLE,
+    REASON_NOT_CONFIGURED,
+    REASON_RENDER_FAILED,
+    REASON_SECRET_UNAVAILABLE,
+    REASON_UNREACHABLE,
     ConnectedAppAuth,
     PatAuth,
     TableauAPIError,
@@ -60,6 +67,11 @@ from databricks.sdk.errors import NotFound, PermissionDenied
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _code(reason: Optional[str]) -> str:
+    """Client-facing error code for a Tableau failure reason (translated in the UI)."""
+    return f"tableau_{reason or 'server_error'}"
 
 PROJECT, WORKBOOK, DATASOURCE, VIEW = "p", "wb", "ds", "v"
 _SEP = "~"
@@ -276,37 +288,42 @@ class TableauConnector(AssetConnector):
         name = (cfg.secret_name or "").strip()
         if not name:
             raise ConnectorAuthenticationError(
-                "The Tableau secret (a Unity Catalog secret) is not configured", connector_type=self.connector_type
+                "The Tableau secret (a Unity Catalog secret) is not configured", connector_type=self.connector_type,
+                code=_code(REASON_NOT_CONFIGURED),
             )
         if not _UC_SECRET_NAME_RE.match(name):
             raise ConnectorAuthenticationError(
                 f"'{name}' is not a Unity Catalog secret name (catalog.schema.secret)",
-                connector_type=self.connector_type,
+                connector_type=self.connector_type, code=_code(REASON_INVALID_SECRET_NAME),
             )
         if cfg.workspace_client is None:
             raise ConnectorAuthenticationError(
-                "No workspace client available to read the Tableau secret", connector_type=self.connector_type
+                "No workspace client available to read the Tableau secret", connector_type=self.connector_type,
+                code=_code(REASON_SECRET_UNAVAILABLE),
             )
         try:
             value = cfg.workspace_client.secrets_uc.get_secret(full_name=name, include_value=True).effective_value
         except NotFound:
             raise ConnectorAuthenticationError(
-                f"Unity Catalog secret '{name}' was not found", connector_type=self.connector_type
+                f"Unity Catalog secret '{name}' was not found", connector_type=self.connector_type,
+                code=_code(REASON_SECRET_UNAVAILABLE),
             ) from None
         except PermissionDenied:
             raise ConnectorAuthenticationError(
-                f"No READ_SECRET privilege on Unity Catalog secret '{name}'", connector_type=self.connector_type
+                f"No READ_SECRET privilege on Unity Catalog secret '{name}'", connector_type=self.connector_type,
+                code=_code(REASON_SECRET_UNAVAILABLE),
             ) from None
         except Exception as exc:
             # The SDK message can carry request details: log it, keep it out of the error
             logger.warning(f"Reading Unity Catalog secret '{name}' failed: {type(exc).__name__}: {exc}")
             raise ConnectorAuthenticationError(
-                f"Could not read Unity Catalog secret '{name}'", connector_type=self.connector_type
+                f"Could not read Unity Catalog secret '{name}'", connector_type=self.connector_type,
+                code=_code(REASON_SECRET_UNAVAILABLE),
             ) from None
         if not value:
             raise ConnectorAuthenticationError(
                 f"Unity Catalog secret '{name}' is empty, or the value was not returned (READ_SECRET is needed)",
-                connector_type=self.connector_type,
+                connector_type=self.connector_type, code=_code(REASON_SECRET_UNAVAILABLE),
             )
         return str(value).strip()
 
@@ -315,11 +332,14 @@ class TableauConnector(AssetConnector):
         secret = self._read_secret()
         if cfg.auth_mode == "pat":
             if not cfg.pat_name:
-                raise ConnectorAuthenticationError("PAT name is not configured", connector_type=self.connector_type)
+                raise ConnectorAuthenticationError(
+                    "PAT name is not configured", connector_type=self.connector_type, code=_code(REASON_NOT_CONFIGURED),
+                )
             return PatAuth(token_name=cfg.pat_name, token_secret=secret)
         if not (cfg.client_id and cfg.secret_id and cfg.username):
             raise ConnectorAuthenticationError(
-                "Connected App client id, secret id and username are required", connector_type=self.connector_type
+                "Connected App client id, secret id and username are required", connector_type=self.connector_type,
+                code=_code(REASON_NOT_CONFIGURED),
             )
         return ConnectedAppAuth(client_id=cfg.client_id, secret_id=cfg.secret_id, secret_value=secret, username=cfg.username)
 
@@ -327,11 +347,15 @@ class TableauConnector(AssetConnector):
         if self._client is None:
             cfg = self._cfg
             if not cfg.server_url:
-                raise ConnectorAuthenticationError("Tableau server URL is not configured", connector_type=self.connector_type)
+                raise ConnectorAuthenticationError(
+                    "Tableau server URL is not configured", connector_type=self.connector_type,
+                    code=_code(REASON_NOT_CONFIGURED),
+                )
             try:
                 validate_server_url(cfg.server_url)
             except TableauAPIError as exc:
-                raise ConnectorConnectionError(str(exc), connector_type=self.connector_type) from exc
+                logger.warning(f"Refused Tableau server URL: {exc}")
+                raise ConnectorConnectionError(str(exc), connector_type=self.connector_type, code=_code(exc.reason)) from exc
             self._client = TableauClient(
                 cfg.server_url,
                 cfg.site_content_url,
@@ -343,12 +367,17 @@ class TableauConnector(AssetConnector):
         return self._client
 
     def _translate(self, exc: TableauAPIError) -> Exception:
-        """Connector error for a Tableau API error: 401 → auth, 403 → permission, else connection."""
+        """Connector error for a Tableau API error: 401 → auth, 403 → permission, else connection.
+
+        The message stays in the server log; the client gets only the code.
+        """
+        logger.warning(f"Tableau request failed: {exc}")
+        code = _code(exc.reason)
         if exc.status == 401:
-            return ConnectorAuthenticationError(str(exc), connector_type=self.connector_type)
+            return ConnectorAuthenticationError(str(exc), connector_type=self.connector_type, code=code)
         if exc.status == 403:
-            return ConnectorPermissionError(str(exc), connector_type=self.connector_type)
-        return ConnectorConnectionError(str(exc), connector_type=self.connector_type)
+            return ConnectorPermissionError(str(exc), connector_type=self.connector_type, code=code)
+        return ConnectorConnectionError(str(exc), connector_type=self.connector_type, code=code)
 
     def _call(self, fn, *args, **kwargs):
         """Run a client call, translating API errors to connector errors."""
@@ -705,7 +734,8 @@ class TableauConnector(AssetConnector):
                     columns.append(self._field_column(f))
         except TableauAPIError as exc:
             logger.warning(f"Metadata API query for data source {luid} failed: {exc}")
-            properties["metadata_api_error"] = str(exc)
+            logger.warning(f"Metadata API lineage read failed: {exc}")
+            properties["metadata_api_error"] = _code(REASON_METADATA_UNAVAILABLE)
 
         return AssetMetadata(
             identifier=identifier, name=ds.get("name", ""), asset_type=UnifiedAssetType.TABLEAU_DATASOURCE,
@@ -834,9 +864,10 @@ class TableauConnector(AssetConnector):
             content = client.get_bytes(f"/views/{view_luid}/image", {"resolution": "high", "maxAge": 1})
             if content:
                 return DashboardSnapshot(status="ok", content=content, source="view_image")
-            status, error = "empty", "Tableau returned an empty image"
+            status, error = "empty", _code(REASON_RENDER_FAILED)
         except TableauAPIError as exc:
-            status, error = self._render_failure(exc), str(exc)
+            logger.warning(f"Snapshot render of view {view_luid} failed: {exc}")
+            status, error = self._render_failure(exc), _code(REASON_RENDER_FAILED)
         snapshot = DashboardSnapshot(status=status, error=error)
         if workbook_luid:
             try:
@@ -887,7 +918,9 @@ class TableauConnector(AssetConnector):
         try:
             metadata = self.get_asset_metadata(identifier)
         except Exception as exc:
-            return AssetValidationResult(identifier=identifier, exists=False, validated=False, message=str(exc))
+            logger.warning(f"Could not validate Tableau asset '{identifier}': {exc}")
+            code = client_error_code(exc, _code(None))
+            return AssetValidationResult(identifier=identifier, exists=False, validated=False, message=code)
         if metadata is None:
             return AssetValidationResult(identifier=identifier, exists=False, message="Not found")
         return AssetValidationResult(identifier=identifier, exists=True, asset_type=metadata.asset_type)
@@ -914,7 +947,11 @@ class TableauConnector(AssetConnector):
             result["available"] = True
             result["healthy"] = True
         except Exception as exc:
-            result["error"] = str(exc)
+            logger.warning(f"Tableau health check failed: {exc}")
+            if isinstance(exc, TableauAPIError):
+                result["error"] = _code(exc.reason)
+            else:
+                result["error"] = client_error_code(exc, _code(REASON_UNREACHABLE))
             return result
 
         try:
@@ -927,7 +964,8 @@ class TableauConnector(AssetConnector):
                     "names of content it does not own, so lineage to Unity Catalog will be incomplete."
                 )
         except TableauAPIError as exc:
-            result["warnings"].append(f"Could not read the account's site role: {exc}")
+            logger.warning(f"Could not read the account's site role: {exc}")
+            result["warnings"].append("Could not read the account's site role.")
 
         try:
             probe = client.graphql(_METADATA_PROBE_QUERY)
@@ -935,9 +973,10 @@ class TableauConnector(AssetConnector):
             if not probe.is_complete:
                 result["warnings"].append(f"Metadata API returned incomplete results: {probe.warning_codes}")
         except TableauAPIError as exc:
+            logger.warning(f"Tableau Metadata API is not available: {exc}")
             result["metadata_api"] = False
             result["warnings"].append(
                 "The Metadata API is not available (on Tableau Server it must be enabled with "
-                f"'tsm maintenance metadata-services enable'): {exc}"
+                "'tsm maintenance metadata-services enable')."
             )
         return result

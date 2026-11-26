@@ -881,6 +881,24 @@
       "caBundlePathHelp": "Optional. PEM bundle for Tableau Server with a private certificate authority.",
       "defaultCatalog": "Default catalog",
       "defaultCatalogHelp": "Optional. Unity Catalog catalog for Databricks tables Tableau names as schema.table only."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Tableau could not be reached. Check the server URL and the network.",
+      "tableau_auth_failed": "Tableau rejected the sign-in. Check the PAT or Connected App settings and the secret value.",
+      "tableau_forbidden": "Tableau denied access. The account needs access to this site and content.",
+      "tableau_not_found": "Tableau could not find the requested item. It may have been moved or deleted.",
+      "tableau_server_error": "Tableau returned an error. Try again later.",
+      "tableau_invalid_server_url": "The Tableau server URL must be an https address.",
+      "tableau_blocked_server_address": "The Tableau server address is not allowed because it resolves to a private or internal address.",
+      "tableau_redirect_refused": "Tableau answered with a redirect, which is not followed. Use the final server URL.",
+      "tableau_metadata_unavailable": "The Tableau Metadata API is not available or returned incomplete results.",
+      "tableau_render_failed": "Tableau could not render the dashboard image.",
+      "tableau_secret_unavailable": "The Unity Catalog secret could not be read. Check that it exists and that you have READ_SECRET on it.",
+      "tableau_not_configured": "The connection is missing required settings.",
+      "tableau_invalid_secret_name": "The secret must be a Unity Catalog name (catalog.schema.secret).",
+      "connection_error": "The source system could not be reached.",
+      "import_failed": "This item could not be imported.",
+      "connection_test_failed": "The connection test failed. See the server log for details."
     }
   },
   "schemaImporter": {

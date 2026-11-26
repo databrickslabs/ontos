@@ -5,6 +5,7 @@ Handles CRUD operations on the connections table, instantiates connectors
 on demand, and ensures a system Databricks connection exists at startup.
 """
 
+from src.connectors.base import client_error_code
 import json as _json
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -226,7 +227,7 @@ class ConnectionsManager:
                 "connector_type": db_obj.connector_type,
                 "connection_name": db_obj.name,
                 "healthy": False,
-                "error": str(exc),
+                "error": client_error_code(exc, "connection_test_failed"),
             }
 
     # ------------------------------------------------------------------

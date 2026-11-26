@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { connectorErrorText } from '@/lib/connector-error-text';
 import {
   ChevronRight,
   ChevronDown,
@@ -527,7 +528,7 @@ export default function SchemaBrowser({
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <pre className="text-xs mt-2 p-2 bg-muted rounded whitespace-pre-wrap break-all">
-                      {browseErrorDetail}
+                      {connectorErrorText(t, browseErrorDetail, browseErrorDetail)}
                     </pre>
                   </CollapsibleContent>
                 </Collapsible>

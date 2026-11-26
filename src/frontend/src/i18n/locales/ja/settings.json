@@ -863,6 +863,24 @@
       "caBundlePathHelp": "任意。プライベート認証局を使用する Tableau Server 用の PEM バンドル。",
       "defaultCatalog": "既定のカタログ",
       "defaultCatalogHelp": "任意。Tableau が schema.table とだけ表記する Databricks テーブルの Unity Catalog カタログ。"
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Tableau に接続できません。サーバー URL とネットワークを確認してください。",
+      "tableau_auth_failed": "Tableau がサインインを拒否しました。PAT または Connected App の設定とシークレット値を確認してください。",
+      "tableau_forbidden": "Tableau がアクセスを拒否しました。このサイトとコンテンツへのアクセス権が必要です。",
+      "tableau_not_found": "Tableau で要求された項目が見つかりません。移動または削除された可能性があります。",
+      "tableau_server_error": "Tableau がエラーを返しました。しばらくしてから再試行してください。",
+      "tableau_invalid_server_url": "Tableau サーバー URL は https のアドレスである必要があります。",
+      "tableau_blocked_server_address": "Tableau サーバーのアドレスは、プライベートまたは内部アドレスに解決されるため許可されていません。",
+      "tableau_redirect_refused": "Tableau がリダイレクトで応答しましたが、リダイレクトは追跡しません。最終的なサーバー URL を使用してください。",
+      "tableau_metadata_unavailable": "Tableau Metadata API が利用できないか、結果が不完全です。",
+      "tableau_render_failed": "Tableau でダッシュボード画像を描画できませんでした。",
+      "tableau_secret_unavailable": "Unity Catalog シークレットを読み取れませんでした。存在することと、READ_SECRET 権限があることを確認してください。",
+      "tableau_not_configured": "接続に必要な設定が不足しています。",
+      "tableau_invalid_secret_name": "シークレットは Unity Catalog 名（catalog.schema.secret）である必要があります。",
+      "connection_error": "ソースシステムに接続できません。",
+      "import_failed": "この項目はインポートできませんでした。",
+      "connection_test_failed": "接続テストに失敗しました。詳細はサーバーログを確認してください。"
     }
   },
   "schemaImporter": {

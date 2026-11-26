@@ -863,6 +863,24 @@
       "caBundlePathHelp": "Facoltativo. Bundle PEM per Tableau Server con un'autorità di certificazione privata.",
       "defaultCatalog": "Catalogo predefinito",
       "defaultCatalogHelp": "Facoltativo. Catalogo Unity Catalog per le tabelle Databricks che Tableau indica solo come schema.tabella."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Impossibile raggiungere Tableau. Controlla l'URL del server e la rete.",
+      "tableau_auth_failed": "Tableau ha rifiutato l'accesso. Controlla le impostazioni di PAT o Connected App e il valore del segreto.",
+      "tableau_forbidden": "Tableau ha negato l'accesso. L'account deve avere accesso a questo sito e ai suoi contenuti.",
+      "tableau_not_found": "Tableau non trova l'elemento richiesto. Potrebbe essere stato spostato o eliminato.",
+      "tableau_server_error": "Tableau ha restituito un errore. Riprova più tardi.",
+      "tableau_invalid_server_url": "L'URL del server Tableau deve essere un indirizzo https.",
+      "tableau_blocked_server_address": "L'indirizzo del server Tableau non è consentito perché risolve a un indirizzo privato o interno.",
+      "tableau_redirect_refused": "Tableau ha risposto con un reindirizzamento, che non viene seguito. Usa l'URL finale del server.",
+      "tableau_metadata_unavailable": "L'API Metadata di Tableau non è disponibile o ha restituito risultati incompleti.",
+      "tableau_render_failed": "Tableau non è riuscito a generare l'immagine della dashboard.",
+      "tableau_secret_unavailable": "Impossibile leggere il segreto di Unity Catalog. Verifica che esista e che tu abbia READ_SECRET su di esso.",
+      "tableau_not_configured": "Alla connessione mancano impostazioni obbligatorie.",
+      "tableau_invalid_secret_name": "Il segreto deve essere un nome Unity Catalog (catalog.schema.secret).",
+      "connection_error": "Impossibile raggiungere il sistema di origine.",
+      "import_failed": "Impossibile importare questo elemento.",
+      "connection_test_failed": "Il test di connessione non è riuscito. Consulta il log del server per i dettagli."
     }
   },
   "schemaImporter": {

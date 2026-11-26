@@ -881,6 +881,24 @@
       "caBundlePathHelp": "Opcional. Pacote PEM para Tableau Server com uma autoridade certificadora privada.",
       "defaultCatalog": "Catálogo padrão",
       "defaultCatalogHelp": "Opcional. Catálogo do Unity Catalog para tabelas do Databricks que o Tableau nomeia apenas como esquema.tabela."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Não foi possível contactar o Tableau. Verifique o URL do servidor e a rede.",
+      "tableau_auth_failed": "O Tableau recusou o início de sessão. Verifique as definições do PAT ou da Connected App e o valor do segredo.",
+      "tableau_forbidden": "O Tableau negou o acesso. A conta precisa de acesso a este site e ao seu conteúdo.",
+      "tableau_not_found": "O Tableau não encontrou o item pedido. Pode ter sido movido ou eliminado.",
+      "tableau_server_error": "O Tableau devolveu um erro. Tente novamente mais tarde.",
+      "tableau_invalid_server_url": "O URL do servidor Tableau tem de ser um endereço https.",
+      "tableau_blocked_server_address": "O endereço do servidor Tableau não é permitido porque resolve para um endereço privado ou interno.",
+      "tableau_redirect_refused": "O Tableau respondeu com um redirecionamento, que não é seguido. Use o URL final do servidor.",
+      "tableau_metadata_unavailable": "A API de metadados do Tableau não está disponível ou devolveu resultados incompletos.",
+      "tableau_render_failed": "O Tableau não conseguiu gerar a imagem do painel.",
+      "tableau_secret_unavailable": "Não foi possível ler o segredo do Unity Catalog. Verifique se existe e se tem READ_SECRET sobre ele.",
+      "tableau_not_configured": "A ligação não tem as definições obrigatórias.",
+      "tableau_invalid_secret_name": "O segredo tem de ser um nome do Unity Catalog (catalog.schema.secret).",
+      "connection_error": "Não foi possível contactar o sistema de origem.",
+      "import_failed": "Não foi possível importar este item.",
+      "connection_test_failed": "O teste de ligação falhou. Consulte o registo do servidor para mais detalhes."
     }
   },
   "schemaImporter": {

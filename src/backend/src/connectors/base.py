@@ -492,9 +492,20 @@ class AssetConnector(ABC):
 class ConnectorError(Exception):
     """Base exception for connector errors."""
     
-    def __init__(self, message: str, connector_type: str = "unknown"):
+    def __init__(self, message: str, connector_type: str = "unknown", code: Optional[str] = None):
         self.connector_type = connector_type
+        # ``message`` is for server logs; ``code`` is the client-facing, translatable reason
+        self.code = code
         super().__init__(f"[{connector_type}] {message}")
+
+
+def client_error_code(exc: BaseException, fallback: str) -> str:
+    """The client-facing code of an error: a connector's ``code``, else ``fallback``.
+
+    Never the raw message, and never a source system's own error code.
+    """
+    code = getattr(exc, "code", None) if isinstance(exc, ConnectorError) else None
+    return code or fallback
 
 
 class ConnectorNotFoundError(ConnectorError):

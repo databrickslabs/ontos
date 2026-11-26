@@ -881,6 +881,24 @@
       "caBundlePathHelp": "Optioneel. PEM-bundel voor Tableau Server met een private certificaatautoriteit.",
       "defaultCatalog": "Standaardcatalogus",
       "defaultCatalogHelp": "Optioneel. Unity Catalog-catalogus voor Databricks-tabellen die Tableau alleen als schema.tabel benoemt."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Tableau is niet bereikbaar. Controleer de server-URL en het netwerk.",
+      "tableau_auth_failed": "Tableau heeft de aanmelding geweigerd. Controleer de PAT- of Connected App-instellingen en de geheime waarde.",
+      "tableau_forbidden": "Tableau heeft de toegang geweigerd. Het account heeft toegang nodig tot deze site en de inhoud.",
+      "tableau_not_found": "Tableau kan het gevraagde item niet vinden. Het is mogelijk verplaatst of verwijderd.",
+      "tableau_server_error": "Tableau gaf een fout terug. Probeer het later opnieuw.",
+      "tableau_invalid_server_url": "De Tableau-server-URL moet een https-adres zijn.",
+      "tableau_blocked_server_address": "Het Tableau-serveradres is niet toegestaan omdat het naar een privé- of intern adres verwijst.",
+      "tableau_redirect_refused": "Tableau antwoordde met een doorverwijzing, die niet wordt gevolgd. Gebruik de uiteindelijke server-URL.",
+      "tableau_metadata_unavailable": "De Tableau Metadata API is niet beschikbaar of gaf onvolledige resultaten.",
+      "tableau_render_failed": "Tableau kon de dashboardafbeelding niet renderen.",
+      "tableau_secret_unavailable": "Het Unity Catalog-geheim kon niet worden gelezen. Controleer of het bestaat en of je READ_SECRET erop hebt.",
+      "tableau_not_configured": "De verbinding mist verplichte instellingen.",
+      "tableau_invalid_secret_name": "Het geheim moet een Unity Catalog-naam zijn (catalog.schema.secret).",
+      "connection_error": "Het bronsysteem is niet bereikbaar.",
+      "import_failed": "Dit item kon niet worden geïmporteerd.",
+      "connection_test_failed": "De verbindingstest is mislukt. Zie het serverlogboek voor details."
     }
   },
   "schemaImporter": {

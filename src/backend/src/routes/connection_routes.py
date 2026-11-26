@@ -121,7 +121,7 @@ async def create_connection(
         return result
     except Exception as e:
         logger.error(f"Error creating connection: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Could not create the connection")
 
 
 @router.put("/connections/{connection_id}")

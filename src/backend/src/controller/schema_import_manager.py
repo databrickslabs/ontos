@@ -5,6 +5,7 @@ Bridges external connectors with persisted Ontos assets.  Provides browse,
 preview, and import operations.
 """
 
+from src.connectors.base import client_error_code
 import threading
 from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
@@ -205,7 +206,8 @@ class SchemaImportManager:
         except Exception as exc:
             logger.warning(f"Connector error browsing {connection_id}: {exc}")
             browse_error = "Connection error"
-            browse_error_detail = str(exc)
+            # The connector's code when it has one (translated by the UI); never its raw message
+            browse_error_detail = client_error_code(exc, "connection_error")
             containers = []
 
         # Sort containers alphabetically (case-insensitive) so the tree is
@@ -493,13 +495,13 @@ class SchemaImportManager:
             except Exception as exc:
                 logger.error(f"Failed to create asset for '{item.path}': {exc}", exc_info=True)
                 result.errors += 1
-                result.error_messages.append(f"{item.path}: {exc}")
+                result.error_messages.append(f"{item.path}: {client_error_code(exc, 'import_failed')}")
                 result.items.append(ImportResultItem(
                     path=item.path,
                     name=item.name,
                     asset_type=item.asset_type,
                     action="error",
-                    error=str(exc),
+                    error=client_error_code(exc, "import_failed"),
                     parent_path=item.parent_path,
                 ))
 

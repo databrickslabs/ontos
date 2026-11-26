@@ -863,6 +863,24 @@
       "caBundlePathHelp": "Optional. PEM-Bundle für Tableau Server mit privater Zertifizierungsstelle.",
       "defaultCatalog": "Standardkatalog",
       "defaultCatalogHelp": "Optional. Unity-Catalog-Katalog für Databricks-Tabellen, die Tableau nur als schema.tabelle benennt."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Tableau ist nicht erreichbar. Prüfen Sie die Server-URL und das Netzwerk.",
+      "tableau_auth_failed": "Tableau hat die Anmeldung abgelehnt. Prüfen Sie die PAT- bzw. Connected-App-Einstellungen und den Geheimniswert.",
+      "tableau_forbidden": "Tableau hat den Zugriff verweigert. Das Konto braucht Zugriff auf diese Site und die Inhalte.",
+      "tableau_not_found": "Tableau konnte das angeforderte Element nicht finden. Es wurde möglicherweise verschoben oder gelöscht.",
+      "tableau_server_error": "Tableau hat einen Fehler zurückgegeben. Versuchen Sie es später erneut.",
+      "tableau_invalid_server_url": "Die Tableau-Server-URL muss eine https-Adresse sein.",
+      "tableau_blocked_server_address": "Die Tableau-Serveradresse ist nicht zulässig, weil sie auf eine private oder interne Adresse auflöst.",
+      "tableau_redirect_refused": "Tableau hat mit einer Weiterleitung geantwortet, die nicht verfolgt wird. Verwenden Sie die endgültige Server-URL.",
+      "tableau_metadata_unavailable": "Die Tableau Metadata API ist nicht verfügbar oder hat unvollständige Ergebnisse geliefert.",
+      "tableau_render_failed": "Tableau konnte das Dashboard-Bild nicht rendern.",
+      "tableau_secret_unavailable": "Das Unity-Catalog-Geheimnis konnte nicht gelesen werden. Prüfen Sie, ob es existiert und ob Sie READ_SECRET darauf haben.",
+      "tableau_not_configured": "Der Verbindung fehlen erforderliche Einstellungen.",
+      "tableau_invalid_secret_name": "Das Geheimnis muss ein Unity-Catalog-Name sein (catalog.schema.secret).",
+      "connection_error": "Das Quellsystem ist nicht erreichbar.",
+      "import_failed": "Dieses Element konnte nicht importiert werden.",
+      "connection_test_failed": "Der Verbindungstest ist fehlgeschlagen. Details finden Sie im Server-Log."
     }
   },
   "schemaImporter": {

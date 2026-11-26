@@ -150,6 +150,19 @@ def _call(world, persona, tool, **args):
     return _run(create_default_registry().execute(tool, _ctx(world, PERSONAS[persona]), args))
 
 
+def _with_concepts(caller):
+    """The link reads need Read-only on semantic-models (the level of their REST
+    routes, tested in test_tool_authz_fail_closed); the read rule is on top."""
+    if caller is None:
+        return None
+    return dataclasses.replace(caller, permissions={
+        **caller.permissions, 'semantic-models': FeatureAccessLevel.READ_ONLY})
+
+
+def _link_call(world, caller, tool, **args):
+    return _run(create_default_registry().execute(tool, _ctx(world, caller), args))
+
+
 @pytest.mark.parametrize('persona', sorted(PERSONAS))
 class TestByPersona:
     def test_get_data_product(self, world, persona):
@@ -219,14 +232,21 @@ class TestByPersona:
                     label='Customer', created_by='x'))
         world.db.commit()
 
-        found = _call(world, persona, 'find_entities_by_concept', concept_iri=IRI)
+        caller = PERSONAS[persona]
+        if caller is None:
+            # No identity: no level on semantic-models, refused before any read rule.
+            res = _link_call(world, None, 'find_entities_by_concept', concept_iri=IRI)
+            assert res.success is False and res.error_code == 'tool_not_permitted'
+            return
+        caller = _with_concepts(caller)
+        found = _link_call(world, caller, 'find_entities_by_concept', concept_iri=IRI)
         expected = {world.p[k].id for k in READABLE[persona]}
         expected |= {world.c[k].id for k in READABLE[persona]}
         assert {e['entity_id'] for e in found.data['entities']} == expected
 
         for key, row in world.p.items():
-            res = _call(world, persona, 'list_semantic_links',
-                        entity_type='data_product', entity_id=row.id)
+            res = _link_call(world, caller, 'list_semantic_links',
+                             entity_type='data_product', entity_id=row.id)
             assert res.data['total_found'] == (1 if key in READABLE[persona] else 0), key
 
     def test_entity_tags(self, world, persona):
@@ -423,6 +443,12 @@ class _Graph:
 
 
 def _graph_ctx(world, caller, graph):
+    # The graph tools need Read-only on semantic-models (the level of their REST routes,
+    # tested in test_tool_authz_fail_closed); what is tested here is the read rule on top.
+    if caller is not None:
+        caller = dataclasses.replace(
+            caller,
+            permissions={**caller.permissions, 'semantic-models': FeatureAccessLevel.READ_ONLY})
     ctx = _ctx(world, caller)
     ctx.semantic_models_manager = graph
     return ctx
@@ -443,6 +469,9 @@ class TestGraphNodes:
             res = _run(create_default_registry().execute(
                 'get_concept_neighbors', ctx,
                 {'concept_iri': 'urn:ontos:entity-type:data_product'}))
+            if PERSONAS[persona] is None:  # no identity: refused before the read rule
+                assert res.success is False and res.error_code == 'tool_not_permitted'
+                continue
             got = {n['step_iri'] for n in res.data['incoming']}
             assert got == {nodes[k] for k in readable}, persona
 
@@ -498,12 +527,13 @@ class TestDerivedEntities:
             world.db.add(EntitySemanticLinkDb(id=uuid.uuid4(), entity_id=eid, entity_type=etype,
                                               iri=IRI, label='Customer', created_by='x'))
         world.db.commit()
-        found = _call(world, 'consumer', 'find_entities_by_concept', concept_iri=IRI)
+        consumer, adm = _with_concepts(PERSONAS['consumer']), _with_concepts(PERSONAS['admin'])
+        found = _link_call(world, consumer, 'find_entities_by_concept', concept_iri=IRI)
         assert {e['entity_id'] for e in found.data['entities']} == {f'{pub}#public'}
-        admin = _call(world, 'admin', 'find_entities_by_concept', concept_iri=IRI)
+        admin = _link_call(world, adm, 'find_entities_by_concept', concept_iri=IRI)
         assert len(admin.data['entities']) == 3
-        res = _call(world, 'consumer', 'list_semantic_links',
-                    entity_type='data_contract_schema', entity_id=f'{draft}#secret_schema')
+        res = _link_call(world, consumer, 'list_semantic_links',
+                         entity_type='data_contract_schema', entity_id=f'{draft}#secret_schema')
         assert res.data['total_found'] == 0
 
 

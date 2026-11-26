@@ -10,7 +10,7 @@ from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.tools import read_access
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -43,6 +43,7 @@ class SearchDomainsTool(BaseTool):
     }
     required_params = ["query"]
     required_scope = "domains:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -102,6 +103,7 @@ class GetDomainTool(BaseTool):
     }
     required_params = ["domain_id"]
     required_scope = "domains:read"
+    required_permission = ANY_CALLER
     
     async def execute(
         self,

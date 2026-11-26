@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from src.common.logging import get_logger
 from src.tools import read_access
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -32,6 +32,7 @@ class GetDataProductCostsTool(BaseTool):
     }
     required_params = []
     required_scope = "costs:read"
+    required_permission = ANY_CALLER
     
     async def execute(
         self,

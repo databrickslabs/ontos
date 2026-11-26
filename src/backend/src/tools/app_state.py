@@ -41,7 +41,7 @@ from src.db_models.data_products import DataProductDb
 from src.db_models.projects import ProjectDb
 from src.db_models.settings import AppRoleDb
 from src.db_models.teams import TeamDb
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -176,6 +176,7 @@ class GetAppStateTool(BaseTool):
     parameters: Dict[str, Any] = {}
     required_params: list = []
     required_scope = None  # type: ignore[assignment]
+    required_permission = ANY_CALLER
 
     async def execute(self, ctx: ToolContext, **kwargs) -> ToolResult:
         # No params; ignore kwargs (the LLM occasionally passes empty

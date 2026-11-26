@@ -172,6 +172,11 @@ class ToolResult:
 # matching REST route requires (or the caller is unknown).
 TOOL_NOT_PERMITTED_CODE = "tool_not_permitted"
 
+# Declared by a tool that needs no feature level: any caller may run it, with or
+# without an identity (the MCP API-key caller has none). It is an explicit
+# choice, never a default: a tool that declares nothing is refused.
+ANY_CALLER: tuple[str, FeatureAccessLevel] = ("*", FeatureAccessLevel.NONE)
+
 
 @dataclass
 class ToolCaller:
@@ -241,10 +246,24 @@ def check_tool_permission(tool: "BaseTool", ctx: ToolContext) -> Optional[ToolRe
     """Apply a tool's declared ``required_permission``; ``None`` means it may run.
 
     Called by every runner (``ToolRegistry.execute`` and the MCP handler)
-    before ``execute``.
+    before ``execute``. Fails closed: a tool that declares nothing is refused
+    (``ANY_CALLER`` is the explicit "no feature level needed").
     """
     required = getattr(tool, "required_permission", None)
     if not required:
+        logger.error(
+            "[%s] refused: the tool declares no required_permission (use ANY_CALLER "
+            "for a tool that needs no feature level); caller=%s auth_path=%s",
+            getattr(tool, "name", type(tool).__name__),
+            ctx.caller.email if ctx.caller else None,
+            ctx.caller.auth_path if ctx.caller else None,
+        )
+        return ToolResult(
+            success=False,
+            error="Not allowed: this tool declares no required permission.",
+            error_code=TOOL_NOT_PERMITTED_CODE,
+        )
+    if required == ANY_CALLER:
         return None
     feature_id, required_level = required
     return permission_refusal(ctx, feature_id, required_level, tool.name)
@@ -275,7 +294,8 @@ class BaseTool(ABC):
     required_scope: str = "*"  # Default: admin-only, subclasses should override
     category: str = "general"  # Tool category for query-based filtering
     # (feature_id, level) the caller needs, the same as the matching REST
-    # route's PermissionChecker. Every tool that changes data declares one.
+    # route's PermissionChecker, or ``ANY_CALLER``. Every tool declares one:
+    # a tool without it is refused (``check_tool_permission``).
     required_permission: Optional[tuple[str, FeatureAccessLevel]] = None
     
     @abstractmethod

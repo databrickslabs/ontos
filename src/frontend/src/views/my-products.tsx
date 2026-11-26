@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Package, ExternalLink, ShoppingBag, Search, X, LayoutList, Network, Database, Grid2X2 } from 'lucide-react';
-import { CardSkeleton, SkeletonBlock } from '@/components/common/list-view-skeleton';
+import { CardSkeleton, SkeletonBlock, SkeletonLine, skeletonWidth } from '@/components/common/list-view-skeleton';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { useDomains } from '@/hooks/use-domains';
 import { useViewModeStore } from '@/stores/view-mode-store';
@@ -264,7 +264,14 @@ export default function MyProducts() {
             </div>
           </div>
         </div>
-        {domainsLoading || domainDetailsLoading ? (
+        {(domainsLoading || domainDetailsLoading) && domainBrowserStyle === 'pills' ? (
+          // A row of domain pills (size="sm" buttons)
+          <div className="flex flex-wrap gap-2" aria-hidden="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <SkeletonLine key={i} height="h-8" width="" className="rounded-full" style={{ width: skeletonWidth(i, 72, 64) }} />
+            ))}
+          </div>
+        ) : domainsLoading || domainDetailsLoading ? (
           <SkeletonBlock height="h-[220px]" className="rounded-lg" />
         ) : domainBrowserStyle === 'pills' ? (
           <div className="flex flex-wrap gap-2">

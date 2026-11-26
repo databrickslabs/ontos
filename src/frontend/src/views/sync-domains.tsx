@@ -38,6 +38,7 @@ import type {
   DomainSyncNode,
   SyncAction,
 } from '@/types/domain-sync';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 const TOP_LEVEL = '__top__';
 
@@ -94,6 +95,7 @@ export default function SyncDomainsView() {
 
   const [direction, setDirection] = useState<SyncDirection>('import_from_uc');
   const [domains, setDomains] = useState<DataDomain[]>([]);
+  const [domainsLoaded, setDomainsLoaded] = useState(false);
   const [targetId, setTargetId] = useState<string>(TOP_LEVEL); // import root / export anchor
   const [preview, setPreview] = useState<DomainSyncPreview | null>(null);
   const [result, setResult] = useState<DomainSyncResult | null>(null);
@@ -115,6 +117,8 @@ export default function SyncDomainsView() {
       if (resp.data) setDomains(resp.data);
     } catch (err) {
       console.error('Failed to fetch domains:', err);
+    } finally {
+      setDomainsLoaded(true);
     }
   }, [apiGet]);
 
@@ -238,27 +242,32 @@ export default function SyncDomainsView() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Select
-                value={targetId}
-                onValueChange={(v) => {
-                  setTargetId(v);
-                  resetPlan();
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TOP_LEVEL}>
-                    {isImport ? t('data-domains:sync.target.importTopLevel') : t('data-domains:sync.target.exportTopLevel')}
-                  </SelectItem>
-                  {domains.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
+              {!domainsLoaded ? (
+                // Shaped like the select below, whose options are the domains
+                <SkeletonLine height="h-10" width="w-full" />
+              ) : (
+                <Select
+                  value={targetId}
+                  onValueChange={(v) => {
+                    setTargetId(v);
+                    resetPlan();
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={TOP_LEVEL}>
+                      {isImport ? t('data-domains:sync.target.importTopLevel') : t('data-domains:sync.target.exportTopLevel')}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {domains.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </CardContent>
           </Card>
 

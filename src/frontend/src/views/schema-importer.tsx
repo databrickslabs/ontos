@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Import, Loader2, Eye } from 'lucide-react';
+import { Import, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -22,6 +22,7 @@ import SchemaBrowser from '@/components/schema-importer/schema-browser';
 import ImportPreviewDialog from '@/components/schema-importer/import-preview-dialog';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import { useToast } from '@/hooks/use-toast';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 export default function SchemaImporterView() {
   const { t } = useTranslation(['database-schema', 'settings', 'common']);
@@ -141,10 +142,8 @@ export default function SchemaImporterView() {
             </CardHeader>
             <CardContent>
               {isLoadingConnections ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('common:states.loading')}
-                </div>
+                // Shaped like the connection select below
+                <SkeletonLine height="h-10" width="w-full" />
               ) : connections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {t('database-schema:importer.noConnections')}

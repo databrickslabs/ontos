@@ -36,6 +36,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import type { Connection } from '@/types/connections';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 // -- Types --
 
@@ -498,9 +499,8 @@ export default function OntologyGeneratorView() {
             </CardHeader>
             <CardContent>
               {isLoadingConnections ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> {t('common:states.loading')}
-                </div>
+                // Shaped like the connection select below
+                <SkeletonLine height="h-10" width="w-full" />
               ) : connections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {t('semantic-models:ontologyGenerator.noConnections')}

@@ -7,7 +7,6 @@ import {
   Upload,
   Zap,
   ArrowUpFromLine,
-  Loader2,
   List,
   ListTree,
   Share2,
@@ -34,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { GuidedGenerateDialog } from '@/components/concepts/guided-generate-dialog';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 // A recent creation-work item shown in the "In progress" list. Sourced from the
 // ontology generator runs endpoint (real data). Imports do not yet have a
@@ -45,6 +45,11 @@ interface GenerationRunSummary {
   created_at?: string | null;
   step_count?: number;
 }
+
+// Stands in for the in-progress runs while they load (see ContentSkeleton)
+const IN_PROGRESS_SAMPLE: GenerationRunSummary[] = [
+  { run_id: 'sample', status: 'completed', progress_message: 'Draft not yet assigned to a concept scheme.', created_at: '2026-01-01T00:00:00Z', step_count: 4 },
+];
 
 function formatDate(iso?: string | null): string {
   if (!iso) return '';
@@ -468,18 +473,17 @@ export default function DefineView() {
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
         {t('semantic-models:define.inProgress', 'In progress')}
       </h3>
-      {runsLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {t('common:status.loading', 'Loading…')}
-        </div>
-      ) : inProgress.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">
-          {t('semantic-models:define.noInProgress', 'No creation work in progress. Start with one of the paths above.')}
-        </p>
-      ) : (
+      <ContentSkeleton
+        loading={runsLoading}
+        empty={inProgress.length === 0}
+        emptyMessage={
+          <p className="text-sm text-muted-foreground py-4">
+            {t('semantic-models:define.noInProgress', 'No creation work in progress. Start with one of the paths above.')}
+          </p>
+        }
+      >
         <div className="flex flex-col gap-1.5">
-          {inProgressPage.map((run) => (
+          {(runsLoading ? IN_PROGRESS_SAMPLE : inProgressPage).map((run) => (
             <Card key={run.run_id}>
               {/* Thin, single-line row: icon · name+status · message · metadata
                   (time, steps) all on ONE line, then the Review action. The
@@ -532,7 +536,7 @@ export default function DefineView() {
             onPageSizeChange={setInProgressPageSize}
           />
         </div>
-      )}
+      </ContentSkeleton>
 
       {/* Author: create a new concept scheme in place (reuses the collection
           editor; a collection IS a concept scheme in the domain model). */}

@@ -11,6 +11,11 @@ import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import { useNavHiddenFeatures } from '@/hooks/use-nav-hidden-features';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
+
+// Stand in for the version and start time while they load (see ContentSkeleton)
+const VERSION_SAMPLE = '1.0.0';
+const START_TIME_SAMPLE = 'Jan 1, 2026, 12:00:00 PM';
 
 export default function About() {
   const { t } = useTranslation(['about', 'features']);
@@ -54,7 +59,7 @@ export default function About() {
             <div>
               <p className="text-sm text-muted-foreground">{t('about:version')}</p>
               {loading ? (
-                <p className="font-semibold">{t('about:loading')}</p>
+                <ContentSkeleton loading><p className="font-semibold">{VERSION_SAMPLE}</p></ContentSkeleton>
               ) : appVersion ? (
                 <p className="font-semibold">{appVersion}</p>
               ) : (
@@ -64,7 +69,7 @@ export default function About() {
             <div>
               <p className="text-sm text-muted-foreground">{t('about:runningSince')}</p>
               {loading ? (
-                <p className="font-semibold">{t('about:loading')}</p>
+                <ContentSkeleton loading><p className="font-semibold">{START_TIME_SAMPLE}</p></ContentSkeleton>
               ) : serverStartTime ? (
                 <p className="font-semibold">{format(new Date(serverStartTime), 'PPpp')}</p>
               ) : (
@@ -88,7 +93,7 @@ export default function About() {
           <div>
             <p className="text-sm text-muted-foreground">{t('about:version')}</p>
             {loading ? (
-              <p className="font-semibold">{t('about:loading')}</p>
+              <ContentSkeleton loading><p className="font-semibold">{VERSION_SAMPLE}</p></ContentSkeleton>
             ) : appVersion ? (
               <p className="font-semibold">{appVersion}</p>
             ) : (
@@ -98,7 +103,7 @@ export default function About() {
           <div>
             <p className="text-sm text-muted-foreground">{t('about:runningSince')}</p>
             {loading ? (
-              <p className="font-semibold">{t('about:loading')}</p>
+              <ContentSkeleton loading><p className="font-semibold">{START_TIME_SAMPLE}</p></ContentSkeleton>
             ) : serverStartTime ? (
               <p className="font-semibold">{format(new Date(serverStartTime), 'PPpp')}</p>
             ) : (

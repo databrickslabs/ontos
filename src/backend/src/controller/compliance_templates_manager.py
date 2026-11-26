@@ -10,6 +10,7 @@ from src.common.compliance_completeness import CompletenessResult, FieldSpec, ch
 from src.common.compliance_reconcile import FieldDesc, reconcile
 from src.common.compliance_value_types import ValueTypeError, coerce_value
 from src.common.logging import get_logger
+from src.models.process_workflows import EntityType
 from src.models.compliance_templates import (
     ComplianceFieldCreate,
     ComplianceFieldRead,
@@ -35,6 +36,20 @@ class ComplianceTemplateError(ValueError):
 
 class ComplianceNotFoundError(ComplianceTemplateError):
     """A template or field that does not exist (HTTP 404)."""
+
+
+class ComplianceUnknownEntityTypeError(ComplianceTemplateError):
+    """A template bound to an entity type the app doesn't know (HTTP 400)."""
+
+
+# The entity types the app knows. The column stays an open string, so a type added
+# later needs only this enum; a typo is refused when a template is created or activated.
+_KNOWN_ENTITY_TYPES = frozenset(t.value for t in EntityType)
+
+
+def _assert_known_entity_type(entity_type: str) -> None:
+    if entity_type not in _KNOWN_ENTITY_TYPES:
+        raise ComplianceUnknownEntityTypeError("Unknown entity type.")
 
 
 class ComplianceConflictError(ComplianceTemplateError):
@@ -117,6 +132,7 @@ class ComplianceTemplatesManager:
         return ComplianceTemplateRead.model_validate(t) if t else None
 
     def create_template(self, db: Session, *, payload: ComplianceTemplateCreate, user_email: str | None) -> ComplianceTemplateRead:
+        _assert_known_entity_type(payload.entity_type)
         _assert_unique_reference_ids(payload.fields)
         template = compliance_templates_repo.create_template(
             db,
@@ -179,6 +195,7 @@ class ComplianceTemplatesManager:
         if not t:
             raise ComplianceTemplateError("Template not found")
         if active:
+            _assert_known_entity_type(t.entity_type)
             compliance_templates_repo.activate_template(db, db_obj=t)
         else:
             compliance_templates_repo.deactivate_template(db, db_obj=t)

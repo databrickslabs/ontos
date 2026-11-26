@@ -101,3 +101,35 @@ def test_reads_still_work_after_a_refused_update(client, template):
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["label"] == "Business tier"
     assert accepted.json()["is_mandatory"] is True
+
+
+@pytest.mark.parametrize("entity_type", ["data-product", "Data_Product", "product"])
+def test_create_answers_400_for_an_unknown_entity_type_and_stores_nothing(client, db_session, entity_type):
+    db_session.connection().begin_nested()
+    body = dict(NEW_TEMPLATE, name=f"Typo {entity_type}", entity_type=entity_type)
+
+    response = client.post(TEMPLATE_URL, json=body)
+
+    assert response.status_code == 400, response.text
+    listed = client.get(TEMPLATE_URL).json()
+    assert all(t["name"] != body["name"] for t in listed)
+
+
+def test_create_accepts_a_known_entity_type_other_than_products(client, db_session):
+    db_session.connection().begin_nested()
+    response = client.post(TEMPLATE_URL, json=dict(NEW_TEMPLATE, name="Tables", entity_type="table"))
+    assert response.status_code == 201, response.text
+    assert response.json()["entity_type"] == "table"
+
+
+def test_activate_answers_400_for_a_stored_template_of_an_unknown_type(client, db_session):
+    db_session.connection().begin_nested()
+    from src.repositories.compliance_templates_repository import compliance_templates_repo
+    stored = compliance_templates_repo.create_template(
+        db_session, name="Legacy", entity_type="data-product", description=None, created_by=None,
+    )
+    db_session.commit()
+
+    response = client.post(f"{TEMPLATE_URL}/{stored.id}/activate")
+
+    assert response.status_code == 400, response.text

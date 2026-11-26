@@ -18,6 +18,7 @@ from src.controller.compliance_templates_manager import (
     ComplianceConflictError,
     ComplianceNotFoundError,
     ComplianceTemplateError,
+    ComplianceUnknownEntityTypeError,
     compliance_templates_manager,
 )
 from src.models.compliance_templates import (
@@ -173,6 +174,9 @@ async def activate_template(
     """Activate a template, deactivating any currently-active one for its entity type."""
     try:
         return compliance_templates_manager.set_active(db, template_id=template_id, active=True)
+    except ComplianceUnknownEntityTypeError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ComplianceTemplateError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

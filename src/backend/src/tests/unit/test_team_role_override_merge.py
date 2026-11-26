@@ -428,7 +428,7 @@ class TestUserHasFeatureLevel:
 
 
 class TestAdoptEntityIdsStaysGroupBased:
-    """``user_can_adopt_entity_ids_for`` uses the roles matching the user's groups only."""
+    """``user_can_adopt_entity_ids_for`` uses group and direct-assignment roles, not team roles."""
 
     def _user(self, groups):
         return UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=groups)

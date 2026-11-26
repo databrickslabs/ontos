@@ -200,31 +200,30 @@ class AuthorizationManager:
             for role in all_roles
         )
 
-    def user_can_adopt_entity_ids(self, user_groups: Optional[List[str]]) -> bool:
+    def user_can_adopt_entity_ids(
+        self, user_groups: Optional[List[str]], user_email: Optional[str] = None
+    ) -> bool:
         """Return True iff the user holds any role flagged ``can_adopt_entity_ids=True``.
 
-        Mirrors :meth:`is_user_ontos_admin`: resolves roles by case-insensitive group
-        intersection and returns True if any resolved role has the import adoption
-        privilege. Gates the "Adopt IDs from file" import toggle so a contract/
-        product writer cannot silently claim an arbitrary UUID (#853 review).
+        Mirrors :meth:`is_user_ontos_admin`: a role matches by group or by the user's
+        email in ``assigned_users`` (case-insensitive, #1713). Gates the "Adopt IDs
+        from file" import toggle so a contract/product writer cannot silently claim
+        an arbitrary UUID (#853 review).
         """
-        if not user_groups:
-            return False
-        user_group_set = {(g or '').lower() for g in user_groups}
-        if not user_group_set:
+        user_group_set = {(g or '').lower() for g in (user_groups or [])}
+        user_email_norm = _normalize_email(user_email)
+        if not user_group_set and not user_email_norm:
             return False
         try:
             all_roles = self._settings_manager.list_app_roles()
         except Exception:
             logger.exception("user_can_adopt_entity_ids: failed to load app roles; denying")
             return False
-        for role in all_roles:
-            if not getattr(role, 'can_adopt_entity_ids', False):
-                continue
-            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
-            if role_groups and role_groups.intersection(user_group_set):
-                return True
-        return False
+        return any(
+            getattr(role, 'can_adopt_entity_ids', False)
+            and _role_matches(role, user_group_set, user_email_norm)
+            for role in all_roles
+        )
 
     def get_role_permissions_by_name(self, role_names: Sequence[str]) -> Dict[str, Optional[Dict[str, FeatureAccessLevel]]]:
         """Feature levels each named role grants (None for a name no role has), in one role read."""

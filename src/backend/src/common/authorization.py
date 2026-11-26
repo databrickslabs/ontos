@@ -731,18 +731,19 @@ def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
     OR when they hold ADMIN on the target feature (#853 review). The toggle itself
     defaults to off; this check only matters when the client explicitly opts in.
 
-    Both parts are group-based: the ``can_adopt_entity_ids`` flag and the feature
-    level come from the roles matching the user's groups only, not from team role
-    overrides, email assignment or an applied role override.
+    Both parts use the roles the user holds by group or by direct assignment
+    (``assigned_users``, matched on the caller's email, #1713), not team role
+    overrides or an applied role override.
     """
     groups = getattr(user, "groups", None) or []
+    email = getattr(user, "email", None)
     try:
-        if auth_manager.user_can_adopt_entity_ids(groups):
+        if auth_manager.user_can_adopt_entity_ids(groups, email):
             return True
     except Exception:
         logger.warning("user_can_adopt_entity_ids check failed; falling back to feature-admin.", exc_info=True)
     try:
-        effective = auth_manager.get_user_effective_permissions(groups, None)
+        effective = auth_manager.get_user_effective_permissions(groups, None, user_email=email)
         return auth_manager.has_permission(effective, feature_id, FeatureAccessLevel.ADMIN)
     except Exception:
         logger.warning("Feature-admin check for adopting ids failed for '%s'; denying.", feature_id, exc_info=True)

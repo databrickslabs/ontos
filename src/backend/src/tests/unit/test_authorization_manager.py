@@ -421,6 +421,42 @@ class TestIsUserOntosAdmin:
         assert manager.is_user_ontos_admin([], "boss@example.com") is False
 
 
+class TestUserCanAdoptEntityIds:
+    """``user_can_adopt_entity_ids`` honours a role assigned by user (#1713)."""
+
+    @staticmethod
+    def _manager(roles):
+        settings = Mock()
+        settings.list_app_roles.return_value = roles
+        return AuthorizationManager(settings_manager=settings)
+
+    @staticmethod
+    def _role(groups, users, adopt=True):
+        return AppRole(
+            id=uuid.uuid4(), name="Importer", description="d", assigned_groups=groups,
+            assigned_users=users, feature_permissions={}, home_sections=[],
+            approval_privileges={}, can_adopt_entity_ids=adopt,
+        )
+
+    def test_role_assigned_by_user_counts_case_insensitively(self):
+        m = self._manager([self._role([], ["Dev@Example.com"])])
+        assert m.user_can_adopt_entity_ids([], "dev@example.COM") is True
+        assert m.user_can_adopt_entity_ids([], "other@example.com") is False
+
+    def test_group_still_counts_and_flag_is_required(self):
+        assert self._manager([self._role(["imp"], [])]).user_can_adopt_entity_ids(["imp"]) is True
+        no_flag = self._manager([self._role(["imp"], ["dev@example.com"], adopt=False)])
+        assert no_flag.user_can_adopt_entity_ids(["imp"], "dev@example.com") is False
+
+    def test_helper_passes_the_callers_email(self):
+        from src.common.authorization import user_can_adopt_entity_ids_for
+        from src.models.users import UserInfo
+
+        m = self._manager([self._role([], ["dev@example.com"])])
+        user = UserInfo(email="dev@example.com", username="d", user="d", ip=None, groups=[])
+        assert user_can_adopt_entity_ids_for(m, user, "data-products") is True
+
+
 # =============================================================================
 # Issue #326 — get_user_effective_role_ids
 # =============================================================================

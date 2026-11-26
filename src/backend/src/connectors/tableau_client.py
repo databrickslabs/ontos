@@ -17,12 +17,15 @@ Row-level data is never requested by this client.
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
+import socket
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from urllib.parse import urlsplit
 
 import requests
 
@@ -54,13 +57,75 @@ INCOMPLETE_RESULT_CODES = {
 }
 
 
-class TableauAPIError(Exception):
-    """A Tableau API call failed."""
+# Reasons a Tableau call failed, safe to show to users (translated in the UI)
+REASON_INVALID_URL = "invalid_server_url"
+REASON_BLOCKED_ADDRESS = "blocked_server_address"
+REASON_REDIRECT = "redirect_refused"
 
-    def __init__(self, message: str, status: Optional[int] = None, code: Optional[str] = None):
+
+class TableauAPIError(Exception):
+    """A Tableau API call failed. ``str()`` is for server logs only; ``reason`` is the client-facing code."""
+
+    def __init__(
+        self,
+        message: str,
+        status: Optional[int] = None,
+        code: Optional[str] = None,
+        reason: Optional[str] = None,
+    ):
         super().__init__(message)
         self.status = status
         self.code = code
+        self.reason = reason
+
+
+def _resolve_addresses(host: str, port: int) -> List[str]:
+    return [info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)]
+
+
+def _is_public_address(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    candidates = [ip]
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        candidates.append(ip.ipv4_mapped)
+    for candidate in candidates:
+        if (not candidate.is_global or candidate.is_private or candidate.is_loopback
+                or candidate.is_link_local or candidate.is_multicast or candidate.is_reserved
+                or candidate.is_unspecified):
+            return False
+    return True
+
+
+def validate_server_url(
+    server_url: str, resolve: Callable[[str, int], List[str]] = _resolve_addresses,
+) -> str:
+    """Require an https Tableau URL whose host resolves only to public addresses.
+
+    Every address the name resolves to is checked, so a name with one public and
+    one private record is refused. Returns the URL unchanged. Raises
+    ``TableauAPIError`` with a ``reason`` code otherwise.
+    """
+    raw = (server_url or "").strip()
+    try:
+        parts = urlsplit(raw)
+        port = parts.port or 443
+    except ValueError:
+        raise TableauAPIError("Tableau server URL is malformed", reason=REASON_INVALID_URL) from None
+    if parts.scheme.lower() != "https" or not parts.hostname or parts.username or parts.password:
+        raise TableauAPIError(f"Tableau server URL must be https without credentials: {raw!r}", reason=REASON_INVALID_URL)
+    try:
+        addresses = resolve(parts.hostname, port)
+    except OSError as exc:
+        raise TableauAPIError(f"Cannot resolve Tableau host {parts.hostname}: {exc}", reason=REASON_INVALID_URL) from exc
+    if not addresses:
+        raise TableauAPIError(f"No address for Tableau host {parts.hostname}", reason=REASON_INVALID_URL)
+    for address in addresses:
+        if not _is_public_address(address):
+            raise TableauAPIError(
+                f"Tableau host {parts.hostname} resolves to a non-public address ({address})",
+                reason=REASON_BLOCKED_ADDRESS,
+            )
+    return raw
 
 
 # ============================================================================
@@ -204,11 +269,23 @@ class TableauClient:
         return (self.server_url, self.site_content_url, self._auth.identity)
 
     def _send(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Send a request; transport failures (TLS, DNS, timeouts) become TableauAPIError."""
+        """Send a request; transport failures (TLS, DNS, timeouts) become TableauAPIError.
+
+        Redirects are never followed: a 3xx from the configured server is an error,
+        so credentials are not re-sent to another host.
+        """
         try:
-            return self._http.request(method, url, verify=self._verify, timeout=self._timeout, **kwargs)
+            resp = self._http.request(
+                method, url, verify=self._verify, timeout=self._timeout, allow_redirects=False, **kwargs,
+            )
         except requests.RequestException as exc:
             raise TableauAPIError(f"Cannot reach Tableau at {self.server_url}: {exc}") from exc
+        if 300 <= resp.status_code < 400:
+            raise TableauAPIError(
+                f"Tableau answered {method} with a redirect ({resp.status_code}) to {resp.headers.get('Location', '?')}",
+                status=resp.status_code, reason=REASON_REDIRECT,
+            )
+        return resp
 
     def server_info(self) -> Dict[str, Any]:
         """``GET /serverinfo`` (no auth): product version and REST API version."""

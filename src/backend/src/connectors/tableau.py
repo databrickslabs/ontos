@@ -44,6 +44,7 @@ from src.connectors.tableau_client import (
     TableauAPIError,
     TableauAuth,
     TableauClient,
+    validate_server_url,
 )
 from src.models.assets import (
     AssetInfo,
@@ -327,6 +328,10 @@ class TableauConnector(AssetConnector):
             cfg = self._cfg
             if not cfg.server_url:
                 raise ConnectorAuthenticationError("Tableau server URL is not configured", connector_type=self.connector_type)
+            try:
+                validate_server_url(cfg.server_url)
+            except TableauAPIError as exc:
+                raise ConnectorConnectionError(str(exc), connector_type=self.connector_type) from exc
             self._client = TableauClient(
                 cfg.server_url,
                 cfg.site_content_url,

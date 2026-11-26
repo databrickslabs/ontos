@@ -115,6 +115,19 @@ describe('Home with the marketplace home section', () => {
     expect(screen.queryByTestId('discovery-section')).not.toBeInTheDocument();
   });
 
+  it('lets the curation and required-actions sections of another role win', () => {
+    applyRole(
+      [HomeSection.MARKETPLACE],
+      [[HomeSection.REQUIRED_ACTIONS, HomeSection.DATA_CURATION, HomeSection.DISCOVERY]],
+    );
+    renderWithProviders(<Home />);
+
+    expect(screen.queryByTestId('marketplace-view')).not.toBeInTheDocument();
+    expect(screen.getByTestId('data-curation-section')).toBeInTheDocument();
+    expect(screen.getByTestId('discovery-section')).toBeInTheDocument();
+    expect(screen.getByTestId('required-actions')).toBeInTheDocument();
+  });
+
   it('shows the full home as before when no role has the marketplace section', () => {
     applyRole([HomeSection.DISCOVERY]);
     renderWithProviders(<Home />);

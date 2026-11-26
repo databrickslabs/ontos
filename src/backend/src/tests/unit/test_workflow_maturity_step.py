@@ -7,6 +7,7 @@ evaluator; scope selection, the one-run-at-a-time registry and the summary are r
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -250,3 +251,22 @@ def test_the_shipped_nightly_workflow_is_inactive_and_valid(db_session):
                for i, s in enumerate(nightly['steps'])],
     )
     assert WorkflowsManager(db_session).validate_workflow(workflow).valid
+
+
+def test_the_step_ends_its_session_transaction_before_the_long_run(monkeypatch):
+    """A scheduled run's session holds a transaction (the execution row's refresh opened
+    it); it must not stay idle in it for the whole run (Lakebase ends such sessions)."""
+    events = []
+    db = MagicMock()
+    db.commit.side_effect = lambda: events.append('commit')
+
+    def run_now(scope, *, started_by):
+        events.append('run')
+        return {'id': 'r1', 'state': 'completed', 'evaluated': 0, 'total': 0}
+
+    monkeypatch.setattr(bulk, 'run_now', run_now)
+
+    result = _run_step(db, {})
+
+    assert result.passed, result.error
+    assert events == ['commit', 'run']

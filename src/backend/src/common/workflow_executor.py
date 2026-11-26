@@ -3881,6 +3881,9 @@ class EvaluateAssetMaturityStepHandler(StepHandler):
         from src.controller import maturity_bulk_evaluator as bulk
         from src.controller.workflow_scheduler import SCHEDULER_USER
 
+        # The run takes minutes and this session would sit idle in the transaction its
+        # last read opened (the execution row's refresh); Lakebase ends such sessions
+        self._db.commit()
         try:
             scope = bulk.normalize_scope(self._config.get('catalog'),
                                          self._config.get('schema_name'))

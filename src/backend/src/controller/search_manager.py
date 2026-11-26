@@ -160,8 +160,9 @@ class SearchManager:
     def upsert_items(self, items: List[SearchIndexItem]) -> None:
         """Insert or update several items in one backend call; disabled items are removed."""
         enabled: List[SearchIndexItem] = []
+        uses_postgres = self._uses_postgres()
         for item in items:
-            if self._is_item_enabled(item):
+            if self._is_item_indexable(item, uses_postgres):
                 enabled.append(item)
             else:
                 self._backend.remove(item.id)

@@ -732,7 +732,8 @@
     "showMore": "Mostra altro",
     "showingOf": "Mostrati {{shown}} di {{total}}",
     "changesCapped": "Troppe modifiche per elencarle tutte ({{total}} in totale). I conteggi sopra includono tutte le modifiche.",
-    "yamlCapped": "Il diff YAML è troppo grande per essere mostrato qui. Le modifiche sopra sono complete.",
+    "yamlCapped": "Il diff YAML è troppo grande per essere mostrato qui.",
+    "yamlCappedComplete": "Il diff YAML è troppo grande per essere mostrato qui. Le modifiche sopra sono complete.",
     "rules": {
       "status": "Stato modificato (ciclo di vita, non contenuto)",
       "api-version": "Versione del formato modificata",
@@ -791,7 +792,8 @@
         "removed": "Rimosso",
         "modified": "Modificato"
       }
-    }
+    },
+    "tooLarge": "Questa versione è troppo grande per essere confrontata."
   },
   "versioning": {
     "recommendedBump": "Incremento di versione consigliato:",

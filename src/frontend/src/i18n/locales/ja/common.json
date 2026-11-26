@@ -732,7 +732,8 @@
     "showMore": "さらに表示",
     "showingOf": "{{total}} 件中 {{shown}} 件を表示",
     "changesCapped": "変更が多すぎるため全件を表示できません（全 {{total}} 件）。上の件数はすべての変更を含みます。",
-    "yamlCapped": "YAML の差分が大きすぎて表示できません。上の変更一覧は完全です。",
+    "yamlCapped": "YAML の差分が大きすぎて表示できません。",
+    "yamlCappedComplete": "YAML の差分が大きすぎて表示できません。上の変更一覧は完全です。",
     "rules": {
       "status": "ステータスの変更（ライフサイクル。内容ではない）",
       "api-version": "フォーマットのバージョンの変更",
@@ -791,7 +792,8 @@
         "removed": "削除",
         "modified": "変更"
       }
-    }
+    },
+    "tooLarge": "このバージョンは大きすぎて比較できません。"
   },
   "versioning": {
     "recommendedBump": "推奨されるバージョンアップ:",

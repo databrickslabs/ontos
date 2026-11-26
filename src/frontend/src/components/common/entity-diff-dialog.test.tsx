@@ -178,6 +178,36 @@ describe('EntityDiffDialog', () => {
     expect(await screen.findByText(/too large to show/i)).toBeInTheDocument();
   });
 
+  it('says the version is too large when the server answers 413', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 413, json: async () => ({}) }));
+    renderDialog();
+
+    expect(await screen.findByText('This version is too large to compare.')).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to load the version comparison/)).not.toBeInTheDocument();
+  });
+
+  it('does not say the changes are complete when the change list was capped', async () => {
+    mockFetch(diffResponse({ changes_truncated: true, changes_total: 5000, unified_diff: '',
+      unified_diff_truncated: true }));
+    renderDialog();
+    await screen.findByText('Output port removed');
+
+    await userEvent.click(screen.getByRole('tab', { name: /YAML/ }));
+
+    expect(await screen.findByText('The YAML diff is too large to show here.')).toBeInTheDocument();
+    expect(screen.queryByText(/changes above are complete/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the completeness note when the change list was not capped', async () => {
+    mockFetch(diffResponse({ unified_diff: '', unified_diff_truncated: true }));
+    renderDialog();
+    await screen.findByText('Output port removed');
+
+    await userEvent.click(screen.getByRole('tab', { name: /YAML/ }));
+
+    expect(await screen.findByText(/changes above are complete/)).toBeInTheDocument();
+  });
+
   it('shows an error when the comparison fails to load', async () => {
     mockFetch({}, false);
     renderDialog();

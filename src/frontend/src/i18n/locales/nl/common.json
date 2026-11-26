@@ -732,7 +732,8 @@
     "showMore": "Meer tonen",
     "showingOf": "{{shown}} van {{total}} getoond",
     "changesCapped": "Te veel wijzigingen om volledig te tonen ({{total}} in totaal). De aantallen hierboven tellen alle wijzigingen mee.",
-    "yamlCapped": "Het YAML-verschil is te groot om hier te tonen. De wijzigingen hierboven zijn compleet.",
+    "yamlCapped": "Het YAML-verschil is te groot om hier te tonen.",
+    "yamlCappedComplete": "Het YAML-verschil is te groot om hier te tonen. De wijzigingen hierboven zijn compleet.",
     "rules": {
       "status": "Status gewijzigd (levenscyclus, geen inhoud)",
       "api-version": "Formatversie gewijzigd",
@@ -791,7 +792,8 @@
         "removed": "Verwijderd",
         "modified": "Gewijzigd"
       }
-    }
+    },
+    "tooLarge": "Deze versie is te groot om te vergelijken."
   },
   "versioning": {
     "recommendedBump": "Aanbevolen versieverhoging:",

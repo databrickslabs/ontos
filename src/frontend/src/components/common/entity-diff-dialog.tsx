@@ -63,6 +63,9 @@ const BUMP_ORDER: BumpLabel[] = ['major', 'minor', 'patch', 'none']
 const CHANGE_PAGE = 100
 const YAML_PAGE = 500
 
+/** The comparison is over the server's size limit (HTTP 413), not a failure to load. */
+class DiffTooLargeError extends Error {}
+
 export function diffEndpointFor(kind: EntityKind, baseId: string, targetId: string): string {
   const base = kind === 'product' ? '/api/data-products' : '/api/data-contracts'
   return `${base}/${encodeURIComponent(baseId)}/diff/${encodeURIComponent(targetId)}`
@@ -182,6 +185,7 @@ export default function EntityDiffDialog({
     setDiff(null) // don't show the previous pair's bump while the new one loads
     fetch(diffEndpointFor(entityKind, baseId, targetId))
       .then(async (res) => {
+        if (res.status === 413) throw new DiffTooLargeError()
         if (!res.ok) throw new Error(String(res.status))
         return (await res.json()) as EntityDiffResponse
       })
@@ -191,10 +195,12 @@ export default function EntityDiffDialog({
         setYamlLimit(YAML_PAGE)
         setDiff(data)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!cancelled) {
           setDiff(null)
-          setError(t('entityDiff.loadError'))
+          setError(
+            t(err instanceof DiffTooLargeError ? 'entityDiff.tooLarge' : 'entityDiff.loadError'),
+          )
         }
       })
       .finally(() => {
@@ -385,7 +391,9 @@ export default function EntityDiffDialog({
                 )}
                 </div>
               ) : diff.unified_diff_truncated ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">{t('entityDiff.yamlCapped')}</p>
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  {t(diff.changes_truncated ? 'entityDiff.yamlCapped' : 'entityDiff.yamlCappedComplete')}
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground py-6 text-center">{t('entityDiff.noChanges')}</p>
               )}

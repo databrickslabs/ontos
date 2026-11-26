@@ -34,8 +34,25 @@ describe('isOntosAdmin', () => {
     expect(isOntosAdmin(['consumers'], roles)).toBe(false);
   });
 
-  it('is false without groups', () => {
+  it('is false without groups and without email', () => {
     expect(isOntosAdmin(null, roles)).toBe(false);
     expect(isOntosAdmin([], roles)).toBe(false);
+    expect(isOntosAdmin([], roles, '  ')).toBe(false);
+  });
+
+  it('matches an is_admin role assigned by user, case-insensitively, without groups (#1713)', () => {
+    const byUser = [
+      { id: 'a', name: 'Admin', assigned_groups: [], assigned_users: ['Boss@Example.com'], is_admin: true },
+    ] as unknown as AppRole[];
+    expect(isOntosAdmin([], byUser, ' boss@example.COM ')).toBe(true);
+    expect(isOntosAdmin(['x'], byUser, 'boss@example.com')).toBe(true);
+    expect(isOntosAdmin([], byUser, 'other@example.com')).toBe(false);
+  });
+
+  it('does not treat a non-admin role assigned by user as admin', () => {
+    const byUser = [
+      { id: 'c', name: 'Consumer', assigned_groups: [], assigned_users: ['dev@example.com'], is_admin: false },
+    ] as unknown as AppRole[];
+    expect(isOntosAdmin([], byUser, 'dev@example.com')).toBe(false);
   });
 });

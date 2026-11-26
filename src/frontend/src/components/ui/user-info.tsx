@@ -203,8 +203,8 @@ export default function UserInfo() {
   // Ontos admin = user belongs to any AppRole flagged is_admin. Same check as the
   // menus (useIsOntosAdmin), on the groups this component loads itself.
   const isAdminActual = useMemo<boolean>(
-      () => isOntosAdmin(userInfo?.groups, availableRoles),
-      [userInfo?.groups, availableRoles],
+      () => isOntosAdmin(userInfo?.groups, availableRoles, userInfo?.email),
+      [userInfo?.groups, userInfo?.email, availableRoles],
   );
 
   // Admins/localdev keep the impersonation power (all roles); non-admins with 2+ membership-matched

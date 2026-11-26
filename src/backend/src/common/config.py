@@ -32,8 +32,9 @@ LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT = (
     "Be strict and flag anything suspicious."
 )
 
-# ENV values that refuse the test-identity settings (Settings.reject_test_identity_in_prod)
-PROD_ENV_NAMES = frozenset({'PROD', 'PRODUCTION'})
+# ENV value (besides LOCAL*) that allows the test-identity settings
+# (Settings.reject_test_identity_outside_dev)
+TEST_IDENTITY_ENV = 'DEV'
 
 
 class Settings(BaseSettings):
@@ -390,28 +391,30 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode='after')
-    def reject_test_identity_in_prod(self) -> 'Settings':
-        """Refuse to start if test-identity settings are enabled in PROD.
+    def reject_test_identity_outside_dev(self) -> 'Settings':
+        """Refuse to start if test-identity settings are set outside DEV and LOCAL*.
 
         TEST_USER_TOKEN (header impersonation with caller-chosen groups) and
-        MOCK_USER_DETAILS (every request becomes a mock admin) are allowed on
-        LOCAL/DEV test deployments, but in PROD either one lets anyone act as admin.
-        ``PRODUCTION`` counts as PROD: the app has no other meaning for it (every
-        ENV that isn't LOCAL* runs like PROD).
+        MOCK_USER_DETAILS (every request becomes a mock admin) are allowed only
+        when ENV is DEV or starts with LOCAL (the same prefix test the rest of the
+        app uses). Any other value, including an unset ENV (the default is PROD),
+        refuses to start while either one is set.
         """
-        if (self.ENV or '').strip().upper() in PROD_ENV_NAMES:
-            enabled = [
-                name for name, on in (
-                    ("TEST_USER_TOKEN", bool(self.TEST_USER_TOKEN)),
-                    ("MOCK_USER_DETAILS", self.MOCK_USER_DETAILS),
-                ) if on
-            ]
-            if enabled:
-                raise ValueError(
-                    f"{', '.join(enabled)} must not be set when "
-                    f"ENV={self.ENV.strip().upper()} "
-                    "(enables user impersonation)."
-                )
+        env = (self.ENV or '').strip().upper()
+        if env == TEST_IDENTITY_ENV or env.startswith("LOCAL"):
+            return self
+        enabled = [
+            name for name, on in (
+                ("TEST_USER_TOKEN", bool(self.TEST_USER_TOKEN)),
+                ("MOCK_USER_DETAILS", self.MOCK_USER_DETAILS),
+            ) if on
+        ]
+        if enabled:
+            raise ValueError(
+                f"{', '.join(enabled)} must not be set when ENV={env or '(empty)'} "
+                "(enables user impersonation). TEST_USER_TOKEN and MOCK_USER_DETAILS "
+                f"are allowed only when ENV={TEST_IDENTITY_ENV} or starts with LOCAL."
+            )
         return self
 
     @model_validator(mode='after')

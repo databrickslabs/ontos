@@ -338,7 +338,9 @@
         "script_python_disabled": "Les étapes de script Python sont désactivées : réécrivez l'étape en SQL ou supprimez-la.",
         "script_sql_placeholder_in_quotes": "L'espace réservé {{placeholder}} est entre guillemets ou accents graves, où sa valeur ne peut pas être envoyée comme paramètre. Écrivez-le seul : name = {{placeholder}}, concat('%', {{placeholder}}, '%') ou IDENTIFIER({{placeholder}}).",
         "script_sql_placeholder_in_identifier": "L'espace réservé {{placeholder}} fait partie d'un nom plus long. Construisez le nom avec IDENTIFIER(...), par exemple IDENTIFIER(concat('main.', {{placeholder}})).",
-        "script_sql_placeholder_as_list": "L'espace réservé {{placeholder}} constitue toute la liste d'un IN (...), mais sa valeur est un seul texte. Utilisez = {{placeholder}} pour une valeur, ou array_contains(from_json({{placeholder}}, 'array<string>'), colonne) pour une liste JSON."
+        "script_sql_placeholder_as_list": "L'espace réservé {{placeholder}} constitue toute la liste d'un IN (...), mais sa valeur est un seul texte. Utilisez = {{placeholder}} pour une valeur, ou array_contains(from_json({{placeholder}}, 'array<string>'), colonne) pour une liste JSON.",
+        "script_sql_placeholder_typed_literal": "L'espace réservé {{placeholder}} est le texte d'un littéral typé ou préfixé ({{keyword}} '...'), qui n'accepte pas de paramètre. Utilisez CAST('{{placeholder}}' AS DATE) (ou le type voulu).",
+        "script_sql_placeholder_name_position": "L'espace réservé {{placeholder}} est à l'endroit d'un nom de catalogue ou de schéma (après IN, CATALOG, SCHEMA, DATABASE ou USE), qui n'accepte pas de paramètre. Écrivez IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

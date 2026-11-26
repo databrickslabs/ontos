@@ -155,10 +155,12 @@ A SQL script runs on the SQL warehouse set in Settings. Each `${...}` / `{{...}}
 | `name = '${entity_name}'` (the whole quoted literal) | the literal's value: `:p0` |
 | `FROM ${entity_id}` (after `FROM`, `JOIN`, `INTO`, `UPDATE`, `TABLE`) | a table name: `IDENTIFIER(:p0)` |
 
-Three places can't hold a parameter. A script that uses one is refused on save and on activation, and a stored one fails when it runs:
+Five places can't hold a parameter. A script that uses one is refused on save and on activation, and a stored one fails when it runs:
 
 - inside a longer quoted text, double quotes or backticks (`'%${entity_name}%'`, `` `${entity_id}` ``): `script_sql_placeholder_in_quotes`. Write `concat('%', ${entity_name}, '%')` or `IDENTIFIER(${entity_id})`.
 - glued to other name text (`main.${entity_id}`, `t_${entity_name}`): `script_sql_placeholder_in_identifier`. Write `IDENTIFIER(concat('main.', ${entity_id}))`.
+- as a typed or prefixed literal (`DATE '${d}'`, `INTERVAL '${n}' DAY`, `X'${h}'`, `r'${s}'`): `script_sql_placeholder_typed_literal`. The parameter would replace only the text. Write `CAST('${d}' AS DATE)` (or the type you need).
+- as a catalog or schema name, right after `IN`, `CATALOG`, `SCHEMA`, `DATABASE` or `USE` (`SHOW TABLES IN ${s}`, `USE CATALOG ${c}`): `script_sql_placeholder_name_position`. Write `IDENTIFIER(${s})`.
 - as the whole list of an `IN (...)` (`IN (${entity.ids})`): `script_sql_placeholder_as_list`. The value is one string, so the list would have one item. Use `= ${...}` for one value, or `array_contains(from_json(${entity.ids}, 'array<string>'), column)` for a list (lists in the entity are JSON).
 
 Placeholders in SQL comments are left as written. A placeholder that doesn't resolve is also left as written (without the quotes of a whole literal), so the warehouse reports it.

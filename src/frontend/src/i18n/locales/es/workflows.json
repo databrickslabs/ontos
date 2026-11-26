@@ -338,7 +338,9 @@
         "script_python_disabled": "Los pasos de script Python están desactivados: reescribe el paso en SQL o elimínalo.",
         "script_sql_placeholder_in_quotes": "El marcador {{placeholder}} está entre comillas o acentos graves, donde su valor no puede enviarse como parámetro. Escríbelo solo: name = {{placeholder}}, concat('%', {{placeholder}}, '%') o IDENTIFIER({{placeholder}}).",
         "script_sql_placeholder_in_identifier": "El marcador {{placeholder}} forma parte de un nombre más largo. Construye el nombre con IDENTIFIER(...), por ejemplo IDENTIFIER(concat('main.', {{placeholder}})).",
-        "script_sql_placeholder_as_list": "El marcador {{placeholder}} es la lista entera de un IN (...), pero su valor es un solo texto. Usa = {{placeholder}} para un valor, o array_contains(from_json({{placeholder}}, 'array<string>'), columna) para una lista JSON."
+        "script_sql_placeholder_as_list": "El marcador {{placeholder}} es la lista entera de un IN (...), pero su valor es un solo texto. Usa = {{placeholder}} para un valor, o array_contains(from_json({{placeholder}}, 'array<string>'), columna) para una lista JSON.",
+        "script_sql_placeholder_typed_literal": "El marcador {{placeholder}} es el texto de un literal tipado o con prefijo ({{keyword}} '...'), que no admite parámetro. Usa CAST('{{placeholder}}' AS DATE) (o el tipo que necesites).",
+        "script_sql_placeholder_name_position": "El marcador {{placeholder}} está donde va el nombre de un catálogo o esquema (después de IN, CATALOG, SCHEMA, DATABASE o USE), que no admite parámetro. Escribe IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

@@ -338,7 +338,9 @@
         "script_python_disabled": "I passaggi di script Python sono disattivati: riscrivi il passaggio in SQL o rimuovilo.",
         "script_sql_placeholder_in_quotes": "Il segnaposto {{placeholder}} è tra virgolette o apici inversi, dove il suo valore non può essere inviato come parametro. Scrivilo da solo: name = {{placeholder}}, concat('%', {{placeholder}}, '%') o IDENTIFIER({{placeholder}}).",
         "script_sql_placeholder_in_identifier": "Il segnaposto {{placeholder}} fa parte di un nome più lungo. Costruisci il nome con IDENTIFIER(...), per esempio IDENTIFIER(concat('main.', {{placeholder}})).",
-        "script_sql_placeholder_as_list": "Il segnaposto {{placeholder}} è l'intera lista di un IN (...), ma il suo valore è un solo testo. Usa = {{placeholder}} per un valore, o array_contains(from_json({{placeholder}}, 'array<string>'), colonna) per una lista JSON."
+        "script_sql_placeholder_as_list": "Il segnaposto {{placeholder}} è l'intera lista di un IN (...), ma il suo valore è un solo testo. Usa = {{placeholder}} per un valore, o array_contains(from_json({{placeholder}}, 'array<string>'), colonna) per una lista JSON.",
+        "script_sql_placeholder_typed_literal": "Il segnaposto {{placeholder}} è il testo di un letterale tipizzato o con prefisso ({{keyword}} '...'), che non accetta parametri. Usa CAST('{{placeholder}}' AS DATE) (o il tipo che ti serve).",
+        "script_sql_placeholder_name_position": "Il segnaposto {{placeholder}} è dove va il nome di un catalogo o di uno schema (dopo IN, CATALOG, SCHEMA, DATABASE o USE), che non accetta parametri. Scrivi IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

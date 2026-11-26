@@ -13,6 +13,7 @@ import pytest
 
 from src.common.workflow_sql_params import (
     SQL_PLACEHOLDER_AS_LIST,
+    SQL_PLACEHOLDER_NAME_POSITION,
     SQL_PLACEHOLDER_IN_IDENTIFIER,
     SQL_PLACEHOLDER_IN_QUOTES,
     SQL_PLACEHOLDER_TYPED_LITERAL,
@@ -75,6 +76,14 @@ def test_none_code_has_no_issue():
     # the whole list of an IN (...)
     ('SELECT * FROM t WHERE id IN (${ids})', [(SQL_PLACEHOLDER_AS_LIST, '${ids}')]),
     ('SELECT * FROM t WHERE id in ( {{ids}} )', [(SQL_PLACEHOLDER_AS_LIST, '{{ids}}')]),
+    # a catalog or schema name
+    ('SHOW TABLES IN ${s}', [(SQL_PLACEHOLDER_NAME_POSITION, '${s}')]),
+    ('show tables in {{s}} LIKE "a*"', [(SQL_PLACEHOLDER_NAME_POSITION, '{{s}}')]),
+    ('USE CATALOG ${c}', [(SQL_PLACEHOLDER_NAME_POSITION, '${c}')]),
+    ('USE SCHEMA ${s}', [(SQL_PLACEHOLDER_NAME_POSITION, '${s}')]),
+    ('USE ${s}', [(SQL_PLACEHOLDER_NAME_POSITION, '${s}')]),
+    ('CREATE SCHEMA IF NOT EXISTS ${s}', [(SQL_PLACEHOLDER_NAME_POSITION, '${s}')]),
+    ('SHOW COLUMNS IN t IN ${s}', [(SQL_PLACEHOLDER_NAME_POSITION, '${s}')]),
 ])
 def test_a_placeholder_that_cannot_be_bound_is_reported(code, expected):
     assert _issues(code) == expected
@@ -97,6 +106,25 @@ def test_a_typed_or_prefixed_literal_is_refused_with_its_keyword(code, keyword):
     assert issue['params']['keyword'] == keyword
     assert issue['params']['placeholder'].startswith('${')
     assert 'CAST(' in issue['message']
+
+
+@pytest.mark.parametrize('code', [
+    'SHOW TABLES IN IDENTIFIER(${s})',
+    'USE CATALOG IDENTIFIER(${c})',
+    'SELECT * FROM t WHERE a IN (${a}, ${b})',
+    "SELECT 'in ${s}' -- USE ${s}",
+    'SELECT * FROM t WHERE schema_name = ${s}',
+])
+def test_name_positions_written_with_identifier_or_elsewhere_are_not_refused(code):
+    assert [i for i in check_sql_placeholders(code)
+            if i['code'] == SQL_PLACEHOLDER_NAME_POSITION] == []
+
+
+def test_a_name_position_issue_hints_at_identifier():
+    [issue] = check_sql_placeholders('USE CATALOG ${c}')
+
+    assert issue['params'] == {'placeholder': '${c}'}
+    assert 'IDENTIFIER(${c})' in issue['message']
 
 
 @pytest.mark.parametrize('code', [

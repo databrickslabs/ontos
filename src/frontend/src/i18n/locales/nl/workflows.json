@@ -338,7 +338,9 @@
         "script_python_disabled": "Python-scriptstappen zijn uitgeschakeld: herschrijf de stap in SQL of verwijder hem.",
         "script_sql_placeholder_in_quotes": "De placeholder {{placeholder}} staat tussen aanhalingstekens of backticks, waar zijn waarde niet als parameter kan worden meegegeven. Schrijf hem los: name = {{placeholder}}, concat('%', {{placeholder}}, '%') of IDENTIFIER({{placeholder}}).",
         "script_sql_placeholder_in_identifier": "De placeholder {{placeholder}} is deel van een langere naam. Bouw de naam met IDENTIFIER(...), bijvoorbeeld IDENTIFIER(concat('main.', {{placeholder}})).",
-        "script_sql_placeholder_as_list": "De placeholder {{placeholder}} is de hele lijst van een IN (...), maar zijn waarde is één tekst. Gebruik = {{placeholder}} voor één waarde, of array_contains(from_json({{placeholder}}, 'array<string>'), kolom) voor een JSON-lijst."
+        "script_sql_placeholder_as_list": "De placeholder {{placeholder}} is de hele lijst van een IN (...), maar zijn waarde is één tekst. Gebruik = {{placeholder}} voor één waarde, of array_contains(from_json({{placeholder}}, 'array<string>'), kolom) voor een JSON-lijst.",
+        "script_sql_placeholder_typed_literal": "De placeholder {{placeholder}} is de tekst van een getypeerde of met voorvoegsel geschreven literal ({{keyword}} '...'), die geen parameter accepteert. Gebruik CAST('{{placeholder}}' AS DATE) (of het type dat je nodig hebt).",
+        "script_sql_placeholder_name_position": "De placeholder {{placeholder}} staat waar de naam van een catalogus of schema hoort (na IN, CATALOG, SCHEMA, DATABASE of USE), waar geen parameter kan staan. Schrijf IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

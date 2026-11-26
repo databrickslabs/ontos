@@ -338,7 +338,9 @@
         "script_python_disabled": "Python スクリプトステップは無効です。ステップを SQL で書き直すか、削除してください。",
         "script_sql_placeholder_in_quotes": "プレースホルダー {{placeholder}} が引用符またはバッククォートの中にあり、値をパラメーターとして送れません。単独で書いてください: name = {{placeholder}}、concat('%', {{placeholder}}, '%')、または IDENTIFIER({{placeholder}})。",
         "script_sql_placeholder_in_identifier": "プレースホルダー {{placeholder}} が長い名前の一部になっています。IDENTIFIER(...) で名前を組み立ててください。例: IDENTIFIER(concat('main.', {{placeholder}}))。",
-        "script_sql_placeholder_as_list": "プレースホルダー {{placeholder}} が IN (...) のリスト全体ですが、値は 1 つのテキストです。1 つの値には = {{placeholder}}、JSON リストには array_contains(from_json({{placeholder}}, 'array<string>'), column) を使ってください。"
+        "script_sql_placeholder_as_list": "プレースホルダー {{placeholder}} が IN (...) のリスト全体ですが、値は 1 つのテキストです。1 つの値には = {{placeholder}}、JSON リストには array_contains(from_json({{placeholder}}, 'array<string>'), column) を使ってください。",
+        "script_sql_placeholder_typed_literal": "プレースホルダー {{placeholder}} は型付きまたは接頭辞付きリテラル ({{keyword}} '...') のテキストで、パラメーターを受け付けません。CAST('{{placeholder}}' AS DATE) (または必要な型) を使ってください。",
+        "script_sql_placeholder_name_position": "プレースホルダー {{placeholder}} はカタログまたはスキーマ名の位置 (IN、CATALOG、SCHEMA、DATABASE、USE の後) にあり、パラメーターを受け付けません。IDENTIFIER({{placeholder}}) と書いてください。"
       }
     },
     "validationIssues": {

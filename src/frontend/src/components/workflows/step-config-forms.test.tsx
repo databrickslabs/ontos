@@ -245,6 +245,17 @@ describe('step config checks', () => {
       { placeholder: '${ids}' },
       'The placeholder ${ids} is the whole list of an IN (...), but its value is a single text.',
     ],
+    [
+      'script_sql_placeholder_typed_literal',
+      { placeholder: '${d}', keyword: 'DATE' },
+      "The placeholder ${d} is the text of a typed or prefixed literal (DATE '...'), "
+        + "which can't take a parameter. Use CAST('${d}' AS DATE)",
+    ],
+    [
+      'script_sql_placeholder_name_position',
+      { placeholder: '${s}' },
+      'The placeholder ${s} is where a catalog or schema name goes',
+    ],
   ])('translates %s from designer.scriptStepSafety.errors', (code, params, text) => {
     const issue = { code, params, message: 'English from the backend' };
     expect(stepConfigIssueText(issue, i18n.t)).toContain(text);

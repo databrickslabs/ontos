@@ -16,7 +16,7 @@ written decides how:
 - anywhere else (``= ${name}``, ``IDENTIFIER(${name})``, ``concat('%', ${name})``)
   it is a value: ``:pN``.
 
-Four places can't hold a parameter, so a step that uses them is refused on save
+Five places can't hold a parameter, so a step that uses them is refused on save
 and at run time (``check_sql_placeholders``):
 
 - inside a longer quoted text, double quotes or backticks (``'%${name}%'``):
@@ -25,6 +25,10 @@ and at run time (``check_sql_placeholders``):
 - as a typed or prefixed literal (``DATE '${d}'``, ``INTERVAL '${n}' DAY``,
   ``X'${h}'``): the parameter would replace only the text. ``CAST('${d}' AS DATE)``
   binds cleanly;
+- as a catalog or schema name, right after ``IN``, ``CATALOG``, ``SCHEMA``,
+  ``DATABASE`` or ``USE`` (``SHOW TABLES IN ${s}``, ``USE CATALOG ${c}``): the
+  warehouse takes a bound value there as a literal, not a name. Refused on save with
+  the hint ``IDENTIFIER(${s})`` instead of guessing;
 - as the whole list of an ``IN (...)``: the value is one string, so
   ``IN (${ids})`` would compare with that one string. A list stored in the
   entity is JSON: ``array_contains(from_json(${ids}, 'array<string>'), col)``.
@@ -44,12 +48,19 @@ SQL_PLACEHOLDER_IN_QUOTES = 'script_sql_placeholder_in_quotes'
 SQL_PLACEHOLDER_IN_IDENTIFIER = 'script_sql_placeholder_in_identifier'
 SQL_PLACEHOLDER_AS_LIST = 'script_sql_placeholder_as_list'
 SQL_PLACEHOLDER_TYPED_LITERAL = 'script_sql_placeholder_typed_literal'
+SQL_PLACEHOLDER_NAME_POSITION = 'script_sql_placeholder_name_position'
 
 # Keywords after which a placeholder names a table, with an optional IF [NOT] EXISTS.
 _TABLE_KEYWORD_BEFORE = re.compile(
     r'\b(?:FROM|JOIN|INTO|UPDATE|TABLE|OVERWRITE|OPTIMIZE|VACUUM|USING'
     r'|DESCRIBE(?:\s+(?:TABLE|EXTENDED|DETAIL|HISTORY))*)'
     r'(?:\s+IF(?:\s+NOT)?\s+EXISTS)?\s*$',
+    re.IGNORECASE,
+)
+# Positions that take a catalog or schema name (SHOW TABLES IN ${s}, USE CATALOG ${c}):
+# a bound value is a literal there, which the warehouse rejects.
+_NAME_KEYWORD_BEFORE = re.compile(
+    r'\b(?:IN|CATALOG|SCHEMA|DATABASE|USE)(?:\s+IF(?:\s+NOT)?\s+EXISTS)?\s*$',
     re.IGNORECASE,
 )
 _MERGE = re.compile(r'\bMERGE\b', re.IGNORECASE)
@@ -83,6 +94,11 @@ _ISSUE_TEXT = {
     SQL_PLACEHOLDER_TYPED_LITERAL: (
         "Placeholder {placeholder} is the text of a typed literal ({keyword} '...'), which "
         "can't take a parameter. Use CAST('{placeholder}' AS DATE) (or the type you need)"
+    ),
+    SQL_PLACEHOLDER_NAME_POSITION: (
+        "Placeholder {placeholder} is where a catalog or schema name goes (after IN, "
+        "CATALOG, SCHEMA, DATABASE or USE), which can't take a parameter. "
+        "Write IDENTIFIER({placeholder})"
     ),
     SQL_PLACEHOLDER_AS_LIST: (
         "Placeholder {placeholder} is the whole list of an IN (...): its value is one "
@@ -256,6 +272,8 @@ def _scan(code: str) -> List[_Placeholder]:
             placeholder.kind = SQL_PLACEHOLDER_IN_IDENTIFIER
         elif _IN_LIST_BEFORE.search(before) and _LIST_END_AFTER.match(after):
             placeholder.kind = SQL_PLACEHOLDER_AS_LIST
+        elif _NAME_KEYWORD_BEFORE.search(before):
+            placeholder.kind = SQL_PLACEHOLDER_NAME_POSITION
         elif _is_table_position(before):
             placeholder.kind = 'table'
         else:

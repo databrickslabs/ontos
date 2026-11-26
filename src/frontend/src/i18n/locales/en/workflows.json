@@ -338,7 +338,9 @@
         "script_python_disabled": "Python script steps are disabled: rewrite the step in SQL or remove it.",
         "script_sql_placeholder_in_quotes": "The placeholder {{placeholder}} is inside quotes or backticks, where its value can't be sent as a parameter. Write it on its own: name = {{placeholder}}, concat('%', {{placeholder}}, '%') or IDENTIFIER({{placeholder}}).",
         "script_sql_placeholder_in_identifier": "The placeholder {{placeholder}} is part of a longer name. Build the name with IDENTIFIER(...), for example IDENTIFIER(concat('main.', {{placeholder}})).",
-        "script_sql_placeholder_as_list": "The placeholder {{placeholder}} is the whole list of an IN (...), but its value is a single text. Use = {{placeholder}} for one value, or array_contains(from_json({{placeholder}}, 'array<string>'), column) for a JSON list."
+        "script_sql_placeholder_as_list": "The placeholder {{placeholder}} is the whole list of an IN (...), but its value is a single text. Use = {{placeholder}} for one value, or array_contains(from_json({{placeholder}}, 'array<string>'), column) for a JSON list.",
+        "script_sql_placeholder_typed_literal": "The placeholder {{placeholder}} is the text of a typed or prefixed literal ({{keyword}} '...'), which can't take a parameter. Use CAST('{{placeholder}}' AS DATE) (or the type you need).",
+        "script_sql_placeholder_name_position": "The placeholder {{placeholder}} is where a catalog or schema name goes (after IN, CATALOG, SCHEMA, DATABASE or USE), which can't take a parameter. Write IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

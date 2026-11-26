@@ -338,7 +338,9 @@
         "script_python_disabled": "Python-Skriptschritte sind deaktiviert: Schreiben Sie den Schritt in SQL um oder entfernen Sie ihn.",
         "script_sql_placeholder_in_quotes": "Der Platzhalter {{placeholder}} steht in Anführungszeichen oder Backticks, wo sein Wert nicht als Parameter übergeben werden kann. Schreiben Sie ihn allein: name = {{placeholder}}, concat('%', {{placeholder}}, '%') oder IDENTIFIER({{placeholder}}).",
         "script_sql_placeholder_in_identifier": "Der Platzhalter {{placeholder}} ist Teil eines längeren Namens. Bilden Sie den Namen mit IDENTIFIER(...), zum Beispiel IDENTIFIER(concat('main.', {{placeholder}})).",
-        "script_sql_placeholder_as_list": "Der Platzhalter {{placeholder}} ist die ganze Liste eines IN (...), sein Wert ist aber ein einzelner Text. Verwenden Sie = {{placeholder}} für einen Wert oder array_contains(from_json({{placeholder}}, 'array<string>'), spalte) für eine JSON-Liste."
+        "script_sql_placeholder_as_list": "Der Platzhalter {{placeholder}} ist die ganze Liste eines IN (...), sein Wert ist aber ein einzelner Text. Verwenden Sie = {{placeholder}} für einen Wert oder array_contains(from_json({{placeholder}}, 'array<string>'), spalte) für eine JSON-Liste.",
+        "script_sql_placeholder_typed_literal": "Der Platzhalter {{placeholder}} ist der Text eines typisierten oder mit Präfix versehenen Literals ({{keyword}} '...'), das keinen Parameter annimmt. Verwenden Sie CAST('{{placeholder}}' AS DATE) (oder den benötigten Typ).",
+        "script_sql_placeholder_name_position": "Der Platzhalter {{placeholder}} steht dort, wo der Name eines Katalogs oder Schemas steht (nach IN, CATALOG, SCHEMA, DATABASE oder USE), was keinen Parameter annimmt. Schreiben Sie IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

@@ -2,17 +2,26 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, RefreshCw, Target, ExternalLink } from 'lucide-react';
+import { AlertCircle, RefreshCw, Target, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { LineageGraph } from '@/types/ontology-schema';
 import { BusinessLineageView } from '@/components/lineage';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 interface ImpactAnalysisPanelProps {
   entityType: string;
   entityId: string;
   maxDepth?: number;
 }
+
+type ImpactGroups = Record<string, { entity_id: string; name: string; status?: string | null }[]>;
+
+// Stands in for the impact groups while they load (see ContentSkeleton)
+const IMPACT_SAMPLE: ImpactGroups = {
+  DataProduct: [{ entity_id: 'sample-1', name: 'Sample downstream product', status: 'active' }],
+  DataContract: [{ entity_id: 'sample-2', name: 'Sample downstream contract', status: 'active' }],
+};
 
 const TYPE_ROUTE_MAP: Record<string, string> = {
   DataProduct: '/data-products',
@@ -55,9 +64,9 @@ export function ImpactAnalysisPanel({
 
   useEffect(() => { fetchImpact(); }, [fetchImpact]);
 
-  const groupedImpact = useMemo(() => {
+  const groupedImpact = useMemo<ImpactGroups>(() => {
     if (!graphData) return {};
-    const groups: Record<string, { entity_id: string; name: string; status?: string | null }[]> = {};
+    const groups: ImpactGroups = {};
     for (const node of graphData.nodes) {
       if (node.is_center) continue;
       if (!groups[node.entity_type]) groups[node.entity_type] = [];
@@ -71,17 +80,6 @@ export function ImpactAnalysisPanel({
   }, [graphData]);
 
   const affectedCount = graphData ? graphData.nodes.length - 1 : 0;
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">{t('common:impactAnalysis.analyzing')}</span>
-        </CardContent>
-      </Card>
-    );
-  }
 
   if (error) {
     return (
@@ -107,40 +105,49 @@ export function ImpactAnalysisPanel({
               <Target className="h-4 w-4" />
               {t('common:impactAnalysis.summary')}
             </span>
-            <Badge variant={affectedCount > 0 ? 'secondary' : 'outline'}>
-              {t('common:impactAnalysis.affectedCount', { count: affectedCount })}
-            </Badge>
+            {!isLoading && (
+              <Badge variant={affectedCount > 0 ? 'secondary' : 'outline'}>
+                {t('common:impactAnalysis.affectedCount', { count: affectedCount })}
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {affectedCount === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t('common:impactAnalysis.noDownstream', { type: entityType })}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {Object.entries(groupedImpact).map(([type, entities]) => (
-                <div key={type}>
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                    {type.replace(/([A-Z])/g, ' $1').trim()} ({entities.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-1">
-                    {entities.map((e) => (
-                      <Badge
-                        key={e.entity_id}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-accent text-xs"
-                        onClick={() => navigate(getEntityRoute(type, e.entity_id))}
-                      >
-                        {e.name}
-                        <ExternalLink className="ml-1 h-2.5 w-2.5" />
-                      </Badge>
-                    ))}
+          <ContentSkeleton
+            data={isLoading ? null : groupedImpact}
+            sample={IMPACT_SAMPLE}
+            empty={affectedCount === 0}
+            emptyMessage={
+              <p className="text-sm text-muted-foreground">
+                {t('common:impactAnalysis.noDownstream', { type: entityType })}
+              </p>
+            }
+          >
+            {(groups) => (
+              <div className="space-y-3">
+                {Object.entries(groups).map(([type, entities]) => (
+                  <div key={type}>
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                      {type.replace(/([A-Z])/g, ' $1').trim()} ({entities.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-1">
+                      {entities.map((e) => (
+                        <Badge
+                          key={e.entity_id}
+                          variant="outline"
+                          className="cursor-pointer hover:bg-accent text-xs"
+                          onClick={() => navigate(getEntityRoute(type, e.entity_id))}
+                        >
+                          {e.name}
+                          <ExternalLink className="ml-1 h-2.5 w-2.5" />
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </ContentSkeleton>
         </CardContent>
       </Card>
 

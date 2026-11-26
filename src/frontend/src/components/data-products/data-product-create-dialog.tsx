@@ -37,6 +37,7 @@ import { tagsForCreate, tagsForUpdate } from '@/lib/tag-payload';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -445,9 +446,10 @@ export default function DataProductCreateDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {teamsLoading ? (
-                    <SelectItem value="loading" disabled>
-                      {t('data-products:createDialog.loadingTeams')}
-                    </SelectItem>
+                    <div className="space-y-2 p-2">
+                      <SkeletonLine height="h-4" width="w-3/4" />
+                      <SkeletonLine height="h-4" width="w-1/2" />
+                    </div>
                   ) : (
                     teams.map((team) => (
                       <SelectItem key={team.id} value={team.id}>

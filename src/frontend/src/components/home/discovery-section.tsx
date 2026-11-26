@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Database, BoxSelect, Star, AlertCircle, Info, Bell } from 'lucide-react';
-import { CardSkeleton, SkeletonBlock } from '@/components/common/list-view-skeleton';
+import { SkeletonBlock } from '@/components/common/list-view-skeleton';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Link } from 'react-router-dom';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import SubscribeDialog from '@/components/data-products/subscribe-dialog';
@@ -16,6 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Badge } from '@/components/ui/badge';
+
+// Stands in for the popular products while they load (see ContentSkeleton)
+const sampleProduct = (id: string, name: string): DataProduct => ({
+  id, name, status: 'active', domain: 'sales', description: { purpose: 'Sample description of the product' },
+  team: { name: 'Data team', members: [{ username: 'owner' }] }, updated_at: '2026-01-01T00:00:00Z',
+} as DataProduct);
+const DISCOVERY_SAMPLE: DataProduct[] = [sampleProduct('s1', 'Sample product'), sampleProduct('s2', 'Customer 360')];
 
 interface DiscoverySectionProps {
   maxItems?: number;
@@ -382,107 +390,102 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
 
       <div>
         <div className="flex items-center gap-2 mb-3"><Star className="h-5 w-5 text-primary" /><span className="font-medium">{t('discoverySection.popularProducts')}</span></div>
-        {productsLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <CardSkeleton key={i} titleWidth="w-3/4" descriptionWidth="w-1/2" contentRows={2} />
-            ))}
-          </div>
-        ) : productsError ? (
-          <Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /><AlertDescription>{productsError}</AlertDescription></Alert>
-        ) : filteredProducts.length === 0 ? (
-          <p className="text-center text-muted-foreground">{t('discoverySection.noProducts')}</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredProducts
-              .slice()
-              .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
-              .slice(0, maxItems)
-              .map(p => {
-                // ODPS v1.0.0: domain is at root level, not in info
-                const rawDomain = (p?.domain as any);
-                const domainStr = rawDomain != null ? String(rawDomain) : '';
-                const resolvedById = getDomainName(domainStr);
-                const resolvedByName = !resolvedById && domainStr
-                  ? (domains.find(d => d.name.toLowerCase() === domainStr.toLowerCase())?.name || null)
-                  : null;
-                const domainLabel = resolvedById || resolvedByName || (domainStr || null);
+        <ContentSkeleton
+          data={productsLoading ? null : filteredProducts}
+          sample={DISCOVERY_SAMPLE}
+          error={productsError ? <Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /><AlertDescription>{productsError}</AlertDescription></Alert> : undefined}
+          empty={filteredProducts.length === 0}
+          emptyMessage={<p className="text-center text-muted-foreground">{t('discoverySection.noProducts')}</p>}
+          contentClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+        >
+          {(list) => list
+            .slice()
+            .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
+            .slice(0, maxItems)
+            .map(p => {
+              // ODPS v1.0.0: domain is at root level, not in info
+              const rawDomain = (p?.domain as any);
+              const domainStr = rawDomain != null ? String(rawDomain) : '';
+              const resolvedById = getDomainName(domainStr);
+              const resolvedByName = !resolvedById && domainStr
+                ? (domains.find(d => d.name.toLowerCase() === domainStr.toLowerCase())?.name || null)
+                : null;
+              const domainLabel = resolvedById || resolvedByName || (domainStr || null);
 
-                // ODPS v1.0.0: Get description from structured description
-                const description = p.description?.purpose || p.description?.usage || '';
+              // ODPS v1.0.0: Get description from structured description
+              const description = p.description?.purpose || p.description?.usage || '';
 
-                // ODPS v1.0.0: Get owner from team
-                const owner = p.team?.members?.[0]?.username || p.team?.name || t('discoverySection.unknown');
+              // ODPS v1.0.0: Get owner from team
+              const owner = p.team?.members?.[0]?.username || p.team?.name || t('discoverySection.unknown');
 
-                return (
-                  <div key={p.id || p.name} className="group">
-                    <Card className="transition-shadow group-hover:shadow-md h-full">
-                      <CardHeader>
-                        <div className="flex items-center gap-2">
-                          <Database className="h-5 w-5 text-primary" />
-                          <CardTitle className="truncate flex-1">
-                            <Link to={p.id ? `/data-products/${p.id}` : '/data-products'} className="hover:underline">
-                              {p.name || t('discoverySection.untitled')}
-                            </Link>
-                          </CardTitle>
-                          <button
-                            className="inline-flex items-center justify-center text-foreground/80 hover:text-foreground transition-colors"
-                            title={t('discoverySection.info')}
-                            aria-label={t('discoverySection.info')}
-                            onClick={() => { if (p.id) { setInfoProductId(p.id); setInfoProductTitle(p.name); } }}
-                          >
-                            <Info className="h-4 w-4" />
-                          </button>
-                        </div>
-                        {description ? (
-                          <CardDescription className="line-clamp-2">{description}</CardDescription>
-                        ) : null}
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <Badge variant="secondary" className="text-xs">
-                            {domainLabel || t('discoverySection.unknown')}
+              return (
+                <div key={p.id || p.name} className="group">
+                  <Card className="transition-shadow group-hover:shadow-md h-full">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Database className="h-5 w-5 text-primary" />
+                        <CardTitle className="truncate flex-1">
+                          <Link to={p.id ? `/data-products/${p.id}` : '/data-products'} className="hover:underline">
+                            {p.name || t('discoverySection.untitled')}
+                          </Link>
+                        </CardTitle>
+                        <button
+                          className="inline-flex items-center justify-center text-foreground/80 hover:text-foreground transition-colors"
+                          title={t('discoverySection.info')}
+                          aria-label={t('discoverySection.info')}
+                          onClick={() => { if (p.id) { setInfoProductId(p.id); setInfoProductTitle(p.name); } }}
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {description ? (
+                        <CardDescription className="line-clamp-2">{description}</CardDescription>
+                      ) : null}
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {domainLabel || t('discoverySection.unknown')}
+                        </Badge>
+                        {p.status && (
+                          <Badge variant="outline" className="text-xs">
+                            {p.status}
                           </Badge>
-                          {p.status && (
-                            <Badge variant="outline" className="text-xs">
-                              {p.status}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground mb-2 truncate">
-                          {t('discoverySection.owner')}: {owner}
-                        </div>
-                        {subscribedProductIds.has(p.id || '') ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            disabled
-                          >
-                            <Bell className="h-3.5 w-3.5 mr-1" />
-                            {t('discoverySection.subscribed')}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleSubscribeClick(p);
-                            }}
-                          >
-                            {t('discoverySection.subscribe')}
-                          </Button>
                         )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-2 truncate">
+                        {t('discoverySection.owner')}: {owner}
+                      </div>
+                      {subscribedProductIds.has(p.id || '') ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled
+                        >
+                          <Bell className="h-3.5 w-3.5 mr-1" />
+                          {t('discoverySection.subscribed')}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSubscribeClick(p);
+                          }}
+                        >
+                          {t('discoverySection.subscribe')}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
               })}
-          </div>
-        )}
+        </ContentSkeleton>
       </div>
       <EntityInfoDialog
         entityType={'data_product'}

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
-  Loader2, AlertCircle, ChevronRight, ChevronDown, Database,
+  AlertCircle, ChevronRight, ChevronDown, Database,
   Table2, Eye, Columns2, FileText, Package, ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,22 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useApi } from '@/hooks/use-api';
 import { cn } from '@/lib/utils';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import type { ProductHierarchy, HierarchyDataset, HierarchyTableOrView, HierarchyColumn } from '@/types/ontology-schema';
+
+// Stands in for the hierarchy on the first load (see ContentSkeleton)
+const HIERARCHY_SAMPLE: ProductHierarchy = {
+  product_id: 'sample',
+  product_name: 'Sample product',
+  datasets: [{
+    dataset_id: 'sample',
+    name: 'Sample dataset',
+    status: 'active',
+    tables: [{ id: 'sample-table', name: 'orders', status: 'active', columns: [{ id: 'sample-col', name: 'order_id' }] }],
+    views: [],
+    contract: null,
+  }],
+};
 
 interface ProductHierarchyPanelProps {
   productId: string;
@@ -196,25 +211,10 @@ export function ProductHierarchyPanel({ productId, className }: ProductHierarchy
     fetchHierarchy();
   }, [fetchHierarchy]);
 
-  if (loading) {
-    return (
-      <Card className={className}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Data Hierarchy
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // While loading (also on refetch), the hierarchy in skeleton mode: the current one, or a sample
+  const shown = loading ? (hierarchy ?? HIERARCHY_SAMPLE) : hierarchy;
 
-  if (error) {
+  if (!loading && error) {
     return (
       <Card className={className}>
         <CardHeader className="pb-3">
@@ -233,10 +233,11 @@ export function ProductHierarchyPanel({ productId, className }: ProductHierarchy
     );
   }
 
-  const datasets = hierarchy?.datasets || [];
+  const datasets = shown?.datasets || [];
 
   return (
-    <Card className={className}>
+    <ContentSkeleton loading={loading} className={className}>
+    <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
@@ -262,5 +263,6 @@ export function ProductHierarchyPanel({ productId, className }: ProductHierarchy
         )}
       </CardContent>
     </Card>
+    </ContentSkeleton>
   );
 }

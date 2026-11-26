@@ -27,8 +27,9 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Loader2, Search, Users, User, UserSquare, X } from 'lucide-react';
+import { Search, Users, User, UserSquare, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -401,10 +402,7 @@ function ConfiguredInput({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {loading ? (
-          <div className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('common:principalPicker.searching')}
-          </div>
+          <ListItemSkeleton count={3} height="h-9" className="space-y-1" />
         ) : visible.length === 0 ? (
           <div className="px-2 py-2 text-sm text-muted-foreground">{t('common:states.noMatches')}</div>
         ) : (
@@ -594,15 +592,12 @@ function PrincipalPickerDialog({
             data-testid="principal-picker-dialog-input"
           />
           <div className="max-h-72 overflow-y-auto rounded-md border">
-            {loading ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('common:principalPicker.searching')}
-              </div>
-            ) : debouncedQuery.trim().length < 2 ? (
+            {debouncedQuery.trim().length < 2 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
                 {t('common:principalPicker.typeAtLeast2')}
               </div>
+            ) : loading ? (
+              <ListItemSkeleton count={4} height="h-9" className="space-y-1 p-1" />
             ) : visible.length === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">{t('common:states.noMatches')}</div>
             ) : (

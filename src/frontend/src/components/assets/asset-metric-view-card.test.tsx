@@ -189,6 +189,6 @@ describe('AssetMetricViewCard', () => {
         getMock.mockReturnValue(new Promise(() => {}));
         render(<AssetMetricViewCard assetId="a1" assetTypeName={MV} />);
 
-        expect(screen.getByLabelText('Loading the metric view')).toBeInTheDocument();
+        expect(screen.getByText('Loading the metric view')).toBeInTheDocument();
     });
 });

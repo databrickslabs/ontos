@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2 } from 'lucide-react';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 import MetricViewStatus from '@/components/assets/metric-view-status';
@@ -77,11 +77,11 @@ export default function AssetMetricViewCard({ assetId, assetTypeName }: {
             </CardHeader>
             <CardContent>
                 {state === 'loading' && (
-                    <div className="flex justify-center py-6">
-                        <Loader2
-                            className="h-6 w-6 animate-spin text-muted-foreground"
-                            aria-label={t('detail.metricView.loading')}
-                        />
+                    <div className="space-y-3 py-2" aria-busy="true">
+                        <span className="sr-only" role="status">{t('detail.metricView.loading')}</span>
+                        <SkeletonLine height="h-4" width="w-1/2" />
+                        <SkeletonLine height="h-4" width="w-full" />
+                        <SkeletonLine height="h-4" width="w-3/4" />
                     </div>
                 )}
                 {state === 'noToken' && (

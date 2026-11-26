@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useApi } from '@/hooks/use-api';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import type { Connection } from '@/types/connections';
 
 export interface CatalogSchemaResult {
@@ -142,10 +143,7 @@ export default function InferFromCatalogDialog({
           <div className="flex items-center gap-3 flex-shrink-0">
             <span className="text-sm font-medium whitespace-nowrap">{t('data-contracts:infer.connectionLabel', 'Connection:')}</span>
             {isLoadingConnections ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('common:states.loading')}
-              </div>
+              <SkeletonLine height="h-10" width="w-[300px]" />
             ) : connections.length === 0 ? (
               <span className="text-sm text-muted-foreground">
                 {t('data-contracts:infer.noConnections', 'No connections configured. Add one in Settings > Connectors.')}

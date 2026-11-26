@@ -14,7 +14,6 @@ import {
   Table as TableIcon,
   Eye,
   ExternalLink,
-  Loader2,
   AlertCircle,
   Database,
   FileSpreadsheet,
@@ -25,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
   Select,
   SelectContent,
@@ -269,8 +269,9 @@ const LineageGraphComponent: React.FC<LineageGraphProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div aria-busy="true">
+        <span className="sr-only" role="status">{t('common:states.loading')}</span>
+        <GraphCanvasSkeleton height="h-64" />
       </div>
     );
   }

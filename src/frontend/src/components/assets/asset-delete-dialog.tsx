@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, Trash2, AlertTriangle, Box, Table2, Eye, Columns2, Database, Shapes } from 'lucide-react';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -219,9 +220,13 @@ export function AssetDeleteDialog({
         </DialogHeader>
 
         {isLoadingPreview ? (
-          <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">{t('assets:cascadeDelete.loadingRelated')}</span>
+          <div className="space-y-3" aria-busy="true">
+            <span className="sr-only" role="status">{t('assets:cascadeDelete.loadingRelated')}</span>
+            {/* Warning box, then the list of related assets */}
+            <SkeletonLine height="h-10" width="w-full" />
+            {[0, 1, 2].map((i) => (
+              <SkeletonLine key={i} height="h-8" width="w-full" />
+            ))}
           </div>
         ) : preview && hasChildren ? (
           <div className="space-y-3">

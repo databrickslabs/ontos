@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
+import { SkeletonLine } from '@/components/common/list-view-skeleton'
 
 /**
  * Shared version selector for any entity kind that participates in the
@@ -88,6 +89,7 @@ export default function VersionSelector({
   const { toast } = useToast()
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -114,7 +116,10 @@ export default function VersionSelector({
           setVersions([])
         }
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) {
+          setIsLoading(false)
+          setLoaded(true)
+        }
       }
     }
 
@@ -123,6 +128,11 @@ export default function VersionSelector({
       cancelled = true
     }
   }, [entityKind, currentEntityId, endpointOverride, toast])
+
+  if (!loaded) {
+    // The trigger's footprint, so the toolbar doesn't jump when the versions arrive
+    return <SkeletonLine height="h-8" width="w-28" />
+  }
 
   if (versions.length <= 1) {
     // Family-of-one: nothing to switch between. Render nothing so the

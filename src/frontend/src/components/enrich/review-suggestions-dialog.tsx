@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import { DialogSkeleton } from '@/components/common/list-view-skeleton';
 
 // ---------------------------------------------------------------------------
 // Inline "Review suggested matches" surface for the Map lane.
@@ -181,9 +182,9 @@ export default function ReviewSuggestionsDialog({
               onNext={() => setActiveIndex((i) => Math.min(i + 1, suggestionRefs!.length - 1))}
             />
           ) : loading && !hasScheme && placeholders.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('enrich.review.loading', 'Loading suggested matches…')}
+            <div className="py-4" aria-busy="true">
+              <span className="sr-only" role="status">{t('enrich.review.loading', 'Loading suggested matches…')}</span>
+              <DialogSkeleton rows={3} />
             </div>
           ) : hasScheme ? (
             // Live scheme-review path: list the scheme's pending suggestions and

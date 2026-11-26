@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge'
 import { ChevronsUpDown, Check, GitBranch, Pin, History } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import VersionSelector, { type EntityVersionRow } from '@/components/common/version-selector'
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -306,7 +307,7 @@ export function EntityVersionPicker({
             <CommandInput placeholder={t('common:entityVersionPicker.searchPlaceholder', { kind: entityKind })} />
             <CommandList>
               {loading ? (
-                <CommandEmpty>{t('common:entityVersionPicker.loading')}</CommandEmpty>
+                <ListItemSkeleton count={3} height="h-9" className="space-y-1 p-1" />
               ) : (
                 <>
                   <CommandEmpty>

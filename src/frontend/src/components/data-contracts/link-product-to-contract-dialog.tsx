@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import type { DataProduct, OutputPort } from '@/types/data-product';
 import { omitTags } from '@/lib/tag-payload';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 type LinkProductToContractDialogProps = {
   isOpen: boolean;
@@ -216,9 +217,7 @@ export default function LinkProductToContractDialog({
               {t('data-contracts:linkProduct.selectProductLabel', 'Select Product')} <span className="text-destructive">*</span>
             </Label>
             {isLoadingProducts ? (
-              <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
+              <SkeletonLine height="h-10" width="w-full" />
             ) : (
               <Select value={selectedProductId} onValueChange={setSelectedProductId}>
                 <SelectTrigger id="product">

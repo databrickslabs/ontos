@@ -25,7 +25,8 @@ import { LLMConfig } from '@/types/llm';
 import { DataTable } from "@/components/ui/data-table"; // For table preview
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { RelativeDate } from '@/components/common/relative-date';
+import { RelativeDate } from '@/components/common/relative-date';import { DialogSkeleton } from '@/components/common/list-view-skeleton';
+
 import { PrismAsyncLight as SyntaxHighlighterBase } from 'react-syntax-highlighter';
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
@@ -251,7 +252,7 @@ export default function AssetReviewEditor({
     // --- Render Content --- //
     const renderAssetContent = () => {
         if (isLoadingContent) {
-            return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+            return <div aria-busy="true"><span className="sr-only" role="status">{t('common:states.loading')}</span><DialogSkeleton rows={4} className="py-4" /></div>;
         }
         if (contentError && !definition && !preview && !metricView) { 
              return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{contentError}</AlertDescription></Alert>;

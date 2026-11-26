@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { useFormatLabel } from '@/lib/format-label';
 import type { InstanceHierarchyNode } from '@/types/ontology-schema';
 import { AddRelationshipDialog } from '@/components/common/add-relationship-dialog';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -400,6 +401,19 @@ function RootTreeNode({
 // Main panel
 // ---------------------------------------------------------------------------
 
+// Stands in for the relationships while they load (see ContentSkeleton)
+const RELATIONSHIPS_SAMPLE: RelationshipSummary = {
+  entity_type: 'sample', entity_id: 'sample', total: 2,
+  outgoing: [{
+    id: 'sample-1', source_type: 'sample', source_id: 'sample', target_type: 'Dataset', target_id: 'sample-1',
+    relationship_type: 'has dataset', target_name: 'Sample related dataset', created_at: '2026-01-01T00:00:00Z',
+  }],
+  incoming: [{
+    id: 'sample-2', source_type: 'DataProduct', source_id: 'sample-2', target_type: 'sample', target_id: 'sample',
+    relationship_type: 'depends on', source_name: 'Sample data product', created_at: '2026-01-01T00:00:00Z',
+  }],
+};
+
 export function EntityTreePanel({
   entityType,
   entityId,
@@ -464,8 +478,10 @@ export function EntityTreePanel({
 
   // ------ derived data ------
 
-  const outgoing = data?.outgoing || [];
-  const incoming = data?.incoming || [];
+  // While loading, the panel renders a sample in skeleton mode (ContentSkeleton)
+  const shown = loading ? RELATIONSHIPS_SAMPLE : data;
+  const outgoing = shown?.outgoing || [];
+  const incoming = shown?.incoming || [];
   const total = outgoing.length + incoming.length;
 
   const rootNodes: RootNode[] = useMemo(() => {
@@ -504,24 +520,6 @@ export function EntityTreePanel({
 
   // ------ render ------
 
-  if (loading) {
-    return (
-      <Card className={className}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Link2 className="h-4 w-4" />
-            {resolvedTitle}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   if (error) {
     return (
       <Card className={className}>
@@ -549,7 +547,7 @@ export function EntityTreePanel({
             <CardTitle className="text-base flex items-center gap-2">
               <Link2 className="h-4 w-4" />
               {resolvedTitle}
-              <Badge variant="secondary" className="ml-1 text-xs">{total}</Badge>
+              {!loading && <Badge variant="secondary" className="ml-1 text-xs">{total}</Badge>}
             </CardTitle>
             {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setIsAddOpen(true)}>
@@ -559,11 +557,15 @@ export function EntityTreePanel({
           </div>
         </CardHeader>
         <CardContent>
-          {total === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              {t('common:entityRelationships.noneFound')}
-            </p>
-          ) : (
+          <ContentSkeleton
+            loading={loading}
+            empty={total === 0}
+            emptyMessage={
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {t('common:entityRelationships.noneFound')}
+              </p>
+            }
+          >
             <div className="space-y-2">
               {/* Type filter bar */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -607,7 +609,7 @@ export function EntityTreePanel({
                 </div>
               )}
             </div>
-          )}
+          </ContentSkeleton>
         </CardContent>
       </Card>
 

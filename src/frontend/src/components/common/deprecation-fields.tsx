@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/hooks/use-api';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 export interface DeprecationValues {
   deprecationReason: string;
@@ -88,6 +89,7 @@ export default function DeprecationFields({
   const { t } = useTranslation(['common']);
   const { get } = useApi();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +113,7 @@ export default function DeprecationFields({
         }
       }
       setCandidates([...byId.values()]);
+      setCandidatesLoading(false);
     });
     return () => {
       cancelled = true;
@@ -149,26 +152,30 @@ export default function DeprecationFields({
       </div>
       <div className="space-y-2">
         <Label htmlFor="deprecation-replacement">{t('common:deprecation.replacement')}</Label>
-        <Select
-          value={value.replacementId || NO_REPLACEMENT}
-          onValueChange={(id) =>
-            onChange({ ...value, replacementId: id === NO_REPLACEMENT ? '' : id })
-          }
-          disabled={disabled}
-        >
-          <SelectTrigger id="deprecation-replacement">
-            <SelectValue placeholder={t('common:deprecation.noReplacement')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NO_REPLACEMENT}>{t('common:deprecation.noReplacement')}</SelectItem>
-            {candidates.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name || c.id}
-                {c.version ? ` (${c.version})` : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {candidatesLoading ? (
+          <SkeletonLine height="h-10" width="w-full" />
+        ) : (
+          <Select
+            value={value.replacementId || NO_REPLACEMENT}
+            onValueChange={(id) =>
+              onChange({ ...value, replacementId: id === NO_REPLACEMENT ? '' : id })
+            }
+            disabled={disabled}
+          >
+            <SelectTrigger id="deprecation-replacement">
+              <SelectValue placeholder={t('common:deprecation.noReplacement')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_REPLACEMENT}>{t('common:deprecation.noReplacement')}</SelectItem>
+              {candidates.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name || c.id}
+                  {c.version ? ` (${c.version})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
     </div>
   );

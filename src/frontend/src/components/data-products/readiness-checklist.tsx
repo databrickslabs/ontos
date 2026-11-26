@@ -3,12 +3,24 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import type { ReadinessReport } from '@/types/ontology-schema';
 
 interface ReadinessChecklistProps {
   productId: string;
 }
+
+// Stands in for the report on the first load (see ContentSkeleton)
+const READINESS_SAMPLE: ReadinessReport = {
+  product_id: 'sample',
+  product_name: 'Sample product',
+  checks: [
+    { name: 'Owner assigned', status: 'pass', detail: 'Sample owner' },
+    { name: 'Output port has a contract', status: 'warn', detail: 'Sample detail' },
+  ],
+  overall: 'partial',
+};
 
 const STATUS_CONFIG = {
   pass: { icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950/30' },
@@ -44,18 +56,10 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">{t('data-products:readiness.checking')}</span>
-        </CardContent>
-      </Card>
-    );
-  }
+  // While loading (also on re-check), the report in skeleton mode: the current one, or a sample
+  const shown = isLoading ? (report ?? READINESS_SAMPLE) : report;
 
-  if (error || !report) {
+  if (!isLoading && (error || !report)) {
     return (
       <Card>
         <CardContent className="py-6 text-center">
@@ -68,10 +72,11 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
     );
   }
 
-  const overall = OVERALL_CONFIG[report.overall] || OVERALL_CONFIG.not_ready;
-  const passCount = report.checks.filter(c => c.status === 'pass').length;
+  const overall = OVERALL_CONFIG[shown!.overall] || OVERALL_CONFIG.not_ready;
+  const passCount = shown!.checks.filter(c => c.status === 'pass').length;
 
   return (
+    <ContentSkeleton loading={isLoading}>
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
@@ -81,7 +86,7 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
           </span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-normal text-muted-foreground">
-              {t('data-products:readiness.passCount', { passed: passCount, total: report.checks.length })}
+              {t('data-products:readiness.passCount', { passed: passCount, total: shown!.checks.length })}
             </span>
             <Badge variant={overall.variant}>{t(`data-products:readiness.status.${overall.labelKey}`)}</Badge>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={fetchReport}>
@@ -92,7 +97,7 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {report.checks.map((check, i) => {
+          {shown!.checks.map((check, i) => {
             const cfg = STATUS_CONFIG[check.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.warn;
             const Icon = cfg.icon;
             return (
@@ -111,5 +116,6 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
         </div>
       </CardContent>
     </Card>
+    </ContentSkeleton>
   );
 }

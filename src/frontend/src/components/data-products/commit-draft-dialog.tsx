@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { DiffFromParentResponse } from '@/types/data-product';
 
@@ -150,94 +151,85 @@ export default function CommitDraftDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {loadingDiff ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              {t('data-products:commitDraft.analyzing')}
-            </div>
-          ) : (
-            <>
-              {/* Change Analysis Summary */}
-              {diffAnalysis && (
-                <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-                  <AlertTitle className="text-blue-800 dark:text-blue-200">{t('data-products:commitDraft.changeAnalysisTitle')}</AlertTitle>
-                  <AlertDescription className="text-blue-700 dark:text-blue-300">
-                    {t('data-products:commitDraft.changeAnalysisDescription', { bump: diffAnalysis.suggested_bump })}
-                    {diffAnalysis.analysis?.summary && (
-                      <p className="mt-1 text-sm">{diffAnalysis.analysis.summary}</p>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Version Selection */}
-              <div className="space-y-3">
-                <Label>{t('data-products:commitDraft.selectVersion')}</Label>
-                <RadioGroup
-                  value={selectedVersionBump}
-                  onValueChange={(v) => setSelectedVersionBump(v as typeof selectedVersionBump)}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="patch" id="patch" />
-                    <Label htmlFor="patch" className="font-normal">
-                      {t('data-products:commitDraft.patch')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'patch') : '?.?.?'})
-                      <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.patchDescription')}</span>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="minor" id="minor" />
-                    <Label htmlFor="minor" className="font-normal">
-                      {t('data-products:commitDraft.minor')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'minor') : '?.?.?'})
-                      <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.minorDescription')}</span>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="major" id="major" />
-                    <Label htmlFor="major" className="font-normal">
-                      {t('data-products:commitDraft.major')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'major') : '?.?.?'})
-                      <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.majorDescription')}</span>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="custom" id="custom" />
-                    <Label htmlFor="custom" className="font-normal">{t('data-products:commitDraft.customVersion')}</Label>
-                  </div>
-                </RadioGroup>
-                
-                {selectedVersionBump === 'custom' && (
-                  <Input
-                    value={customVersion}
-                    onChange={(e) => setCustomVersion(e.target.value)}
-                    placeholder={t('data-products:commitDraft.customVersionPlaceholder')}
-                    className="mt-2"
-                  />
+        <ContentSkeleton loading={loadingDiff} className="py-4" contentClassName="space-y-4">
+          {/* Change Analysis Summary */}
+          {diffAnalysis && (
+            <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+              <AlertTitle className="text-blue-800 dark:text-blue-200">{t('data-products:commitDraft.changeAnalysisTitle')}</AlertTitle>
+              <AlertDescription className="text-blue-700 dark:text-blue-300">
+                {t('data-products:commitDraft.changeAnalysisDescription', { bump: diffAnalysis.suggested_bump })}
+                {diffAnalysis.analysis?.summary && (
+                  <p className="mt-1 text-sm">{diffAnalysis.analysis.summary}</p>
                 )}
-              </div>
-
-              {/* Change Summary */}
-              <div className="space-y-2">
-                <Label htmlFor="change-summary">{t('data-products:commitDraft.changeSummaryLabel')}</Label>
-                <Textarea
-                  id="change-summary"
-                  value={changeSummary}
-                  onChange={(e) => setChangeSummary(e.target.value)}
-                  placeholder={t('data-products:commitDraft.changeSummaryPlaceholder')}
-                  className="min-h-[100px] resize-none"
-                  disabled={isCommitting}
-                />
-              </div>
-
-              {/* Error Display */}
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-            </>
+              </AlertDescription>
+            </Alert>
           )}
-        </div>
+
+          {/* Version Selection */}
+          <div className="space-y-3">
+            <Label>{t('data-products:commitDraft.selectVersion')}</Label>
+            <RadioGroup
+              value={selectedVersionBump}
+              onValueChange={(v) => setSelectedVersionBump(v as typeof selectedVersionBump)}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="patch" id="patch" />
+                <Label htmlFor="patch" className="font-normal">
+                  {t('data-products:commitDraft.patch')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'patch') : '?.?.?'})
+                  <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.patchDescription')}</span>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="minor" id="minor" />
+                <Label htmlFor="minor" className="font-normal">
+                  {t('data-products:commitDraft.minor')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'minor') : '?.?.?'})
+                  <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.minorDescription')}</span>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="major" id="major" />
+                <Label htmlFor="major" className="font-normal">
+                  {t('data-products:commitDraft.major')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'major') : '?.?.?'})
+                  <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.majorDescription')}</span>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="custom" id="custom" />
+                <Label htmlFor="custom" className="font-normal">{t('data-products:commitDraft.customVersion')}</Label>
+              </div>
+            </RadioGroup>
+
+            {selectedVersionBump === 'custom' && (
+              <Input
+                value={customVersion}
+                onChange={(e) => setCustomVersion(e.target.value)}
+                placeholder={t('data-products:commitDraft.customVersionPlaceholder')}
+                className="mt-2"
+              />
+            )}
+          </div>
+
+          {/* Change Summary */}
+          <div className="space-y-2">
+            <Label htmlFor="change-summary">{t('data-products:commitDraft.changeSummaryLabel')}</Label>
+            <Textarea
+              id="change-summary"
+              value={changeSummary}
+              onChange={(e) => setChangeSummary(e.target.value)}
+              placeholder={t('data-products:commitDraft.changeSummaryPlaceholder')}
+              className="min-h-[100px] resize-none"
+              disabled={isCommitting}
+            />
+          </div>
+
+          {/* Error Display */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </ContentSkeleton>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCommitting}>

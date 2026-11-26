@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface OverviewTileProps {
   icon: ReactNode;
@@ -62,7 +62,7 @@ export default function OverviewTile({
             </div>
             <div className="flex-shrink-0 ml-auto">
               {loading ? (
-                <Loader2 className="h-4 w-4 sm:h-4.5 sm:w-4.5 md:h-5 md:w-5 animate-spin text-primary" />
+                <SkeletonLine height="h-6 md:h-8" width="w-12 md:w-16" />
               ) : error ? (
                 <span className="text-xs text-destructive">Error</span>
               ) : (

@@ -10,11 +10,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Loader2, AlertCircle, ZoomIn, ZoomOut, Maximize, RotateCcw,
+  AlertCircle, ZoomIn, ZoomOut, Maximize, RotateCcw,
   Group, Ungroup,
 } from 'lucide-react';
 import type { LineageGraph, LineageGraphNode } from '@/types/ontology-schema';
 import { useFormatLabel } from '@/lib/format-label';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 
 // ─── Shared color map — re-exported from lineage constants for backward compat
 export { TYPE_COLOR, DEFAULT_HEX, hexForType } from '@/components/lineage/constants';
@@ -469,12 +470,7 @@ export function BusinessLineageGraph({
   // ─── Render ─────────────────────────────────────────────────────────────
 
   if (isLoading) {
-    return (
-      <div className={`flex items-center justify-center ${className || 'h-64'}`}>
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">{t('common:businessLineage.loadingRelationships')}</span>
-      </div>
-    );
+    return <GraphCanvasSkeleton height={className || 'h-[500px]'} />;
   }
 
   if (error) {

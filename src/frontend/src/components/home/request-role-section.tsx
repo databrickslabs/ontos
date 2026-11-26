@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, UserPlus, Info } from 'lucide-react';
-import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { AppRole } from '@/types/settings';
 import RequestRoleAccessDialog from '@/components/settings/request-role-access-dialog';
@@ -27,12 +27,27 @@ export default function RequestRoleSection({ maxItems = 6 }: RequestRoleSectionP
   const displayedRoles = requestableRoles.slice(0, maxItems);
 
   if (isLoading) {
+    // Same frame as the loaded section: a grid of role cards with a button each
     return (
-      <section className="mb-16">
+      <section className="mb-16" aria-busy="true">
         <h2 className="text-2xl font-semibold mb-4">{t('requestRoleSection.title', 'Roles')}</h2>
         <Card>
-          <CardContent className="py-6">
-            <ListItemSkeleton count={3} height="h-12" className="space-y-2" />
+          <CardHeader>
+            <CardTitle>{t('requestRoleSection.cardTitle', 'Available Roles')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <SkeletonLine height="h-5" width="w-5" />
+                    <SkeletonLine height="h-4" width="w-32" />
+                  </div>
+                  <SkeletonLine height="h-4" width="w-5/6" />
+                  <SkeletonLine height="h-8" width="w-full" />
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </section>

@@ -75,7 +75,7 @@ describe('Requested deprecation fields', () => {
     get.mockResolvedValue({ data: [] });
   });
 
-  it('hides the reason when the justification is the reason', () => {
+  it('hides the reason when the justification is the reason', async () => {
     renderWithProviders(
       <DeprecationFields
         entityType="data_product"
@@ -88,7 +88,8 @@ describe('Requested deprecation fields', () => {
 
     expect(document.getElementById('deprecation-reason')).toBeNull();
     expect(document.getElementById('deprecation-sunset-date')).toBeInTheDocument();
-    expect(document.getElementById('deprecation-replacement')).toBeInTheDocument();
+    // The replacement select waits for the candidates (a skeleton until then)
+    await waitFor(() => expect(document.getElementById('deprecation-replacement')).toBeInTheDocument());
   });
 
   it('sends only the sunset date and the replacement with a request', () => {

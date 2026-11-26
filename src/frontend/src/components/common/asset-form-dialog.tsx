@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface AssetFormDialogProps {
   isOpen: boolean;
@@ -246,9 +247,14 @@ export function AssetFormDialog({
         </DialogHeader>
 
         {schemaLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">{t('common:assetForm.loadingSchema')}</span>
+          <div className="space-y-4" role="status" aria-busy="true">
+            <span className="sr-only">{t('common:assetForm.loadingSchema')}</span>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-2" aria-hidden="true">
+                <SkeletonLine height="h-4" width="w-24" />
+                <SkeletonLine height="h-9" width="w-full" />
+              </div>
+            ))}
           </div>
         ) : (
           <Form {...form}>

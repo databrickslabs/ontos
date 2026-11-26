@@ -14,7 +14,8 @@ import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { Home as HomeIcon, Loader2 } from 'lucide-react';
+import { Home as HomeIcon } from 'lucide-react';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useNavHiddenFeatures } from '@/hooks/use-nav-hidden-features';
 
 interface NavigationProps {
@@ -22,7 +23,7 @@ interface NavigationProps {
 }
 
 export function Navigation({ isCollapsed }: NavigationProps) {
-  const { t } = useTranslation(['navigation', 'features']);
+  const { t } = useTranslation(['navigation', 'features', 'common']);
   const location = useLocation();
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
   const { permissions, isLoading: permissionsLoading, hasPermission } = usePermissions();
@@ -65,11 +66,15 @@ export function Navigation({ isCollapsed }: NavigationProps) {
   }, [rawNavigationGroups, permissions, permissionsLoading, hasPermission]);
 
   if (permissionsLoading) {
-     return (
-         <div className="flex justify-center items-center h-full p-4">
-             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-         </div>
-     );
+    // Placeholder rows where the navigation items will be
+    return (
+      <div className="flex flex-col gap-1 px-1 py-2" aria-busy="true">
+        <span className="sr-only" role="status">{t('common:states.loading')}</span>
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <SkeletonLine key={i} height="h-8" width={isCollapsed ? 'w-8 mx-auto' : 'w-full'} />
+        ))}
+      </div>
+    );
   }
 
   const homeLink: FeatureConfig = {

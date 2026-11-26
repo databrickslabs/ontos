@@ -33,6 +33,7 @@ import {
   Columns2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton'
 import { 
   UCAssetInfo, 
   UCAssetType, 
@@ -173,7 +174,7 @@ export default function UCAssetLookupDialog({
     return isSelectableType(type as UCAssetType)
   }, [selectableTypesProp])
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Tree state
@@ -933,7 +934,7 @@ export default function UCAssetLookupDialog({
             className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden border rounded p-2"
           >
             {loading ? (
-              <div className="p-3 text-sm text-muted-foreground">{t('data-contracts:ucLookup.loadingCatalogs', 'Loading catalogs...')}</div>
+              <HierarchyTreeSkeleton />
             ) : filteredRootItems.length === 0 ? (
               <div className="p-3 text-sm text-muted-foreground">{t('data-contracts:ucLookup.noMatchingItems', 'No matching items found')}</div>
             ) : (

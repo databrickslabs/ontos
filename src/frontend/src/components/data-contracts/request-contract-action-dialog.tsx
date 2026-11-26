@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { contractActionErrorText } from '@/lib/contract-action-error';
 import { needsStatusChangeRequest } from '@/lib/status-change-error';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -596,12 +597,7 @@ export default function RequestContractActionDialog({
           {requestType === 'deploy' && (
             <div className="space-y-3">
               {/* Loading Policy Indicator */}
-              {loadingPolicy && (
-                <Alert>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <AlertDescription>{t('data-contracts:requests.deploy.loadingPolicy', 'Loading deployment policy...')}</AlertDescription>
-                </Alert>
-              )}
+              {loadingPolicy && <SkeletonBlock height="h-12" />}
               
               {/* Policy Error */}
               {policyError && (

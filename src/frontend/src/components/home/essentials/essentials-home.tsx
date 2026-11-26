@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { SkeletonLine, skeletonWidth } from '@/components/common/list-view-skeleton';
 import SearchBar from '@/components/ui/search-bar';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
@@ -61,6 +62,17 @@ export interface EssentialsHomeProps {
    * in Publish. Not passed yet, so no badge is shown.
    */
   renderAssetBadge?: (asset: OwnedAsset) => ReactNode;
+}
+
+/** Placeholder lines while a list in a journey card loads */
+function LinesSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-2" aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <SkeletonLine key={i} height="h-4" width="" style={{ width: `${skeletonWidth(i, 120, 140)}px` }} />
+      ))}
+    </div>
+  );
 }
 
 const LIST_LIMIT = 5;
@@ -289,7 +301,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                     {t('home:essentials.notices.reviewsTruncated', { count: REVIEWS_LIMIT })}
                   </p>
                 )}
-                {reviewList.loading || reviewList.error ? null : latest.length === 0 ? (
+                {reviewList.loading ? <LinesSkeleton /> : reviewList.error ? null : latest.length === 0 ? (
                   <Empty>{t('home:essentials.trust.empty')}</Empty>
                 ) : (
                   <ul className="space-y-1 text-sm">
@@ -332,7 +344,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                 description={t('home:essentials.publish.description')}
               >
                 {owned.error && <LoadError onRetry={owned.retry} />}
-                {owned.loading || (owned.error && owned.data.length === 0) ? null
+                {owned.loading ? <LinesSkeleton /> : (owned.error && owned.data.length === 0) ? null
                   : owned.data.length === 0 ? (
                   <Empty>{t('home:essentials.publish.noAssets')}</Empty>
                 ) : gaps.length === 0 ? (
@@ -432,6 +444,8 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                       <LoadError onRetry={accessRequests.retry} />
                     ) : !accessRequests.loading && accessRequests.total === 0 ? (
                       <Empty>{t('home:essentials.maintain.noRequests')}</Empty>
+                    ) : accessRequests.loading ? (
+                      <LinesSkeleton />
                     ) : (
                       <ul className="space-y-1 text-sm">
                         {accessRequests.data.slice(0, LIST_LIMIT).map((r) => (
@@ -455,6 +469,8 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                     <LoadError onRetry={reviewList.retry} />
                   ) : !reviewList.loading && openReviews.length === 0 ? (
                     <Empty>{t('home:essentials.maintain.noReviews')}</Empty>
+                  ) : reviewList.loading ? (
+                    <LinesSkeleton />
                   ) : (
                     <ul className="space-y-1 text-sm">
                       {openReviews.slice(0, LIST_LIMIT).map((r) => (

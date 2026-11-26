@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveNavHiddenFeatures } from './use-nav-hidden-features';
-import { isOntosAdmin } from './use-is-ontos-admin';
+import { isOntosAdmin, rolesHeldBy } from './use-is-ontos-admin';
 import type { AppRole } from '@/types/settings';
 
 describe('resolveNavHiddenFeatures', () => {
@@ -54,5 +54,22 @@ describe('isOntosAdmin', () => {
       { id: 'c', name: 'Consumer', assigned_groups: [], assigned_users: ['dev@example.com'], is_admin: false },
     ] as unknown as AppRole[];
     expect(isOntosAdmin([], byUser, 'dev@example.com')).toBe(false);
+  });
+});
+
+describe('rolesHeldBy', () => {
+  const roles = [
+    { id: 'g', name: 'ByGroup', assigned_groups: ['Team'], assigned_users: [] },
+    { id: 'u', name: 'ByUser', assigned_groups: [], assigned_users: ['Dev@Example.com'] },
+    { id: 'o', name: 'Other', assigned_groups: ['x'], assigned_users: ['o@example.com'] },
+  ] as unknown as AppRole[];
+
+  it('returns roles held by group or by user, case-insensitively (#1713)', () => {
+    expect(rolesHeldBy(['team'], roles, ' dev@example.COM ').map((r) => r.id)).toEqual(['g', 'u']);
+    expect(rolesHeldBy([], roles, 'dev@example.com').map((r) => r.id)).toEqual(['u']);
+  });
+
+  it('returns nothing without groups and email', () => {
+    expect(rolesHeldBy(null, roles, null)).toEqual([]);
   });
 });

@@ -490,8 +490,8 @@ class SettingsManager(ThreadBoundDb):
         When role_id is None, the override is cleared and the user's actual group-based
         permissions are used. This stores state in-memory for the backend process lifetime.
 
-        Defense-in-depth: when caller_is_admin is False, the target role_id must intersect
-        with caller_groups (i.e., the user must be a member of a group assigned to that role).
+        Defense-in-depth: when caller_is_admin is False, the user must hold the target role:
+        a group of caller_groups assigned to it, or the user's email in its assigned_users (#1713).
         Admins retain the impersonation power and may set any role_id. Clearing the override
         (role_id=None) is always allowed.
 
@@ -513,11 +513,12 @@ class SettingsManager(ThreadBoundDb):
 
         # Membership validation for non-admin callers
         if not caller_is_admin:
+            from src.controller.authorization_manager import _normalize_email, _role_matches
+
             group_set = {(g or '').lower() for g in (caller_groups or [])}
-            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
-            if not group_set or not role_groups.intersection(group_set):
+            if not _role_matches(role, group_set, _normalize_email(user_email)):
                 raise PermissionError(
-                    f"User is not a member of any group assigned to role '{role.name}'"
+                    f"User is not assigned to role '{role.name}' by group or by user"
                 )
 
         self._applied_role_overrides[user_email] = role_id

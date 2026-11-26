@@ -29,6 +29,25 @@ export function isOntosAdmin(
   );
 }
 
+/**
+ * The roles the user holds: by group (`assigned_groups`) or by email (`assigned_users`),
+ * case-insensitive. Mirrors the backend `_role_matches` (#1713).
+ */
+export function rolesHeldBy(
+  groups: (string | null)[] | null | undefined,
+  roles: AppRole[],
+  email?: string | null,
+): AppRole[] {
+  const groupSet = new Set((groups || []).map((g) => (g || '').toLowerCase()));
+  const emailNorm = (email || '').trim().toLowerCase();
+  return roles.filter(
+    (role) =>
+      (role.assigned_groups || []).some((g) => groupSet.has((g || '').toLowerCase())) ||
+      (emailNorm !== '' &&
+        (role.assigned_users || []).some((u) => (u || '').trim().toLowerCase() === emailNorm)),
+  );
+}
+
 /** Whether the current user is an Ontos admin, from the shared user and permissions stores. */
 export function useIsOntosAdmin(): boolean {
   const groups = useUserStore((state) => state.userInfo?.groups);

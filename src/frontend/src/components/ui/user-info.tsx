@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { usePermissions } from '@/stores/permissions-store';
-import { isOntosAdmin } from '@/hooks/use-is-ontos-admin';
+import { isOntosAdmin, rolesHeldBy } from '@/hooks/use-is-ontos-admin';
 import useTestPersonaStore from '@/stores/test-persona-store';
 import { FeatureAccessLevel, AppRole } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
@@ -186,19 +186,15 @@ export default function UserInfo() {
   // level capabilities like impersonation belong to the Ontos admin role.
   const isLocalDev = userInfo?.username === 'localdev';
 
-  // Membership-scoped role set: roles whose assigned_groups intersect the user's groups.
+  // Membership-scoped role set: roles the user holds by group or by assigned user.
   // Fix for regression where end users belonging to 2+ roles could not switch between them —
   // the previous gate was admin-only, so non-admin multi-role users saw no switcher at all.
   // Group comparison is case-insensitive because `assigned_groups` and `userInfo.groups` may
   // originate from different sources (settings.yaml vs SCIM/identity headers).
-  const myRoles = useMemo<AppRole[]>(() => {
-      const groups = userInfo?.groups;
-      if (!groups || groups.length === 0) return [];
-      const groupSet = new Set(groups.map(g => (g || '').toLowerCase()));
-      return availableRoles.filter(role =>
-          (role.assigned_groups || []).some(g => groupSet.has((g || '').toLowerCase()))
-      );
-  }, [userInfo?.groups, availableRoles]);
+  const myRoles = useMemo<AppRole[]>(
+      () => rolesHeldBy(userInfo?.groups, availableRoles, userInfo?.email),
+      [userInfo?.groups, userInfo?.email, availableRoles],
+  );
 
   // Ontos admin = user belongs to any AppRole flagged is_admin. Same check as the
   // menus (useIsOntosAdmin), on the groups this component loads itself.

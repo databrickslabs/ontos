@@ -162,6 +162,20 @@ class TestRolesEndpointScoping:
         assert "Admin" not in names
         assert outsider.name not in names
 
+    def test_non_admin_sees_a_role_assigned_to_them_by_user(
+        self, as_settings_admin: TestClient, db_session: Session
+    ):
+        # #1713: role approval assigns roles by user. No group involved, case-insensitive.
+        by_user = _add_role(db_session, "Assigned By User", [], is_admin=False)
+        by_user.assigned_users = json.dumps(["Settings_Admin@Example.com"])
+        db_session.commit()
+        other = _add_role(db_session, "Other", ["data-producers"], is_admin=False)
+
+        response = as_settings_admin.get("/api/settings/roles")
+        names = {role["name"] for role in response.json()}
+        assert names == {by_user.name}
+        assert other.name not in names
+
     def test_user_with_no_groups_sees_empty_list(self, db_session: Session, client: TestClient):
         # Override to a user with no groups at all.
         async def _override():
@@ -207,6 +221,20 @@ class TestRoleOverrideAdminGate:
         # Before the fix, this would have returned 200 because settings:ADMIN bypassed
         # membership validation. After the fix, the user must be in an is_admin role.
         assert response.status_code == 403
+
+    def test_non_admin_can_switch_to_a_role_assigned_to_them_by_user(
+        self, as_settings_admin: TestClient, db_session: Session
+    ):
+        # #1713: the switcher lists roles held by user, so the override must accept them.
+        by_user = _add_role(db_session, "Switch By User", [], is_admin=False)
+        by_user.assigned_users = json.dumps(["settings_admin@example.com"])
+        db_session.commit()
+
+        response = as_settings_admin.post(
+            "/api/user/role-override", json={"role_id": str(by_user.id)}
+        )
+        assert response.status_code == 200
+        as_settings_admin.post("/api/user/role-override", json={"role_id": None})
 
     def test_ontos_admin_can_impersonate_any_role(self, client: TestClient, db_session: Session):
         # Default user (groups=["test_admins"]) is in the seeded is_admin Admin role.

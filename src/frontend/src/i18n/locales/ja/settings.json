@@ -424,10 +424,12 @@
         "title": "ホームセクション",
         "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。",
         "labels": {
-          "JOURNEY": "ジャーニーホーム"
+          "JOURNEY": "ジャーニーホーム",
+          "MARKETPLACE": "マーケットプレイスのホーム"
         },
         "descriptions": {
-          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。"
+          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。",
+          "MARKETPLACE": "ホームページ全体をマーケットプレイスに置き換えます。他のセクションとは併用できません。"
         }
       },
       "approvalPrivileges": {
@@ -579,6 +581,62 @@
       "submitFailed": "ロールアクセスリクエストの送信に失敗しました",
       "sending": "リクエストを送信中...",
       "send": "リクエストを送信"
+    }
+  },
+  "navigationPresets": {
+    "title": "ナビゲーションプリセット",
+    "help": "既定ロールのメニューとホームページを一度に設定します。プリセットが変更するのはメニューとホームページの表示だけで、アクセスレベルは変わりません。ロールは名前で照合され、適用後も各ロールを個別に編集できます。",
+    "loadFailed": "ナビゲーションプリセットを読み込めませんでした。",
+    "presets": {
+      "essentials": {
+        "name": "エッセンシャル",
+        "description": "ジャーニーのホームと短いメニュー：カタログ、アセット、コンセプトに加え、スチュワードとガバナンス向けにレビューとコンプライアンス。"
+      },
+      "data-consumer": {
+        "name": "データコンシューマー",
+        "description": "データコンシューマー向けのマーケットプレイスのホーム。メニューにはマーケットプレイスとマイプロダクトを表示します。"
+      }
+    },
+    "preview": {
+      "role": "ロール",
+      "menu": "適用後のメニュー",
+      "home": "ホームページ",
+      "status": "状態",
+      "menuEmpty": "メニュー項目なし",
+      "homeUnchanged": "変更なし",
+      "noAccess": "表示されません：このロールには {{features}} へのアクセス権がありません。"
+    },
+    "status": {
+      "changes": "変更あり",
+      "noChange": "変更なし",
+      "notFound": "ロールが見つかりません"
+    },
+    "actions": {
+      "apply": "プリセットを適用",
+      "undo": "直前のプリセットを元に戻す"
+    },
+    "nothingToApply": "すべてのロールがすでにこのプリセットと一致しています。",
+    "lastApplied": "最終適用：{{preset}}、{{user}}、{{date}}",
+    "unknownUser": "不明なユーザー",
+    "confirm": {
+      "applyTitle": "{{preset}} プリセットを適用しますか？",
+      "applyDescription_one": "{{count}} 件のロールのメニューとホームページを変更します。アクセスレベルは変わらず、後で元に戻せます。",
+      "applyDescription_other": "{{count}} 件のロールのメニューとホームページを変更します。アクセスレベルは変わらず、後で元に戻せます。",
+      "undoTitle": "直前のプリセットを元に戻しますか？",
+      "undoDescription_one": "{{preset}} が {{count}} 件のロールで変更したメニューとホームページを元に戻します。",
+      "undoDescription_other": "{{preset}} が {{count}} 件のロールで変更したメニューとホームページを元に戻します。"
+    },
+    "applied": "{{preset}} プリセットを適用しました",
+    "nothingChanged": "変更する内容はありません",
+    "appliedSummary": "変更：{{changed}}、変更なし：{{unchanged}}、見つからない：{{missing}}。",
+    "applyFailed": "プリセットを適用できませんでした",
+    "undone": "{{preset}} プリセットを元に戻しました",
+    "undoneSummary": "復元：{{restored}}、見つからない：{{missing}}。",
+    "undoFailed": "プリセットを元に戻せませんでした",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "元に戻せるプリセットの適用はありません。",
+      "navigation_preset_unknown": "このプリセットは存在しません。",
+      "generic": "リクエストに失敗しました。もう一度お試しください。"
     }
   },
   "mcpTokens": {

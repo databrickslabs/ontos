@@ -65,15 +65,28 @@ describe('Navigation with hidden features', () => {
   it('shows every accessible feature when nothing is hidden', () => {
     const { container } = renderWithProviders(<Navigation isCollapsed={false} />);
     expect(navPaths(container).sort()).toEqual(
-      ['/assets', '/data-catalog', '/data-contracts', '/data-products', '/marketplace'],
+      [
+        '/assets', '/data-catalog', '/data-contracts', '/data-products', '/marketplace',
+        '/my-products',
+      ],
     );
   });
 
   it('leaves out a hidden feature at Read-only and one at Read/Write', () => {
     state.hiddenNavFeatures = ['data-contracts', 'data-products'];
     const { container } = renderWithProviders(<Navigation isCollapsed={false} />);
-    // data-products also gates Marketplace, so both entries go.
-    expect(navPaths(container).sort()).toEqual(['/assets', '/data-catalog']);
+    // Marketplace and My Products have their own flags: hiding Products leaves them.
+    expect(navPaths(container).sort()).toEqual(
+      ['/assets', '/data-catalog', '/marketplace', '/my-products'],
+    );
+  });
+
+  it('hides Marketplace and My Products on their own flags, keeping Products', () => {
+    state.hiddenNavFeatures = ['marketplace', 'my-products'];
+    const { container } = renderWithProviders(<Navigation isCollapsed={false} />);
+    expect(navPaths(container)).toContain('/data-products');
+    expect(navPaths(container)).not.toContain('/marketplace');
+    expect(navPaths(container)).not.toContain('/my-products');
   });
 
   it('shows everything to an Ontos admin acting as themselves', () => {

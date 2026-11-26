@@ -58,6 +58,8 @@ export enum HomeSection {
     DISCOVERY = 'DISCOVERY',
     // Journey home (#1347): replaces the Full overview for the roles that have it.
     JOURNEY = 'JOURNEY',
+    // Marketplace home (#1325): the marketplace page replaces the home page.
+    MARKETPLACE = 'MARKETPLACE',
 }
 
 // --- Approval Privileges ---

@@ -1,23 +1,28 @@
 import { useTranslation } from 'react-i18next';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FeatureAccessLevel } from '@/types/settings';
+import { features, type FeatureConfig } from '@/config/features';
 
 /** Width of the "Show in navigation" column in the role editor. */
 export const NAV_COLUMN_CLASS = 'w-[110px]';
 
 /**
- * The hidden list to store for a role (#1325): known features only, and never one at
- * None (it has no menu entry anyway).
+ * The hidden list to store for a role (#1325): known features and menu entries only, and
+ * never one whose access feature is at None (it has no menu entry anyway). `entryFeatures`
+ * maps the menu entries with their own flag (Marketplace, My Products) to that feature.
  */
 export function cleanHiddenNavFeatures(
   hidden: readonly string[] | undefined,
   permissions: Record<string, FeatureAccessLevel> | undefined,
   knownFeatureIds: Iterable<string>,
+  entryFeatures: Readonly<Record<string, string>> = {},
 ): string[] {
   const known = new Set(knownFeatureIds);
+  const accessFeature = (id: string) => entryFeatures[id] ?? id;
   return Array.from(new Set(hidden || [])).filter(
-    (id) => known.has(id)
-      && (permissions?.[id] ?? FeatureAccessLevel.NONE) !== FeatureAccessLevel.NONE,
+    (id) => (known.has(id) || (id in entryFeatures && known.has(entryFeatures[id])))
+      && (permissions?.[accessFeature(id)] ?? FeatureAccessLevel.NONE)
+        !== FeatureAccessLevel.NONE,
   );
 }
 
@@ -93,6 +98,52 @@ export function RoleNavVisibilityCell({
           const rest = hidden.filter((id) => id !== featureId);
           onChange(checked === true ? rest : [...rest, featureId]);
         }}
+      />
+    </div>
+  );
+}
+
+/** The menu entries with their own flag that depend on the access level of `featureId`. */
+export function navEntriesOf(featureId: string): FeatureConfig[] {
+  return features.filter(
+    (f) => f.navId && (f.permissionId || f.id) === featureId && f.navId !== featureId,
+  );
+}
+
+interface RoleNavEntryRowProps {
+  entry: FeatureConfig;
+  level: FeatureAccessLevel | undefined;
+  isAdminRole: boolean;
+  hidden: readonly string[];
+  onChange: (hidden: string[]) => void;
+}
+
+/**
+ * Sub-row under a feature for a menu entry with its own flag (Marketplace, My Products):
+ * no access level of its own, its checkbox follows the feature's level.
+ */
+export function RoleNavEntryRow({
+  entry, level, isAdminRole, hidden, onChange,
+}: RoleNavEntryRowProps) {
+  const { t } = useTranslation(['settings', 'features']);
+  const navId = entry.navId as string;
+  const label = t(`features:${entry.id}.name`, { defaultValue: entry.name });
+  return (
+    <div
+      data-testid={`nav-entry-row-${navId}`}
+      className="flex items-center justify-between space-x-4 py-1 pl-6"
+    >
+      <label htmlFor={`nav-${navId}`} className="text-sm font-normal flex-1 text-muted-foreground">
+        {label}
+      </label>
+      <div className="w-[180px]" aria-hidden="true" />
+      <RoleNavVisibilityCell
+        featureId={navId}
+        label={label}
+        level={level}
+        isAdminRole={isAdminRole}
+        hidden={hidden}
+        onChange={onChange}
       />
     </div>
   );

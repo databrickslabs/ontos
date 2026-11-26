@@ -23,6 +23,14 @@
     "name": "Produits",
     "description": "Regroupez et gérez les actifs Databricks liés avec des tags."
   },
+  "marketplace": {
+    "name": "Marketplace",
+    "description": "Parcourez les produits de données disponibles et abonnez-vous."
+  },
+  "my-products": {
+    "name": "Mes produits",
+    "description": "Consultez et gérez les produits de données auxquels vous êtes abonné."
+  },
   "concepts": {
     "name": "Concepts",
     "description": "Parcourir, rechercher et gérer les concepts métier, schémas de concepts et hiérarchies."

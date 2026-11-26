@@ -1,0 +1,24 @@
+# Navigation preset "essentials" (#1325): the journey home and a short menu.
+#
+# Applying it sets, for each role named below, which sidebar entries stay in the menu
+# ("shown") and which home page the role gets. Every other menu entry the role has access to
+# is hidden. Roles are matched by name (the default role names), so a renamed or deleted role
+# is reported as not found and left alone. Admin roles are never changed.
+#
+# A preset changes menus and home pages only, never access levels (feature permissions).
+# An entry listed under "shown" that the role has no access to stays absent from its menu.
+# Search and My Requests have no menu flag, so a preset can't hide them.
+#
+# Roles not listed here (Admin, Data Producer, Security Officer) are left unchanged: the
+# producer needs Products and Contracts in the menu.
+id: essentials
+roles:
+  Data Consumer:
+    shown: [data-catalog, assets, semantic-models]
+    home_sections: [JOURNEY]
+  Data Steward:
+    shown: [data-catalog, assets, semantic-models, data-asset-reviews]
+    home_sections: [JOURNEY]
+  Data Governance Officer:
+    shown: [data-catalog, assets, semantic-models, data-asset-reviews, compliance]
+    home_sections: [JOURNEY]

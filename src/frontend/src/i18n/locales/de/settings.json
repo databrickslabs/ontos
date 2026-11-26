@@ -424,10 +424,12 @@
         "title": "Startseiten-Bereiche",
         "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden.",
         "labels": {
-          "JOURNEY": "Journey-Startseite"
+          "JOURNEY": "Journey-Startseite",
+          "MARKETPLACE": "Marktplatz-Startseite"
         },
         "descriptions": {
-          "JOURNEY": "Ersetzt die vollständige Startseite durch Finden, Verstehen, Vertrauen, Veröffentlichen und Pflegen. Es lässt sich nicht mit anderen Bereichen kombinieren."
+          "JOURNEY": "Ersetzt die vollständige Startseite durch Finden, Verstehen, Vertrauen, Veröffentlichen und Pflegen. Es lässt sich nicht mit anderen Bereichen kombinieren.",
+          "MARKETPLACE": "Ersetzt die vollständige Startseite durch den Marktplatz. Lässt sich nicht mit anderen Bereichen kombinieren."
         }
       },
       "approvalPrivileges": {
@@ -579,6 +581,62 @@
       "submitFailed": "Rollenzugriffsanfrage konnte nicht übermittelt werden",
       "sending": "Anfrage wird gesendet...",
       "send": "Anfrage senden"
+    }
+  },
+  "navigationPresets": {
+    "title": "Navigationsvorlagen",
+    "help": "Legt die Menüs und die Startseite der Standardrollen in einem Schritt fest. Eine Vorlage ändert nur, was die Menüs und die Startseite zeigen, nie die Zugriffsstufen. Rollen werden über ihren Namen zugeordnet und bleiben danach einzeln bearbeitbar.",
+    "loadFailed": "Die Navigationsvorlagen konnten nicht geladen werden.",
+    "presets": {
+      "essentials": {
+        "name": "Grundausstattung",
+        "description": "Startseite mit Journey und ein kurzes Menü: Katalog, Assets und Konzepte, dazu Reviews und Compliance für Stewards und Governance."
+      },
+      "data-consumer": {
+        "name": "Datenkonsument",
+        "description": "Marktplatz-Startseite für Datenkonsumenten, mit Marktplatz und Meine Produkte im Menü."
+      }
+    },
+    "preview": {
+      "role": "Rolle",
+      "menu": "Menü nach dem Anwenden",
+      "home": "Startseite",
+      "status": "Status",
+      "menuEmpty": "Keine Menüeinträge",
+      "homeUnchanged": "Unverändert",
+      "noAccess": "Nicht angezeigt: Die Rolle hat keinen Zugriff auf {{features}}."
+    },
+    "status": {
+      "changes": "Ändert",
+      "noChange": "Keine Änderung",
+      "notFound": "Rolle nicht gefunden"
+    },
+    "actions": {
+      "apply": "Vorlage anwenden",
+      "undo": "Letzte Vorlage rückgängig machen"
+    },
+    "nothingToApply": "Alle Rollen entsprechen bereits dieser Vorlage.",
+    "lastApplied": "Zuletzt angewendet: {{preset}} von {{user}}, {{date}}",
+    "unknownUser": "unbekannter Benutzer",
+    "confirm": {
+      "applyTitle": "Vorlage {{preset}} anwenden?",
+      "applyDescription_one": "Das ändert das Menü und die Startseite von {{count}} Rolle. Die Zugriffsstufen bleiben gleich, und Sie können es danach rückgängig machen.",
+      "applyDescription_other": "Das ändert die Menüs und Startseiten von {{count}} Rollen. Die Zugriffsstufen bleiben gleich, und Sie können es danach rückgängig machen.",
+      "undoTitle": "Letzte Vorlage rückgängig machen?",
+      "undoDescription_one": "Das stellt das Menü und die Startseite wieder her, die {{preset}} bei {{count}} Rolle geändert hat.",
+      "undoDescription_other": "Das stellt die Menüs und Startseiten wieder her, die {{preset}} bei {{count}} Rollen geändert hat."
+    },
+    "applied": "Vorlage {{preset}} angewendet",
+    "nothingChanged": "Nichts zu ändern",
+    "appliedSummary": "Geändert: {{changed}}, unverändert: {{unchanged}}, nicht gefunden: {{missing}}.",
+    "applyFailed": "Die Vorlage konnte nicht angewendet werden",
+    "undone": "Vorlage {{preset}} rückgängig gemacht",
+    "undoneSummary": "Wiederhergestellt: {{restored}}, nicht gefunden: {{missing}}.",
+    "undoFailed": "Die Vorlage konnte nicht rückgängig gemacht werden",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "Es gibt keine Vorlagenanwendung zum Rückgängigmachen.",
+      "navigation_preset_unknown": "Diese Vorlage existiert nicht.",
+      "generic": "Die Anfrage ist fehlgeschlagen. Versuchen Sie es erneut."
     }
   },
   "mcpTokens": {

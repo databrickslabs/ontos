@@ -28,6 +28,8 @@ class HomeSection(str, Enum):
     DISCOVERY = "DISCOVERY"
     # Journey home (#1347): Find, Understand, Trust, Publish, Maintain. Replaces the overview.
     JOURNEY = "JOURNEY"
+    # Marketplace home (#1325): the marketplace banner and search box replace the home page.
+    MARKETPLACE = "MARKETPLACE"
 
 # Approval entities for route-agnostic approval privileges
 class ApprovalEntity(str, Enum):

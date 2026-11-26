@@ -23,6 +23,14 @@
     "name": "プロダクト",
     "description": "関連する Databricks アセットをタグでグループ化して管理します。"
   },
+  "marketplace": {
+    "name": "マーケットプレイス",
+    "description": "利用可能なデータプロダクトを閲覧して購読します。"
+  },
+  "my-products": {
+    "name": "マイプロダクト",
+    "description": "購読中のデータプロダクトを表示して管理します。"
+  },
   "concepts": {
     "name": "コンセプト",
     "description": "ビジネスコンセプト、コンセプトスキーム、階層を閲覧、検索、管理します。"

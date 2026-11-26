@@ -694,7 +694,7 @@ def test_team_override_assets_role_reads_asset_and_notes(
     db_session.flush()
     db_session.add(TeamMemberDb(team_id=team.id, member_type='user',
                                 member_identifier=no_groups.email,
-                                app_role_override=role.name, added_by='seed'))
+                                app_role_override_id=str(role.id), added_by='seed'))
     db_session.flush()
 
     for method, url, kwargs in _note_routes(asset):

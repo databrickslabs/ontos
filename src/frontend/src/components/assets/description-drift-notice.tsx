@@ -46,12 +46,12 @@ export function DescriptionDriftNotice({
 
   if (!enabled || !drift) return null;
   const own = drift.fields[0];
-  const others = drift.fields.slice(1).filter((f) => f.changed_in_uc).length;
+  const others = drift.fields.slice(1).filter((f) => f.changed_in_uc && f.differs).length;
   const canCompare = (assetTypeName ?? '').trim().toLowerCase() !== 'column';
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-testid="description-drift">
-      {own?.changed_in_uc && (
+      {own?.changed_in_uc && own.differs && (
         <Badge variant="secondary" className="gap-1 text-amber-700 dark:text-amber-400">
           <RefreshCw className="h-3 w-3" />
           {t('assets:descriptionDrift.changedInUc')}

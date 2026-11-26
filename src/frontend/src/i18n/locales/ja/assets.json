@@ -133,6 +133,16 @@
     "ucEmptyRow": "ここには Unity Catalog のコメントがないため、取り込むものはありません。",
     "truncated": "最初の 1000 列のみ表示されます。",
     "replaceNote": "選択した Ontos の説明は置き換えられ、以前の説明は変更履歴に残ります。",
+    "objectTypes": {
+      "table": "テーブル",
+      "view": "ビュー",
+      "column": "カラム"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} はこのテーブルに含まれていません。",
+      "asset_not_found": "このアセットは存在しなくなりました。",
+      "uc_reset_failed": "説明をリセットできなかったため、変更はありません。もう一度お試しください。"
+    },
     "resetSelected": "選択をリセット ({{count}})",
     "toast": {
       "done": "置き換えた説明: {{count}}",

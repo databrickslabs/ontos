@@ -820,12 +820,12 @@ def reset_asset_descriptions_to_uc(
         details["results"] = [
             {"asset_id": str(r.asset_id), "changed": r.changed,
              "error": r.error.code if r.error else None} for r in result.results]
-        changed_ids = [r.asset_id for r in result.results if r.changed]
-        for changed_id in changed_ids:
-            # Commits: the audit says success only once the changes are stored
+        if result.changed:
+            # One commit and one maturity re-evaluation for the request (of the asset the user
+            # reset from: a table's maturity follows its columns; a column has none)
             _schedule_maturity_evaluation(
-                db, background_tasks, request, changed_id, current_user.email)
-        if not changed_ids:
+                db, background_tasks, request, asset_id, current_user.email)
+        else:
             db.commit()
         success = True
         return result

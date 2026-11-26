@@ -168,6 +168,79 @@ describe('DescriptionCompareDialog', () => {
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
   });
 
+  it('translates the codes of a refused field', async () => {
+    getMock.mockResolvedValue({ data: drift([field('t', 'orders'), field('c1', 'order_id'),
+      field('c2', 'note')]) });
+    postMock.mockResolvedValue({
+      data: {
+        results: [
+          { asset_id: 't', changed: true, warnings: [] },
+          {
+            asset_id: 'c1', changed: false, warnings: [],
+            error: { code: 'uc_reset_field_not_in_table', message: 'english', params: {
+              object: 'main.sales.items.id' } },
+          },
+          { asset_id: 'c2', changed: false, warnings: [],
+            error: { code: 'asset_not_found', message: 'english', params: {} } },
+        ],
+        changed: 1, failed: 2,
+      },
+    });
+    renderDialog();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Select all' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reset selected (3)' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('main.sales.items.id is not part of this table.');
+    expect(alert).toHaveTextContent('This asset no longer exists.');
+    expect(alert).not.toHaveTextContent('english');
+  });
+
+  it('translates a failure of the whole request', async () => {
+    getMock.mockResolvedValue({ data: drift([field('t', 'orders')]) });
+    postMock.mockResolvedValue({
+      data: null, error: 'english', errorCode: 'uc_reset_failed', errorParams: {} });
+    renderDialog();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Select all' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reset selected (1)' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('none was changed');
+  });
+
+  it('shows the warnings of a field that was reset, and keeps the dialog open', async () => {
+    getMock.mockResolvedValue({ data: drift([field('t', 'orders'), field('c1', 'order_id')]) });
+    postMock.mockResolvedValue({
+      data: {
+        results: [
+          { asset_id: 't', changed: true, warnings: [] },
+          { asset_id: 'c1', changed: false, warnings: [{
+            code: 'uc_description_empty', message: 'english', params: { object: 'x.order_id' },
+          }] },
+        ],
+        changed: 1, failed: 0,
+      },
+    });
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Select all' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reset selected (2)' }));
+
+    const notes = await screen.findAllByRole('status');
+    const warning = notes.find((n) => n.textContent?.includes('order_id: '));
+    expect(warning).toHaveTextContent('Unity Catalog has no comment on x.order_id');
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it('names the kind of object in the language of the user', async () => {
+    getMock.mockResolvedValue({ data: drift([field('t', 'orders'), field('c1', 'order_id')]) });
+    renderDialog();
+
+    expect(await screen.findByText('Column')).toBeInTheDocument();
+    expect(screen.queryByText('column')).not.toBeInTheDocument();
+  });
+
   it('translates a coded error of the read', async () => {
     getMock.mockResolvedValue({
       data: null, error: 'english', errorCode: 'uc_reset_permission_denied',

@@ -150,9 +150,12 @@ class UcDescriptionResetManager:
 
     def apply_comment(
         self, db: Session, asset: AssetDb, label: str, uc_comment: Optional[str], *,
-        username: str, expected_uc_comment: Any = NOT_SENT,
+        username: str, expected_uc_comment: Any = NOT_SENT, snapshot: bool = True,
     ) -> ResetOutcome:
         """Replace the description of the (locked) asset with ``uc_comment``, read as the user.
+
+        ``snapshot=False``: the caller updates the tables' column snapshots itself, once for
+        all the assets it resets (see ``UcDescriptionDriftManager.reset_many``).
 
         Records the comment as the asset's Unity Catalog baseline (drift). An empty comment
         changes nothing and warns; a description that already equals it only clears the
@@ -200,7 +203,8 @@ class UcDescriptionResetManager:
                 db, asset_id=asset_id, asset_in=AssetUpdate(description=uc_comment),
                 current_user_id=username)
         asset = db.get(AssetDb, asset_id)
-        AssetsManager.update_table_column_snapshot(db, asset)
+        if snapshot:
+            AssetsManager.update_table_column_snapshot(db, asset)
         audit['outcome'] = 'reset'
         logger.info("Reset the description of asset %s to its Unity Catalog comment", asset_id)
         return ResetOutcome(result(True), audit)

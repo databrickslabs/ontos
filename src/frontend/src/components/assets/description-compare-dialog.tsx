@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -28,6 +29,16 @@ interface LoadError {
   code?: string | null;
   message?: string | null;
   params?: Record<string, unknown> | null;
+}
+
+/** The text of a coded error of this dialog: its own keys first, then the reset dialog's. */
+function errorText(
+  t: TFunction, code?: string | null, message?: string | null,
+  params?: Record<string, unknown> | null,
+): string {
+  const fallback = descriptionResetText(t, 'errors', code, message, params);
+  if (!code) return fallback;
+  return String(t(`${PREFIX}.errors.${code}`, { ...(params ?? {}), defaultValue: fallback }));
 }
 
 /** A field the user can reset: it differs, still exists in Unity Catalog and has a comment. */
@@ -59,6 +70,7 @@ export function DescriptionCompareDialog({ assetId, open, onOpenChange, onReset 
   const [error, setError] = useState<LoadError | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [failures, setFailures] = useState<AssetResetFieldResult[]>([]);
+  const [warned, setWarned] = useState<AssetResetFieldResult[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +89,7 @@ export function DescriptionCompareDialog({ assetId, open, onOpenChange, onReset 
   useEffect(() => {
     if (!open) return;
     setFailures([]);
+    setWarned([]);
     void load();
   }, [open, load]);
 
@@ -116,10 +129,12 @@ export function DescriptionCompareDialog({ assetId, open, onOpenChange, onReset 
         variant: failed.length > 0 ? 'destructive' : undefined,
       });
       if (res.data.changed > 0) onReset();
-      if (failed.length === 0) {
+      const warnings = res.data.results.filter((r) => !r.error && r.warnings?.length > 0);
+      if (failed.length === 0 && warnings.length === 0) {
         onOpenChange(false);
       } else {
         setFailures(failed);
+        setWarned(warnings);
         await load();
       }
     } finally {
@@ -152,7 +167,7 @@ export function DescriptionCompareDialog({ assetId, open, onOpenChange, onReset 
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              {descriptionResetText(t, 'errors', error.code, error.message, error.params)}
+              {errorText(t, error.code, error.message, error.params)}
             </span>
           </div>
         )}
@@ -162,11 +177,20 @@ export function DescriptionCompareDialog({ assetId, open, onOpenChange, onReset 
             {failures.map((f) => (
               <li key={f.asset_id}>
                 <span className="font-medium">{nameOf(f.asset_id)}</span>{': '}
-                {descriptionResetText(
-                  t, 'errors', f.error?.code, f.error?.message, f.error?.params,
-                )}
+                {errorText(t, f.error?.code, f.error?.message, f.error?.params)}
               </li>
             ))}
+          </ul>
+        )}
+
+        {warned.length > 0 && (
+          <ul role="status" className="space-y-1 text-sm text-amber-700 dark:text-amber-400">
+            {warned.flatMap((r) => r.warnings.map((w) => (
+              <li key={`${r.asset_id}:${w.code}`}>
+                <span className="font-medium">{nameOf(r.asset_id)}</span>{': '}
+                {descriptionResetText(t, 'warnings', w.code, w.message, w.params)}
+              </li>
+            )))}
           </ul>
         )}
 
@@ -217,7 +241,11 @@ export function DescriptionCompareDialog({ assetId, open, onOpenChange, onReset 
                       <td className="p-2 text-sm">
                         <div className="font-medium">{f.name}</div>
                         <div className="flex flex-wrap gap-1 pt-1">
-                          <Badge variant="outline" className="text-xs">{f.object_type}</Badge>
+                          <Badge variant="outline" className="text-xs">{
+                            t(`${PREFIX}.objectTypes.${f.object_type}`, {
+                              defaultValue: f.object_type,
+                            })
+                          }</Badge>
                           {f.changed_in_uc && (
                             <Badge variant="secondary" className="text-xs">
                               {t(`${PREFIX}.changedBadge`)}

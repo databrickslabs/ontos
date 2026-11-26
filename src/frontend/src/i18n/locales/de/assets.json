@@ -133,6 +133,16 @@
     "ucEmptyRow": "Unity Catalog hat hier keinen Kommentar, es gibt also nichts zu übernehmen.",
     "truncated": "Es werden nur die ersten 1000 Spalten aufgelistet.",
     "replaceNote": "Die ausgewählten Beschreibungen in Ontos werden ersetzt; die bisherigen bleiben im Änderungsprotokoll.",
+    "objectTypes": {
+      "table": "Tabelle",
+      "view": "View",
+      "column": "Spalte"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} gehört nicht zu dieser Tabelle.",
+      "asset_not_found": "Dieses Asset existiert nicht mehr.",
+      "uc_reset_failed": "Die Beschreibungen konnten nicht zurückgesetzt werden, und keine wurde geändert. Versuchen Sie es erneut."
+    },
     "resetSelected": "Ausgewählte zurücksetzen ({{count}})",
     "toast": {
       "done": "Ersetzte Beschreibungen: {{count}}",

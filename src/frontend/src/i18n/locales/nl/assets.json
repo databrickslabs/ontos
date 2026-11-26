@@ -133,6 +133,16 @@
     "ucEmptyRow": "Unity Catalog heeft hier geen opmerking, dus er valt niets over te nemen.",
     "truncated": "Alleen de eerste 1000 kolommen worden getoond.",
     "replaceNote": "De geselecteerde beschrijvingen in Ontos worden vervangen; de vorige blijven in het wijzigingslogboek.",
+    "objectTypes": {
+      "table": "Tabel",
+      "view": "View",
+      "column": "Kolom"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} maakt geen deel uit van deze tabel.",
+      "asset_not_found": "Dit asset bestaat niet meer.",
+      "uc_reset_failed": "De beschrijvingen konden niet worden hersteld en er is niets gewijzigd. Probeer het opnieuw."
+    },
     "resetSelected": "Geselecteerde resetten ({{count}})",
     "toast": {
       "done": "Vervangen beschrijvingen: {{count}}",

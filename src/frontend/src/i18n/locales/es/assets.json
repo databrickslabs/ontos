@@ -133,6 +133,16 @@
     "ucEmptyRow": "Unity Catalog no tiene comentario aquí, así que no hay nada que traer.",
     "truncated": "Solo se listan las primeras 1000 columnas.",
     "replaceNote": "Las descripciones seleccionadas en Ontos se sustituyen; las anteriores quedan en el registro de cambios.",
+    "objectTypes": {
+      "table": "Tabla",
+      "view": "Vista",
+      "column": "Columna"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} no forma parte de esta tabla.",
+      "asset_not_found": "Este activo ya no existe.",
+      "uc_reset_failed": "No se pudieron restablecer las descripciones y no se cambió ninguna. Inténtelo de nuevo."
+    },
     "resetSelected": "Restablecer seleccionadas ({{count}})",
     "toast": {
       "done": "Descripciones sustituidas: {{count}}",

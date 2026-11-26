@@ -133,6 +133,16 @@
     "ucEmptyRow": "Unity Catalog has no comment here, so there is nothing to bring.",
     "truncated": "Only the first 1000 columns are listed.",
     "replaceNote": "The selected descriptions in Ontos are replaced; the previous ones stay in the change log.",
+    "objectTypes": {
+      "table": "Table",
+      "view": "View",
+      "column": "Column"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} is not part of this table.",
+      "asset_not_found": "This asset no longer exists.",
+      "uc_reset_failed": "The descriptions could not be reset and none was changed. Try again."
+    },
     "resetSelected": "Reset selected ({{count}})",
     "toast": {
       "done": "Descriptions replaced: {{count}}",

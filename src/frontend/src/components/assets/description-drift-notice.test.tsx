@@ -38,6 +38,19 @@ describe('DescriptionDriftNotice', () => {
     expect(getMock).toHaveBeenCalledWith('/api/assets/t/description/drift');
   });
 
+  it('shows no badge once the Ontos text matches the new comment', async () => {
+    getMock.mockResolvedValue({
+      data: drift([field({ changed_in_uc: true, differs: false }),
+        field({ asset_id: 'c1', changed_in_uc: true, differs: false })]),
+    });
+    renderNotice();
+
+    expect(await screen.findByRole('button', { name: 'Compare with Unity Catalog' }))
+      .toBeInTheDocument();
+    expect(screen.queryByText(/Changed in Unity Catalog/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Columns changed/)).not.toBeInTheDocument();
+  });
+
   it('counts the columns that changed', async () => {
     getMock.mockResolvedValue({
       data: drift([field(), field({ asset_id: 'c1', changed_in_uc: true }),

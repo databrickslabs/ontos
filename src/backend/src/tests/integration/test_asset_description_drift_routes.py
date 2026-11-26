@@ -115,6 +115,26 @@ class TestDrift:
         assert fields['orders']['baseline_text'] == 'Orders (UC)'
         assert fields['order_id']['changed_in_uc'] is False
 
+    def test_a_comment_changed_in_unity_catalog_is_settled_by_matching_the_text(
+            self, client, db_session, user_ws):
+        # UC changed since the baseline, then the user edited the Ontos text to the new comment
+        # (write-back off: the baseline stays old): nothing is left to flag, compare or reset
+        table = _asset(db_session, 'Table', TABLE, 'Orders (new UC)', baseline='Orders (old UC)')
+        user_ws.tables.get.return_value = _info('Orders (new UC)', {})
+
+        field = _fields(_drift(client, table))['orders']
+
+        assert (field['differs'], field['changed_in_uc']) == (False, False)
+
+    def test_the_next_change_in_unity_catalog_is_flagged_again_after_settling(
+            self, client, db_session, user_ws):
+        table = _asset(db_session, 'Table', TABLE, 'Orders (new UC)', baseline='Orders (old UC)')
+        user_ws.tables.get.return_value = _info('Orders (newer UC)', {})
+
+        field = _fields(_drift(client, table))['orders']
+
+        assert (field['differs'], field['changed_in_uc']) == (True, True)
+
     def test_matching_texts_do_not_differ(self, client, db_session, user_ws):
         table = _asset(db_session, 'Table', TABLE, 'Same', baseline='Same')
         user_ws.tables.get.return_value = _info('Same \r\n', {})
@@ -298,6 +318,48 @@ class TestResetSelected:
 
         assert response.status_code == 200, response.text
         assert len(response.json()['results']) == 1001
+
+    def test_one_commit_and_one_maturity_task_for_all_the_fields(
+            self, client, tree, user_ws, monkeypatch):
+        from src.routes import assets_routes
+
+        scheduled = []
+        monkeypatch.setattr(
+            assets_routes, '_schedule_maturity_evaluation',
+            lambda db, tasks, request, asset_id, email: (scheduled.append(asset_id), db.commit()))
+        user_ws.tables.get.return_value = _info(
+            'Orders (UC)', {'order_id': 'Key (UC)', 'note': 'Note (UC)'})
+
+        body = self._post(client, tree.table, [
+            {'asset_id': str(a.id)} for a in (tree.table, tree.key, tree.note)]).json()
+
+        assert body['changed'] == 3
+        assert scheduled == [tree.table.id]
+
+    def test_an_unexpected_failure_is_a_coded_error_without_its_text(
+            self, client, tree, user_ws, monkeypatch):
+        from src.controller.assets_manager import AssetsManager
+
+        real = AssetsManager.update_asset
+        calls = []
+
+        def failing(self, db, **kwargs):
+            calls.append(kwargs['asset_id'])
+            if len(calls) == 2:
+                raise RuntimeError('boom: internal detail')
+            return real(self, db, **kwargs)
+
+        monkeypatch.setattr(AssetsManager, 'update_asset', failing)
+        user_ws.tables.get.return_value = _info(
+            'Orders (UC)', {'order_id': 'Key (UC)', 'note': 'Note (UC)'})
+
+        response = self._post(client, tree.table, [
+            {'asset_id': str(tree.table.id)}, {'asset_id': str(tree.key.id)}])
+
+        assert response.status_code == 500
+        detail = response.json()['detail']
+        assert detail['code'] == 'uc_reset_failed'
+        assert 'boom' not in response.text
 
     def test_more_than_the_dialog_can_list_is_refused(self, client, tree, user_ws):
         from uuid import uuid4

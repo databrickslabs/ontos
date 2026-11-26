@@ -40,6 +40,23 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _next_due_after(sync: "ConnectorSyncDb", started: datetime) -> datetime:
+    """The next due time, anchored on the previous one.
+
+    Anchoring keeps a run that starts a few seconds after its hourly job from
+    pushing the next slot past the following hour (a 60-minute sync would then run
+    every other hour). A sync that is far behind its slot schedules from its start,
+    so a backlog does not turn into a burst of catch-up runs.
+    """
+    interval = timedelta(minutes=sync.interval_minutes)
+    anchor = sync.next_due_at
+    if anchor is not None and anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=timezone.utc)  # some drivers return naive UTC datetimes
+    if anchor is not None and anchor + interval > started:
+        return anchor + interval
+    return started + interval
+
+
 def _under(location: Optional[str], paths: Iterable[str]) -> bool:
     return bool(location) and any(location == p or location.startswith(f"{p}.") for p in paths)
 
@@ -178,7 +195,7 @@ class ConnectorSyncManager:
         sync.last_status = status
         if status == STATUS_COMPLETED:
             sync.last_complete_sync_at = started
-        sync.next_due_at = started + timedelta(minutes=sync.interval_minutes)
+        sync.next_due_at = _next_due_after(sync, started)
         db.flush()
 
     @staticmethod

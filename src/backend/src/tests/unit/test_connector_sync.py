@@ -510,3 +510,36 @@ def test_a_renamed_workbook_is_one_asset_renamed_and_never_retired(db_session, s
     assert summary["retired"] == 0
     assert _asset(db_session, WB).status == "active"
     assert db_session.query(AssetDb).filter(AssetDb.platform == "tableau", AssetDb.location == WB).count() == 1
+
+
+def test_an_hourly_sync_is_due_at_every_hourly_job(db_session, sync, importer, monkeypatch):
+    """A run that starts a few seconds after its job must not push the next slot past the following hour (#1524 review 3)."""
+    from src.controller import connector_sync_manager as manager_module
+
+    clock = {"now": None}
+    monkeypatch.setattr(manager_module, "_now", lambda: clock["now"])
+    sync.interval_minutes = 60
+    sync.next_due_at = datetime(2026, 11, 26, 9, 0, tzinfo=timezone.utc)
+    db_session.flush()
+
+    for hour in (9, 10, 11, 12):
+        trigger = datetime(2026, 11, 26, hour, 0, tzinfo=timezone.utc)
+        assert ConnectorSyncManager().due(db_session, now=trigger) == [sync], f"not due at the {hour}:00 job"
+        clock["now"] = trigger + timedelta(seconds=7)  # the run starts a few seconds after its job
+        clear_listing_cache()
+        summary = ConnectorSyncManager().run(db_session, sync, importer)
+        assert summary["status"] == STATUS_COMPLETED
+    assert sync.next_due_at == datetime(2026, 11, 26, 13, 0, tzinfo=timezone.utc)
+
+
+def test_a_sync_far_behind_its_slot_reschedules_from_its_start(db_session, sync, importer, monkeypatch):
+    from src.controller import connector_sync_manager as manager_module
+
+    clock = {"now": datetime(2026, 11, 26, 15, 0, 3, tzinfo=timezone.utc)}
+    monkeypatch.setattr(manager_module, "_now", lambda: clock["now"])
+    sync.interval_minutes = 60
+    sync.next_due_at = datetime(2026, 11, 26, 10, 0, tzinfo=timezone.utc)  # the server was down for hours
+    db_session.flush()
+    clear_listing_cache()
+    ConnectorSyncManager().run(db_session, sync, importer)
+    assert sync.next_due_at == datetime(2026, 11, 26, 16, 0, 3, tzinfo=timezone.utc)  # no catch-up burst

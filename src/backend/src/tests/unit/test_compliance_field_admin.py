@@ -488,9 +488,48 @@ class TestCanEditValuesOfAProduct(unittest.TestCase):
                 self.routes._assert_can_edit_values(self.request, self.db, self.user, "data_product", "p-1")
         self.assertEqual(ctx.exception.status_code, 403)
 
-    def test_other_entity_types_keep_feature_check_only(self):
-        owns_check = self._check(None, entity_type="other_entity")
-        owns_check.assert_not_called()
+    def test_other_entity_types_are_refused_unless_admin(self):
+        """Fail closed: a type with no owner rule is writable by admins only."""
+        from fastapi import HTTPException
+        with patch.object(self.routes, "_is_values_admin", return_value=False) as admin_check:
+            with self.assertRaises(HTTPException) as ctx:
+                self.routes._assert_can_edit_values(self.request, self.db, self.user, "table", "t-1")
+        self.assertEqual(ctx.exception.status_code, 403)
+        admin_check.assert_called_once()
+
+    def test_other_entity_types_are_writable_by_an_admin(self):
+        with patch.object(self.routes, "_is_values_admin", return_value=True):
+            self.routes._assert_can_edit_values(self.request, self.db, self.user, "table", "t-1")
+
+    def test_other_entity_types_never_reach_the_product_lookup(self):
+        with patch("src.repositories.data_products_repository.data_product_repo") as repo, \
+             patch.object(self.routes, "_is_values_admin", return_value=True):
+            self.routes._assert_can_edit_values(self.request, self.db, self.user, "view", "v-1")
+        repo.get.assert_not_called()
+
+    def test_values_admin_is_the_admin_level_of_the_values_feature(self):
+        from src.common.features import FeatureAccessLevel
+        auth = MagicMock()
+        auth.has_permission.return_value = True
+        request = MagicMock()
+        request.app.state.authorization_manager = auth
+        with patch("src.common.authorization.effective_permissions_for_request", return_value={"f": 1}):
+            self.assertTrue(self.routes._is_values_admin(request, self.user))
+        feature, level = auth.has_permission.call_args.args[1:3]
+        self.assertEqual(feature, "compliance-template-values")
+        self.assertEqual(level, FeatureAccessLevel.ADMIN)
+
+    def test_a_read_write_holder_who_is_not_admin_is_refused(self):
+        auth = MagicMock()
+        auth.has_permission.return_value = False
+        request = MagicMock()
+        request.app.state.authorization_manager = auth
+        with patch("src.common.authorization.effective_permissions_for_request", return_value={}):
+            self.assertFalse(self.routes._is_values_admin(request, self.user))
+
+    def test_no_authorization_manager_or_user_denies(self):
+        self.assertFalse(self.routes._is_values_admin(MagicMock(app=MagicMock(state=MagicMock(authorization_manager=None))), self.user))
+        self.assertFalse(self.routes._is_values_admin(self.request, None))
 
 
 class TestUpdateFieldValueTypeValidation(unittest.TestCase):

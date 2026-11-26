@@ -59,14 +59,36 @@ def _assert_can_read_values(request: Request, db, current_user, entity_type: str
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data product not found")
 
 
+def _is_values_admin(request: Request, current_user) -> bool:
+    """Whether the caller holds ADMIN on compliance-template-values, resolved like the feature checks."""
+    if not current_user:
+        return False
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    if not auth_manager:
+        return False
+    from src.common.authorization import effective_permissions_for_request
+
+    eff = effective_permissions_for_request(request, current_user.email, current_user.groups or [], auth_manager)
+    return auth_manager.has_permission(eff, VALUES_FEATURE_ID, FeatureAccessLevel.ADMIN)
+
+
 def _assert_can_edit_values(request: Request, db, current_user, entity_type: str, entity_id: str) -> None:
     """Writing a product's compliance values needs the same edit rights as editing the product.
 
     Admin, or an owner of the product (draft owner, owning team, project member), as the
     product routes decide (``product_read_rule``). The feature-level permission alone is
-    not enough. Other entity types have no owner rule yet and keep the feature check.
+    not enough.
+
+    Any other entity type fails closed: only an admin (ADMIN on compliance-template-values)
+    may write its values. #1512 must add the owner check for tables and views here before it
+    lets Stewards and Producers write them; until then no owner rule exists for them.
     """
     if entity_type != "data_product":
+        if not _is_values_admin(request, current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admins can fill compliance values for this entity type",
+            )
         return
     from src.repositories.data_products_repository import data_product_repo
 

@@ -117,3 +117,13 @@ def test_a_missing_product_answers_the_same_404(as_persona, savepoint, persona):
         response = client.get(route.format(pid=str(uuid.uuid4())))
         assert response.status_code == 404, (route, response.text)
         assert response.json() == MISSING
+
+
+@pytest.mark.parametrize("persona", ["owner", "consumer"])
+def test_only_an_admin_writes_the_values_of_another_entity_type(as_persona, persona):
+    """No owner rule exists for tables and views yet, so a Producer (read/write) is refused."""
+    client = as_persona(persona)
+    response = client.put(
+        "/api/compliance-templates/entities/table/some-table/values", json={"values": []},
+    )
+    assert response.status_code == 403, response.text

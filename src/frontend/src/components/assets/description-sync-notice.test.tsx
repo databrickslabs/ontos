@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import i18n from '@/i18n/config';
 
 import { DescriptionSyncNotice, descriptionSyncText } from './description-sync-notice';
@@ -46,5 +47,15 @@ describe('DescriptionSyncNotice', () => {
     const warning = { code: 'something_new', message: 'english fallback' };
     const text = descriptionSyncText(i18n.t, warning);
     expect(text).toBe('english fallback');
+  });
+
+  it('offers the Unity Catalog comment only when it can be used', async () => {
+    const onUse = vi.fn();
+    const { rerender } = render(<DescriptionSyncNotice sync={sync} />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+
+    rerender(<DescriptionSyncNotice sync={sync} onUseUcComment={onUse} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Use the Unity Catalog comment' }));
+    expect(onUse).toHaveBeenCalledTimes(1);
   });
 });

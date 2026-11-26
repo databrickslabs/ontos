@@ -665,6 +665,8 @@ class SchemaImportManager:
         connection_id: Optional[UUID] = None,
     ) -> None:
         """Capture snapshots of imported dashboards; failures are warnings and never stop the import."""
+        if not _connector_hook(connector, "snapshots_enabled", default=False):
+            return
         for item in preview_items:
             if item.asset_type == "Column" or item.path not in created_assets:
                 continue

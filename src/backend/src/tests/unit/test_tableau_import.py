@@ -133,16 +133,19 @@ class RecordingSnapshots:
         return {"status": self.status, "error": "refresh token" if self.status != "ok" else None}
 
 
-def _importer(snapshots=None):
-    connector = TableauConnector(TableauConnectorConfig(server_url=FakeClient.server_url, site_content_url="s"), client=FakeClient())
+def _importer(snapshots=None, capture=True):
+    connector = TableauConnector(
+        TableauConnectorConfig(server_url=FakeClient.server_url, site_content_url="s", capture_snapshots=capture),
+        client=FakeClient(),
+    )
     connections = MagicMock()
     connections.get_connector_for_connection.return_value = connector
     return SchemaImportManager(connections, AssetsManager(), snapshot_manager=snapshots or RecordingSnapshots())
 
 
-def _import(db, *paths, snapshots=None):
+def _import(db, *paths, snapshots=None, capture=True):
     request = ImportRequest(connection_id=uuid4(), selected_paths=list(paths), depth=ImportDepth.FULL_RECURSIVE)
-    return _importer(snapshots).execute_import(db, request, current_user_id="u@example.com")
+    return _importer(snapshots, capture=capture).execute_import(db, request, current_user_id="u@example.com")
 
 
 def _asset(db, location):
@@ -289,6 +292,12 @@ def test_import_captures_snapshots_of_dashboards_only(db_session, asset_types, u
 
     dashboard = _asset(db_session, f"{WB_PATH}.v~v1")
     assert dashboard.properties["connection_id"]
+
+
+def test_snapshots_are_off_unless_the_connection_opts_in(db_session, asset_types, uc_orders):
+    snapshots = RecordingSnapshots()
+    _import(db_session, WB_PATH, snapshots=snapshots, capture=False)
+    assert snapshots.captured == []
 
 
 def test_snapshot_failures_are_import_warnings(db_session, asset_types, uc_orders):

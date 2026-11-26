@@ -1,4 +1,5 @@
 """Dashboard snapshot routes: read state, opt out, refresh guard."""
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -73,7 +74,8 @@ def _refresh(client, asset, monkeypatch, connector, capture):
 def test_refresh_captures_through_the_connection(client: TestClient, imported, monkeypatch):
     def capture(asset):
         asset.properties = {**asset.properties, "snapshot": {"status": "auth_expired"}}
-    response = _refresh(client, imported, monkeypatch, object(), capture)
+    opted_in = SimpleNamespace(snapshots_enabled=lambda: True)
+    response = _refresh(client, imported, monkeypatch, opted_in, capture)
     assert response.status_code == 200, response.text
     assert response.json()["snapshot"]["status"] == "auth_expired"
 
@@ -85,4 +87,22 @@ def test_refresh_with_a_deleted_connection_is_404(client: TestClient, imported, 
 def test_refresh_failure_is_502(client: TestClient, imported, monkeypatch):
     def capture(asset):
         raise RuntimeError("boom")
-    assert _refresh(client, imported, monkeypatch, object(), capture).status_code == 502
+    opted_in = SimpleNamespace(snapshots_enabled=lambda: True)
+    assert _refresh(client, imported, monkeypatch, opted_in, capture).status_code == 502
+
+
+def test_refresh_needs_the_connection_to_opt_in(client: TestClient, imported, monkeypatch):
+    response = _refresh(client, imported, monkeypatch, SimpleNamespace(snapshots_enabled=lambda: False),
+                        lambda asset: None)
+    assert response.status_code == 400, response.text
+
+
+def test_forced_refresh_is_admin_only():
+    from src.common.authorization import PermissionChecker
+    from src.common.features import FeatureAccessLevel
+    from src.routes.dashboard_snapshot_routes import router
+
+    route = next(r for r in router.routes if getattr(r, "path", "") == "/api/assets/{asset_id}/snapshot"
+                 and "POST" in getattr(r, "methods", set()))
+    checkers = [d.call for d in route.dependant.dependencies if isinstance(d.call, PermissionChecker)]
+    assert checkers and all(c.required_level == FeatureAccessLevel.ADMIN for c in checkers)

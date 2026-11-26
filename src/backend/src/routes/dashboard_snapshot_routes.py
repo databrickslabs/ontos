@@ -80,9 +80,12 @@ def refresh_snapshot(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     manager: DashboardSnapshotManager = Depends(_get_snapshot_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.ADMIN)),
 ):
-    """Capture a new snapshot now, even when the dashboard has user-based filters (an explicit choice)."""
+    """Capture a new snapshot now, even when the dashboard has user-based filters.
+
+    Administrators only: this is a forced capture that skips the user-filter check.
+    """
     asset = _asset(db, asset_id)
     connection_id = _connection_id(asset)
     if connection_id is None:
@@ -96,6 +99,8 @@ def refresh_snapshot(
     connector = ConnectionsManager(db=db, workspace_client=ws).get_connector_for_connection(connection_id)
     if connector is None:
         raise HTTPException(status_code=404, detail="The asset's connection no longer exists")
+    if not getattr(connector, "snapshots_enabled", lambda: False)():
+        raise HTTPException(status_code=400, detail="Snapshots are not enabled for this connection")
 
     try:
         manager.capture(db, asset=asset, connector=connector, current_user=current_user.username if current_user else None, force=True)

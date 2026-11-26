@@ -101,6 +101,8 @@ class TableauConnectorConfig(ConnectorConfig):
     # Optional CA bundle path for Tableau Server with a private CA
     ca_bundle_path: Optional[str] = None
     include_hidden_views: bool = False
+    # Dashboard snapshots are opt-in per connection: an image shows figures to everyone who can read the asset
+    capture_snapshots: bool = False
     # Catalog for Databricks tables Tableau names with two parts (schema.table),
     # e.g. connections that set a default catalog instead of naming it
     default_catalog: Optional[str] = None
@@ -835,6 +837,10 @@ class TableauConnector(AssetConnector):
     # ------------------------------------------------------------------
     # Snapshots
     # ------------------------------------------------------------------
+
+    def snapshots_enabled(self) -> bool:
+        """Whether this connection's dashboards get snapshots (off unless the connection opts in)."""
+        return bool(self._cfg.capture_snapshots)
 
     def wants_snapshot(self, metadata: AssetMetadata) -> bool:
         return metadata.asset_type == UnifiedAssetType.TABLEAU_DASHBOARD

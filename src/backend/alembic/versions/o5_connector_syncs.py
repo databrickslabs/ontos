@@ -5,7 +5,7 @@ a schedule, retiring assets the source no longer has (#1312). Import runs record
 the sync that started them.
 
 Revision ID: o5_connector_syncs
-Revises: o4_shared_library_documents
+Revises: t1_contract_tag_backfill
 Create Date: 2026-11-06 12:00:00.000000
 
 """
@@ -17,7 +17,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = 'o5_connector_syncs'
-down_revision: Union[str, None] = 'o4_shared_library_documents'
+down_revision: Union[str, None] = 't1_contract_tag_backfill'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

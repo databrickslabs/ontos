@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+
 import { ConsumerPrincipal, DataProduct, DataProductStatus } from '@/types/data-product';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { useTeams } from '@/hooks/use-teams';
@@ -38,6 +38,7 @@ import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -598,7 +599,7 @@ export default function DataProductCreateDialog({
               {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting && <ActionSpinner className="mr-2" />}
               {mode === 'edit' ? t('common:actions.saveChanges') : t('data-products:createDialog.createProductButton')}
             </Button>
           </DialogFooter>

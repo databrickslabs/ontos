@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, AlertCircle, UserCheck, User, Users, Loader2, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, AlertCircle, UserCheck, User, Users, ChevronDown } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -25,6 +25,7 @@ import { TeamFormDialog } from '@/components/teams/team-form-dialog';
 import { useNavigate } from 'react-router-dom';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { useTranslation } from 'react-i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Check API response helper
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -340,7 +341,7 @@ export default function TeamsView() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingTeamId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
-               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
+               {(apiIsLoading || permissionsLoading) ? <ActionSpinner className="mr-2" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

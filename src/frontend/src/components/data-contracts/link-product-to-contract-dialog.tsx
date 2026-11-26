@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { Loader2 } from 'lucide-react';
+
 import type { DataProduct, OutputPort } from '@/types/data-product';
 import { omitTags } from '@/lib/tag-payload';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type LinkProductToContractDialogProps = {
   isOpen: boolean;
@@ -350,7 +351,7 @@ export default function LinkProductToContractDialog({
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {t('data-contracts:linkProduct.linking', 'Linking...')}
               </>
             ) : (

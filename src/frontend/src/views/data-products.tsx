@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import TagChip from '@/components/ui/tag-chip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, Pencil, Trash2, AlertCircle, Package, ChevronDown, Upload, Loader2, Sparkles, KeyRound, Table as TableIcon, Workflow, Bell, BellOff, HelpCircle, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Package, ChevronDown, Upload, Sparkles, KeyRound, Table as TableIcon, Workflow, Bell, BellOff, HelpCircle, Eye } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
@@ -43,6 +43,7 @@ import VersionCountBadge from '@/components/common/version-count-badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import type { CertificationLevel } from '@/types/lifecycle';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -893,7 +894,7 @@ export default function DataProducts() {
                             disabled={isUploading || !canWrite || permissionsLoading}
                         >
                           <Upload className="h-4 w-4" />
-                          {isUploading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('upload.uploading')}</>) : t('toolbar.uploadFile')}
+                          {isUploading ? (<><ActionSpinner className="mr-2" /> {t('upload.uploading')}</>) : t('toolbar.uploadFile')}
                           <HelpCircle className="h-3 w-3 ml-1 opacity-50" />
                         </Button>
                       </TooltipTrigger>

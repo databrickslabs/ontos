@@ -4,7 +4,7 @@ import type { TFunction } from 'i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2 } from 'lucide-react';
+
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,7 @@ import { DataDomain, DataDomainCreate, DataDomainUpdate } from '@/types/data-dom
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import TagSelector from '@/components/ui/tag-selector';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface DataDomainFormDialogProps {
   domain?: DataDomain | null;
@@ -243,7 +244,7 @@ export function DataDomainFormDialog({
               {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+              {isSubmitting && <ActionSpinner className="mr-2" />} 
               {submitButtonText}
             </Button>
           </DialogFooter>

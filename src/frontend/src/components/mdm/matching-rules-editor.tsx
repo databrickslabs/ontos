@@ -19,10 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, GripVertical, Save } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { MatchingRule, SurvivorshipRule, MdmConfig, MatchRuleType, SurvivorshipStrategy } from '@/types/mdm';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface MatchingRulesEditorProps {
   isOpen: boolean;
@@ -376,7 +377,7 @@ export default function MatchingRulesEditor({
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {t('common:actions.saving')}
               </>
             ) : (

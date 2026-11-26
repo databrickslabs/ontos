@@ -14,8 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import ConceptSelectDialog from './concept-select-dialog';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface Props {
   isOpen: boolean;
@@ -138,7 +139,7 @@ export function DeprecateConceptDialog({ isOpen, onOpenChange, conceptIri, onSuc
               disabled={isSubmitting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting && <ActionSpinner className="mr-2" />}
               {t('semantic-models:lifecycle.deprecate', 'Deprecate')}
             </AlertDialogAction>
           </AlertDialogFooter>

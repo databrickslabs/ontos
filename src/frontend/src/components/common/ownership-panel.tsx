@@ -13,7 +13,7 @@
  *   />
  */
 import { useState, useEffect, useCallback } from 'react';
-import { Users2, History, UserPlus, Loader2, Trash2, ChevronDown, ChevronRight, Import, Copy } from 'lucide-react';
+import { Users2, History, UserPlus, Trash2, ChevronDown, ChevronRight, Import, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import type { BusinessOwnerRead, OwnerObjectType } from '@/types/business-owner';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export interface ImportedContact {
   username?: string;
@@ -360,7 +361,7 @@ export function OwnershipPanel({
               {t('removeDialog.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleRemove} disabled={isRemoving}>
-              {isRemoving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isRemoving && <ActionSpinner className="mr-2" />}
               {t('removeDialog.remove')}
             </Button>
           </DialogFooter>

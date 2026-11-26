@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Pencil, Trash2, Shield, ShieldCheck, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield, ShieldCheck } from 'lucide-react';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useTranslation } from 'react-i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface CertificationLevel {
   id: string;
@@ -350,7 +351,7 @@ export default function CertificationLevelsSettings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common:actions.cancel')}</Button>
             <Button onClick={handleSave} disabled={saving || !formData.name.trim()}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {saving ? <ActionSpinner className="mr-1" /> : null}
               {editingLevel ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>

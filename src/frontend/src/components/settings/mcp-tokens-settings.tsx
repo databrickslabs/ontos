@@ -57,7 +57,6 @@ import {
   AlertTriangle,
   Clock,
   Shield,
-  Loader2,
   RefreshCw,
   Eye,
   EyeOff,
@@ -74,6 +73,7 @@ import {
   MCPTokenCreate,
   MCP_SCOPE_CATEGORIES,
 } from '@/types/mcp-token';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export default function MCPTokensSettings() {
   const { t } = useTranslation(['settings', 'common']);
@@ -311,7 +311,7 @@ export default function MCPTokensSettings() {
               onClick={loadTokens}
               disabled={isLoading}
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              <ActionSpinner icon={RefreshCw} spinning={isLoading} className="mr-2" />
               {t('settings:mcpTokens.refresh')}
             </Button>
             <Button onClick={() => setCreateDialogOpen(true)}>
@@ -679,7 +679,7 @@ export default function MCPTokensSettings() {
             <Button onClick={handleCreateToken} disabled={isCreating}>
               {isCreating ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                   {t('settings:mcpTokens.createDialog.creating')}
                 </>
               ) : (

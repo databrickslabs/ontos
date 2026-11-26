@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /**
  * Shared upload dialog for ODCS Data Contracts and ODPS Data Products.
@@ -135,7 +136,7 @@ export function ImportEntityDialog({
           <input {...getInputProps()} />
           {uploading ? (
             <div className="flex justify-center">
-              <Loader2 className="animate-spin h-8 w-8 text-primary" />
+              <ActionSpinner className="h-8 w-8 text-primary" />
             </div>
           ) : (
             <>
@@ -161,7 +162,7 @@ export function ImportEntityDialog({
               disabled={!paste.value.trim() || paste.submitting || uploading}
               onClick={paste.onSubmit}
             >
-              {paste.submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {paste.submitting && <ActionSpinner className="mr-2" />}
               {labels.pasteButton}
             </Button>
           </div>

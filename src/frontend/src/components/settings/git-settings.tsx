@@ -18,13 +18,13 @@ import {
   Upload,
   Download,
   FileText,
-  Loader2,
   AlertCircle,
   CheckCircle2,
   Clock,
   Save,
 } from 'lucide-react';
 import { GitDiffModal } from './git-diff-modal';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface GitStatus {
   clone_status: 'not_configured' | 'not_cloned' | 'cloning' | 'cloned' | 'error';
@@ -297,7 +297,7 @@ export default function GitSettings() {
       },
       cloning: {
         variant: 'secondary',
-        icon: <Loader2 className="h-3 w-3 mr-1 animate-spin" />,
+        icon: <ActionSpinner className="h-3 w-3 mr-1" />,
         label: t('settings:git.status.cloning', 'Cloning...'),
       },
       cloned: {
@@ -507,7 +507,7 @@ export default function GitSettings() {
             {hasWriteAccess && (
               <Button onClick={handleSaveSettings} disabled={isSaving}>
                 {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
@@ -524,7 +524,7 @@ export default function GitSettings() {
                   disabled={isPulling || !hasWriteAccess}
                 >
                   {isPulling ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <ActionSpinner className="mr-2" />
                   ) : (
                     <Download className="mr-2 h-4 w-4" />
                   )}
@@ -548,7 +548,7 @@ export default function GitSettings() {
                   disabled={isPushing || status.pending_changes_count === 0 || !hasWriteAccess}
                 >
                   {isPushing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <ActionSpinner className="mr-2" />
                   ) : (
                     <Upload className="mr-2 h-4 w-4" />
                   )}
@@ -561,7 +561,7 @@ export default function GitSettings() {
                 disabled={isCloning || !settings.gitRepoUrl || !hasWriteAccess}
               >
                 {isCloning ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                 ) : (
                   <FolderGit2 className="mr-2 h-4 w-4" />
                 )}

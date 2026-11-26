@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Save, RefreshCw, Search, Settings2, Layers, ArrowUpDown, Check, AlertCircle } from 'lucide-react';
+import { Save, RefreshCw, Search, Settings2, Layers, ArrowUpDown, Check, AlertCircle } from 'lucide-react';
 import {
   CardSkeleton,
   SkeletonLine,
@@ -27,6 +27,7 @@ import {
   // DefaultsConfig - unused
   RankingConfig,
 } from '@/types/settings';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 
 // i18n key suffixes (under the `settings:` namespace); rendered via t(`settings:${key}`)
@@ -569,7 +570,7 @@ export default function SearchConfigEditor() {
             disabled={isRebuilding || !hasWriteAccess}
           >
             {isRebuilding ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <ActionSpinner className="mr-2" />
             ) : (
               <RefreshCw className="mr-2 h-4 w-4" />
             )}
@@ -581,7 +582,7 @@ export default function SearchConfigEditor() {
             disabled={isSaving || !hasWriteAccess || !hasChanges}
           >
             {isSaving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <ActionSpinner className="mr-2" />
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}

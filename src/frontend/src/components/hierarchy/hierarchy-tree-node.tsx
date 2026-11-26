@@ -2,9 +2,25 @@ import { useState, useCallback, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  ChevronRight, ChevronDown, Loader2, ExternalLink,
-  Box, Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain,
-  Activity, Server, Shield, BookOpen, Database, FolderOpen, Shapes, Network,
+  ChevronRight,
+  ChevronDown,
+  ExternalLink,
+  Box,
+  Table2,
+  Eye,
+  Columns2,
+  LayoutDashboard,
+  Globe,
+  FileCode,
+  Brain,
+  Activity,
+  Server,
+  Shield,
+  BookOpen,
+  Database,
+  FolderOpen,
+  Shapes,
+  Network,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useApi } from '@/hooks/use-api';
 import { cn } from '@/lib/utils';
 import type { InstanceHierarchyNode } from '@/types/ontology-schema';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain, Activity,
@@ -132,7 +149,7 @@ export function HierarchyTreeNode({
           aria-label={expanded ? t('data-catalog:hierarchy.collapse') : t('data-catalog:hierarchy.expand')}
         >
           {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            <ActionSpinner className="h-3.5 w-3.5 text-muted-foreground" />
           ) : hasChildren ? (
             expanded ? (
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />

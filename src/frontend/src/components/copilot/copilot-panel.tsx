@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Loader2, Sparkles, X, MessageSquare, Plus, Trash2, Check, ChevronDown } from 'lucide-react';
+import { Send, Sparkles, X, MessageSquare, Plus, Trash2, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -26,6 +26,7 @@ import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import type { LLMConfig } from '@/types/llm';
 import type { ChatMessage, LLMSearchStatus, SessionSummary } from '@/types/llm-search';
 import { chatMessageText } from '@/lib/chat-message-text';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const WELCOME_DISMISSED_KEY = 'copilot-welcome-dismissed';
 
@@ -505,7 +506,7 @@ export default function CopilotPanel() {
                       <Sparkles className="w-3 h-3 text-white" />
                     </div>
                     <div className="bg-muted rounded-lg px-3 py-2 flex items-center gap-2">
-                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <ActionSpinner className="w-3 h-3" />
                       <span className="text-xs text-muted-foreground">{t('search:llm.thinking')}</span>
                     </div>
                   </div>
@@ -536,7 +537,7 @@ export default function CopilotPanel() {
               size="icon"
               className="h-9 w-9 shrink-0"
             >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {isLoading ? <ActionSpinner /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
         </div>

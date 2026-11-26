@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, AlertCircle, X, Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, AlertCircle, X, Check, ChevronsUpDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,6 +39,7 @@ import TagSelector from '@/components/ui/tag-selector';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useTranslation } from 'react-i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // --- Prop Types --- 
 interface DataProductFormDialogProps {
@@ -1400,7 +1401,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                       form="data-product-ui-form" 
                       disabled={isSubmitting || isLoadingProduct}
                     >
-                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                      {isSubmitting ? <ActionSpinner className="mr-2" /> : null}
                       {isSubmitting ? t('data-products:form.saving') : (isEditMode ? t('data-products:form.buttons.updateProduct') : t('data-products:form.buttons.createProduct'))}
                     </Button>
                   </DialogFooter>
@@ -1469,7 +1470,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                         onClick={submitFromJson}
                         disabled={isSubmitting || isLoadingProduct || !isJsonValid || !!jsonParseError}
                       >
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                        {isSubmitting ? <ActionSpinner className="mr-2" /> : null}
                         {isSubmitting ? t('data-products:form.saving') : (isEditMode ? t('data-products:form.buttons.updateViaJson') : t('data-products:form.buttons.createViaJson'))}
                     </Button>
                   </DialogFooter>

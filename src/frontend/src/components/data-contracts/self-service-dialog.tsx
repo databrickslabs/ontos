@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, XCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, XCircle, CheckCircle } from 'lucide-react';
 import SchemaPropertyEditor from '@/components/data-contracts/schema-property-editor';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import type { ColumnProperty } from '@/types/data-contract';
 import { useProjectContext } from '@/stores/project-store';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface WorkflowStepResult {
   step_id: string;
@@ -265,7 +266,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common:actions.close', 'Close')}</Button>
             <Button onClick={handleSubmit} disabled={!canSubmit || loading}>
-              {loading ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> {t('data-contracts:selfService.working', 'Working…')}</span>) : t('common:actions.create', 'Create')}
+              {loading ? (<span className="flex items-center gap-2"><ActionSpinner /> {t('data-contracts:selfService.working', 'Working…')}</span>) : t('common:actions.create', 'Create')}
             </Button>
           </div>
         </div>

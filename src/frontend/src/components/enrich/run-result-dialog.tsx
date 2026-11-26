@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, CheckCircle2, SearchX } from 'lucide-react';
+import { CheckCircle2, SearchX } from 'lucide-react';
 
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import ReviewSuggestionsDialog from '@/components/enrich/review-suggestions-dialog';
 import type { Run } from '@/types/term-mapping';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface Props {
   open: boolean;
@@ -55,7 +56,7 @@ export default function RunResultDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <ActionSpinner className="h-5 w-5 text-muted-foreground" />
               ) : hasSuggestions ? (
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" />
               ) : (

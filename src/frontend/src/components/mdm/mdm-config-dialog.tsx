@@ -24,12 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { MdmEntityType, MdmConfigCreate, MatchingRule, SurvivorshipRule, MatchRuleType, SurvivorshipStrategy } from '@/types/mdm';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface DataContract {
   id: string;
@@ -373,7 +374,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
               {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {submitting && <ActionSpinner className="mr-2" />}
               {t('mdm:config.createButton')}
             </Button>
           </DialogFooter>

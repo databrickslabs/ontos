@@ -7,12 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import { useEntityMetadata, useMergedMetadata, DocumentItem, LinkItem, RichTextItem, EntityKind } from '@/hooks/use-entity-metadata';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
-import { Bell, Check, Loader2, ArrowLeft, Share2, Star, ExternalLink } from 'lucide-react';
+import { Bell, Check, ArrowLeft, Share2, Star, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { StarRatingInput } from '@/components/ratings/star-rating-input';
 import { RatingSummary } from '@/components/ratings/rating-summary';
 import { useComments } from '@/hooks/use-comments';
 import type { RatingAggregation } from '@/types/comments';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Stands in for the notes and links while they load (see ContentSkeleton)
 const INFO_SAMPLE_BASE = { entity_id: 'sample', entity_type: 'data_product' as EntityKind };
@@ -349,7 +350,7 @@ export default function EntityInfoDialog({
                         onClick={handleSubmitRating}
                       >
                         {submittingRating ? (
-                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('metadata:ratings.submitting')}</>
+                          <><ActionSpinner className="mr-2" /> {t('metadata:ratings.submitting')}</>
                         ) : (
                           t('metadata:ratings.submitRating')
                         )}
@@ -393,7 +394,7 @@ export default function EntityInfoDialog({
                 >
                   {subscriptionLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <ActionSpinner className="mr-2" />
                       {t('common:actions.loading')}
                     </>
                   ) : (

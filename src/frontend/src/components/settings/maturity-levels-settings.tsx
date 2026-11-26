@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronRight,
-  LockKeyhole, FileText, BookOpen, Activity, ShieldCheck, ExternalLink, Info,
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  LockKeyhole,
+  FileText,
+  BookOpen,
+  Activity,
+  ShieldCheck,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +35,7 @@ import { useApi } from '@/hooks/use-api';
 import { useTranslation } from 'react-i18next';
 import type { MaturityLevel, MaturityGate } from '@/types/maturity';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Stands in for the levels while they load (see ContentSkeleton)
 const SAMPLE_LEVELS: MaturityLevel[] = [
@@ -475,7 +486,7 @@ export default function MaturityLevelsSettings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common:actions.cancel')}</Button>
             <Button onClick={handleSave} disabled={saving || !formData.name.trim()}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {saving ? <ActionSpinner className="mr-1" /> : null}
               {editingLevel ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>

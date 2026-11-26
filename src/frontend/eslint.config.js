@@ -79,5 +79,39 @@ export default tseslint.config(
     rules: {
       'i18next/no-literal-string': 'off',
     },
+  },
+  {
+    // Loading-state guardrail (#297): content loads get a layout-matched
+    // skeleton, spinners only go through ActionSpinner. Also enforced in CI by
+    // src/lib/loading-state-guard.test.ts.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/components/ui/action-spinner.tsx', '**/*.test.{ts,tsx}', '**/tests/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/\\banimate-spin\\b/], TemplateElement[value.raw=/\\banimate-spin\\b/]',
+          message:
+            'Use <ActionSpinner /> for actions in progress, and a skeleton (list-view-skeleton / ContentSkeleton) for loading content.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/components/common/list-view-skeleton.tsx', 'src/components/ui/skeleton.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/components/ui/skeleton',
+              message: 'Use the shared skeletons in @/components/common/list-view-skeleton or ContentSkeleton.',
+            },
+          ],
+        },
+      ],
+    },
   }
 );

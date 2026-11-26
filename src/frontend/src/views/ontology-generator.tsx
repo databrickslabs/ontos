@@ -37,6 +37,7 @@ import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import type { Connection } from '@/types/connections';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // -- Types --
 
@@ -475,7 +476,7 @@ export default function OntologyGeneratorView() {
       cancelled: 'text-muted-foreground',
     };
     return (
-      <Icon className={`h-4 w-4 shrink-0 ${colorMap[status] || 'text-muted-foreground'} ${status === 'running' ? 'animate-spin' : ''}`} />
+      <ActionSpinner icon={Icon} spinning={status === 'running'} className={`shrink-0 ${colorMap[status] || 'text-muted-foreground'}`} />
     );
   };
 
@@ -561,7 +562,7 @@ export default function OntologyGeneratorView() {
             {isRunning ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <ActionSpinner className="text-primary" />
                   <span className="truncate">{progressMessage || t('semantic-models:ontologyGenerator.progress.working')}</span>
                 </div>
                 <Button variant="destructive" onClick={handleCancel} className="w-full">
@@ -578,7 +579,7 @@ export default function OntologyGeneratorView() {
                 )}
                 <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full">
                   {isStarting ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Starting...</>
+                    <><ActionSpinner className="mr-2" /> Starting...</>
                   ) : (
                     <><Wand2 className="h-4 w-4 mr-2" /> Generate Ontology ({selectedPaths.size} selected)</>
                   )}
@@ -705,7 +706,7 @@ export default function OntologyGeneratorView() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> {t('semantic-models:ontologyGenerator.agentProgress')}
+                  <ActionSpinner /> {t('semantic-models:ontologyGenerator.agentProgress')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -926,7 +927,7 @@ export default function OntologyGeneratorView() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsSaveDialogOpen(false)} disabled={isSaving}>{t('common:actions.cancel')}</Button>
             <Button onClick={handleSaveToCollection} disabled={isSaving || !collectionName.trim()}>
-              {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('common:actions.saving')}</> : <><Save className="h-4 w-4 mr-2" /> {t('common:actions.save')}</>}
+              {isSaving ? <><ActionSpinner className="mr-2" /> {t('common:actions.saving')}</> : <><Save className="h-4 w-4 mr-2" /> {t('common:actions.save')}</>}
             </Button>
           </DialogFooter>
         </DialogContent>

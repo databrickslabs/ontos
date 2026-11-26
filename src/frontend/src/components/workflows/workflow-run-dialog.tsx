@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getEntityTypeLabel } from '@/lib/workflow-labels';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 import type { EntityType, ProcessWorkflow, WorkflowExecution } from '@/types/process-workflow';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /** Entity types a manual workflow can be run against when its trigger lists none. */
 const RUNNABLE_ENTITY_TYPES: EntityType[] = [
@@ -308,7 +309,7 @@ export function WorkflowRunDialog({
               </Button>
               <Button onClick={handleRun} disabled={!canRun}>
                 {isRunning ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                 ) : (
                   <Play className="h-4 w-4 mr-2" />
                 )}

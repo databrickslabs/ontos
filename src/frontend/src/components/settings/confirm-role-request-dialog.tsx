@@ -14,7 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface ConfirmRoleRequestDialogProps {
   isOpen: boolean;
@@ -127,7 +128,7 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
                 onClick={() => handleSubmit(false)}
                 disabled={isSubmitting}
             >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isSubmitting ? <ActionSpinner className="mr-2" /> : null}
                 {t('settings:roles.confirmRequest.deny')}
             </Button>
            <div className="flex gap-2">
@@ -138,7 +139,7 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
                 onClick={() => handleSubmit(true)}
                 disabled={isSubmitting}
             >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isSubmitting ? <ActionSpinner className="mr-2" /> : null}
                 {t('settings:roles.confirmRequest.approve')}
             </Button>
            </div>

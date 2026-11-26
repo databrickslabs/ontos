@@ -34,9 +34,10 @@ import {
   CollectionType,
   ScopeLevel,
 } from '@/types/ontology';
-import { Loader2 } from 'lucide-react';
+
 import { buildSchemeOptionGroups } from '@/lib/scheme-select-options';
 import { SchemeSelectItems } from './scheme-select-items';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Marker the backend writes as `created_by` on sources it auto-registers as
 // collections (bundled / imported ontologies). These are also read-only.
@@ -282,7 +283,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
               {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={isLoading || !formData.label}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading && <ActionSpinner className="mr-2" />}
               {isNew ? t('common:actions.create') : t('common:actions.save')}
             </Button>
           </DialogFooter>

@@ -33,9 +33,9 @@ import {
   RefreshCw,
   AlertCircle,
   AlertTriangle,
-  Loader2,
   FileDown,
 } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // -- Types --
 
@@ -380,7 +380,7 @@ export default function AssetImportExportDialog({
 
             <div className="flex gap-2">
               <Button onClick={handleExport} disabled={isExporting}>
-                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                {isExporting ? <ActionSpinner className="mr-2" /> : <Download className="mr-2 h-4 w-4" />}
                 {isExporting ? t('assets:importExport.exporting') : t('assets:importExport.exportAssets')}
               </Button>
               <Button variant="outline" onClick={handleDownloadTemplate}>
@@ -424,7 +424,7 @@ export default function AssetImportExportDialog({
                   disabled={!selectedFile || isPreviewLoading}
                 >
                   {isPreviewLoading
-                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ? <ActionSpinner className="mr-2" />
                     : <RefreshCw className="mr-2 h-4 w-4" />
                   }
                   {t('assets:importExport.preview')}
@@ -530,7 +530,7 @@ export default function AssetImportExportDialog({
           {canImport && preview && !importResult && importableCount > 0 && (
             <Button onClick={handleImport} disabled={isImporting}>
               {isImporting
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('assets:importExport.importing')}</>
+                ? <><ActionSpinner className="mr-2" />{t('assets:importExport.importing')}</>
                 : <><Upload className="mr-2 h-4 w-4" />{t('assets:importExport.importAssets', { count: importableCount })}</>
               }
             </Button>

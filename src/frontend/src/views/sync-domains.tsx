@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
-  Loader2,
   Eye,
   Play,
   CheckCircle2,
@@ -39,6 +38,7 @@ import type {
   SyncAction,
 } from '@/types/domain-sync';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const TOP_LEVEL = '__top__';
 
@@ -273,7 +273,7 @@ export default function SyncDomainsView() {
 
           <div className="flex flex-col gap-2">
             <Button onClick={runPreview} disabled={isPreviewing || isApplying} variant="outline" className="w-full">
-              {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
+              {isPreviewing ? <ActionSpinner className="mr-2" /> : <Eye className="mr-2 h-4 w-4" />}
               {t('data-domains:sync.actions.preview')}
             </Button>
             <Button
@@ -281,7 +281,7 @@ export default function SyncDomainsView() {
               disabled={!preview || !!nothingToDo || isApplying || isPreviewing}
               className="w-full"
             >
-              {isApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+              {isApplying ? <ActionSpinner className="mr-2" /> : <Play className="mr-2 h-4 w-4" />}
               {t('data-domains:sync.actions.apply')}
             </Button>
           </div>

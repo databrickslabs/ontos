@@ -33,11 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, User, Users } from 'lucide-react';
+import { Plus, Trash2, User, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { TeamRead, TeamCreate, TeamUpdate, TeamMember } from '@/types/team';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Form schema
 const teamMemberSchema = z.object({
@@ -514,7 +515,7 @@ export function TeamFormDialog({
                 {t('common:actions.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSubmitting && <ActionSpinner className="mr-2" />}
                 {team ? t('teams:form.buttons.update') : t('teams:form.buttons.create')}
               </Button>
             </DialogFooter>

@@ -5,7 +5,6 @@ import i18n from 'i18next';
 import {
   ArrowLeft,
   AlertCircle,
-  Loader2,
   Pencil,
   Trash2,
   Network,
@@ -67,6 +66,7 @@ import {
 } from '@/components/concepts/request-concept-action-dialog';
 import { ConceptSummaryPanel } from '@/components/concepts/concept-summary-panel';
 import { CommentSidebar } from '@/components/comments';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Bound list-like sections to ~10 rows of vertical real-estate via internal
 // scrolling, so the page stays compact regardless of how many relations or
@@ -1210,7 +1210,7 @@ export default function ConceptDetailView() {
 
       {isLoading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" /> {t('semantic-models:details.refreshing')}
+          <ActionSpinner className="h-3 w-3" /> {t('semantic-models:details.refreshing')}
         </div>
       )}
 
@@ -1375,7 +1375,7 @@ export default function ConceptDetailView() {
               onClick={handleSubmitReview}
               disabled={statusBusy}
             >
-              {statusBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {statusBusy && <ActionSpinner className="mr-2" />}
               {t('semantic-models:submitReview.submit', 'Submit')}
             </Button>
           </DialogFooter>
@@ -1411,7 +1411,7 @@ export default function ConceptDetailView() {
               {t('common:actions.cancel', 'Cancel')}
             </Button>
             <Button type="button" onClick={handleRequestChanges} disabled={statusBusy}>
-              {statusBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {statusBusy && <ActionSpinner className="mr-2" />}
               {t('semantic-models:requestChanges.submit', 'Send back')}
             </Button>
           </DialogFooter>

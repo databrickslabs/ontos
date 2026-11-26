@@ -17,7 +17,6 @@ import {
   Image,
   FileText,
   Code,
-  Loader2,
   Save,
   AlertTriangle,
   Eye,
@@ -32,6 +31,7 @@ import {
   SkeletonLine,
 } from '@/components/common/list-view-skeleton';
 import { DEFAULT_APP_NAME } from '@/lib/branding';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const APP_DISPLAY_NAME_MAX_LEN = 64;
 const APP_SHORT_NAME_MAX_LEN = 16;
@@ -577,7 +577,7 @@ export default function UICustomizationSettings() {
           <div className="pt-4">
             <Button onClick={handleSaveSettings} disabled={isSaving}>
               {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}

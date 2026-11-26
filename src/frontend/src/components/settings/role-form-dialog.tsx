@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { homeSectionBlocked, normalizeHomeSections } from '@/lib/home-sections';
 import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection, ApprovalEntity, NO_ROLE_SENTINEL, PermissionGroup, PERMISSION_GROUP_ORDER } from '@/types/settings';
 import { useApi } from '@/hooks/use-api';
@@ -26,6 +26,7 @@ import {
     NAV_COLUMN_CLASS, RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures,
     roleSaveErrorText,
 } from '@/components/settings/role-nav-visibility';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Sub-groups within the Settings permission group mirror the Settings
 // sidebar layout (Reference Data → Configuration → Integrations →
@@ -1080,7 +1081,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                     <DialogFooter className="pt-4 border-t mt-4">
                         <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>{t('roles.actions.cancel')}</Button>
                         <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            {isSubmitting ? <ActionSpinner className="mr-2" /> : null}
                             {isEditMode ? t('roles.actions.update') : t('roles.actions.create')}
                         </Button>
                     </DialogFooter>

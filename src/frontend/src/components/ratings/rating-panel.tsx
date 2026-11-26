@@ -8,9 +8,10 @@ import { RatingSummary } from './rating-summary';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare } from 'lucide-react';
 import { useComments } from '@/hooks/use-comments';
 import type { RatingAggregation } from '@/types/comments';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export interface RatingPanelProps {
   /** Entity type (data_product, dataset, etc.) */
@@ -185,7 +186,7 @@ export function RatingPanel({
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        <ActionSpinner className="mr-1" />
                         {t('metadata:ratings.submitting')}
                       </>
                     ) : (

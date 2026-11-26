@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Plus, Trash2, Edit, Settings, Tag, Hash, Users, Loader2, AlertCircle, Eye } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Settings, Tag, Hash, Users, AlertCircle, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
@@ -50,6 +50,7 @@ import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { RelativeDate } from '@/components/common/relative-date';
 import { useAppSettingsStore } from '@/stores/app-settings-store';
 import { deleteOrThrow } from '@/lib/delete-or-throw';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Types based on backend models
 interface TagNamespace {
@@ -541,7 +542,7 @@ export default function TagsSettings() {
               </Select>
             )}
             {isSavingDisplayFormat && (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <ActionSpinner />
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-2">
@@ -700,7 +701,7 @@ export default function TagsSettings() {
               {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleNamespaceSubmit} disabled={loading || !namespaceForm.name}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <ActionSpinner className="mr-2" />}
               {editingNamespace ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>
@@ -798,7 +799,7 @@ export default function TagsSettings() {
               {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleTagSubmit} disabled={loading || !tagForm.name}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <ActionSpinner className="mr-2" />}
               {editingTag ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>
@@ -845,7 +846,7 @@ export default function TagsSettings() {
               {t('common:actions.cancel')}
             </Button>
             <Button onClick={handlePermissionSubmit} disabled={loading || !permissionForm.group_id}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <ActionSpinner className="mr-2" />}
               {editingPermission ? t('common:actions.update') : t('common:actions.add')}
             </Button>
           </DialogFooter>

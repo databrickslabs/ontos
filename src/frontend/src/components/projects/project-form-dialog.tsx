@@ -31,12 +31,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, FolderOpen, Users, X } from 'lucide-react';
+import { FolderOpen, Users, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
 import { TeamSummary } from '@/types/team';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Form schema
 const tagSchema = z.union([
@@ -411,7 +412,7 @@ export function ProjectFormDialog({
                 {t('common:actions.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSubmitting && <ActionSpinner className="mr-2" />}
                 {project ? t('projects:form.buttons.update') : t('projects:form.buttons.create')}
               </Button>
             </DialogFooter>

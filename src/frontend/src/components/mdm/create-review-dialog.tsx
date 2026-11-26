@@ -15,13 +15,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, FileCheck } from 'lucide-react';
+import { FileCheck } from 'lucide-react';
 
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { MdmCreateReviewRequest, MdmCreateReviewResponse } from '@/types/mdm';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { Controller } from 'react-hook-form';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type FormValues = {
   reviewer_email: string;
@@ -176,7 +177,7 @@ export default function CreateReviewDialog({
               {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {submitting && <ActionSpinner className="mr-2" />}
               {t('mdm:candidates.createReview')}
             </Button>
           </DialogFooter>

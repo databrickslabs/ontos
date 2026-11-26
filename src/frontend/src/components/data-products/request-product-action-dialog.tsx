@@ -11,7 +11,7 @@ import { useApi } from '@/hooks/use-api';
 import { needsStatusChangeRequest, statusChangeErrorText } from '@/lib/status-change-error';
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
+import { AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
 import AccessRequestFields from '@/components/access/access-request-fields';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import DeprecationFields, {
@@ -20,6 +20,7 @@ import DeprecationFields, {
   deprecationPayload,
   requestedDeprecationPayload,
 } from '@/components/common/deprecation-fields';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type RequestType = 'access' | 'review' | 'publish' | 'certify' | 'status_change';
 
@@ -877,7 +878,7 @@ export default function RequestProductActionDialog({
           <Button onClick={handleSubmit} disabled={submitting || !config.enabled}>
             {submitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {isDirectStatusChange ? t('data-products:requestAction.buttons.changingStatus') : (wizardActive ? t('data-products:requestAction.buttons.opening') : t('data-products:requestAction.buttons.sendingRequest'))}
               </>
             ) : (

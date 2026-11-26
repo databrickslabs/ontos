@@ -1,9 +1,32 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  Search, Loader2, Check, Database, Table2, Eye, Radio,
-  LayoutDashboard, BookOpen, BrainCircuit, Globe, Zap,
-  Box, Server, Shapes, FolderTree, Columns2, FileCode, Brain,
-  Activity, Shield, FolderOpen, Lightbulb, Users, Briefcase, Package, FileText, Info,
+  Search,
+  Check,
+  Database,
+  Table2,
+  Eye,
+  Radio,
+  LayoutDashboard,
+  BookOpen,
+  BrainCircuit,
+  Globe,
+  Zap,
+  Box,
+  Server,
+  Shapes,
+  FolderTree,
+  Columns2,
+  FileCode,
+  Brain,
+  Activity,
+  Shield,
+  FolderOpen,
+  Lightbulb,
+  Users,
+  Briefcase,
+  Package,
+  FileText,
+  Info,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -30,6 +53,7 @@ import { AssetTypeRead } from '@/types/asset';
 import type { RelationshipDefinition } from '@/types/ontology-schema';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { ListItemSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface AddRelationshipDialogProps {
   isOpen: boolean;
@@ -655,7 +679,7 @@ export function AddRelationshipDialog({
                         className="pl-9"
                       />
                       {searchLoading && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        <ActionSpinner className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       )}
                     </div>
                     <ScrollArea className="flex-1 min-h-0">
@@ -824,7 +848,7 @@ export function AddRelationshipDialog({
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common:actions.cancel')}</Button>
               <Button onClick={handleCreate} disabled={!selectedTarget || !selectedRelType || createLoading}>
-                {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {createLoading && <ActionSpinner className="mr-2" />}
                 {t('common:addRelationship.createRelationship')}
               </Button>
             </DialogFooter>

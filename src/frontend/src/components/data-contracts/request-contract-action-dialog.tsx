@@ -13,7 +13,7 @@ import { SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { contractActionErrorText } from '@/lib/contract-action-error';
 import { needsStatusChangeRequest } from '@/lib/status-change-error';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Loader2, AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
+import { AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
 import AccessRequestFields from '@/components/access/access-request-fields';
 import DeprecationFields, {
@@ -28,6 +28,7 @@ import {
   getStatusText,
   getRecommendedActionText,
 } from '@/lib/odcs-lifecycle';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type RequestType = 'access' | 'review' | 'deploy' | 'publish' | 'certify' | 'status_change';
 
@@ -918,7 +919,7 @@ export default function RequestContractActionDialog({
             onClick={handleSubmit}
             disabled={submitting || !currentConfig.enabled}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             {submitting
               ? (requestType === 'status_change' && canDirectStatusChange ? t('data-contracts:requests.changingStatus', 'Changing Status...') : t('data-contracts:requests.sendingRequest', 'Sending Request...'))
               : (requestType === 'status_change' && canDirectStatusChange ? t('data-contracts:requests.statusChange.changeTitle', 'Change Status') : t('data-contracts:requests.sendRequest', 'Send Request'))}

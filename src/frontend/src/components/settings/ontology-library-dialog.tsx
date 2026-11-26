@@ -26,7 +26,6 @@ import { Input } from '@/components/ui/input';
 import {
   ChevronRight,
   ChevronDown,
-  Loader2,
   Library,
   ExternalLink,
   Search,
@@ -43,6 +42,7 @@ import {
 } from '@/types/industry-ontology';
 import { cn } from '@/lib/utils';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /**
  * Main dialog component for the Industry Ontology Library.
@@ -614,7 +614,7 @@ export default function OntologyLibraryDialog({
             >
               {isImporting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                   {t('settings:ontologyLibrary.buttons.importing')}
                 </>
               ) : (

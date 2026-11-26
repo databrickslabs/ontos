@@ -10,8 +10,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { DiffFromParentResponse } from '@/types/data-product';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface CommitDraftDialogProps {
   isOpen: boolean;
@@ -238,7 +239,7 @@ export default function CommitDraftDialog({
           <Button onClick={handleSubmit} disabled={isCommitting || loadingDiff}>
             {isCommitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {t('data-products:commitDraft.committing')}
               </>
             ) : (

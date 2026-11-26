@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Play, Square, Pause, Loader2, CheckCircle2, XCircle, Clock, Minus } from 'lucide-react';
+import { Play, Square, Pause, CheckCircle2, XCircle, Clock, Minus } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflows';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface WorkflowActionsProps {
   status: WorkflowStatus;
@@ -35,7 +36,7 @@ export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: 
     <TooltipProvider>
       <div className="flex items-center gap-2">
         {/* Running spinner */}
-        {status.is_running && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {status.is_running && <ActionSpinner className="text-muted-foreground" />}
 
         {/* State-specific combinations */}
         {status.is_running ? (

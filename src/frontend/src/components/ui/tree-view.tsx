@@ -1,6 +1,7 @@
 import * as React from "react"
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ActionSpinner } from "@/components/ui/action-spinner"
 
 export interface TreeDataItem {
   id: string
@@ -254,7 +255,7 @@ export const TreeView = React.forwardRef<TreeViewHandle, TreeViewProps>(
                   }}
                 >
                   {item.loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <ActionSpinner />
                   ) : isExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (

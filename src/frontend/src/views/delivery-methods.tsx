@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, AlertCircle, Truck, ChevronDown, Loader2 } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, AlertCircle, Truck, ChevronDown } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -22,6 +22,7 @@ import { FeatureAccessLevel } from '@/types/settings';
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
 import { useTranslation } from 'react-i18next';
 import { DeliveryMethodFormDialog } from '@/components/delivery-methods/delivery-method-form-dialog';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export default function DeliveryMethodsView() {
   const [methods, setMethods] = useState<DeliveryMethodRead[]>([]);
@@ -221,7 +222,7 @@ export default function DeliveryMethodsView() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading}>
-              {apiIsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
+              {apiIsLoading ? <ActionSpinner className="mr-2" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

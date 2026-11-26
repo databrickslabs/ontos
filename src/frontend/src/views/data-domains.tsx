@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import {
-  MoreHorizontal, PlusCircle, AlertCircle, BoxSelect, TableIcon, WorkflowIcon, Loader2, ChevronDown,
-  Eye, RefreshCw, FileText,
+  MoreHorizontal,
+  PlusCircle,
+  AlertCircle,
+  BoxSelect,
+  TableIcon,
+  WorkflowIcon,
+  ChevronDown,
+  Eye,
+  RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from "@/components/ui/button";
@@ -32,6 +40,7 @@ import { useProjectContext } from '@/stores/project-store';
 import { useTranslation } from 'react-i18next';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import MarkdownImportDialog from '@/components/metadata/markdown-import-dialog';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Placeholder for Graph View
 // const DataDomainGraphViewPlaceholder = () => (
@@ -431,7 +440,7 @@ export default function DataDomainsView() {
               className="bg-red-600 hover:bg-red-700"
               disabled={apiIsLoading || permissionsLoading || (deletionImpact !== null && !deletionImpact.deletable)}
             >
-               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
+               {(apiIsLoading || permissionsLoading) ? <ActionSpinner className="mr-2" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

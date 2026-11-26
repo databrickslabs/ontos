@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Bot, User, Loader2, AlertCircle, Trash2, MessageSquare, Plus, ChevronDown, Sparkles, RefreshCw, Pencil, Bug, ChevronRight, Clock, Wrench, CheckCircle2, XCircle } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, Trash2, MessageSquare, Plus, ChevronDown, Sparkles, RefreshCw, Pencil, Bug, ChevronRight, Clock, Wrench, CheckCircle2, XCircle } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,7 @@ import type {
 import { fetchLLMStatus, fetchSessions, sendMessage, deleteSession } from './llm-search-api';
 import { chatMessageText } from '@/lib/chat-message-text';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 
 // ============================================================================
@@ -807,7 +808,7 @@ export default function LLMSearch() {
                     <Sparkles className="w-4 h-4 text-white" />
                   </div>
                   <div className="bg-muted rounded-lg px-4 py-3 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <ActionSpinner />
                     <span className="text-sm text-muted-foreground">{t('search:llm.thinking')}</span>
                   </div>
                 </div>
@@ -847,7 +848,7 @@ export default function LLMSearch() {
             className="h-11 w-11 shrink-0"
           >
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <ActionSpinner />
             ) : (
               <Send className="w-4 h-4" />
             )}

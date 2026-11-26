@@ -10,9 +10,20 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
-  Loader2, Plus, Check, Search, ChevronRight, ChevronLeft,
-  Link2, Database, Package, Shield, Send, BookOpen, Tag,
-  Shapes, AlertCircle,
+  Plus,
+  Check,
+  Search,
+  ChevronRight,
+  ChevronLeft,
+  Link2,
+  Database,
+  Package,
+  Shield,
+  Send,
+  BookOpen,
+  Tag,
+  Shapes,
+  AlertCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +31,7 @@ import { useFormatLabel } from '@/lib/format-label';
 import { getOtherTypeName } from '@/lib/relationship-type';
 import type { RelationshipDefinition, EntityRelationships } from '@/types/ontology-schema';
 import { ListItemSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface LinkCandidate {
   id: string;
@@ -292,7 +304,7 @@ export function LineageEditor({
                 </span>
                 {isReviewStep && (
                   <Button size="sm" onClick={handleSave} disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                    {isSaving && <ActionSpinner className="mr-2 h-3.5 w-3.5" />}
                     {t('common:lineageEditor.saveAll')}
                   </Button>
                 )}

@@ -14,11 +14,12 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { AssetTypeRead, AssetTypeCategory, AssetTypeStatus } from '@/types/asset';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const CATEGORIES: AssetTypeCategory[] = ['data', 'analytics', 'integration', 'system', 'custom'];
 const STATUSES: AssetTypeStatus[] = ['active', 'deprecated'];
@@ -212,7 +213,7 @@ export function AssetTypeFormDialog({
                 {t('common:actions.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSubmitting && <ActionSpinner className="mr-2" />}
                 {assetType ? t('form.update') : t('form.create')}
               </Button>
             </DialogFooter>

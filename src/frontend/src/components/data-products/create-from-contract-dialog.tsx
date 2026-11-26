@@ -19,9 +19,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Loader2, FileText } from 'lucide-react';
+import { AlertCircle, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface CreateFromContractDialogProps {
   isOpen: boolean;
@@ -244,7 +245,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
             onClick={handleSubmit}
             disabled={submitting || !productName.trim() || !version.trim()}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             {submitting ? t('data-products:createFromContract.creating') : t('data-products:createFromContract.createButton')}
           </Button>
         </DialogFooter>

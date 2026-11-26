@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X, Loader2 } from 'lucide-react';
+import { X } from 'lucide-react';
 import { ConsumerPrincipal } from '@/types/data-product';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Multi-select picker backed by /api/workspace/groups, surfacing workspace
 // group display names and packaging each selection as a typed
@@ -118,7 +119,7 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
           }}
           className="flex-1"
         />
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {loading && <ActionSpinner className="text-muted-foreground" />}
         {search.trim() && (
           <Button
             type="button"

@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ChevronRight,
   ChevronDown,
-  Loader2,
   Database,
   Table2,
   Eye,
@@ -31,6 +30,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { parseSearchQuery, matchesSegment } from '@/lib/uc-search-parser';
 import type { BrowseNode, BrowseResponse } from '@/types/schema-import';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface TreeNode extends BrowseNode {
   children?: TreeNode[];
@@ -436,7 +436,7 @@ export default function SchemaBrowser({
               className="p-0.5 hover:bg-muted rounded"
             >
               {node.isLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                <ActionSpinner className="h-3.5 w-3.5 text-muted-foreground" />
               ) : node.isExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               ) : (

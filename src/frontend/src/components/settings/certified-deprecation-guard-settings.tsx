@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import type { GateExemptions } from '@/types/process-workflow';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export const GUARD_URL = '/api/certified-deprecation-guard';
 
@@ -99,7 +100,7 @@ export default function CertifiedDeprecationGuardSettings() {
           />
           {canEdit ? (
             <Button onClick={save} disabled={saving} size="sm">
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving && <ActionSpinner className="mr-2" />}
               {t('common:actions.save')}
             </Button>
           ) : (

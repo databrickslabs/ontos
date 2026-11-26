@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle2, ExternalLink, HelpCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, HelpCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import type {
@@ -7,6 +7,7 @@ import type {
     MetricViewDrift,
     MetricViewRefresh,
 } from '@/types/data-asset-review';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /** A date from the API in the user's language; the raw text when it isn't a date. */
 function formatDate(value: string | null | undefined, language: string): string {
@@ -84,7 +85,7 @@ function RefreshSection({ refresh, language }: {
                     className="gap-1"
                 >
                     {refresh.status === 'running' && (
-                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                        <ActionSpinner className="h-3 w-3" aria-hidden />
                     )}
                     {status}
                 </Badge>

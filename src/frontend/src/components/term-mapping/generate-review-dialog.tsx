@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -24,6 +24,7 @@ import type {
   GenerateReviewResponse,
   Run,
 } from '@/types/term-mapping';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface Props {
   isOpen: boolean;
@@ -181,7 +182,7 @@ export default function GenerateReviewDialog({
             {t('actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={submitting || eligible === 0}>
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             {t('generateReview.submit')}
           </Button>
         </DialogFooter>

@@ -99,6 +99,7 @@
     "after": "Dopo",
     "restoreAfter": "Ripristina il testo nuovo",
     "restoreBefore": "Ripristina il testo precedente",
+    "restoreBeforeUnavailable": "Questa era la prima descrizione, quindi non c'è un testo precedente da ripristinare.",
     "restored": "Descrizione ripristinata",
     "restoreFailed": "La descrizione non è stata ripristinata",
     "showMore": "Mostra altri {{count}}",

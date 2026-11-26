@@ -99,6 +99,7 @@
     "after": "Na",
     "restoreAfter": "Nieuwe tekst herstellen",
     "restoreBefore": "Vorige tekst herstellen",
+    "restoreBeforeUnavailable": "Dit was de eerste beschrijving, dus er is geen vorige tekst om te herstellen.",
     "restored": "Beschrijving hersteld",
     "restoreFailed": "De beschrijving is niet hersteld",
     "showMore": "{{count}} meer tonen",

@@ -187,6 +187,40 @@ describe('DescriptionHistoryPanel', () => {
     expect(screen.queryByRole('button', { name: /Show/ })).not.toBeInTheDocument();
   });
 
+  it('keeps the pages it showed when the list reloads after a restore', async () => {
+    const page1 = [1, 2, 3, 4, 5].map((n) => entry(n));
+    const all = [...page1, entry(6)];
+    getMock.mockImplementation((url: string) => Promise.resolve({
+      data: {
+        asset_id: 'a1', total: 6,
+        items: url.includes('skip=0&limit=10') ? all : url.includes('skip=0') ? page1 : [entry(6)],
+      },
+    }));
+    const props = { assetId: 'a1', currentDescription: 'x', canRestore: true, onRestored: vi.fn() };
+    const { rerender } = render(<DescriptionHistoryPanel {...props} refreshKey="v1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Show 1 more' }));
+    expect(await screen.findByText('user6@example.com')).toBeInTheDocument();
+
+    rerender(<DescriptionHistoryPanel {...props} refreshKey="v2" />);
+
+    await waitFor(() => expect(getMock).toHaveBeenLastCalledWith(
+      '/api/assets/a1/description/history?skip=0&limit=10'));
+    expect(await screen.findByText('user6@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show/ })).not.toBeInTheDocument();
+  });
+
+  it('cannot restore the previous text of a first description', async () => {
+    getMock.mockResolvedValue({
+      data: { asset_id: 'a1', total: 1, items: [entry(1, { before: null, source: 'uc_import' })] },
+    });
+    renderPanel({ currentDescription: 'something else' });
+
+    expect(await screen.findByRole('button', { name: 'Restore the previous text' }))
+      .toBeDisabled();
+    expect(screen.getByText(/no previous text to restore/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore the new text' })).toBeEnabled();
+  });
+
   it('speaks Portuguese', async () => {
     await act(async () => {
       await i18n.changeLanguage('pt');

@@ -99,6 +99,7 @@
     "after": "Nachher",
     "restoreAfter": "Neuen Text wiederherstellen",
     "restoreBefore": "Vorherigen Text wiederherstellen",
+    "restoreBeforeUnavailable": "Dies war die erste Beschreibung, daher gibt es keinen vorherigen Text zum Wiederherstellen.",
     "restored": "Beschreibung wiederhergestellt",
     "restoreFailed": "Die Beschreibung wurde nicht wiederhergestellt",
     "showMore": "{{count}} weitere anzeigen",

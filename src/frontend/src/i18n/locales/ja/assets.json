@@ -99,6 +99,7 @@
     "after": "変更後",
     "restoreAfter": "新しいテキストを復元",
     "restoreBefore": "以前のテキストを復元",
+    "restoreBeforeUnavailable": "これは最初の説明のため、復元できる以前のテキストはありません。",
     "restored": "説明を復元しました",
     "restoreFailed": "説明を復元できませんでした",
     "showMore": "さらに {{count}} 件を表示",

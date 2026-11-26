@@ -28,8 +28,8 @@ from src.controller.uc_description_sync_manager import (
     SyncOutcome, UcDescriptionSyncManager, write_failed_warning,
 )
 from src.controller.asset_description_history import (
-    HistoryEntryNotFoundError, SOURCE_RESTORE, description_source, get_description_entry,
-    list_description_history,
+    HistoryEntryNotFoundError, NoPreviousTextError, SOURCE_RESTORE, description_source,
+    get_description_entry, list_description_history,
 )
 from src.controller.uc_description_drift_manager import UcDescriptionDriftManager
 from src.models.asset_description import (
@@ -729,6 +729,10 @@ def restore_asset_description(
             raise HistoryEntryNotFoundError(
                 "No such description change on this asset.", entry_id=restore_in.entry_id)
         text = entry.details.get(restore_in.version)
+        if restore_in.version == 'before' and not text:
+            # A first description: going back would empty it (and the Unity Catalog comment)
+            raise NoPreviousTextError(
+                "This change has no previous text to restore.", entry_id=restore_in.entry_id)
         with description_source(
                 SOURCE_RESTORE, restored_from=entry.id, restored_version=restore_in.version):
             result = _save_asset_edit(

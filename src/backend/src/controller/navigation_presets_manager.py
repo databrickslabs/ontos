@@ -92,6 +92,10 @@ def _level(role: AppRole, feature_id: str) -> int:
     return ACCESS_LEVEL_ORDER.get(level, 0)
 
 
+def _menu_ids(ids: List[str]) -> set:
+    return {e for e in ids if e in NAV_MENU_ENTRIES}
+
+
 def _home_values(sections: Optional[List[Any]]) -> List[str]:
     return [s.value if isinstance(s, HomeSection) else str(s) for s in (sections or [])]
 
@@ -150,7 +154,7 @@ class NavigationPresetsManager:
             )
         hidden = compute_hidden_entries(role, shown)
         no_access = [e for e in shown if _level(role, NAV_MENU_ENTRIES[e]) < _READ_ONLY]
-        changed = set(hidden) != set(current_hidden) or (
+        changed = set(hidden) != _menu_ids(current_hidden) or (
             definition.home_sections is not None
             and set(_home_values(definition.home_sections)) != set(_home_values(current_home))
         )
@@ -170,7 +174,8 @@ class NavigationPresetsManager:
     ) -> NavigationPresetApplyResult:
         """Apply a preset to its roles.
 
-        Only ``hidden_nav_features`` and (when the preset sets them) ``home_sections`` of the
+        Only ``hidden_nav_features`` (its menu-entry ids; other ids in the list are kept) and
+        (when the preset sets them) ``home_sections`` of the
         roles that would change are written, together with the snapshot ``undo`` restores, in
         one transaction. When no role changes, nothing is written and the snapshot of an
         earlier application stays. Applying another preset replaces the snapshot.
@@ -205,7 +210,12 @@ class NavigationPresetsManager:
                     'hidden_nav_features': list(role.hidden_nav_features or []),
                     'home_sections': _home_values(role.home_sections),
                 }
-                update = {'hidden_nav_features': preview.hidden}
+                # Only the menu entries are the preset's to set: ids that aren't menu
+                # entries (feature ids kept in the list) stay as they are.
+                update = {'hidden_nav_features': [
+                    *(e for e in role.hidden_nav_features or [] if e not in NAV_MENU_ENTRIES),
+                    *preview.hidden,
+                ]}
                 if definition.home_sections is not None:
                     update['home_sections'] = list(definition.home_sections)
                 app_role_repo.update(db, db_obj=row, obj_in=AppRoleUpdate(**update))

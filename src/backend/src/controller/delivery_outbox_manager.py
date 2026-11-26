@@ -22,6 +22,7 @@ entity), Unity Catalog grants re-apply, and a manual task only logs.
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
@@ -49,7 +50,8 @@ RETRY_FACTOR = 4
 RETRY_CAP = timedelta(hours=6)
 # A new row is left to the attempt after its commit this long before the worker takes it.
 FIRST_ATTEMPT_GRACE = timedelta(minutes=1)
-# Delivered rows are deleted after this long (failed ones are kept), once a day.
+# Delivered rows, and failed ones (nobody delivered them again), are deleted after this
+# long, once a day.
 RETENTION = timedelta(days=30)
 PRUNE_TASK_KEY = 'delivery-outbox-prune'
 # With requests coming in, the worker also looks for due rows once per slot this long:
@@ -57,6 +59,9 @@ PRUNE_TASK_KEY = 'delivery-outbox-prune'
 SWEEP_INTERVAL = timedelta(minutes=5)
 # Rows delivered per pass; the next pass follows at once when there were more.
 MAX_ROWS_PER_PASS = 50
+# A pass also ends, with the next one following at once, after this long: a slow
+# delivery mode can't hold the scheduler thread (its workflows) for the whole batch.
+PASS_BUDGET = timedelta(seconds=30)
 # A due row another instance holds is looked at again this much later.
 LOCKED_RECHECK = timedelta(seconds=30)
 # After a failed pass (e.g. the database is unreachable): 1 minute, doubling up to 1 hour.
@@ -406,6 +411,19 @@ class DeliveryOutboxManager:
                 names[(entity_type, entity_id)] = name
         return names
 
+    @staticmethod
+    def _close_rows_of_a_gone_entity(
+        db: Session, entity_type: str, entity_id: str, now: datetime,
+    ) -> None:
+        """Close the open rows of an entity that no longer exists: there is nothing to
+        deliver, and they could never be delivered again."""
+        rows = delivery_outbox_repo.for_entity(db, entity_type, entity_id, lock=True)
+        for row in rows:
+            delivery_outbox_repo.record(row, status=DELIVERED, now=now,
+                                        code='delivery_entity_not_found', counted=False)
+        if rows:
+            db.commit()
+
     def redeliver(
         self, db: Session, entity_type: str, entity_id: str, user: Optional[str],
         now: Optional[datetime] = None,
@@ -422,6 +440,7 @@ class DeliveryOutboxManager:
             raise DeliveryEntityTypeUnsupportedError(
                 f"Entity type {entity_type} can't be delivered again", entityType=entity_type)
         if db.get(kind.model(), entity_id) is None:
+            self._close_rows_of_a_gone_entity(db, entity_type, entity_id, _utc(now) or _now())
             raise DeliveryEntityNotFoundError(
                 f"{entity_type} {entity_id} not found", entityType=entity_type,
                 entityId=entity_id)
@@ -442,7 +461,9 @@ class DeliveryOutboxManager:
                 continue
             row.status, row.attempts, row.code, row.params = PENDING, 0, None, None
             row.next_attempt_at, row.delivered_at = now + FIRST_ATTEMPT_GRACE, None
-            row.queued_by, row.updated_at = user, now
+            # queued_by stays the one who made the change; the audit log has who
+            # delivered it again
+            row.updated_at = now
             ids.append(row.id)
         # A mode turned on since has no row yet; one with a held row has its attempt
         covered = {row.mode for row in open_rows}
@@ -552,6 +573,7 @@ class DeliveryOutboxWorker:
     def _sweep(session_factory: Callable[[], Session], now: datetime) -> tuple:
         """Deliver due rows one at a time; ``(count, more_left)``."""
         tried = 0
+        started = time.monotonic()
         while tried < MAX_ROWS_PER_PASS:
             db = session_factory()
             row = row_id = None
@@ -590,6 +612,8 @@ class DeliveryOutboxWorker:
                 tried += 1
             finally:
                 db.close()
+            if time.monotonic() - started >= PASS_BUDGET.total_seconds():
+                break
         return tried, True
 
     @staticmethod
@@ -617,7 +641,7 @@ class DeliveryOutboxWorker:
 
     def _prune(self, session_factory: Callable[[], Session], now: datetime,
                claimed_by: str) -> None:
-        """Delete old delivered rows, once a day across instances."""
+        """Delete old delivered and failed rows, once a day across instances."""
         day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         if self._last_prune_day == day:
             return
@@ -630,16 +654,17 @@ class DeliveryOutboxWorker:
             ):
                 return  # another instance prunes today
             deleted = delivery_outbox_repo.prune_delivered(db, before=now - RETENTION)
+            deleted += delivery_outbox_repo.prune_failed(db, before=now - RETENTION)
             db.commit()
             scheduler_claims_repo.record_outcome(
                 db, task_key=PRUNE_TASK_KEY, slot=day,
                 outcome={'status': 'done', 'deleted': deleted},
             )
             if deleted:
-                logger.info(f"Deleted {deleted} delivered outbox row(s) older than "
+                logger.info(f"Deleted {deleted} delivered or failed outbox row(s) older than "
                             f"{RETENTION.days} days")
         except Exception as e:
-            logger.warning(f"Could not delete old delivered outbox rows ({type(e).__name__})")
+            logger.warning(f"Could not delete old outbox rows ({type(e).__name__})")
             db.rollback()
         finally:
             db.close()

@@ -13,7 +13,8 @@ the commit and then by the workflow scheduler's thread (``delivery_outbox_manage
   ``delivery_mode_inactive`` (the mode was turned off before it ran). Deleted
   after the retention period.
 - ``failed``: past its attempts, or its entity is gone; kept until it is
-  delivered again (``POST /api/delivery/{entity_type}/{entity_id}/redeliver``).
+  delivered again (``POST /api/delivery/{entity_type}/{entity_id}/redeliver``), or
+  deleted after the retention period.
 """
 from sqlalchemy import JSON, TIMESTAMP, Column, Index, Integer, String
 from sqlalchemy.sql import func
@@ -44,7 +45,7 @@ class DeliveryOutboxDb(Base):
     next_attempt_at = Column(TIMESTAMP(timezone=True), nullable=True)
     last_attempt_at = Column(TIMESTAMP(timezone=True), nullable=True)
     delivered_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    # Who made the change, or asked to deliver it again
+    # Who made the change (who delivered it again is in the audit log)
     queued_by = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(),

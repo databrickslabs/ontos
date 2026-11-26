@@ -430,7 +430,7 @@ class TestRedeliver:
 
         assert ids == [row_id]
         assert [(row.status, row.attempts, row.queued_by) for row in rows] == [
-            ('delivered', 1, 'admin')]
+            ('delivered', 1, 'a@b.com')]  # attribution stays with the change
         assert outbox.outcome_of(rows).status == 'delivered'
 
     def test_without_open_rows_a_row_per_active_mode_is_added(self, manager, sessions, service):
@@ -524,6 +524,22 @@ class TestRedeliver:
         modes = [row.mode for row in delivery_outbox_repo.by_ids(sessions(), queued.row_ids)]
         assert (modes, queued.in_progress) == (['manual'], [held])
 
+    def test_a_gone_entity_closes_its_open_rows_and_is_refused(self, manager, sessions, service):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        product_id = _import(manager, 'P A').created_ids[0]
+        db = sessions()
+        row = db.query(DeliveryOutboxDb).one()
+        row.status, row.attempts, row.next_attempt_at = 'failed', MAX_ATTEMPTS, None
+        db.query(DataProductDb).filter(DataProductDb.id == product_id).delete()
+        db.commit()
+
+        with pytest.raises(DeliveryEntityNotFoundError):
+            delivery_outbox_manager.redeliver(sessions(), 'DataProduct', product_id, user='admin')
+
+        row = _rows(sessions)[0]
+        assert (row.status, row.code) == ('delivered', 'delivery_entity_not_found')
+        assert delivery_outbox_manager.list_rows(sessions()).rows == []
+
     def test_refusals(self, manager, sessions, service):
         product_id = _import(manager, 'P A').created_ids[0]
         db = sessions()
@@ -606,6 +622,37 @@ class TestWorkerSchedule:
 
         assert scheduler._tick() is None  # delivered: nothing left to wake up for
         assert _rows(sessions)[0].status == 'delivered'
+
+    def test_failed_rows_are_pruned_after_the_retention_too(self, manager, sessions, service):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        _import(manager, 'P A', 'P B')
+        now = _now()
+        db = sessions()
+        old, recent = db.query(DeliveryOutboxDb).order_by(DeliveryOutboxDb.id).all()
+        for row in (old, recent):
+            row.status, row.next_attempt_at = 'failed', None
+        old.updated_at = now - RETENTION - timedelta(minutes=1)
+        old_id, recent_id = old.id, recent.id
+        db.commit()
+
+        DeliveryOutboxWorker().run(sessions, now)
+
+        assert [row.id for row in _rows(sessions)] == [recent_id] != [old_id]
+
+    def test_a_pass_ends_when_its_time_is_up_and_the_next_follows_at_once(
+        self, manager, sessions, service, monkeypatch,
+    ):
+        service.failing = {'indirect': 'delivery_git_unavailable'}
+        _import(manager, 'P A', 'P B', 'P C')
+        service.failing = {}
+        monkeypatch.setattr(outbox, 'PASS_BUDGET', timedelta(0))
+        worker = DeliveryOutboxWorker()
+        now = _now() + timedelta(minutes=2)
+
+        assert worker.run(sessions, now) == 1
+        assert sorted(row.status for row in _rows(sessions)) == [
+            'delivered', 'pending', 'pending']
+        assert worker.next_deadline() == now
 
     def test_delivered_rows_are_pruned_once_a_day(self, manager, sessions, service):
         _import(manager, 'P A', 'P B')

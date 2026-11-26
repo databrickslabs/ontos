@@ -150,5 +150,12 @@ class DeliveryOutboxRepository:
             DeliveryOutboxDb.status == DELIVERED, DeliveryOutboxDb.delivered_at < before,
         ).delete(synchronize_session=False)
 
+    def prune_failed(self, db: Session, *, before: datetime) -> int:
+        """Delete the rows that failed (and were not delivered again) before ``before``
+        (the caller commits)."""
+        return db.query(DeliveryOutboxDb).filter(
+            DeliveryOutboxDb.status == FAILED, DeliveryOutboxDb.updated_at < before,
+        ).delete(synchronize_session=False)
+
 
 delivery_outbox_repo = DeliveryOutboxRepository()

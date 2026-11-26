@@ -546,7 +546,8 @@ pass `... = 0` for a table that may have undocumented keys): the table is report
 evaluated, like the fields of the next section, with source `unity_catalog.tables.get` and a
 reason: `table_no_access` (no grant on the table), `table_not_found`, `table_read_failed` or
 `table_read_limit`. A policy run makes at most 2000 `tables.get` calls and spends at most 10
-minutes on them, from its start; past that, the remaining tables are not evaluated (reason
+minutes on them, counted from the first of those calls (listing the tables and LLM checks don't
+consume it); past that, the remaining tables are not evaluated (reason
 `table_read_limit`). Scope a rule to a catalog or schema to stay within the limit.
 
 #### Table and View Tags and Lineage

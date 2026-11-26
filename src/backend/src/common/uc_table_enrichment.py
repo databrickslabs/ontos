@@ -13,7 +13,8 @@ lineage. This module adds, for the tables of one catalog at a time:
   table: ``tables.list`` does not return ``table_constraints``, so a listed table
   can't tell a table without keys from a table whose keys weren't read. Only the
   tables a rule selects are read, up to ``MAX_TABLE_READS_PER_RUN`` reads and
-  ``MAX_TABLE_READ_SECONDS`` per policy run.
+  ``MAX_TABLE_READ_SECONDS`` per policy run, counted from the first read (the
+  table listing and the LLM checks before it spend none of it).
 
 The two statements run on the SQL warehouse and are filtered by the catalog and
 the schemas in scope, so a run reads only what its rule can see. A source that
@@ -101,7 +102,8 @@ MAX_STATEMENTS_PER_RUN = 100
 # awaited by their HTTP request; past this, statements still to send and the one
 # running are not waited for (reason ``timed_out``).
 MAX_RUN_SECONDS = 900
-# ``tables.get`` calls one policy run may make for key columns, and the time it may spend on them
+# ``tables.get`` calls one policy run may make for key columns, and the time it
+# may spend on them, counted from the first call
 MAX_TABLE_READS_PER_RUN = 2000
 MAX_TABLE_READ_SECONDS = 600
 # Rows kept for reuse by later rules of the same run; past this, rows are not kept
@@ -458,8 +460,10 @@ class TableConstraintsReader:
     """Reads the key column fields of tables with ``tables.get``.
 
     ``tables.list`` doesn't return ``table_constraints``. One reader serves one
-    policy run: past ``max_reads`` calls or ``max_seconds`` since it was created,
-    ``fields`` raises ``SourceUnavailable`` (``table_read_limit``) without a call.
+    policy run: past ``max_reads`` calls or ``max_seconds`` since its first
+    read, ``fields`` raises ``SourceUnavailable`` (``table_read_limit``)
+    without a call. The time before that first read (the table listing, LLM
+    checks) spends none of the budget.
     """
 
     def __init__(
@@ -469,13 +473,22 @@ class TableConstraintsReader:
     ):
         self.ws = workspace_client
         self.max_reads = max_reads
+        self.max_seconds = max_seconds
         self.reads = 0
         self._clock = clock
-        self._deadline = clock() + max_seconds
+        # Set at the first read, so the time before it spends none of the budget
+        self._deadline: Optional[float] = None
+
+    def _past_deadline(self) -> bool:
+        """Whether the budget the first read started is spent (starting it there)."""
+        now = self._clock()
+        if self._deadline is None:
+            self._deadline = now + self.max_seconds
+        return now >= self._deadline
 
     def fields(self, full_name: str) -> Dict[str, Any]:
         """``KEY_FIELDS`` of the table; raises ``SourceUnavailable`` when it can't be read."""
-        if self.reads >= self.max_reads or self._clock() >= self._deadline:
+        if self.reads >= self.max_reads or self._past_deadline():
             raise SourceUnavailable(REASON_TABLE_READ_LIMIT, 'run reached its table read limit')
         self.reads += 1
         try:

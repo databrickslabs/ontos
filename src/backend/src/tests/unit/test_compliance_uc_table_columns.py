@@ -339,16 +339,34 @@ def test_table_reads_are_capped_per_reader():
 
 
 def test_table_reads_stop_at_the_time_limit():
+    a, b = _table('a', [_col('id')]), _table('b', [_col('id')])
+    entities = _entities(a, b)
+    times = [0.0]
+    ws = _ws_with_get({'a': a, 'b': b})
+    reader = TableConstraintsReader(ws, max_seconds=1, clock=lambda: times[0])
+
+    enrich_tables([entities[0]], {'keys'}, None, reader)  # the first read starts the budget
+    times[0] = 5.0  # past the budget that first read started
+    enrich_tables([entities[1]], {'keys'}, None, reader)
+
+    assert 'primary_key_columns' in entities[0]
+    assert ws.tables.get.call_count == 1
+    assert unavailable_fields_read(entities[1], ['primary_key_columns'])[
+        'primary_key_columns']['reason'] == 'table_read_limit'
+
+
+def test_the_read_budget_starts_at_the_first_read_not_at_the_reader():
     a = _table('a', [_col('id')])
     [entity] = _entities(a)
-    times = iter([0, 5, 5])
+    times = [0.0]
     ws = _ws_with_get({'a': a})
-    reader = TableConstraintsReader(ws, max_seconds=1, clock=lambda: next(times))
+    reader = TableConstraintsReader(ws, max_seconds=1, clock=lambda: times[0])
+    times[0] = 500.0  # the table listing and LLM checks spent the time, no key read yet
 
     enrich_tables([entity], {'keys'}, None, reader)
 
-    ws.tables.get.assert_not_called()
-    assert unavailable_fields_read(entity, ['primary_key_columns'])
+    ws.tables.get.assert_called_once_with(full_name='main.sales.a')
+    assert entity['primary_key_columns'] == []
 
 
 def test_policy_run_checks_key_columns_through_tables_get(db_session):

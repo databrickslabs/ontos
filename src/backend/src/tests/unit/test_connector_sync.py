@@ -471,18 +471,23 @@ def test_non_tableau_connections_skip_the_secret_check(monkeypatch):
 def test_only_administrators_set_up_tableau_connections(monkeypatch):
     from fastapi import HTTPException
 
-    from src.models.users import UserInfo
     from src.routes import connection_routes as routes
 
-    user = UserInfo(email="writer@example.com", username="writer", user="writer", ip=None, groups=["writers"])
+    request = MagicMock()
     auth = MagicMock()
-    auth.has_permission.return_value = False
-    monkeypatch.setattr(routes, "user_has_feature_level",
-                        lambda auth_manager, u, feature, level: False)
-    with pytest.raises(HTTPException) as refused:
-        routes._require_admin_for_secret_sources(auth, user, "tableau")
-    assert refused.value.status_code == 403
+    seen = []
 
-    routes._require_admin_for_secret_sources(auth, user, "bigquery", None)  # other connectors are unaffected
-    monkeypatch.setattr(routes, "user_has_feature_level", lambda auth_manager, u, feature, level: True)
-    routes._require_admin_for_secret_sources(auth, user, None, "tableau")
+    def has_level(auth_manager, user, feature, level, req=None):
+        seen.append(req)
+        return False
+
+    monkeypatch.setattr(routes, "user_has_feature_level", has_level)
+    with pytest.raises(HTTPException) as refused:
+        routes._require_admin_for_tableau(request, auth, MagicMock(), "tableau")
+    assert refused.value.status_code == 403
+    assert seen == [request], "the gate must receive the request, or it denies administrators too"
+
+    routes._require_admin_for_tableau(request, auth, MagicMock(), "bigquery")  # other connectors are unaffected
+    monkeypatch.setattr(routes, "user_has_feature_level", lambda *a, **k: True)
+    routes._require_admin_for_tableau(request, auth, MagicMock(), "tableau")
+

@@ -37,6 +37,11 @@ _STD_VALUE_SQL = {
 }
 
 _TITLE_KEY = "lower(coalesce(title, '')) COLLATE \"C\""
+# Python's _sort_key for TITLE_DESC orders by -ord per character, so a title
+# that is a prefix of another sorts first. Plain DESC puts the longer one first.
+# Appending the largest code point makes a prefix compare greater than its
+# extensions under DESC, which restores the in-memory order.
+_TITLE_DESC_KEY = f"(({_TITLE_KEY}) || chr(1114111))"
 
 _RE_SPECIAL = set("\\^$.|?*+()[]{}")
 
@@ -177,7 +182,7 @@ def order_by_sql(config: SearchConfig) -> str:
         elif sf == SortField.TITLE_ASC:
             parts.append(f"{_TITLE_KEY} ASC")
         elif sf == SortField.TITLE_DESC:
-            parts.append(f"{_TITLE_KEY} DESC")
+            parts.append(f"{_TITLE_DESC_KEY} DESC")
     parts.append("id ASC")  # deterministic final tiebreak
     return ", ".join(parts)
 

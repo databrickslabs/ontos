@@ -125,6 +125,10 @@ def _variants():
     by_score.ranking.tertiary_sort = SortField.MATCH_PRIORITY
     out["rank_by_score"] = by_score
 
+    title_desc = copy.deepcopy(base)
+    title_desc.ranking.primary_sort = SortField.TITLE_DESC
+    out["title_desc_first"] = title_desc
+
     match_types = copy.deepcopy(base)
     match_types.defaults.fields.title.match_type = MatchType.FUZZY
     match_types.defaults.fields.description.match_type = MatchType.EXACT
@@ -136,6 +140,15 @@ def _variants():
 
 
 VARIANTS = _variants()
+
+
+# Titles where one is a prefix of another: the case where title_desc must match
+# the in-memory order (shorter prefix first), not plain SQL DESC.
+PREFIX_TITLE_ITEMS = [
+    _item("product::20", "data-product", "data-products", "Orders", "Prefix title"),
+    _item("product::21", "data-product", "data-products", "Orders Daily", "Prefix title"),
+    _item("product::22", "data-product", "data-products", "Orders Daily Archive", "Prefix title"),
+]
 
 
 def _memory_items(config):
@@ -238,3 +251,14 @@ def test_facets_expose_no_user_identifiers(seeded, query):
         assert any(r["id"].endswith("d-7") for r in mem_res["results"])
     for facets in (pg_res["facets"], mem_res["facets"]):
         assert not [v for counts in facets.values() for v in counts if "@" in str(v)]
+
+
+def test_title_desc_prefix_titles_match_memory(seeded):
+    config = VARIANTS["title_desc_first"]
+    repo.upsert_documents(seeded, PREFIX_TITLE_ITEMS)
+    seeded.flush()
+    mem = [s.item.id for s in search_scoring.score_and_rank(
+        _memory_items(config) + PREFIX_TITLE_ITEMS, "orders", config)]
+    pg = [i.id for i in repo.search_index_items(seeded, "orders", config=config)]
+    assert pg == mem
+    assert pg.index("product::20") < pg.index("product::21") < pg.index("product::22")

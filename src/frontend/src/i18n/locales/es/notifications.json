@@ -34,6 +34,11 @@
     "notApplied": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}",
     "requesterNotApplied": "La revisión de su contrato se decidió, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}"
   },
+  "deleteRefused": {
+    "notDeletable": "Esta notificación requiere una respuesta y no se puede descartar.",
+    "accessDenied": "Solo puedes eliminar tus propias notificaciones.",
+    "generic": "No se pudo eliminar la notificación."
+  },
   "ui": {
     "tooltip": "Notificaciones",
     "loading": "Cargando notificaciones...",

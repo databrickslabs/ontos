@@ -81,7 +81,8 @@ class UcDescriptionDriftManager:
 
         One transaction for the request: the fields are flushed, the tables' column snapshots
         are updated once at the end, and the route commits once. Any other failure rolls back
-        every field and is a coded ``uc_reset_failed``, never a half-applied reset."""
+        every field and is a coded ``uc_reset_failed``, never a half-applied reset. The search
+        index is not touched here: the route upserts the changed assets once, after its commit."""
         root = self._reset.get_asset(db, asset_id)
         table_fqn, root_column = self._reset.target_of(root)
         comments = self._reset.read_table(user_client, table_fqn)
@@ -93,11 +94,9 @@ class UcDescriptionDriftManager:
                     db, root, table_fqn, root_column, request, comments, username, changed))
             self._update_snapshots(db, changed)
         except Exception as e:
-            ids = [a.id for a in changed]
             logger.exception("Resetting the descriptions under asset %s failed; rolled back",
                              root.id)
             db.rollback()
-            self._restore_index(db, ids)
             raise ResetFailedError(
                 "The descriptions could not be reset; none was changed.", table_fqn) from e
         return ResetSelectedResult(
@@ -128,7 +127,7 @@ class UcDescriptionDriftManager:
                 if 'expected_uc_comment' in request.model_fields_set else NOT_SENT)
             outcome = self._reset.apply_comment(
                 db, asset, label, uc_comment, username=username, expected_uc_comment=expected,
-                snapshot=False)
+                snapshot=False, reindex=False)
             if outcome.result.changed:
                 changed.append(asset)
             return ResetFieldResult(
@@ -169,13 +168,6 @@ class UcDescriptionDriftManager:
                     table.properties = {
                         **table.properties, 'schema': {**schema, 'columns': new_entries}}
         db.flush()
-
-    def _restore_index(self, db: Session, ids: List[UUID]) -> None:
-        """Put the search index back to the stored descriptions after a rollback."""
-        try:
-            self._reset._assets.upsert_search_index_for(db, ids)
-        except Exception:
-            logger.warning("Could not restore the search index after a rollback", exc_info=True)
 
     @staticmethod
     def _is_column_of(asset: AssetDb, table_fqn: str) -> bool:

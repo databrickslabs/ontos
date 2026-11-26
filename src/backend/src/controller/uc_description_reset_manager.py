@@ -126,8 +126,8 @@ class UcDescriptionResetManager:
     ) -> ResetOutcome:
         """Replace the description of the asset with its Unity Catalog comment.
 
-        Does not commit (``AssetsManager.update_asset`` does, with the history entry); the
-        caller commits what is left. ``expected_uc_comment``: the comment the user saw;
+        Does not commit (``AssetsManager.update_asset`` only flushes, with the history entry);
+        the caller commits. ``expected_uc_comment``: the comment the user saw;
         another one now is ``UcCommentChangedError``.
         """
         asset = self.lock(db, asset_id)
@@ -151,11 +151,14 @@ class UcDescriptionResetManager:
     def apply_comment(
         self, db: Session, asset: AssetDb, label: str, uc_comment: Optional[str], *,
         username: str, expected_uc_comment: Any = NOT_SENT, snapshot: bool = True,
+        reindex: bool = True,
     ) -> ResetOutcome:
         """Replace the description of the (locked) asset with ``uc_comment``, read as the user.
 
         ``snapshot=False``: the caller updates the tables' column snapshots itself, once for
         all the assets it resets (see ``UcDescriptionDriftManager.reset_many``).
+        ``reindex=False``: likewise the search index, which the caller upserts once after its
+        commit.
 
         Records the comment as the asset's Unity Catalog baseline (drift). An empty comment
         changes nothing and warns; a description that already equals it only clears the
@@ -201,7 +204,8 @@ class UcDescriptionResetManager:
         with description_source(SOURCE_UC_RESET):
             self._assets.update_asset(
                 db, asset_id=asset_id, asset_in=AssetUpdate(description=uc_comment),
-                current_user_id=username, commit=False)
+                current_user_id=username, commit=False,
+                reindex=reindex)
         asset = db.get(AssetDb, asset_id)
         if snapshot:
             AssetsManager.update_table_column_snapshot(db, asset)

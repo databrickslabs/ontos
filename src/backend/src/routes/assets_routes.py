@@ -827,6 +827,7 @@ def reset_asset_descriptions_to_uc(
                 db, background_tasks, request, asset_id, current_user.email)
         else:
             db.commit()
+        _reindex_after_commit(manager, db, [r.asset_id for r in result.results if r.changed])
         success = True
         return result
     except HTTPException as e:
@@ -847,6 +848,17 @@ def reset_asset_descriptions_to_uc(
             feature=FEATURE_ID, action="RESET_ASSET_DESCRIPTIONS", success=success,
             details=details,
         )
+
+
+def _reindex_after_commit(manager: AssetsManager, db, asset_ids) -> None:
+    """Upsert the assets a committed request changed in the search index, with one call.
+
+    Never raises: the change is stored, a stale index entry is rebuilt by the next reindex.
+    """
+    try:
+        manager.upsert_search_index_for(db, asset_ids)
+    except Exception:
+        logger.warning("Could not update the search index after a reset", exc_info=True)
 
 
 def _reset_call(asset_id: UUID, call):

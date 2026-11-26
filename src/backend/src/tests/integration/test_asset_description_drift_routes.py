@@ -389,6 +389,55 @@ class TestResetSelected:
         # The first field was not committed on its own (the audit entry commits later)
         assert before_failure == [0]
 
+    @staticmethod
+    def _index_spy(monkeypatch):
+        from src.controller.assets_manager import AssetsManager
+
+        calls = SimpleNamespace(single=[], batch=[])
+        monkeypatch.setattr(
+            AssetsManager, '_notify_index_upsert', lambda self, item: calls.single.append(item))
+        monkeypatch.setattr(
+            AssetsManager, '_notify_index_upsert_many',
+            lambda self, items: calls.batch.append(list(items)))
+        return calls
+
+    def test_the_search_index_is_updated_once_for_all_the_fields(
+            self, client, tree, user_ws, monkeypatch):
+        calls = self._index_spy(monkeypatch)
+        user_ws.tables.get.return_value = _info(
+            'Orders (UC)', {'order_id': 'Key (UC)', 'note': 'Note (UC)'})
+
+        body = self._post(client, tree.table, [
+            {'asset_id': str(a.id)} for a in (tree.table, tree.key, tree.note)]).json()
+
+        assert body['changed'] == 3
+        assert calls.single == []
+        assert len(calls.batch) == 1 and len(calls.batch[0]) == 3
+
+    def test_a_failed_reset_does_not_touch_the_search_index(
+            self, client, tree, user_ws, monkeypatch):
+        from src.controller.assets_manager import AssetsManager
+
+        calls = self._index_spy(monkeypatch)
+        real = AssetsManager.update_asset
+        count = []
+
+        def failing(self, db, **kwargs):
+            count.append(1)
+            if len(count) == 2:
+                raise RuntimeError('boom')
+            return real(self, db, **kwargs)
+
+        monkeypatch.setattr(AssetsManager, 'update_asset', failing)
+        user_ws.tables.get.return_value = _info(
+            'Orders (UC)', {'order_id': 'Key (UC)', 'note': 'Note (UC)'})
+
+        response = self._post(client, tree.table, [
+            {'asset_id': str(tree.table.id)}, {'asset_id': str(tree.key.id)}])
+
+        assert response.status_code == 500
+        assert calls.single == [] and calls.batch == []
+
     def test_an_unexpected_failure_is_a_coded_error_without_its_text(
             self, client, tree, user_ws, monkeypatch):
         from src.controller.assets_manager import AssetsManager

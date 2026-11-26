@@ -40,6 +40,11 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Holds the status an asset had before a sync retired it, so its return restores that status
+PRIOR_STATUS_PROPERTY = "status_before_sync_retirement"
+_LIFECYCLE_KEPT_ON_RETIREMENT = frozenset({AssetStatus.DRAFT.value, AssetStatus.DEPRECATED.value})
+
+
 def _next_due_after(sync: "ConnectorSyncDb", started: datetime) -> datetime:
     """The next due time, anchored on the previous one.
 
@@ -252,7 +257,9 @@ class ConnectorSyncManager:
                 props.pop(MISSED_PROPERTY, None)
                 if by_sync:
                     props.pop(RETIRED_BY_SYNC_PROPERTY, None)
-                    asset.status = AssetStatus.ACTIVE.value
+                    prior_status = props.pop(PRIOR_STATUS_PROPERTY, None)
+                    if asset.status == AssetStatus.RETIRED.value:
+                        asset.status = prior_status or AssetStatus.ACTIVE.value
                     counts["reactivated"] += 1
                     self._log(db, asset, "REACTIVATED_BY_SYNC", sync)
                 self._save(db, asset, props)
@@ -264,7 +271,10 @@ class ConnectorSyncManager:
             counts["missed"] += 1
             if missed >= sync.retire_after_misses:
                 props[RETIRED_BY_SYNC_PROPERTY] = True
-                asset.status = AssetStatus.RETIRED.value
+                # Draft and deprecated keep their lifecycle status; the rest is retired and remembered
+                if asset.status not in _LIFECYCLE_KEPT_ON_RETIREMENT:
+                    props[PRIOR_STATUS_PROPERTY] = asset.status
+                    asset.status = AssetStatus.RETIRED.value
                 counts["retired"] += 1
                 self._log(db, asset, "RETIRED_BY_SYNC", sync, missed=missed)
             self._save(db, asset, props)

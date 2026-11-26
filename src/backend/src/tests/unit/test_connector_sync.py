@@ -22,6 +22,7 @@ from src.connectors.tableau_client import GraphQLResult, TableauAPIError
 from src.controller.assets_manager import AssetsManager
 from src.controller.connector_sync_manager import (
     MISSED_PROPERTY,
+    PRIOR_STATUS_PROPERTY,
     RETIRED_BY_SYNC_PROPERTY,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -543,3 +544,36 @@ def test_a_sync_far_behind_its_slot_reschedules_from_its_start(db_session, sync,
     clear_listing_cache()
     ConnectorSyncManager().run(db_session, sync, importer)
     assert sync.next_due_at == datetime(2026, 11, 26, 16, 0, 3, tzinfo=timezone.utc)  # no catch-up burst
+
+
+def _retire_and_return_workbook(db_session, sync, importer, source):
+    """Three complete misses retire the workbook (and its dashboard); its return reactivates them."""
+    removed = source.workbooks.pop()
+    for _ in range(3):
+        _run(db_session, sync, importer)
+    workbook = _asset(db_session, WB)
+    retired_status = workbook.status
+    source.workbooks.append(removed)
+    _run(db_session, sync, importer)
+    return retired_status, _asset(db_session, WB)
+
+
+@pytest.mark.parametrize("lifecycle", ["deprecated", "draft"])
+def test_a_deprecated_or_draft_asset_keeps_its_status_through_retirement_and_return(
+    db_session, sync, importer, source, lifecycle,
+):
+    _run(db_session, sync, importer)
+    _asset(db_session, WB).status = lifecycle
+    db_session.flush()
+    retired_status, workbook = _retire_and_return_workbook(db_session, sync, importer, source)
+    assert retired_status == lifecycle  # retirement does not overwrite it
+    assert workbook.status == lifecycle  # and the return does not make it active
+    assert RETIRED_BY_SYNC_PROPERTY not in workbook.properties
+
+
+def test_an_active_asset_is_retired_and_returns_active(db_session, sync, importer, source):
+    _run(db_session, sync, importer)
+    retired_status, workbook = _retire_and_return_workbook(db_session, sync, importer, source)
+    assert retired_status == "retired"
+    assert workbook.status == "active"
+    assert PRIOR_STATUS_PROPERTY not in workbook.properties

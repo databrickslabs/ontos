@@ -86,5 +86,21 @@
     },
     "warningsTitle": "Avertissements ({{count}})",
     "moreWarnings": "+{{count}} de plus"
+  },
+  "sync": {
+    "keepInSync": "Garder synchronisé",
+    "description": "Importer à nouveau cette sélection selon un planning : les changements de la source sont repris et les éléments que la source n'a plus sont retirés.",
+    "interval": "Fréquence",
+    "intervals": {
+      "60": "Toutes les heures",
+      "1440": "Tous les jours",
+      "10080": "Toutes les semaines"
+    },
+    "retireAfter": "Retirer après synchronisations manquées",
+    "retireAfterHint": "Les éléments absents de ce nombre de synchronisations complètes consécutives sont retirés (jamais supprimés).",
+    "save": "Enregistrer la synchronisation",
+    "saved": "Synchronisation « {{name}} » enregistrée",
+    "nextRun": "Prochaine exécution",
+    "saveFailed": "Impossible d'enregistrer la synchronisation"
   }
 }

@@ -7,7 +7,9 @@ preview, and import operations.
 
 from src.connectors.base import client_error_code
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Set
 from uuid import UUID
 
 from sqlalchemy import func
@@ -17,6 +19,11 @@ from sqlalchemy.orm.attributes import flag_modified
 from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, LineageLink, ListAssetsOptions
+from src.models.assets import AssetInfo
+
+# Set by connector syncs on assets a complete walk did not find (see connector_sync_manager)
+SYNC_MISSED_PROPERTY = "sync_missed"
+RETIRED_BY_SYNC_PROPERTY = "retired_by_sync"
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.assets_manager import AssetsManager
 from src.controller.metric_view_consistency_manager import (
@@ -25,6 +32,7 @@ from src.controller.metric_view_consistency_manager import (
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.connections import ConnectionDb
 from src.models.assets import (
+    IMPORTED_KEYS_PROPERTY,
     METRIC_VIEW_ASSET_TYPE,
     AssetCreate,
     AssetRelationshipCreate,
@@ -35,6 +43,7 @@ from src.models.schema_import import (
     BrowseNode,
     BrowseResponse,
     ImportDepth,
+    ImportMode,
     ImportPreviewItem,
     ImportRequest,
     ImportResult,
@@ -138,6 +147,26 @@ _LEAF_ASSET_TYPES = {
     UnifiedAssetType.TABLEAU_SHEET.value,
     UnifiedAssetType.TABLEAU_DATASOURCE.value,
 }
+
+
+@dataclass
+class _SyncWalk:
+    """What a sync-mode walk found beyond the preview items."""
+    # Existing assets in unchanged subtrees: seen in the source, nothing to fetch
+    seen_ids: Set[UUID] = field(default_factory=set)
+    # Why the walk may have missed source items
+    incomplete_reasons: List[str] = field(default_factory=list)
+
+
+def _as_utc(value: Any) -> Optional[datetime]:
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 class SchemaImportManager:
@@ -372,6 +401,8 @@ class SchemaImportManager:
             system_asset_id = None
 
         # 1. Collect all items to import (ancestors first so parents exist)
+        sync = request.mode == ImportMode.SYNC
+        walk = _SyncWalk() if sync else None
         preview_items: List[ImportPreviewItem] = []
         expanded = self._expand_with_ancestors(request.selected_paths)
         for path, parent_path, is_selected in expanded:
@@ -383,10 +414,13 @@ class SchemaImportManager:
                 items=preview_items,
                 parent_path=parent_path,
                 current_depth=0,
+                walk=walk,
             )
 
         result = ImportResult()
         result.system_asset_id = system_asset_id
+        if walk is not None:
+            result.incomplete_reasons.extend(walk.incomplete_reasons)
 
         # path -> created asset UUID (used for relationship wiring)
         created_assets: Dict[str, UUID] = {}
@@ -459,12 +493,26 @@ class SchemaImportManager:
                         # Still a View: no relationships are wired to it as a Metric View
                         continue
                     self._refresh_metric_view(db, connector, item)
-                result.skipped += 1
+                action = "skipped"
+                if sync and item.needs_refresh and item.existing_asset_id:
+                    try:
+                        with db.begin_nested():
+                            self._refresh_existing(db, connector, item, metadata_cache, request.connection_id)
+                        action = "refreshed"
+                    except Exception as exc:
+                        logger.error(f"Failed to refresh asset for '{item.path}': {exc}", exc_info=True)
+                        result.errors += 1
+                        result.error_messages.append(f"{item.path}: {exc}")
+                        action = "error"
+                if action == "refreshed":
+                    result.refreshed += 1
+                elif action == "skipped":
+                    result.skipped += 1
                 result.items.append(ImportResultItem(
                     path=item.path,
                     name=item.name,
                     asset_type=item.asset_type,
-                    action="skipped",
+                    action=action,
                     asset_id=item.existing_asset_id,
                     parent_path=item.parent_path,
                 ))
@@ -505,6 +553,16 @@ class SchemaImportManager:
                     parent_path=item.parent_path,
                 ))
 
+        if sync:
+            if cancel_event is not None and cancel_event.is_set():
+                result.incomplete_reasons.append("cancelled")
+            if result.errors:
+                result.incomplete_reasons.append(f"{result.errors} item(s) failed")
+            seen = set(walk.seen_ids) | {
+                created_assets[i.path] for i in preview_items if i.path in created_assets
+            }
+            result.seen_asset_ids = sorted(seen, key=str)
+
         # 3. Wire relationships (both asset_relationships and entity_relationships)
         # Build a lookup from path -> (asset_type_name, asset_id) for entity relationships
         path_to_type: Dict[str, str] = {}
@@ -538,14 +596,21 @@ class SchemaImportManager:
                         current_user_id=current_user_id,
                     )
 
+        # A sync revisits only what is new or changed: lineage and snapshots of
+        # unchanged assets are as they were (and fetching them is what a sync saves)
+        touched = preview_items
+        if sync:
+            changed = {i.path for i in result.items if i.action in ("created", "refreshed")}
+            touched = [i for i in preview_items if i.path in changed]
+
         # 5. Lineage the connector declares (e.g. BI data source -> warehouse table)
         self._wire_lineage(
-            db, connector, preview_items, created_assets, path_to_type, metadata_cache, result, current_user_id,
+            db, connector, touched, created_assets, path_to_type, metadata_cache, result, current_user_id,
         )
 
         # 6. Snapshots of the dashboards the connector renders
         self._capture_snapshots(
-            db, connector, preview_items, created_assets, metadata_cache, result, current_user_id,
+            db, connector, touched, created_assets, metadata_cache, result, current_user_id,
             connection_id=request.connection_id,
         )
 
@@ -904,8 +969,16 @@ class SchemaImportManager:
         current_depth: int,
         _type_cache: Optional[Dict[str, Any]] = None,
         _is_ancestor: bool = False,
+        walk: Optional[_SyncWalk] = None,
+        listed: Optional[AssetInfo] = None,
     ) -> None:
-        """Recursively collect ImportPreviewItem entries for a given path."""
+        """Recursively collect ImportPreviewItem entries for a given path.
+
+        With ``walk`` (sync mode), an existing asset whose listing entry shows no
+        change since it was imported is not fetched again, and neither is anything
+        below it: its existing descendants are only recorded as seen. Existing
+        assets that did change are collected with ``needs_refresh``.
+        """
         seen_paths = {i.path for i in items}
 
         if _type_cache is None:
@@ -916,11 +989,23 @@ class SchemaImportManager:
                 _type_cache[type_name] = asset_type_repo.get_by_name(db, name=type_name)
             return _type_cache[type_name]
 
+        if walk is not None and listed is not None and self._unchanged_subtree(
+            db, connector, path, listed, walk, _get_asset_type_db,
+        ):
+            return
+
         metadata = None
         try:
             metadata = connector.get_asset_metadata(path)
-        except Exception:
-            pass
+        except Exception as exc:
+            if walk is not None:
+                walk.incomplete_reasons.append(f"{path}: metadata unavailable ({type(exc).__name__})")
+        if walk is not None and metadata is not None:
+            incomplete = (metadata.properties or {}).get("metadata_incomplete") or (
+                (metadata.properties or {}).get("metadata_api_error")
+            )
+            if incomplete:
+                walk.incomplete_reasons.append(f"{path}: source metadata incomplete")
 
         is_leaf = False
 
@@ -937,7 +1022,7 @@ class SchemaImportManager:
                     existing = asset_repo.get_by_identity(
                         db, name=metadata.name, asset_type_id=at_db.id,
                         platform=platform, location=path,
-                    )
+                    ) or _asset_at_location(db, asset_type_id=at_db.id, platform=platform, location=path)
                 if existing is None and ontos_type_name == METRIC_VIEW_ASSET_TYPE:
                     # A metric view imported as a View before the Metric View type
                     # existed is reused, and execute_import converts it. Without the
@@ -959,9 +1044,13 @@ class SchemaImportManager:
                     existing_asset_id=existing.id if existing else None,
                     parent_path=parent_path,
                     is_ancestor=_is_ancestor,
+                    # A renamed item keeps its location, so it is refreshed even if its change time did not move
+                    needs_refresh=walk is not None and existing is not None
+                    and (existing.name != metadata.name or self._changed_since_import(existing, metadata.updated_at)),
                 ))
                 seen_paths.add(path)
 
+                parent_refresh = items[-1].needs_refresh
                 if metadata.schema_info and depth != ImportDepth.SELECTED_ONLY:
                     col_type_db = _get_asset_type_db("Column")
                     for col in metadata.schema_info.columns:
@@ -981,6 +1070,7 @@ class SchemaImportManager:
                             will_create=col_existing is None,
                             existing_asset_id=col_existing.id if col_existing else None,
                             parent_path=path,
+                            needs_refresh=parent_refresh and col_existing is not None,
                         ))
                         seen_paths.add(col_path)
 
@@ -998,8 +1088,11 @@ class SchemaImportManager:
 
         if should_recurse:
             try:
-                options = ListAssetsOptions(path=path, limit=self._child_limit(db))
+                limit = self._child_limit(db)
+                options = ListAssetsOptions(path=path, limit=limit)
                 children = connector.list_assets(options=options)
+                if walk is not None and len(children) >= limit:
+                    walk.incomplete_reasons.append(f"{path}: more than {limit} children, the rest were not listed")
                 for child in children:
                     if child.identifier in seen_paths or child.identifier == path:
                         continue
@@ -1014,9 +1107,13 @@ class SchemaImportManager:
                             parent_path=path,
                             current_depth=current_depth + 1,
                             _type_cache=_type_cache,
+                            walk=walk,
+                            listed=child,
                         )
             except Exception as exc:
                 logger.debug(f"Cannot list children at '{path}': {exc}")
+                if walk is not None:
+                    walk.incomplete_reasons.append(f"{path}: children could not be listed ({type(exc).__name__})")
 
             try:
                 containers = connector.list_containers(parent_path=path)
@@ -1035,9 +1132,68 @@ class SchemaImportManager:
                             parent_path=path,
                             current_depth=current_depth + 1,
                             _type_cache=_type_cache,
+                            walk=walk,
                         )
             except Exception as exc:
                 logger.debug(f"Cannot list containers at '{path}': {exc}")
+                if walk is not None:
+                    walk.incomplete_reasons.append(f"{path}: containers could not be listed ({type(exc).__name__})")
+
+    @staticmethod
+    def _changed_since_import(existing: AssetDb, source_updated_at: Any) -> bool:
+        """Whether the source changed an existing asset after it was imported (unknown: changed)."""
+        current = _as_utc(source_updated_at)
+        stored = _as_utc((existing.properties or {}).get("source_updated_at"))
+        return current is None or stored is None or current > stored
+
+    def _unchanged_subtree(
+        self,
+        db: Session,
+        connector: AssetConnector,
+        path: str,
+        listed: AssetInfo,
+        walk: _SyncWalk,
+        get_asset_type_db: Callable[[str], Any],
+    ) -> bool:
+        """Record an unchanged existing asset and its descendants as seen (sync mode).
+
+        Unchanged means the listing reports a change time no later than the one
+        stored at the last import. A connector that sets ``AssetInfo.updated_at``
+        promises the time changes whenever anything below the asset does (Tableau
+        bumps it when a workbook or data source is published again).
+        """
+        listed_at = _as_utc(listed.updated_at)
+        mapped = _TYPE_MAP.get(listed.asset_type.value) if listed.asset_type else None
+        if listed_at is None or not mapped:
+            return False
+        type_db = get_asset_type_db(mapped[0])
+        existing = type_db and (asset_repo.get_by_identity(
+            db, name=listed.name, asset_type_id=type_db.id, platform=connector.connector_type, location=path,
+        ) or _asset_at_location(db, asset_type_id=type_db.id, platform=connector.connector_type, location=path))
+        # A renamed item is not unchanged: its name must be refreshed
+        if not existing or existing.name != listed.name:
+            return False
+        stored_at = _as_utc((existing.properties or {}).get("source_updated_at"))
+        if stored_at is None or listed_at > stored_at:
+            return False
+        walk.seen_ids.add(existing.id)
+        # Back after missing runs: what was below it is back too. Otherwise a
+        # descendant missing since the asset last changed is still missing (it is
+        # counted again, not seen): the asset hasn't changed since.
+        came_back = bool(
+            (existing.properties or {}).get(SYNC_MISSED_PROPERTY)
+            or (existing.properties or {}).get(RETIRED_BY_SYNC_PROPERTY)
+        )
+        descendants = db.query(AssetDb.id, AssetDb.properties).filter(
+            AssetDb.platform == connector.connector_type,
+            AssetDb.location.startswith(f"{path}.", autoescape=True),
+        )
+        for row in descendants:
+            props = row.properties or {}
+            if not came_back and (props.get(SYNC_MISSED_PROPERTY) or props.get(RETIRED_BY_SYNC_PROPERTY)):
+                continue
+            walk.seen_ids.add(row.id)
+        return True
 
     def _create_asset_from_item(
         self,
@@ -1059,6 +1215,32 @@ class SchemaImportManager:
         if not asset_type_db:
             raise ValueError(f"Ontos asset type '{item.asset_type}' not found in database")
 
+        description, properties = self._source_properties(
+            connector, item, _metadata_cache, connection_id=connection_id,
+        )
+        if properties:
+            properties[IMPORTED_KEYS_PROPERTY] = sorted(properties)
+
+        asset_in = AssetCreate(
+            name=item.name,
+            description=description,
+            asset_type_id=asset_type_db.id,
+            platform=connector.connector_type,
+            location=item.path,
+            properties=properties or None,
+            status=AssetStatus.ACTIVE,
+        )
+
+        return self._assets.create_asset(db, asset_in=asset_in, current_user_id=current_user_id)
+
+    def _source_properties(
+        self,
+        connector: AssetConnector,
+        item: ImportPreviewItem,
+        _metadata_cache: Optional[Dict[str, Any]],
+        connection_id: Optional[UUID] = None,
+    ) -> tuple:
+        """(description, properties) of an item, as read from the source now."""
         properties: Dict[str, Any] = {}
         description = None
 
@@ -1082,6 +1264,9 @@ class SchemaImportManager:
                     properties["source_tags"] = col_info.tags
             else:
                 properties = {"source_path": item.path}
+            if connection_id:
+                # A connector sync retires columns its connection no longer has
+                properties["connection_id"] = str(connection_id)
         else:
             try:
                 meta = connector.get_asset_metadata(item.path)
@@ -1125,17 +1310,36 @@ class SchemaImportManager:
             except Exception as exc:
                 logger.debug(f"Could not fetch metadata for '{item.path}': {exc}")
 
-        asset_in = AssetCreate(
-            name=item.name,
-            description=description,
-            asset_type_id=asset_type_db.id,
-            platform=connector.connector_type,
-            location=item.path,
-            properties=properties or None,
-            status=AssetStatus.ACTIVE,
-        )
+        return description, properties
 
-        return self._assets.create_asset(db, asset_in=asset_in, current_user_id=current_user_id)
+    def _refresh_existing(
+        self,
+        db: Session,
+        connector: AssetConnector,
+        item: ImportPreviewItem,
+        metadata_cache: Dict[str, Any],
+        connection_id: Optional[UUID],
+    ) -> None:
+        """Update an existing asset from the source (sync mode).
+
+        Properties the previous import wrote are replaced by the current ones;
+        everything else (snapshot state, sync counters, properties users added)
+        is kept.
+        """
+        asset = asset_repo.get(db, id=item.existing_asset_id)
+        if asset is None:
+            raise ValueError(f"Asset {item.existing_asset_id} no longer exists")
+        if item.name and asset.name != item.name:
+            asset.name = item.name
+        description, fresh = self._source_properties(connector, item, metadata_cache, connection_id=connection_id)
+        current = dict(asset.properties or {})
+        kept = {k: v for k, v in current.items() if k not in set(current.get(IMPORTED_KEYS_PROPERTY) or [])}
+        kept.pop(IMPORTED_KEYS_PROPERTY, None)
+        asset.properties = {**kept, **fresh, IMPORTED_KEYS_PROPERTY: sorted(fresh)}
+        flag_modified(asset, "properties")
+        if description is not None:
+            asset.description = description
+        db.flush()
 
     @staticmethod
     def _find_column_in_cache(
@@ -1225,6 +1429,21 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.TABLEAU_SHEET.value: "sheet",
     UnifiedAssetType.TABLEAU_DATASOURCE.value: "datasource",
 }
+
+
+def _asset_at_location(db: Session, *, asset_type_id: UUID, platform: str, location: str) -> Optional[AssetDb]:
+    """The asset of this type at this location, under any name.
+
+    Connectors whose paths carry stable ids (Tableau LUIDs) keep the location when
+    the source renames an item, so a match on name alone would create a duplicate
+    and leave the original to be retired.
+    """
+    return (
+        db.query(AssetDb)
+        .filter(AssetDb.asset_type_id == asset_type_id, AssetDb.platform == platform, AssetDb.location == location)
+        .order_by(AssetDb.created_at)
+        .first()
+    )
 
 
 def _connector_hook(connector: Any, name: str, *args: Any, default: Any) -> Any:

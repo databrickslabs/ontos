@@ -45,10 +45,30 @@ export function userTokenRequiredText(body: unknown): string | null {
   return String(i18n.t('errors:userTokenRequired', { defaultValue: english }));
 }
 
+/** Code of a sync requested for a connection type that cannot be synced (only Tableau can). */
+export const CONNECTOR_SYNC_UNSUPPORTED_CODE = 'connector_sync_unsupported';
+
 /**
- * An app-wide server error (an unexpected error, a missing user token) in the
- * user's language, or `null` for any other error.
+ * The text of a sync refused for a connection type other than Tableau
+ * (`{detail: {code: 'connector_sync_unsupported', message}}`) in the user's
+ * language, or `null` for any other error. Takes the parsed JSON body or its raw text.
+ */
+export function connectorSyncUnsupportedText(body: unknown): string | null {
+  const error = parsed(body);
+  const detail = error && typeof error === 'object' ? error.detail : null;
+  if (!detail || typeof detail !== 'object' || detail.code !== CONNECTOR_SYNC_UNSUPPORTED_CODE) {
+    return null;
+  }
+  const english = typeof detail.message === 'string' ? detail.message : '';
+  if (!i18n.isInitialized) return english || null;
+  return String(i18n.t('errors:connectorSyncUnsupported', { defaultValue: english }));
+}
+
+/**
+ * An app-wide server error (an unexpected error, a missing user token, a sync
+ * on a connection type that cannot be synced) in the user's language, or `null`
+ * for any other error.
  */
 export function serverErrorText(body: unknown): string | null {
-  return internalErrorText(body) ?? userTokenRequiredText(body);
+  return internalErrorText(body) ?? userTokenRequiredText(body) ?? connectorSyncUnsupportedText(body);
 }

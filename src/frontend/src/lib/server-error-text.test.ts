@@ -1,6 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import i18n from '@/i18n/config';
-import { internalErrorText, serverErrorText, userTokenRequiredText } from './server-error-text';
+import {
+  connectorSyncUnsupportedText, internalErrorText, serverErrorText, userTokenRequiredText,
+} from './server-error-text';
 
 const body = {
   detail: 'An unexpected error occurred. The details are in the server log (error id 3f2a9c81d0be).',
@@ -58,5 +60,35 @@ describe('userTokenRequiredText', () => {
     expect(userTokenRequiredText({ detail: { code: 'status_change_blocked' } })).toBeNull();
     expect(userTokenRequiredText('Forbidden')).toBeNull();
     expect(serverErrorText({ detail: 'Forbidden' })).toBeNull();
+  });
+});
+
+const syncUnsupported = {
+  detail: {
+    code: 'connector_sync_unsupported',
+    message: 'Syncs are available for Tableau connections only',
+    params: { connector_type: 'databricks' },
+  },
+};
+
+describe('connectorSyncUnsupportedText', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('gives a sync refused for a connection type other than Tableau in the user language', async () => {
+    await i18n.changeLanguage('de');
+    const german = i18n.t('errors:connectorSyncUnsupported');
+
+    expect(german).toContain('Tableau-Verbindungen');
+    expect(connectorSyncUnsupportedText(syncUnsupported)).toBe(german);
+    expect(connectorSyncUnsupportedText(JSON.stringify(syncUnsupported))).toBe(german);
+    expect(serverErrorText(syncUnsupported)).toBe(german);
+  });
+
+  it('gives nothing for any other error', () => {
+    expect(connectorSyncUnsupportedText(body)).toBeNull();
+    expect(connectorSyncUnsupportedText({ detail: 'Forbidden' })).toBeNull();
+    expect(connectorSyncUnsupportedText({ detail: { code: 'user_token_required' } })).toBeNull();
   });
 });

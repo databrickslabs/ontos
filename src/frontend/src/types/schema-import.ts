@@ -43,7 +43,7 @@ export interface ImportResultItem {
   path: string;
   name: string;
   asset_type: string;
-  action: 'created' | 'skipped' | 'error';
+  action: 'created' | 'refreshed' | 'skipped' | 'error';
   asset_id: string | null;
   error: string | null;
   parent_path: string | null;
@@ -58,6 +58,10 @@ export interface ImportResult {
   warnings?: string[];
   items: ImportResultItem[];
   system_asset_id: string | null;
+  /** Sync runs: existing assets updated because they changed in the source. */
+  refreshed?: number;
+  /** Sync runs: why the walk may have missed source items (no retirement counted). */
+  incomplete_reasons?: string[];
 }
 
 export type SchemaImportRunStatus =

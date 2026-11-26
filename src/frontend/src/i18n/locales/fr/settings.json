@@ -881,6 +881,28 @@
       "connection_error": "Le système source est injoignable.",
       "import_failed": "Cet élément n'a pas pu être importé.",
       "connection_test_failed": "Le test de connexion a échoué. Consultez le journal du serveur pour les détails."
+    },
+    "syncs": {
+      "menu": "Synchronisations",
+      "title": "Synchronisations de {{name}}",
+      "description": "Sélections de cette connexion que le job Connector Sync importe à nouveau selon un planning.",
+      "none": "Aucune synchronisation. Importez depuis cette connexion dans le Schema Importer et choisissez « Garder synchronisé ».",
+      "everyMinutes": "Toutes les {{count}} minutes",
+      "retireAfter": "Retiré après synchronisations manquées : {{count}}",
+      "status": {
+        "completed": "Terminée",
+        "incomplete": "Incomplète (rien retiré)",
+        "failed": "Échec"
+      },
+      "lastRun": "Dernière exécution",
+      "neverRun": "Pas encore exécutée",
+      "enabled": "Activée",
+      "runNow": "Exécuter maintenant",
+      "runStarted": "Synchronisation « {{name}} » démarrée",
+      "runFailed": "Impossible de démarrer la synchronisation",
+      "updateFailed": "Impossible de mettre à jour la synchronisation",
+      "deleteFailed": "Impossible de supprimer la synchronisation",
+      "jobWarningTitle": "Le job planifié ne s'exécute pas"
     }
   },
   "schemaImporter": {

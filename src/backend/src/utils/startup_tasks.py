@@ -66,12 +66,7 @@ from src.repositories.tags_repository import (
 
 # Import connector registry and connectors for pluggable asset support
 from src.connectors import get_registry
-from src.connectors.databricks import DatabricksConnector
-from src.connectors.snowflake import SnowflakeConnector
-from src.connectors.kafka import KafkaConnector
-from src.connectors.powerbi import PowerBIConnector
-from src.connectors.tableau import TableauConnector
-from src.connectors.bigquery import BigQueryConnector
+from src.connectors.registration import register_asset_connectors
 
 logger = get_logger(__name__)
 
@@ -432,22 +427,10 @@ def initialize_managers(app: FastAPI):
         # --- Initialize Connector Registry ---
         logger.info("Initializing asset connector registry...")
         try:
-            registry = get_registry()
+            register_asset_connectors(ws_client, registry=get_registry())
+            logger.info("Registered Databricks connector (default) and the other connectors")
             
-            # Register Databricks/UC connector (primary connector)
-            databricks_connector = DatabricksConnector(workspace_client=ws_client)
-            registry.register_instance("databricks", databricks_connector, set_as_default=True)
-            logger.info("Registered Databricks connector (default)")
-            
-            # Register additional connectors (lazily instantiated when first accessed)
-            registry.register_class("bigquery", BigQueryConnector)
-            registry.register_class("snowflake", SnowflakeConnector)
-            registry.register_class("kafka", KafkaConnector)
-            registry.register_class("powerbi", PowerBIConnector)
-            registry.register_class("tableau", TableauConnector)
-            logger.info("Registered connectors: bigquery, snowflake, kafka, powerbi, tableau")
-            
-            logger.info(f"Connector registry initialized with {len(registry.list_registered())} connectors")
+            logger.info("Connector registry initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize connector registry: {e}")
             # Don't fail startup if connector registry fails

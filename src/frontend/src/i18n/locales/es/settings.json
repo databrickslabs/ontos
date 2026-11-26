@@ -881,6 +881,28 @@
       "connection_error": "No se pudo conectar con el sistema de origen.",
       "import_failed": "No se pudo importar este elemento.",
       "connection_test_failed": "La prueba de conexión falló. Consulte el registro del servidor para más detalles."
+    },
+    "syncs": {
+      "menu": "Sincronizaciones",
+      "title": "Sincronizaciones de {{name}}",
+      "description": "Selecciones de esta conexión que el job Connector Sync vuelve a importar de forma programada.",
+      "none": "Aún no hay sincronizaciones. Importe desde esta conexión en el Schema Importer y elija «Mantener sincronizado».",
+      "everyMinutes": "Cada {{count}} minutos",
+      "retireAfter": "Retirado tras sincronizaciones sin el elemento: {{count}}",
+      "status": {
+        "completed": "Completada",
+        "incomplete": "Incompleta (nada retirado)",
+        "failed": "Fallida"
+      },
+      "lastRun": "Última ejecución",
+      "neverRun": "Aún sin ejecutar",
+      "enabled": "Activada",
+      "runNow": "Ejecutar ahora",
+      "runStarted": "Sincronización \"{{name}}\" iniciada",
+      "runFailed": "No se pudo iniciar la sincronización",
+      "updateFailed": "No se pudo actualizar la sincronización",
+      "deleteFailed": "No se pudo eliminar la sincronización",
+      "jobWarningTitle": "El job programado no se está ejecutando"
     }
   },
   "schemaImporter": {

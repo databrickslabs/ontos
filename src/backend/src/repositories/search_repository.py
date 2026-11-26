@@ -366,6 +366,8 @@ def match_ids(
     if not ids and engine is not None and engine.has_trgm:
         ids = _trgm_ids(db, query, where, params, trgm_threshold, engine=engine)
     return ids
+
+
 def _trgm_rel(where: str, engine: SearchEngine) -> str:
     """Rows whose title is word-similar to the query (pg_trgm ``<%``), over the
     same filtered candidates. Uses the GIN trigram index on ``lower(title)``."""

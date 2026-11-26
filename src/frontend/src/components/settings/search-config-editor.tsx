@@ -247,7 +247,9 @@ export default function SearchConfigEditor() {
       
       toast({
         title: t('settings:search.messages.rebuildSuccessTitle'),
-        description: t('settings:search.messages.rebuildSuccessDescription', { count: result.index_size }),
+        description: result.index_size === null
+          ? t('settings:search.messages.rebuildStartedDescription')
+          : t('settings:search.messages.rebuildSuccessDescription', { count: result.index_size }),
       });
     } catch (error) {
       console.error('Error rebuilding index:', error);

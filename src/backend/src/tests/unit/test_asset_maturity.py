@@ -12,7 +12,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from databricks.sdk.errors import NotFound, PermissionDenied
-from databricks.sdk.service.catalog import ColumnInfo, TableInfo
+from databricks.sdk.service.catalog import (
+    ColumnInfo, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint, TableInfo,
+)
 
 from src.common.compliance_dsl import evaluate_rule_on_object
 from src.controller.entity_dict_builder import (
@@ -218,6 +220,30 @@ def test_builder_merges_the_uc_table_column_fields(db_session):
     assert d['column_count'] == 2 and d['columns_without_comment_count'] == 1
     assert d['column_comment_ratio'] == 0.5
     assert [c['name'] for c in d['columns']] == ['id', 'amount']
+
+
+def test_builder_merges_the_uc_table_key_column_fields(db_session):
+    asset = _asset(db_session)
+    table = _table([('id', None), ('customer_id', 'Customer id')])
+    table.table_constraints = [
+        TableConstraint(
+            primary_key_constraint=PrimaryKeyConstraint(name='pk', child_columns=['id'])),
+        TableConstraint(foreign_key_constraint=ForeignKeyConstraint(
+            name='fk', child_columns=['customer_id'],
+            parent_table='main.sales.customers', parent_columns=['id'])),
+    ]
+    ws = _ws(table)
+
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: ws)
+
+    ws.tables.get.assert_called_once_with(full_name=FQN)
+    assert d['primary_key_columns'] == ['id']
+    assert d['foreign_key_columns'] == ['customer_id']
+    assert d['primary_key_columns_without_comment_count'] == 1
+    assert d['foreign_key_columns_without_comment_count'] == 0
+    # A maturity gate reads one of the key fields
+    assert evaluate_rule_on_object(
+        'ASSERT obj.primary_key_columns_without_comment_count = 0', d)[0] is False
 
 
 @pytest.mark.parametrize('error,status', [

@@ -198,6 +198,10 @@
       "query_failed": "de query is mislukt",
       "timed_out": "de query liep nog bij de tijdslimiet",
       "budget_exceeded": "de uitvoering heeft haar limiet aan query's op het SQL-warehouse bereikt",
+      "table_no_access": "geen toegang tot de tabel",
+      "table_not_found": "de tabel is niet gevonden",
+      "table_read_failed": "de tabel kon niet worden gelezen",
+      "table_read_limit": "de uitvoering heeft haar limiet aan tabelleesacties bereikt",
       "transient": "het SQL-warehouse was tijdelijk niet beschikbaar, ook na nieuwe pogingen",
       "not_found": "de systeemtabel is niet gevonden (is het systeemschema ingeschakeld?)",
       "not_loaded": "tags worden voor dit objecttype nog niet gelezen"

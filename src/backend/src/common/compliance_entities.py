@@ -13,8 +13,9 @@ from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_enrichment import (
-    CHUNK_TABLES, VIEW_TABLE_TYPES, SqlRunner, conditions_without, enrich_catalog_tables,
-    fields_read, mark_tags_not_loaded, table_entity, unavailable_fields_read,
+    CHUNK_TABLES, VIEW_TABLE_TYPES, SqlRunner, TableConstraintsReader, conditions_without,
+    enrich_catalog_tables, fields_read, mark_tags_not_loaded, table_entity,
+    unavailable_fields_read,
 )
 
 logger = get_logger(__name__)
@@ -73,6 +74,7 @@ class TableEnrichment:
     groups: Set[str]
     runner: Optional[SqlRunner]
     scope: List[Any] = field(default_factory=list)
+    table_reader: Optional[TableConstraintsReader] = None
 
     def in_scope(self, entity: Dict[str, Any]) -> bool:
         return all_hold(self.scope, entity)
@@ -102,7 +104,7 @@ class UnityCatalogLoader(EntityLoader):
         enrichment = self.table_enrichment
         enrich_catalog_tables(
             catalog, [e for e in entities if enrichment.in_scope(e)],
-            enrichment.groups, enrichment.runner,
+            enrichment.groups, enrichment.runner, enrichment.table_reader,
         )
         return entities
 

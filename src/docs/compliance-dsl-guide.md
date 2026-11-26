@@ -217,6 +217,10 @@ ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
 - `column_comment_ratio` is the share of columns with a comment (blank comments count as
   missing); it is null for a table with no columns, so such a table fails
 - `partition_columns_without_comment_count` counts partition columns without a comment
+- `primary_key_columns_without_comment_count` and `foreign_key_columns_without_comment_count`
+  count the key columns of the table's constraints that have no comment; they are read with one
+  `tables.get` per table the rule selects, and a table whose constraints can't be read is
+  reported as not evaluated, not passed (scope such a rule with `WHERE t.catalog = ...`)
 - See the DSL reference for every column field
 
 ---

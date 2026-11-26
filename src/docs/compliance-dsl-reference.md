@@ -506,7 +506,7 @@ Entities have different properties based on their type:
 
 #### Table and View Columns
 Tables and views also carry fields computed from their columns, as returned by Unity Catalog
-when Ontos lists the tables (no extra call per table):
+when Ontos lists the tables (no extra call per table), plus the key column fields below:
 
 - `columns` - List of `{name, type, comment, is_partition_key}`
 - `column_count` - Number of columns
@@ -525,7 +525,30 @@ MATCH (t:table) ASSERT t.partition_columns_without_comment_count = 0
 MATCH (v:view) ASSERT v.columns_without_comment_count = 0
 ```
 
-Primary and foreign keys are not available yet.
+#### Table and View Key Columns
+The key column fields come from the table's constraints, which the table listing does not
+return. Ontos reads them with one `tables.get` per table, only for the tables the rule
+selects (the `AND`-ed parts of its `WHERE` that don't read these fields), and only for rules
+that read them:
+
+- `primary_key_columns`, `foreign_key_columns` - Names of the columns in the table's primary and
+  foreign key constraints, in constraint order, without repeats (empty lists when the table has
+  none)
+- `primary_key_columns_without_comment_count`, `foreign_key_columns_without_comment_count` - Key
+  columns with no comment (a blank comment counts as none)
+
+```
+MATCH (t:table) WHERE t.schema = 'sales' ASSERT t.primary_key_columns_without_comment_count = 0
+```
+
+When a table's constraints can't be read, its key fields are not set to empty lists (that would
+pass `... = 0` for a table that may have undocumented keys): the table is reported as not
+evaluated, like the fields of the next section, with source `unity_catalog.tables.get` and a
+reason: `table_no_access` (no grant on the table), `table_not_found`, `table_read_failed` or
+`table_read_limit`. A policy run makes at most 2000 `tables.get` calls and spends at most 10
+minutes on them, counted from the first of those calls (listing the tables and LLM checks don't
+consume it); past that, the remaining tables are not evaluated (reason
+`table_read_limit`). Scope a rule to a catalog or schema to stay within the limit.
 
 #### Table and View Tags and Lineage
 These fields come from system tables, read through the SQL warehouse the app is configured

@@ -1,10 +1,14 @@
 """Column fields for Unity Catalog tables and views in compliance rules.
 
-Pure helper: it reads only what ``tables.list`` already returns on a ``TableInfo``
-(``columns`` with ``name``, ``type_text``/``type_name``, ``comment`` and
-``partition_index``), so it makes no API call. The compliance loader uses it for
-``MATCH (t:table)`` / ``MATCH (v:view)``; other entity dicts that point to a UC
-table can reuse it with the same object.
+Pure helper: it makes no API call, it reads what the given ``TableInfo`` holds:
+``columns`` (``name``, ``type_text``/``type_name``, ``comment``,
+``partition_index``), which ``tables.list`` returns, and ``table_constraints``,
+which ``tables.list`` does NOT return (only ``tables.get`` does: databricks-sdk
+``TablesAPI.list`` docs). So the key fields are only valid on a ``TableInfo``
+from ``tables.get``; the compliance loader, which lists tables, takes them from
+``TableConstraintsReader`` (see ``uc_table_enrichment``) and leaves them out of
+the listed entity. Other entity dicts that point to a UC table can reuse this
+with a ``tables.get`` result.
 """
 
 from typing import Any, Dict, List, Optional
@@ -23,6 +27,51 @@ def _column_type(column: Any) -> Optional[str]:
     if type_name is None:
         return None
     return getattr(type_name, 'value', None) or str(type_name)
+
+
+def _key_column_names(table: Any, kind: str) -> List[str]:
+    """Names of the columns in the table's primary or foreign key constraints.
+
+    ``kind`` is ``primary_key_constraint`` or ``foreign_key_constraint``; the names
+    are the child columns, in constraint order, without repeats.
+    """
+    names: List[str] = []
+    for constraint in (getattr(table, 'table_constraints', None) or []):
+        key = getattr(constraint, kind, None)
+        for name in (getattr(key, 'child_columns', None) or []):
+            if name not in names:
+                names.append(name)
+    return names
+
+
+# Fields that need ``table_constraints``, so a ``tables.get`` result
+KEY_FIELDS = (
+    'primary_key_columns',
+    'foreign_key_columns',
+    'primary_key_columns_without_comment_count',
+    'foreign_key_columns_without_comment_count',
+)
+
+
+def key_column_fields(table: Any) -> Dict[str, Any]:
+    """The ``KEY_FIELDS`` of one ``TableInfo`` that carries ``table_constraints``."""
+    comments = {
+        getattr(c, 'name', None): getattr(c, 'comment', None)
+        for c in (getattr(table, 'columns', None) or [])
+    }
+    primary = _key_column_names(table, 'primary_key_constraint')
+    foreign = _key_column_names(table, 'foreign_key_constraint')
+    return {
+        'primary_key_columns': primary,
+        'foreign_key_columns': foreign,
+        # A key column the table doesn't list has no comment either
+        'primary_key_columns_without_comment_count': sum(
+            1 for n in primary if not _has_comment(comments.get(n))
+        ),
+        'foreign_key_columns_without_comment_count': sum(
+            1 for n in foreign if not _has_comment(comments.get(n))
+        ),
+    }
 
 
 def table_column_fields(table: Any) -> Dict[str, Any]:
@@ -53,4 +102,5 @@ def table_column_fields(table: Any) -> Dict[str, Any]:
         'partition_columns_without_comment_count': sum(
             1 for c in partition if not _has_comment(c['comment'])
         ),
+        **key_column_fields(table),
     }

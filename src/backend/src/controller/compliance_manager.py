@@ -44,6 +44,8 @@ from src.common.compliance_entities import (
 )
 from src.common.uc_table_enrichment import (
     FIELD_GROUP,
+    KEYS,
+    TableConstraintsReader,
     NOT_EVALUATED_CODE,
     StatementCache,
     WarehouseSqlRunner,
@@ -1152,11 +1154,13 @@ class ComplianceManager:
         self, parsed_rule: Dict, entity_types: List[str], ws,
         statement_cache: Optional[StatementCache] = None,
     ) -> Optional[TableEnrichment]:
-        """Tags / lineage to load for a run, or None when the rule reads neither.
+        """Tags / lineage / key columns to load for a run, or None when the rule reads none.
 
-        They come from system tables through the SQL warehouse, so they are read
-        only for rules on tables or views that use them, and only for the tables
-        selected by the parts of the rule's WHERE that don't read them.
+        Tags and lineage come from system tables through the SQL warehouse, the
+        key columns from one ``tables.get`` per table (``tables.list`` has no
+        constraints). They are read only for rules on tables or views that use
+        them, and only for the tables selected by the parts of the rule's WHERE
+        that don't read them.
         """
         if ws is None or not any(t in ('table', 'view') for t in entity_types):
             return None
@@ -1174,8 +1178,11 @@ class ComplianceManager:
         if warehouse_id:
             cache = statement_cache or StatementCache()
             runner = cache.runner(WarehouseSqlRunner(ws, warehouse_id))
+        # Key columns are read per table with tables.get (tables.list has no constraints)
+        table_reader = TableConstraintsReader(ws) if KEYS in groups else None
         return TableEnrichment(
             groups=groups, runner=runner, scope=conditions_without(where, FIELD_GROUP),
+            table_reader=table_reader,
         )
 
     def run_policy_inline(

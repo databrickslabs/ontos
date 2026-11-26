@@ -64,3 +64,38 @@ def test_trgm_threshold_must_be_in_zero_to_one(value):
 def test_trgm_threshold_accepts_the_useful_range(value):
     from src.common.config import Settings
     assert Settings(_env_file=None, SEARCH_TRGM_THRESHOLD=value).SEARCH_TRGM_THRESHOLD == value
+
+
+def test_refused_create_extension_leaves_fallback_off():
+    """pg_trgm is listed as available but CREATE EXTENSION is refused: prepare_engine
+    logs and continues, the engine runs without the typo fallback, and no trigram
+    index DDL is attempted."""
+    from src.repositories.search_engine import prepare_engine
+
+    statements = []
+
+    class _Db:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, stmt, *args, **kwargs):
+            sql = str(stmt)
+            statements.append(sql)
+            if sql.startswith("CREATE EXTENSION"):
+                raise PermissionError("permission denied to create extension \"pg_trgm\"")
+            if "pg_available_extensions" in sql:
+                return iter([("pg_trgm",)])
+            return iter([])
+
+        def commit(self):
+            pass
+
+    engine = prepare_engine(lambda: _Db(), "auto")
+
+    assert engine.name == "pg"
+    assert not engine.has_trgm
+    assert any(s.startswith("CREATE EXTENSION") for s in statements)
+    assert not any("gin_trgm_ops" in s for s in statements)

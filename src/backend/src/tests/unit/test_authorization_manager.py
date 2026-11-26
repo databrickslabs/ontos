@@ -304,12 +304,13 @@ class TestIsUserOntosAdmin:
         return AuthorizationManager(settings_manager=mock_settings_manager)
 
     @staticmethod
-    def _role(name, assigned_groups, is_admin=False, feature_permissions=None):
+    def _role(name, assigned_groups, is_admin=False, feature_permissions=None, assigned_users=None):
         return AppRole(
             id=uuid.uuid4(),
             name=name,
             description=f"{name} role",
             assigned_groups=assigned_groups,
+            assigned_users=assigned_users or [],
             feature_permissions=feature_permissions or {},
             home_sections=[],
             approval_privileges={},
@@ -379,6 +380,45 @@ class TestIsUserOntosAdmin:
         # If we can't load roles, fail closed — never silently elevate.
         mock_settings_manager.list_app_roles.side_effect = RuntimeError("db down")
         assert manager.is_user_ontos_admin(["admins"]) is False
+        assert manager.is_user_ontos_admin([], "admin@example.com") is False
+
+    def test_admin_assigned_by_user_is_ontos_admin(self, manager, mock_settings_manager):
+        # Role approval (#760) assigns roles by user: no group involved (#1713).
+        mock_settings_manager.list_app_roles.return_value = [
+            self._role("Admin", [], is_admin=True, assigned_users=["boss@example.com"]),
+        ]
+        assert manager.is_user_ontos_admin([], "boss@example.com") is True
+        assert manager.is_user_ontos_admin(["data-producers"], "boss@example.com") is True
+
+    def test_user_match_is_case_insensitive(self, manager, mock_settings_manager):
+        mock_settings_manager.list_app_roles.return_value = [
+            self._role("Admin", ["admins"], is_admin=True, assigned_users=["Boss@Example.com"]),
+        ]
+        assert manager.is_user_ontos_admin(None, "  bOSS@example.COM ") is True
+
+    def test_other_user_is_not_admin(self, manager, mock_settings_manager):
+        mock_settings_manager.list_app_roles.return_value = [
+            self._role("Admin", ["admins"], is_admin=True, assigned_users=["boss@example.com"]),
+        ]
+        assert manager.is_user_ontos_admin(["data-producers"], "other@example.com") is False
+        assert manager.is_user_ontos_admin(["data-producers"]) is False
+
+    def test_non_admin_role_assigned_by_user_is_not_admin(self, manager, mock_settings_manager):
+        mock_settings_manager.list_app_roles.return_value = [
+            self._role("Producer", [], is_admin=False, assigned_users=["dev@example.com"]),
+            self._role("Admin", ["admins"], is_admin=True),
+        ]
+        assert manager.is_user_ontos_admin([], "dev@example.com") is False
+
+    def test_group_still_grants_admin_with_an_email(self, manager, mock_settings_manager):
+        mock_settings_manager.list_app_roles.return_value = [
+            self._role("Admin", ["admins"], is_admin=True, assigned_users=["boss@example.com"]),
+        ]
+        assert manager.is_user_ontos_admin(["admins"], "someone@example.com") is True
+
+    def test_role_load_failure_denies_admin_assigned_by_user(self, manager, mock_settings_manager):
+        mock_settings_manager.list_app_roles.side_effect = RuntimeError("db down")
+        assert manager.is_user_ontos_admin([], "boss@example.com") is False
 
 
 # =============================================================================

@@ -36,7 +36,9 @@ async def get_notifications(
     """Get notifications filtered for the current user."""
     try:
         logger.debug(f"Retrieving notifications for user: {user_info.email} with groups: {user_info.groups}")
-        ontos_admin = auth_manager.is_user_ontos_admin(user_info.groups if user_info else None)
+        ontos_admin = auth_manager.is_user_ontos_admin(
+            user_info.groups if user_info else None, user_info.email if user_info else None
+        )
         notifications = manager.get_notifications(
             db=db, user_info=user_info, ontos_admin=ontos_admin
         )
@@ -128,7 +130,10 @@ async def delete_notification(
         if not notification:
             raise HTTPException(status_code=404, detail="Notification not found")
 
-        is_admin = auth_manager.is_user_ontos_admin(current_user.groups if current_user else None)
+        is_admin = auth_manager.is_user_ontos_admin(
+            current_user.groups if current_user else None,
+            current_user.email if current_user else None,
+        )
         if not is_admin and not manager.can_user_access_notification(
             db=db, notification=notification, user_info=current_user, admin_fallback=False
         ):

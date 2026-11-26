@@ -245,7 +245,7 @@ async def set_role_override(
     # Determine if caller is an Ontos admin (member of an AppRole flagged is_admin).
     # Computed from groups so the override cannot bootstrap admin, and intentionally
     # decoupled from settings:ADMIN (see issue #404).
-    caller_is_admin = auth_manager.is_user_ontos_admin(user_details.groups)
+    caller_is_admin = auth_manager.is_user_ontos_admin(user_details.groups, user_details.email)
 
     try:
         settings_manager.set_applied_role_override_for_user(

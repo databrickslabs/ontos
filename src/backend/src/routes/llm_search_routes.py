@@ -45,7 +45,7 @@ def _debug_allowed(request: Request, user: UserInfo) -> bool:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
         if auth_manager is None:
             return False
-        return bool(auth_manager.is_user_ontos_admin(user.groups or []))
+        return bool(auth_manager.is_user_ontos_admin(user.groups or [], user.email))
     except Exception:
         logger.warning("Could not check whether the caller may see chat debug info.", exc_info=True)
         return False

@@ -189,6 +189,26 @@ def test_custom_admin_role_sees_and_uses_the_delete_it_is_offered(
     assert audit_entries[-1]["details"]["params"]["admin_override"] is True
 
 
+def test_admin_assigned_by_user_can_delete_and_is_offered_the_delete(
+    as_user, db_session, audit_entries
+):
+    """A role flagged is_admin held only through assigned_users (role approval, #760/#1713)."""
+    db_session.add(AppRoleDb(
+        id=str(uuid.uuid4()), name=f"Assigned Admin {uuid.uuid4().hex[:8]}",
+        description="admin by user", feature_permissions=json.dumps({"notifications": "Admin"}),
+        assigned_groups="[]", assigned_users=json.dumps(["Boss@Example.com"]),
+        home_sections="[]", approval_privileges="{}", is_admin=True,
+    ))
+    notification_id = _notification(db_session, recipient=None, can_delete=False)
+    client = as_user("boss@example.com", ["no-admin-group"])
+
+    listed = {n["id"]: n for n in client.get("/api/notifications").json()}
+    assert listed[notification_id]["can_delete"] is True
+
+    assert client.delete(f"/api/notifications/{notification_id}").status_code == 204
+    assert audit_entries[-1]["details"]["params"]["admin_override"] is True
+
+
 def test_non_admin_is_not_offered_a_delete_on_a_non_deletable_notification(
     as_user, ops_role, db_session
 ):

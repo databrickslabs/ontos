@@ -385,8 +385,9 @@ async def require_ontos_admin(
 ) -> UserInfo:
     """FastAPI dependency that gates an endpoint on Ontos admin membership.
 
-    "Ontos admin" means the caller's workspace groups intersect the
-    ``assigned_groups`` of at least one ``AppRole`` flagged ``is_admin=True``.
+    "Ontos admin" means the caller holds at least one ``AppRole`` flagged
+    ``is_admin=True``, by workspace group (``assigned_groups``) or by email
+    (``assigned_users``).
     This is distinct from ``settings:ADMIN`` (which only governs administration
     of the Settings feature) and from workspace admin via
     ``APP_ADMIN_DEFAULT_GROUPS`` (which gates moderation-style operations).
@@ -394,7 +395,9 @@ async def require_ontos_admin(
     Use this for routes that grant capabilities beyond a single feature —
     impersonation, MCP token management, full role catalog access, etc.
     """
-    if not auth_manager.is_user_ontos_admin(user_details.groups):
+    if not auth_manager.is_user_ontos_admin(
+        user_details.groups, user_details.email
+    ):
         logger.warning(
             "Ontos admin required but caller '%s' is not in any is_admin role",
             user_details.user or user_details.email,

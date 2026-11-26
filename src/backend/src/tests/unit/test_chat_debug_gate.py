@@ -18,7 +18,7 @@ from src.routes import llm_search_routes as routes
 def _request(is_admin):
     auth_manager = None
     if is_admin is not None:
-        auth_manager = SimpleNamespace(is_user_ontos_admin=lambda groups: is_admin)
+        auth_manager = SimpleNamespace(is_user_ontos_admin=lambda groups, user_email=None: is_admin)
     state = SimpleNamespace(authorization_manager=auth_manager, settings_manager=None)
     return SimpleNamespace(app=SimpleNamespace(state=state))
 

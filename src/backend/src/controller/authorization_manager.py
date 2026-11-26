@@ -11,6 +11,25 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+def _normalize_email(user_email: Optional[str]) -> Optional[str]:
+    """Lowercased, stripped email for direct-assignment matching (None when empty)."""
+    return (user_email or "").strip().lower() or None
+
+
+def _role_matches(role, user_group_set: Set[str], user_email_norm: Optional[str]) -> bool:
+    """Whether the user holds ``role`` by group OR by direct user assignment (#196/#760).
+
+    ``user_group_set`` is the user's groups lowercased and ``user_email_norm`` the email
+    from ``_normalize_email``. Both sides are compared case-insensitively; ``(x or '')``
+    guards against None entries in dirty data (a None element would raise on .lower()).
+    """
+    role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
+    role_users = {(u or '').lower() for u in (getattr(role, 'assigned_users', None) or [])}
+    return bool(user_group_set.intersection(role_groups)) or bool(
+        user_email_norm and user_email_norm in role_users
+    )
+
+
 class AuthorizationManager:
     def __init__(self, settings_manager: SettingsManager):
         """Requires SettingsManager to access role configurations."""
@@ -51,7 +70,7 @@ class AuthorizationManager:
         # Normalize user groups to lowercase for case-insensitive matching
         user_group_set = set(g.lower() for g in user_groups)
         # Normalize the email for case-insensitive direct-assignment matching
-        user_email_norm = (user_email or "").strip().lower() or None
+        user_email_norm = _normalize_email(user_email)
 
         if not user_group_set and not user_email_norm:
             logger.warning("Received empty user_groups and no user_email for permission calculation.")
@@ -75,14 +94,8 @@ class AuthorizationManager:
         matching_roles = []
         logger.debug("Identifying matching roles based on group intersection OR email assignment...")
         for role in all_roles:
-            # Normalize role groups + assigned_users to lowercase for case-insensitive
-            # matching. `(x or '')` guards against None entries in dirty data (a None
-            # element would raise on .lower()).
-            role_assigned_groups_set = set((g or '').lower() for g in (role.assigned_groups or []))
-            role_assigned_users_set = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
-
-            group_match = bool(user_group_set.intersection(role_assigned_groups_set))
-            email_match = bool(user_email_norm and user_email_norm in role_assigned_users_set)
+            group_match = _role_matches(role, user_group_set, None)
+            email_match = _role_matches(role, set(), user_email_norm)
 
             if group_match or email_match:
                 matching_roles.append(role)
@@ -146,31 +159,33 @@ class AuthorizationManager:
         logger.debug(f"Permission check for feature '{feature_id}': Required='{required_level.value}', User has='{user_level.value}'. Granted: {has_perm}")
         return has_perm
 
-    def is_user_ontos_admin(self, user_groups: Optional[List[str]]) -> bool:
-        """Return True iff the user belongs to any AppRole flagged ``is_admin=True``.
+    def is_user_ontos_admin(
+        self, user_groups: Optional[List[str]], user_email: Optional[str] = None
+    ) -> bool:
+        """Return True iff the user holds any AppRole flagged ``is_admin=True``.
 
-        Membership is determined by case-insensitive intersection between the
-        user's workspace groups and the role's ``assigned_groups``. This is the
-        canonical "Ontos admin" check used to gate admin-only capabilities such
-        as the role switcher (impersonation), the alpha-features toggle, MCP
-        token management, and the unrestricted view of ``/api/settings/roles``.
+        Membership is resolved like every other role (#196/#760): the user's workspace
+        groups intersect the role's ``assigned_groups``, OR the user's email is in the
+        role's ``assigned_users`` (case-insensitive). This is the canonical "Ontos
+        admin" check used to gate admin-only capabilities such as the role switcher
+        (impersonation), the alpha-features toggle, MCP token management, the
+        unrestricted view of ``/api/settings/roles`` and the admin overrides.
 
         It is intentionally decoupled from ``settings:ADMIN``: a user may
         administer Settings without being an Ontos admin, and vice versa.
 
         Args:
             user_groups: Caller's workspace groups (from SDK or identity headers).
+            user_email: Caller's email, matched against ``assigned_users``. Pass it at
+                every call site: without it, a role assigned by user is not seen.
 
         Returns:
-            True if any role with ``is_admin=True`` has an assigned group that
-            matches one of the user's groups; False otherwise (including the
-            empty-groups case).
+            True if any role with ``is_admin=True`` matches by group or by email;
+            False otherwise (including no groups and no email, and role-load errors).
         """
-        if not user_groups:
-            return False
-
-        user_group_set = {(g or '').lower() for g in user_groups}
-        if not user_group_set:
+        user_group_set = {(g or '').lower() for g in (user_groups or [])}
+        user_email_norm = _normalize_email(user_email)
+        if not user_group_set and not user_email_norm:
             return False
 
         try:
@@ -179,13 +194,11 @@ class AuthorizationManager:
             logger.exception("is_user_ontos_admin: failed to load app roles; denying admin")
             return False
 
-        for role in all_roles:
-            if not getattr(role, 'is_admin', False):
-                continue
-            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
-            if role_groups and role_groups.intersection(user_group_set):
-                return True
-        return False
+        return any(
+            getattr(role, 'is_admin', False)
+            and _role_matches(role, user_group_set, user_email_norm)
+            for role in all_roles
+        )
 
     def user_can_adopt_entity_ids(self, user_groups: Optional[List[str]]) -> bool:
         """Return True iff the user holds any role flagged ``can_adopt_entity_ids=True``.
@@ -264,17 +277,14 @@ class AuthorizationManager:
             return set()
 
         user_group_set = set(g.lower() for g in (user_groups or []))
-        user_email_norm = (user_email or "").strip().lower() or None
+        user_email_norm = _normalize_email(user_email)
         team_names = {n for n in (team_role_names or []) if n}
         if not user_group_set and not user_email_norm and not team_names:
             return set()
 
         role_ids: Set[str] = {str(r.id) for r in all_roles if r.name in team_names}
         for role in all_roles:
-            # `(x or '')` guards against None entries in dirty data.
-            role_groups = set((g or '').lower() for g in (role.assigned_groups or []))
-            role_users = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
-            if user_group_set.intersection(role_groups) or (user_email_norm and user_email_norm in role_users):
+            if _role_matches(role, user_group_set, user_email_norm):
                 role_ids.add(str(role.id))
         return role_ids
 

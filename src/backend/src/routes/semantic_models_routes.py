@@ -1855,7 +1855,9 @@ def _guard_review_bypass(
         return
 
     # Admins may always override the workflow.
-    if auth_manager.is_user_ontos_admin(getattr(current_user, "groups", None)):
+    if auth_manager.is_user_ontos_admin(
+        getattr(current_user, "groups", None), getattr(current_user, "email", None)
+    ):
         return
 
     # Non-firing existence check: is there a governing workflow for concepts?

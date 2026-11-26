@@ -330,7 +330,7 @@ async def list_roles(
     """
     try:
         roles = manager.list_app_roles()
-        if auth_manager.is_user_ontos_admin(user_details.groups):
+        if auth_manager.is_user_ontos_admin(user_details.groups, user_details.email):
             return roles
 
         user_group_set = {(g or '').lower() for g in (user_details.groups or [])}

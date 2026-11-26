@@ -2014,6 +2014,7 @@ ON_FAIL action
 | `LENGTH(str)` | String length | `LENGTH(obj.name) <= 64` |
 | `UPPER(str)` | To uppercase | `UPPER(obj.name)` |
 | `LOWER(str)` | To lowercase | `LOWER(obj.name) = obj.name` |
+| `HAS_CONCEPT(iri_or_label)` | Linked semantic concept (products, contracts, domains) | `HAS_CONCEPT('Customer')` |
 
 ### Available Actions
 

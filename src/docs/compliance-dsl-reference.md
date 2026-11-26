@@ -157,6 +157,20 @@ but no value (`True`) as well. To require a tag, use `HAS_TAG('data_classificati
 require one of some values, use `TAG('data_classification') IN ['public', 'internal']`, which
 is false without the tag.
 
+### Semantic Link Functions
+- `HAS_CONCEPT(iri_or_label)` - True when a concept linked to the entity has this IRI or this label (exact match)
+
+```
+ASSERT HAS_CONCEPT('https://example.com/ontology#Customer')
+ASSERT HAS_CONCEPT('Customer')
+ASSERT NOT HAS_CONCEPT('Deprecated term')
+```
+
+The concepts are the entity's semantic links, as stored on it (direct links only: sub-concepts
+are not inferred). They are read for data products, data contracts and domains; for other entity
+types, and for reviews, `HAS_CONCEPT` is false. The same links are available as fields, see
+[Application Entities](#application-entities).
+
 ### String Functions
 - `UPPER(str)` - Convert to uppercase
 - `LOWER(str)` - Convert to lowercase
@@ -603,22 +617,56 @@ error text is not sent, as it can name objects or hosts the reader can't see; it
 app log.
 
 ### Application Entities
-- `type` - Entity type
-- `id` - Entity ID
-- `name` - Entity name
-- `description` - Description
-- `status` - Status (draft, active, etc.)
-- `version` - Version number
-- `owner` - Owner: the owner team's id for data products and data contracts; for domains, the
-  list of the emails of their active Business Owners (`[]` when none), so test it with
-  `LENGTH(d.owner) > 0` or `d.owner CONTAINS 'user@example.com'`. `d.owner != ''` is true for a domain
-  with no owners (`[] != ''`), so it does not test emptiness. On `before_update` gates the `WHERE`
-  sees the stored owners, but an `ASSERT` on `owner` sees only the change, which carries none
-- `domain` - Name of the primary domain (data products and data contracts); null when there is none, so `x.domain != ''` is also true for an entity without a domain
-- `domain_id` - Id of the primary domain (data products and data contracts); null when there is none
+
+Data products, data contracts, domains and reviews are read from the app database. A data
+product or data contract has the same fields in a compliance run and in a workflow rule (the
+`obj` of a validation step or of a policy check), so `ASSERT obj.has_owner = True` means the same
+in both. A workflow rule also sees the trigger payload: on `before_create`, `before_update` and
+`on_delete` the rule sees the proposed change or the payload, not the stored entity.
+
+**Data products** (`data_product`) and **data contracts** (`data_contract`):
+
+- `type` - `data_product` or `data_contract`
+- `entity_type` - `DataProduct` or `DataContract` (as workflow rules name them)
+- `id`, `name`, `version`, `created_at`, `updated_at` - As stored
+- `status` - Lifecycle status (draft, active, deprecated, retired...)
+- `description` - Purpose text; null when there is none
+- `has_description`, `has_purpose` (both types), `has_usage` (products) - Booleans over the description
+- `owner` - Id of the owning team. It is an id, not an email: use `owner_emails` for addresses
+- `owner_team_id` - The same id as `owner`
+- `owner_team_name` - Name of the owning team, or null
+- `owner_emails` - Email addresses of the owning team's user members, sorted (groups are left out); an empty list when there is no owner
+- `has_owner` - True when an owning team is set
+- `domain` - Name of the primary domain, or null. Same as `domain_name`
+- `domain_name` - Name of the primary domain, or null
+- `domain_id` - Id of the primary domain, or null
+- `tags`, `tag_count`, `has_tags` - Tags, see [Tag Functions](#tag-functions)
+- `concepts`, `concept_iris`, `concept_labels`, `concept_count`, `has_concepts` - Semantic links, see [Semantic Link Functions](#semantic-link-functions)
+- `quality_check_count`, `has_quality_checks` - Quality items of the entity
+- `relationship_count` and the counts by relationship type: `dataset_count`, `business_term_count`, `upstream_system_count`, `upstream_product_count`, `delivery_channel_count`, `logical_attribute_mapping_count`; and the booleans `has_business_terms`, `has_upstream_lineage`, `has_delivery_channels`, `has_logical_attribute_mappings`
+- `publication_scope`, `is_published` - Publication state
+- `certification_level`, `inherited_certification_level`, `effective_certification`, `is_certified` - Certification
+- `maturity_level_order`, `maturity_evaluated_at` - Maturity level as of its last evaluation (null before the first); the level order, not its name
+- Data products only: `output_port_count`, `contract_count` (input contracts of the output ports), `output_port_contract_count`, `has_contract`
+- Data contracts only: `schema_object_count`
+
+**Domains** (`domain`):
+
+- `type`, `id`, `name`, `description`, `created_at`, `updated_at`
+- `owner` - The list of the emails of the active Business Owners (`[]` when none), so test it
+  with `LENGTH(d.owner) > 0` or `d.owner CONTAINS 'user@example.com'`. `d.owner != ''` is true
+  for a domain with no owners (`[] != ''`), so it does not test emptiness. On `before_update`
+  gates the `WHERE` sees the stored owners, but an `ASSERT` on `owner` sees only the change,
+  which carries none
 - `tags` - Tag dictionary
-- `created_at` - Creation timestamp
-- `updated_at` - Last update timestamp
+- `concepts`, `concept_iris`, `concept_labels`, `concept_count`, `has_concepts`
+
+**Reviews** (`review`):
+
+- `type`, `id`, `status`, `created_at`, `updated_at`
+- `reviewer` - Reviewer's email
+- `requester` - Requester's email
+- No concept fields: a review covers many assets, so it has no semantic links
 
 ## Best Practices
 

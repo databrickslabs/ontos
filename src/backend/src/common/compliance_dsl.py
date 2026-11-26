@@ -74,6 +74,7 @@ class TokenType(Enum):
     # Functions
     HAS_TAG = "HAS_TAG"
     TAG = "TAG"
+    HAS_CONCEPT = "HAS_CONCEPT"
     LENGTH = "LENGTH"
     UPPER = "UPPER"
     LOWER = "LOWER"
@@ -123,7 +124,7 @@ class Lexer:
         'MATCH', 'WHERE', 'ASSERT', 'ON_PASS', 'ON_FAIL',
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'MATCHES', 'IN', 'CONTAINS', 'AND', 'OR', 'NOT',
-        'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER', 'LLM_CHECK',
+        'HAS_TAG', 'TAG', 'HAS_CONCEPT', 'LENGTH', 'UPPER', 'LOWER', 'LLM_CHECK',
         'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY',
         'TRUE', 'FALSE'
     }
@@ -430,8 +431,9 @@ class Parser:
             return self.parse_case_expression()
 
         # Function call
-        if token.type in (TokenType.HAS_TAG, TokenType.TAG, TokenType.LENGTH,
-                          TokenType.UPPER, TokenType.LOWER, TokenType.LLM_CHECK):
+        if token.type in (TokenType.HAS_TAG, TokenType.TAG, TokenType.HAS_CONCEPT,
+                          TokenType.LENGTH, TokenType.UPPER, TokenType.LOWER,
+                          TokenType.LLM_CHECK):
             return self.parse_function_call()
 
         # Property access or identifier
@@ -631,6 +633,15 @@ class Evaluator:
             key = self.evaluate(node.args[0])
             tags = self.obj.get('tags', {})
             return tags.get(key)
+
+        if node.name == 'HAS_CONCEPT':
+            # The entity's semantic links (``concepts``): matched by IRI or by label
+            if len(node.args) != 1:
+                raise self.error("HAS_CONCEPT expects 1 argument")
+            key = self.evaluate(node.args[0])
+            if key is None:
+                return False
+            return any(key in (c.get('iri'), c.get('label')) for c in self.obj.get('concepts') or [])
 
         if node.name == 'LENGTH':
             if len(node.args) != 1:

@@ -1,0 +1,189 @@
+{
+  "upload": {
+    "button": "Import erwin model",
+    "title": "Import an erwin data model",
+    "description": "Upload an erwin Data Modeler XML export. You review a preview and choose the options before anything is imported.",
+    "parsing": "Reading the model…",
+    "dropActive": "Drop the file here",
+    "dropInactive": "Drag an erwin XML export here, or click to choose a file",
+    "formats": "erwin XML (.xml), up to 100 MiB",
+    "howToExport": "In erwin Data Modeler: File → Save As → XML Files (*.xml), format \"XML Standard\". Native .erwin files and JSON exports are not supported yet.",
+    "failed": "The upload failed."
+  },
+  "history": {
+    "title": "Model imports",
+    "description": "erwin models staged or imported into concepts and data contracts.",
+    "model": "Model",
+    "file": "File",
+    "status": "Status",
+    "by": "By",
+    "created": "Created"
+  },
+  "status": {
+    "previewed": "Ready to review",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "expired": "Expired"
+  },
+  "modelType": {
+    "logical": "Logical model",
+    "physical": "Physical model",
+    "logical_physical": "Logical/physical model"
+  },
+  "run": {
+    "title": "Model import",
+    "loadFailed": "Could not load the import run.",
+    "previewFailed": "Could not update the preview.",
+    "confirmFailed": "Could not start the import.",
+    "cancelFailed": "Could not cancel the run.",
+    "started": "Import started",
+    "version": "version {{version}}",
+    "cancel": "Cancel",
+    "confirm": "Import",
+    "updateFirst": "Update the preview to apply your changes before importing.",
+    "running": "Importing…",
+    "reimport": "This model was imported before. Concepts and contracts from that import are updated, not duplicated.",
+    "previousRun": "Previous import"
+  },
+  "options": {
+    "title": "Options",
+    "description": "What to import and where it goes.",
+    "importLogical": "Concepts from the logical model",
+    "importPhysical": "Draft contracts from the physical model",
+    "subjectAreas": "Subject areas",
+    "subjectAreasHint": "Import only the selected subject areas. None selected imports the whole model.",
+    "collection": "Concept collection",
+    "newCollection": "New collection \"{{name}}\"",
+    "grouping": "One contract per",
+    "dbms": "Source database",
+    "dbmsAuto": "From the model ({{dbms}})",
+    "migrationMode": "Migration mode: use Databricks types",
+    "catalogMapping": "Unity Catalog mapping",
+    "catalogMappingHint": "Map each erwin owner/schema to a Unity Catalog catalog.schema, so tables resolve to existing UC tables.",
+    "anyOwner": "Any other owner",
+    "addMapping": "Add mapping",
+    "udps": "User-defined properties",
+    "updatePreview": "Update preview"
+  },
+  "grouping": {
+    "subject_area": "Subject area",
+    "schema": "Owner / schema",
+    "table": "Table",
+    "model": "Whole model"
+  },
+  "dbms": {
+    "oracle": "Oracle",
+    "sqlserver": "SQL Server",
+    "teradata": "Teradata",
+    "db2": "Db2",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "snowflake": "Snowflake",
+    "databricks": "Databricks",
+    "other": "Other"
+  },
+  "udpTarget": {
+    "custom_property": "Custom property",
+    "tag": "Tag",
+    "classification": "Classification (columns)",
+    "critical_data_element": "Critical data element (columns)",
+    "ignore": "Ignore"
+  },
+  "tabs": {
+    "summary": "Summary",
+    "logical": "Concepts",
+    "physical": "Contracts",
+    "uc": "Unity Catalog",
+    "warnings": "Warnings ({{count}})"
+  },
+  "summary": {
+    "model": "Model",
+    "entities": "Entities: {{count}}",
+    "views": "Views: {{count}}",
+    "attributes": "Attributes: {{count}}",
+    "relationships": "Relationships: {{count}}",
+    "domains": "Domains: {{count}}",
+    "inScope": "In scope: {{count}} entities",
+    "concepts": "Concepts in {{collection}}",
+    "new": "New: {{count}}",
+    "modified": "Changed: {{count}}",
+    "unchanged": "Unchanged: {{count}}",
+    "deprecated": "Deprecated: {{count}}",
+    "contracts": "Contracts",
+    "flagged": "Flagged as removed: {{count}}",
+    "ucResolved": "{{resolved}} of {{total}} tables found in Unity Catalog"
+  },
+  "action": {
+    "create": "Create",
+    "unchanged": "Unchanged",
+    "update": "Update draft",
+    "new_version": "New version"
+  },
+  "logical": {
+    "new": "New ({{count}})",
+    "modified": "Changed ({{count}})",
+    "removed": "Deprecated ({{count}})"
+  },
+  "physical": {
+    "existing": "Current: v{{version}} ({{status}})",
+    "tables": "{{count}} tables",
+    "domain": "Domain",
+    "noDomain": "No domain",
+    "tablesAdded": "Tables added: {{tables}}",
+    "tablesRemoved": "Tables removed: {{tables}}",
+    "columnAdded": "column {{column}} added",
+    "columnRemoved": "column {{column}} removed",
+    "columnChanged": "{{column}}: {{fields}}",
+    "removedIntro": "These contracts' tables are no longer in the model. They are flagged and their owners notified; nothing is deleted:"
+  },
+  "field": {
+    "physicalType": "physical type",
+    "logicalType": "logical type",
+    "required": "required",
+    "unique": "unique",
+    "primaryKey": "primary key",
+    "primaryKeyPosition": "key position",
+    "description": "description",
+    "businessName": "business name",
+    "physicalName": "UC table"
+  },
+  "uc": {
+    "table": "Table",
+    "owner": "Owner",
+    "fqn": "Unity Catalog table",
+    "status": "Status",
+    "resolved": "Found",
+    "notFound": "Not in Ontos",
+    "noMapping": "No mapping",
+    "hint": "Only tables already in Ontos are matched; nothing is created in Unity Catalog. Import missing tables with the",
+    "schemaImporter": "Schema Importer",
+    "missing": "Missing in UC: {{columns}}",
+    "extra": "Not modeled: {{columns}}",
+    "typeMismatch": "{{column}}: modeled {{modeled}}, UC {{actual}}",
+    "nullMismatch": "{{column}}: modeled {{modeled}}, UC {{actual}}"
+  },
+  "warnings": {
+    "none": "No warnings."
+  },
+  "result": {
+    "title": "Result",
+    "concepts": "Concepts",
+    "openCollection": "Open collections",
+    "contracts": "Contracts",
+    "flagged": "Flagged as removed from the model: {{names}}",
+    "drift": "{{count}} tables differ from Unity Catalog"
+  },
+  "entry": {
+    "fromErwin": "Import an erwin model",
+    "fromErwinShort": "erwin model",
+    "contractsTooltip": "Create draft contracts (and concepts) from an erwin data model"
+  },
+  "provenance": {
+    "label": "Source",
+    "title": "Imported from an erwin data model",
+    "badge": "erwin · {{model}}",
+    "removed": "Removed from the model"
+  }
+}

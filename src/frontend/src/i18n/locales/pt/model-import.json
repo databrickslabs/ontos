@@ -1,0 +1,189 @@
+{
+  "upload": {
+    "button": "Importar modelo erwin",
+    "title": "Importar um modelo de dados erwin",
+    "description": "Envie uma exportação XML do erwin Data Modeler. Você revisa uma prévia e escolhe as opções antes de qualquer importação.",
+    "parsing": "Lendo o modelo…",
+    "dropActive": "Solte o arquivo aqui",
+    "dropInactive": "Arraste uma exportação XML do erwin para cá ou clique para escolher um arquivo",
+    "formats": "XML do erwin (.xml), até 100 MiB",
+    "howToExport": "No erwin Data Modeler: File → Save As → XML Files (*.xml), formato \"XML Standard\". Arquivos .erwin nativos e exportações JSON ainda não são compatíveis.",
+    "failed": "O envio falhou."
+  },
+  "history": {
+    "title": "Importações de modelos",
+    "description": "Modelos do erwin preparados ou importados como conceitos e contratos de dados.",
+    "model": "Modelo",
+    "file": "Arquivo",
+    "status": "Status",
+    "by": "Por",
+    "created": "Criado em"
+  },
+  "status": {
+    "previewed": "Pronto para revisão",
+    "running": "Em execução",
+    "completed": "Concluído",
+    "failed": "Falhou",
+    "cancelled": "Cancelado",
+    "expired": "Expirado"
+  },
+  "modelType": {
+    "logical": "Modelo lógico",
+    "physical": "Modelo físico",
+    "logical_physical": "Modelo lógico/físico"
+  },
+  "run": {
+    "title": "Importação de modelo",
+    "loadFailed": "Não foi possível carregar a execução da importação.",
+    "previewFailed": "Não foi possível atualizar a prévia.",
+    "confirmFailed": "Não foi possível iniciar a importação.",
+    "cancelFailed": "Não foi possível cancelar a execução.",
+    "started": "Importação iniciada",
+    "version": "versão {{version}}",
+    "cancel": "Cancelar",
+    "confirm": "Importar",
+    "updateFirst": "Atualize a prévia para aplicar suas alterações antes de importar.",
+    "running": "Importando…",
+    "reimport": "Este modelo já foi importado antes. Conceitos e contratos dessa importação são atualizados, não duplicados.",
+    "previousRun": "Importação anterior"
+  },
+  "options": {
+    "title": "Opções",
+    "description": "O que importar e para onde vai.",
+    "importLogical": "Conceitos do modelo lógico",
+    "importPhysical": "Contratos rascunho do modelo físico",
+    "subjectAreas": "Áreas temáticas",
+    "subjectAreasHint": "Importa apenas as áreas temáticas selecionadas. Se nenhuma for selecionada, o modelo inteiro é importado.",
+    "collection": "Esquema de conceitos",
+    "newCollection": "Novo esquema de conceitos \"{{name}}\"",
+    "grouping": "Um contrato por",
+    "dbms": "Banco de dados de origem",
+    "dbmsAuto": "Do modelo ({{dbms}})",
+    "migrationMode": "Modo de migração: usar tipos do Databricks",
+    "catalogMapping": "Mapeamento do Unity Catalog",
+    "catalogMappingHint": "Mapeie cada proprietário/esquema do erwin para um catalog.schema do Unity Catalog, para que as tabelas sejam associadas às tabelas UC existentes.",
+    "anyOwner": "Qualquer outro proprietário",
+    "addMapping": "Adicionar mapeamento",
+    "udps": "Propriedades definidas pelo usuário",
+    "updatePreview": "Atualizar prévia"
+  },
+  "grouping": {
+    "subject_area": "Área temática",
+    "schema": "Proprietário / esquema",
+    "table": "Tabela",
+    "model": "Modelo inteiro"
+  },
+  "dbms": {
+    "oracle": "Oracle",
+    "sqlserver": "SQL Server",
+    "teradata": "Teradata",
+    "db2": "Db2",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "snowflake": "Snowflake",
+    "databricks": "Databricks",
+    "other": "Outro"
+  },
+  "udpTarget": {
+    "custom_property": "Propriedade personalizada",
+    "tag": "Tag",
+    "classification": "Classificação (colunas)",
+    "critical_data_element": "Elemento de dado crítico (colunas)",
+    "ignore": "Ignorar"
+  },
+  "tabs": {
+    "summary": "Resumo",
+    "logical": "Conceitos",
+    "physical": "Contratos",
+    "uc": "Unity Catalog",
+    "warnings": "Alertas ({{count}})"
+  },
+  "summary": {
+    "model": "Modelo",
+    "entities": "Entidades: {{count}}",
+    "views": "Visões: {{count}}",
+    "attributes": "Atributos: {{count}}",
+    "relationships": "Relacionamentos: {{count}}",
+    "domains": "Domínios: {{count}}",
+    "inScope": "No escopo: {{count}} entidades",
+    "concepts": "Conceitos em {{collection}}",
+    "new": "Novos: {{count}}",
+    "modified": "Alterados: {{count}}",
+    "unchanged": "Inalterados: {{count}}",
+    "deprecated": "Obsoletos: {{count}}",
+    "contracts": "Contratos",
+    "flagged": "Marcados como removidos: {{count}}",
+    "ucResolved": "{{resolved}} de {{total}} tabelas encontradas no Unity Catalog"
+  },
+  "action": {
+    "create": "Criar",
+    "unchanged": "Inalterado",
+    "update": "Atualizar rascunho",
+    "new_version": "Nova versão"
+  },
+  "logical": {
+    "new": "Novos ({{count}})",
+    "modified": "Alterados ({{count}})",
+    "removed": "Obsoletos ({{count}})"
+  },
+  "physical": {
+    "existing": "Atual: v{{version}} ({{status}})",
+    "tables": "{{count}} tabelas",
+    "domain": "Domínio",
+    "noDomain": "Sem domínio",
+    "tablesAdded": "Tabelas adicionadas: {{tables}}",
+    "tablesRemoved": "Tabelas removidas: {{tables}}",
+    "columnAdded": "coluna {{column}} adicionada",
+    "columnRemoved": "coluna {{column}} removida",
+    "columnChanged": "{{column}}: {{fields}}",
+    "removedIntro": "As tabelas destes contratos não estão mais no modelo. Elas são marcadas e os proprietários são notificados; nada é excluído:"
+  },
+  "field": {
+    "physicalType": "tipo físico",
+    "logicalType": "tipo lógico",
+    "required": "obrigatório",
+    "unique": "único",
+    "primaryKey": "chave primária",
+    "primaryKeyPosition": "posição da chave",
+    "description": "descrição",
+    "businessName": "nome de negócio",
+    "physicalName": "Tabela UC"
+  },
+  "uc": {
+    "table": "Tabela",
+    "owner": "Proprietário",
+    "fqn": "Tabela do Unity Catalog",
+    "status": "Status",
+    "resolved": "Encontrada",
+    "notFound": "Não está no Ontos",
+    "noMapping": "Sem mapeamento",
+    "hint": "Somente tabelas já existentes no Ontos são associadas; nada é criado no Unity Catalog. Importe as tabelas que faltam com o",
+    "schemaImporter": "Schema Importer",
+    "missing": "Ausentes no UC: {{columns}}",
+    "extra": "Não modeladas: {{columns}}",
+    "typeMismatch": "{{column}}: modelado {{modeled}}, UC {{actual}}",
+    "nullMismatch": "{{column}}: modelado {{modeled}}, UC {{actual}}"
+  },
+  "warnings": {
+    "none": "Nenhum alerta."
+  },
+  "result": {
+    "title": "Resultado",
+    "concepts": "Conceitos",
+    "openCollection": "Abrir esquemas de conceitos",
+    "contracts": "Contratos",
+    "flagged": "Marcados como removidos do modelo: {{names}}",
+    "drift": "{{count}} tabelas diferem do Unity Catalog"
+  },
+  "entry": {
+    "fromErwin": "Importar um modelo erwin",
+    "fromErwinShort": "Modelo erwin",
+    "contractsTooltip": "Criar contratos rascunho (e conceitos) a partir de um modelo de dados erwin"
+  },
+  "provenance": {
+    "label": "Origem",
+    "title": "Importado de um modelo de dados erwin",
+    "badge": "erwin · {{model}}",
+    "removed": "Removido do modelo"
+  }
+}

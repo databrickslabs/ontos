@@ -34,6 +34,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { GuidedGenerateDialog } from '@/components/concepts/guided-generate-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import ModelImportDialog from '@/components/model-import/model-import-dialog';
 
 // A recent creation-work item shown in the "In progress" list. Sourced from the
 // ontology generator runs endpoint (real data). Imports do not yet have a
@@ -172,6 +173,7 @@ export default function DefineView() {
 
   const { toast } = useToast();
   const [importOpen, setImportOpen] = useState(false);
+  const [erwinOpen, setErwinOpen] = useState(false);
   const [authorOpen, setAuthorOpen] = useState(false);
   const [guidedOpen, setGuidedOpen] = useState(false);
   const [collections, setCollections] = useState<KnowledgeCollection[]>([]);
@@ -474,6 +476,16 @@ export default function DefineView() {
               <Upload className="h-4 w-4 mr-2" />
               {t('semantic-models:define.import.cta', 'Upload files')}
             </Button>
+            <Button
+              className="w-full mt-2"
+              variant="ghost"
+              size="sm"
+              disabled={!canWrite}
+              title={requiresWriteTitle}
+              onClick={() => setErwinOpen(true)}
+            >
+              {t('model-import:entry.fromErwin', 'Import an erwin model')}
+            </Button>
             <BuildsRow
               builds={{ glossary: 'file', taxonomy: 'file', ontology: 'file' }}
               note={t('semantic-models:define.import.buildsNote')}
@@ -582,6 +594,7 @@ export default function DefineView() {
       <GuidedGenerateDialog open={guidedOpen} onOpenChange={setGuidedOpen} />
 
       {/* Import dialog */}
+      <ModelImportDialog open={erwinOpen} onOpenChange={setErwinOpen} layers={{ logical: true, physical: false }} />
       <ImportConceptsDialog
         open={importOpen}
         onOpenChange={setImportOpen}

@@ -1,0 +1,189 @@
+{
+  "upload": {
+    "button": "erwin-model importeren",
+    "title": "Een erwin-datamodel importeren",
+    "description": "Upload een XML-export van erwin Data Modeler. Je bekijkt een voorbeeld en kiest de opties voordat er iets wordt geïmporteerd.",
+    "parsing": "Model wordt gelezen…",
+    "dropActive": "Zet het bestand hier neer",
+    "dropInactive": "Sleep een erwin-XML-export hierheen of klik om een bestand te kiezen",
+    "formats": "erwin XML (.xml), tot 100 MiB",
+    "howToExport": "In erwin Data Modeler: File → Save As → XML Files (*.xml), indeling \"XML Standard\". Native .erwin-bestanden en JSON-exports worden nog niet ondersteund.",
+    "failed": "Uploaden is mislukt."
+  },
+  "history": {
+    "title": "Modelimports",
+    "description": "erwin-modellen die zijn klaargezet of geïmporteerd als concepten en datacontracten.",
+    "model": "Model",
+    "file": "Bestand",
+    "status": "Status",
+    "by": "Door",
+    "created": "Aangemaakt"
+  },
+  "status": {
+    "previewed": "Klaar om te controleren",
+    "running": "Bezig",
+    "completed": "Voltooid",
+    "failed": "Mislukt",
+    "cancelled": "Geannuleerd",
+    "expired": "Verlopen"
+  },
+  "modelType": {
+    "logical": "Logisch model",
+    "physical": "Fysiek model",
+    "logical_physical": "Logisch/fysiek model"
+  },
+  "run": {
+    "title": "Modelimport",
+    "loadFailed": "De importrun kon niet worden geladen.",
+    "previewFailed": "Het voorbeeld kon niet worden bijgewerkt.",
+    "confirmFailed": "De import kon niet worden gestart.",
+    "cancelFailed": "De run kon niet worden geannuleerd.",
+    "started": "Import gestart",
+    "version": "versie {{version}}",
+    "cancel": "Annuleren",
+    "confirm": "Importeren",
+    "updateFirst": "Werk het voorbeeld bij om je wijzigingen toe te passen voordat je importeert.",
+    "running": "Bezig met importeren…",
+    "reimport": "Dit model was al eerder geïmporteerd. Concepten en contracten uit die import worden bijgewerkt, niet gedupliceerd.",
+    "previousRun": "Vorige import"
+  },
+  "options": {
+    "title": "Opties",
+    "description": "Wat er wordt geïmporteerd en waar het terechtkomt.",
+    "importLogical": "Concepten uit het logische model",
+    "importPhysical": "Ontwerpcontracten uit het fysieke model",
+    "subjectAreas": "Onderwerpsgebieden",
+    "subjectAreasHint": "Importeer alleen de geselecteerde onderwerpsgebieden. Als er niets is geselecteerd, wordt het hele model geïmporteerd.",
+    "collection": "Conceptschema",
+    "newCollection": "Nieuw conceptschema \"{{name}}\"",
+    "grouping": "Eén contract per",
+    "dbms": "Brondatabase",
+    "dbmsAuto": "Uit het model ({{dbms}})",
+    "migrationMode": "Migratiemodus: Databricks-types gebruiken",
+    "catalogMapping": "Unity Catalog-koppeling",
+    "catalogMappingHint": "Koppel elke erwin-eigenaar/schema aan een Unity Catalog catalog.schema, zodat tabellen worden gekoppeld aan bestaande UC-tabellen.",
+    "anyOwner": "Elke andere eigenaar",
+    "addMapping": "Koppeling toevoegen",
+    "udps": "Door gebruiker gedefinieerde eigenschappen",
+    "updatePreview": "Voorbeeld bijwerken"
+  },
+  "grouping": {
+    "subject_area": "Onderwerpsgebied",
+    "schema": "Eigenaar / schema",
+    "table": "Tabel",
+    "model": "Heel model"
+  },
+  "dbms": {
+    "oracle": "Oracle",
+    "sqlserver": "SQL Server",
+    "teradata": "Teradata",
+    "db2": "Db2",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "snowflake": "Snowflake",
+    "databricks": "Databricks",
+    "other": "Overig"
+  },
+  "udpTarget": {
+    "custom_property": "Aangepaste eigenschap",
+    "tag": "Tag",
+    "classification": "Classificatie (kolommen)",
+    "critical_data_element": "Kritiek gegevenselement (kolommen)",
+    "ignore": "Negeren"
+  },
+  "tabs": {
+    "summary": "Samenvatting",
+    "logical": "Concepten",
+    "physical": "Contracten",
+    "uc": "Unity Catalog",
+    "warnings": "Waarschuwingen ({{count}})"
+  },
+  "summary": {
+    "model": "Model",
+    "entities": "Entiteiten: {{count}}",
+    "views": "Weergaven: {{count}}",
+    "attributes": "Attributen: {{count}}",
+    "relationships": "Relaties: {{count}}",
+    "domains": "Domeinen: {{count}}",
+    "inScope": "In scope: {{count}} entiteiten",
+    "concepts": "Concepten in {{collection}}",
+    "new": "Nieuw: {{count}}",
+    "modified": "Gewijzigd: {{count}}",
+    "unchanged": "Ongewijzigd: {{count}}",
+    "deprecated": "Verouderd: {{count}}",
+    "contracts": "Contracten",
+    "flagged": "Gemarkeerd als verwijderd: {{count}}",
+    "ucResolved": "{{resolved}} van {{total}} tabellen gevonden in Unity Catalog"
+  },
+  "action": {
+    "create": "Aanmaken",
+    "unchanged": "Ongewijzigd",
+    "update": "Ontwerp bijwerken",
+    "new_version": "Nieuwe versie"
+  },
+  "logical": {
+    "new": "Nieuw ({{count}})",
+    "modified": "Gewijzigd ({{count}})",
+    "removed": "Verouderd ({{count}})"
+  },
+  "physical": {
+    "existing": "Huidig: v{{version}} ({{status}})",
+    "tables": "{{count}} tabellen",
+    "domain": "Domein",
+    "noDomain": "Geen domein",
+    "tablesAdded": "Toegevoegde tabellen: {{tables}}",
+    "tablesRemoved": "Verwijderde tabellen: {{tables}}",
+    "columnAdded": "kolom {{column}} toegevoegd",
+    "columnRemoved": "kolom {{column}} verwijderd",
+    "columnChanged": "{{column}}: {{fields}}",
+    "removedIntro": "De tabellen van deze contracten staan niet meer in het model. Ze worden gemarkeerd en hun eigenaren krijgen een melding; er wordt niets verwijderd:"
+  },
+  "field": {
+    "physicalType": "fysiek type",
+    "logicalType": "logisch type",
+    "required": "verplicht",
+    "unique": "uniek",
+    "primaryKey": "primaire sleutel",
+    "primaryKeyPosition": "sleutelpositie",
+    "description": "beschrijving",
+    "businessName": "zakelijke naam",
+    "physicalName": "UC-tabel"
+  },
+  "uc": {
+    "table": "Tabel",
+    "owner": "Eigenaar",
+    "fqn": "Unity Catalog-tabel",
+    "status": "Status",
+    "resolved": "Gevonden",
+    "notFound": "Niet in Ontos",
+    "noMapping": "Geen koppeling",
+    "hint": "Alleen tabellen die al in Ontos staan worden gekoppeld; er wordt niets in Unity Catalog aangemaakt. Importeer ontbrekende tabellen met de",
+    "schemaImporter": "Schema Importer",
+    "missing": "Ontbreekt in UC: {{columns}}",
+    "extra": "Niet gemodelleerd: {{columns}}",
+    "typeMismatch": "{{column}}: gemodelleerd {{modeled}}, UC {{actual}}",
+    "nullMismatch": "{{column}}: gemodelleerd {{modeled}}, UC {{actual}}"
+  },
+  "warnings": {
+    "none": "Geen waarschuwingen."
+  },
+  "result": {
+    "title": "Resultaat",
+    "concepts": "Concepten",
+    "openCollection": "Conceptschema's openen",
+    "contracts": "Contracten",
+    "flagged": "Gemarkeerd als verwijderd uit het model: {{names}}",
+    "drift": "{{count}} tabellen wijken af van Unity Catalog"
+  },
+  "entry": {
+    "fromErwin": "erwin-model importeren",
+    "fromErwinShort": "erwin-model",
+    "contractsTooltip": "Ontwerpcontracten (en concepten) aanmaken uit een erwin-datamodel"
+  },
+  "provenance": {
+    "label": "Bron",
+    "title": "Geïmporteerd uit een erwin-datamodel",
+    "badge": "erwin · {{model}}",
+    "removed": "Verwijderd uit het model"
+  }
+}

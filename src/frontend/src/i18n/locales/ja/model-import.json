@@ -1,0 +1,189 @@
+{
+  "upload": {
+    "button": "erwinモデルをインポート",
+    "title": "erwinデータモデルをインポート",
+    "description": "erwin Data ModelerのXMLエクスポートをアップロードします。インポートする前にプレビューを確認し、オプションを選択できます。",
+    "parsing": "モデルを読み込んでいます…",
+    "dropActive": "ここにファイルをドロップ",
+    "dropInactive": "erwinのXMLエクスポートをここにドラッグするか、クリックしてファイルを選択",
+    "formats": "erwin XML（.xml）、最大100 MiB",
+    "howToExport": "erwin Data Modelerで: File → Save As → XML Files (*.xml)、形式は \"XML Standard\"。ネイティブの.erwinファイルとJSONエクスポートはまだサポートされていません。",
+    "failed": "アップロードに失敗しました。"
+  },
+  "history": {
+    "title": "モデルのインポート",
+    "description": "コンセプトとデータ契約にステージングまたはインポートされたerwinモデル。",
+    "model": "モデル",
+    "file": "ファイル",
+    "status": "ステータス",
+    "by": "実行者",
+    "created": "作成日時"
+  },
+  "status": {
+    "previewed": "確認可能",
+    "running": "実行中",
+    "completed": "完了",
+    "failed": "失敗",
+    "cancelled": "キャンセル済み",
+    "expired": "期限切れ"
+  },
+  "modelType": {
+    "logical": "論理モデル",
+    "physical": "物理モデル",
+    "logical_physical": "論理/物理モデル"
+  },
+  "run": {
+    "title": "モデルインポート",
+    "loadFailed": "インポート実行を読み込めませんでした。",
+    "previewFailed": "プレビューを更新できませんでした。",
+    "confirmFailed": "インポートを開始できませんでした。",
+    "cancelFailed": "実行をキャンセルできませんでした。",
+    "started": "インポートを開始しました",
+    "version": "バージョン {{version}}",
+    "cancel": "キャンセル",
+    "confirm": "インポート",
+    "updateFirst": "インポートの前に、変更を反映するためプレビューを更新してください。",
+    "running": "インポート中…",
+    "reimport": "このモデルは以前にインポートされています。そのインポートのコンセプトと契約は重複せず、更新されます。",
+    "previousRun": "前回のインポート"
+  },
+  "options": {
+    "title": "オプション",
+    "description": "インポートする対象と、その配置先。",
+    "importLogical": "論理モデルのコンセプト",
+    "importPhysical": "物理モデルの下書き契約",
+    "subjectAreas": "サブジェクトエリア",
+    "subjectAreasHint": "選択したサブジェクトエリアのみをインポートします。未選択の場合はモデル全体をインポートします。",
+    "collection": "コンセプトスキーム",
+    "newCollection": "新規コンセプトスキーム \"{{name}}\"",
+    "grouping": "契約の単位",
+    "dbms": "ソースデータベース",
+    "dbmsAuto": "モデルから（{{dbms}}）",
+    "migrationMode": "移行モード: Databricksの型を使用",
+    "catalogMapping": "Unity Catalogマッピング",
+    "catalogMappingHint": "erwinのオーナー/スキーマごとにUnity Catalogのcatalog.schemaを割り当てると、テーブルが既存のUCテーブルに解決されます。",
+    "anyOwner": "それ以外のオーナー",
+    "addMapping": "マッピングを追加",
+    "udps": "ユーザー定義プロパティ",
+    "updatePreview": "プレビューを更新"
+  },
+  "grouping": {
+    "subject_area": "サブジェクトエリア",
+    "schema": "オーナー / スキーマ",
+    "table": "テーブル",
+    "model": "モデル全体"
+  },
+  "dbms": {
+    "oracle": "Oracle",
+    "sqlserver": "SQL Server",
+    "teradata": "Teradata",
+    "db2": "Db2",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "snowflake": "Snowflake",
+    "databricks": "Databricks",
+    "other": "その他"
+  },
+  "udpTarget": {
+    "custom_property": "カスタムプロパティ",
+    "tag": "タグ",
+    "classification": "分類（列）",
+    "critical_data_element": "重要データ要素（列）",
+    "ignore": "無視"
+  },
+  "tabs": {
+    "summary": "概要",
+    "logical": "コンセプト",
+    "physical": "契約",
+    "uc": "Unity Catalog",
+    "warnings": "警告（{{count}}）"
+  },
+  "summary": {
+    "model": "モデル",
+    "entities": "エンティティ: {{count}}",
+    "views": "ビュー: {{count}}",
+    "attributes": "属性: {{count}}",
+    "relationships": "リレーションシップ: {{count}}",
+    "domains": "ドメイン: {{count}}",
+    "inScope": "対象: {{count}} エンティティ",
+    "concepts": "{{collection}} のコンセプト",
+    "new": "新規: {{count}}",
+    "modified": "変更: {{count}}",
+    "unchanged": "変更なし: {{count}}",
+    "deprecated": "非推奨: {{count}}",
+    "contracts": "契約",
+    "flagged": "削除済みとしてフラグ: {{count}}",
+    "ucResolved": "{{total}} テーブル中 {{resolved}} 件がUnity Catalogに存在"
+  },
+  "action": {
+    "create": "作成",
+    "unchanged": "変更なし",
+    "update": "下書きを更新",
+    "new_version": "新バージョン"
+  },
+  "logical": {
+    "new": "新規（{{count}}）",
+    "modified": "変更（{{count}}）",
+    "removed": "非推奨（{{count}}）"
+  },
+  "physical": {
+    "existing": "現在: v{{version}}（{{status}}）",
+    "tables": "{{count}} テーブル",
+    "domain": "ドメイン",
+    "noDomain": "ドメインなし",
+    "tablesAdded": "追加されたテーブル: {{tables}}",
+    "tablesRemoved": "削除されたテーブル: {{tables}}",
+    "columnAdded": "列 {{column}} を追加",
+    "columnRemoved": "列 {{column}} を削除",
+    "columnChanged": "{{column}}: {{fields}}",
+    "removedIntro": "これらの契約のテーブルはモデルに存在しなくなりました。フラグが付けられ、オーナーに通知されます。何も削除されません:"
+  },
+  "field": {
+    "physicalType": "物理型",
+    "logicalType": "論理型",
+    "required": "必須",
+    "unique": "一意",
+    "primaryKey": "主キー",
+    "primaryKeyPosition": "キーの位置",
+    "description": "説明",
+    "businessName": "ビジネス名",
+    "physicalName": "UCテーブル"
+  },
+  "uc": {
+    "table": "テーブル",
+    "owner": "オーナー",
+    "fqn": "Unity Catalogテーブル",
+    "status": "ステータス",
+    "resolved": "検出",
+    "notFound": "Ontosにありません",
+    "noMapping": "マッピングなし",
+    "hint": "Ontosに既にあるテーブルのみが照合され、Unity Catalogには何も作成されません。不足しているテーブルは次で取り込んでください:",
+    "schemaImporter": "Schema Importer",
+    "missing": "UCに不足: {{columns}}",
+    "extra": "モデル化されていない: {{columns}}",
+    "typeMismatch": "{{column}}: モデル {{modeled}}、UC {{actual}}",
+    "nullMismatch": "{{column}}: モデル {{modeled}}、UC {{actual}}"
+  },
+  "warnings": {
+    "none": "警告はありません。"
+  },
+  "result": {
+    "title": "結果",
+    "concepts": "コンセプト",
+    "openCollection": "コンセプトスキームを開く",
+    "contracts": "契約",
+    "flagged": "モデルから削除済みとしてフラグ: {{names}}",
+    "drift": "{{count}} テーブルがUnity Catalogと異なります"
+  },
+  "entry": {
+    "fromErwin": "erwinモデルをインポート",
+    "fromErwinShort": "erwinモデル",
+    "contractsTooltip": "erwinデータモデルから下書き契約（およびコンセプト）を作成"
+  },
+  "provenance": {
+    "label": "ソース",
+    "title": "erwinデータモデルからインポート",
+    "badge": "erwin · {{model}}",
+    "removed": "モデルから削除済み"
+  }
+}

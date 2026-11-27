@@ -111,6 +111,7 @@
     "uiCustomization": "Personalización UI",
     "connectors": "Conectores",
     "schemaImporter": "Importador de esquemas",
+    "dataProductTypes": "Tipos de producto de datos",
     "certificationLevels": "Niveles de certificación",
     "maturityLevels": "Niveles de madurez"
   },
@@ -423,10 +424,12 @@
         "title": "Secciones de inicio",
         "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
         "labels": {
-          "JOURNEY": "Inicio por recorrido"
+          "JOURNEY": "Inicio por recorrido",
+          "MARKETPLACE": "Inicio en el Marketplace"
         },
         "descriptions": {
-          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones.",
+          "MARKETPLACE": "Sustituye la página de inicio completa por el marketplace. No se puede combinar con otras secciones."
         }
       },
       "approvalPrivileges": {
@@ -578,6 +581,62 @@
       "submitFailed": "No se pudo enviar la solicitud de acceso a rol",
       "sending": "Enviando solicitud...",
       "send": "Enviar solicitud"
+    }
+  },
+  "navigationPresets": {
+    "title": "Preajustes de navegación",
+    "help": "Configura los menús y la página de inicio de los roles predeterminados en un solo paso. Un preajuste solo cambia lo que muestran los menús y la página de inicio, nunca los niveles de acceso. Los roles se identifican por su nombre y cada rol sigue siendo editable después.",
+    "loadFailed": "No se pudieron cargar los preajustes de navegación.",
+    "presets": {
+      "essentials": {
+        "name": "Esenciales",
+        "description": "Inicio por recorrido y un menú breve: catálogo, activos y conceptos, más revisiones y cumplimiento para stewards y gobernanza."
+      },
+      "data-consumer": {
+        "name": "Consumidor de datos",
+        "description": "Inicio en el Marketplace para consumidores de datos, con Marketplace y Mis productos en el menú."
+      }
+    },
+    "preview": {
+      "role": "Rol",
+      "menu": "Menú tras aplicar",
+      "home": "Página de inicio",
+      "status": "Estado",
+      "menuEmpty": "Sin entradas de menú",
+      "homeUnchanged": "Sin cambios",
+      "noAccess": "No se muestra: el rol no tiene acceso a {{features}}."
+    },
+    "status": {
+      "changes": "Cambia",
+      "noChange": "Sin cambios",
+      "notFound": "Rol no encontrado"
+    },
+    "actions": {
+      "apply": "Aplicar preajuste",
+      "undo": "Deshacer último preajuste"
+    },
+    "nothingToApply": "Todos los roles ya coinciden con este preajuste.",
+    "lastApplied": "Última aplicación: {{preset}} por {{user}}, {{date}}",
+    "unknownUser": "usuario desconocido",
+    "confirm": {
+      "applyTitle": "¿Aplicar el preajuste {{preset}}?",
+      "applyDescription_one": "Esto cambia el menú y la página de inicio de {{count}} rol. Los niveles de acceso no cambian y puedes deshacerlo después.",
+      "applyDescription_other": "Esto cambia los menús y las páginas de inicio de {{count}} roles. Los niveles de acceso no cambian y puedes deshacerlo después.",
+      "undoTitle": "¿Deshacer el último preajuste?",
+      "undoDescription_one": "Esto restaura el menú y la página de inicio que {{preset}} cambió en {{count}} rol.",
+      "undoDescription_other": "Esto restaura los menús y las páginas de inicio que {{preset}} cambió en {{count}} roles."
+    },
+    "applied": "Preajuste {{preset}} aplicado",
+    "nothingChanged": "Nada que cambiar",
+    "appliedSummary": "Cambiados: {{changed}}, sin cambios: {{unchanged}}, no encontrados: {{missing}}.",
+    "applyFailed": "No se pudo aplicar el preajuste",
+    "undone": "Preajuste {{preset}} deshecho",
+    "undoneSummary": "Restaurados: {{restored}}, no encontrados: {{missing}}.",
+    "undoFailed": "No se pudo deshacer el preajuste",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "No hay ninguna aplicación de preajuste que deshacer.",
+      "navigation_preset_unknown": "Este preajuste no existe.",
+      "generic": "La solicitud falló. Inténtalo de nuevo."
     }
   },
   "mcpTokens": {
@@ -1035,6 +1094,24 @@
         "descriptionContract": "Etiqueta cada tabla con el estado del ciclo de vida del contrato de datos que la usa. En una tabla usada por varios contratos, gana el mejor estado (active primero, retired al final).",
         "valueLabel": "Valor de la etiqueta:",
         "sharedKeyHint": "Cuando las etiquetas de estado del producto y del contrato están activadas con la misma clave, se escribe el estado del producto."
+      },
+      "maturityThreshold": {
+        "variable": "true o false: el número del nivel es al menos <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<orden>} con un número de nivel, por ejemplo {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "UUID del activo",
+        "assetType": "Nombre del tipo de activo (Table, View, ...)",
+        "assetFqn": "Nombre de la tabla en Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nombre del nivel de madurez de un activo tabla o vista (última evaluación)",
+        "assetMaturityOrder": "Número del nivel de madurez de un activo tabla o vista (1 = primer nivel)"
+      },
+      "maturity": {
+        "title": "Etiqueta de nivel de madurez",
+        "description": "Etiqueta cada activo tabla o vista con su nivel de madurez (última evaluación). Las tablas sin nivel no reciben etiqueta.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} o {ASSET.MATURITY_ORDER} en la clave o en el valor.",
+        "tablesOnlyHint": "Solo se etiquetan tablas y vistas con nombre en Unity Catalog; los esquemas y catálogos no. La salida de la ejecución cuenta los activos omitidos y el motivo.",
+        "prefixHint": "Empiece la clave con el mismo prefijo que las otras claves activas (ontos_ por defecto), para que el job pueda quitar la etiqueta cuando una tabla pierde su nivel."
       }
     },
     "entityPatterns": {
@@ -1218,6 +1295,71 @@
     "saveButton": "Configuración de entrega guardada correctamente",
     "title": "Modos de entrega"
   },
+  "dataProductTypes": {
+    "title": "Tipos de producto de datos",
+    "description": "Defina los tipos que puede tener un producto de datos. Los tipos integrados se pueden renombrar o desactivar, pero no eliminar.",
+    "addType": "Añadir tipo",
+    "table": {
+      "label": "Etiqueta",
+      "key": "Clave",
+      "products": "Productos",
+      "active": "Activo"
+    },
+    "badges": {
+      "default": "Predeterminado",
+      "builtIn": "Integrado",
+      "imported": "Importado"
+    },
+    "actions": {
+      "moveUp": "Subir {{name}}",
+      "moveDown": "Bajar {{name}}",
+      "toggleActive": "Activo: {{name}}",
+      "makeDefault": "Establecer como predeterminado",
+      "makeDefaultFor": "Establecer {{name}} como predeterminado",
+      "edit": "Editar {{name}}",
+      "delete": "Eliminar {{name}}"
+    },
+    "emptyState": "Aún no hay tipos de producto de datos. Haga clic en \"Añadir tipo\" para crear uno.",
+    "defaultCannotBeInactive": "El tipo predeterminado no se puede desactivar. Establezca primero otro tipo como predeterminado.",
+    "dialog": {
+      "editTitle": "Editar tipo de producto de datos",
+      "createTitle": "Añadir tipo de producto de datos",
+      "editDescription": "Cambie cómo se muestra este tipo. La clave no cambia.",
+      "createDescription": "Cree un tipo que los productores puedan elegir para sus productos de datos."
+    },
+    "form": {
+      "label": "Etiqueta",
+      "labelPlaceholder": "p. ej., Golden Record",
+      "seededLabelHint": "Los tipos integrados se muestran traducidos hasta que cambie la etiqueta.",
+      "key": "Clave",
+      "keyHint": "Palabras en minúsculas unidas por guiones, p. ej. golden-record. No se puede cambiar después y es el valor usado en los archivos ODPS.",
+      "keyImmutable": "La clave no se puede cambiar.",
+      "color": "Color"
+    },
+    "delete": {
+      "title": "¿Eliminar el tipo de producto de datos?",
+      "description": "¿Seguro que desea eliminar \"{{name}}\"? Esta acción no se puede deshacer."
+    },
+    "deleteBlocked": {
+      "seeded": "Los tipos integrados no se pueden eliminar. Desactívelo en su lugar.",
+      "inUse_one": "Lo usa {{count}} producto de datos. Desactívelo en su lugar.",
+      "inUse_other": "Lo usan {{count}} productos de datos. Desactívelo en su lugar."
+    },
+    "messages": {
+      "updated": "Tipo de producto de datos \"{{name}}\" actualizado.",
+      "created": "Tipo de producto de datos \"{{name}}\" creado.",
+      "deleted": "Tipo de producto de datos \"{{name}}\" eliminado.",
+      "reorderFailed": "No se pudo reordenar"
+    },
+    "errors": {
+      "data_product_type_not_found": "Este tipo de producto de datos ya no existe.",
+      "data_product_type_key_exists": "Ya existe un tipo de producto de datos con la clave \"{{key}}\".",
+      "data_product_type_in_use_one": "\"{{key}}\" lo usa {{count}} producto de datos. Desactívelo en lugar de eliminarlo.",
+      "data_product_type_in_use_other": "\"{{key}}\" lo usan {{count}} productos de datos. Desactívelo en lugar de eliminarlo.",
+      "data_product_type_seeded": "\"{{key}}\" es un tipo integrado y no se puede eliminar. Desactívelo en su lugar.",
+      "data_product_type_default_inactive": "\"{{key}}\" no puede ser predeterminado e inactivo a la vez. Establezca primero otro tipo como predeterminado."
+    }
+  },
   "certificationLevels": {
     "title": "Niveles de certificación",
     "description": "Define los niveles de certificación disponibles para los productos de datos, los contratos y los activos.",
@@ -1252,11 +1394,45 @@
       "reorderFailed": "No se pudo reordenar"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Evaluar todos los assets de tabla, vista y vista de métricas",
+    "description": "Evalúa cada asset de tabla, vista y vista de métricas del alcance con los niveles de Asset actuales. Se omite un asset evaluado desde el inicio de la ejecución y solo hay una ejecución a la vez.",
+    "catalog": "Catálogo (opcional)",
+    "schema": "Esquema (opcional)",
+    "start": "Evaluar assets",
+    "running": "Evaluando: {{processed}} de {{total}} assets",
+    "noAssetLevels": "Cree primero los niveles de Asset: sin ellos no se evalúa nada.",
+    "lastRun": "Última ejecución",
+    "none": "Aún no ha terminado ninguna ejecución.",
+    "scope": "Alcance: {{scope}}",
+    "allCatalogs": "Todos los catálogos",
+    "startedBy": "Iniciada por {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} evaluados, {{changed}} con nivel cambiado, {{errors}} errores.",
+    "skipped": "Omitidos",
+    "errors": "Errores",
+    "state": {
+      "running": "En ejecución",
+      "completed": "Completada",
+      "failed": "Fallida"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Evaluado desde el inicio de la ejecución",
+      "maturity_bulk_skipped_not_found": "Asset no encontrado",
+      "maturity_bulk_skipped_no_levels": "Sin niveles de Asset",
+      "maturity_bulk_skipped_asset_type": "No es tabla, vista ni vista de métricas",
+      "maturity_bulk_skipped_not_stored": "No guardado: no se pudo leer la tabla",
+      "maturity_bulk_evaluation_failed": "Fallo en la evaluación (vea el log del servidor)",
+      "maturity_bulk_run_failed": "La ejecución se detuvo (vea el log del servidor)",
+      "maturity_bulk_authentication_failed": "Detenida: Unity Catalog rechazó el token (puede haber caducado); vuelva a ejecutarla",
+      "maturity_bulk_run_in_progress": "Ya hay una evaluación masiva en curso.",
+      "maturity_bulk_scope_invalid": "El alcance no es válido."
+    }
+  },
   "maturityLevels": {
     "title": "Niveles de madurez",
     "description": "Define la escala de madurez para los productos de datos y los contratos. Cada nivel está condicionado por políticas de cumplimiento.",
     "addLevel": "Añadir nivel",
-    "allTypes": "Todos los tipos",
+    "allTypes": "Productos y contratos",
     "gateCount_one": "{{count}} puerta",
     "gateCount_other": "{{count}} puertas",
     "complianceGates": "Puertas de política de cumplimiento",
@@ -1283,7 +1459,8 @@
       "levelNamePreview": "Nombre del nivel"
     },
     "entityTypes": {
-      "all": "Todos los tipos de entidad",
+      "all": "Productos y contratos de datos",
+      "Asset": "Activos (tablas, vistas y vistas de métricas)",
       "DataProduct": "Productos de datos",
       "DataContract": "Contratos de datos"
     },
@@ -1299,6 +1476,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "Esta política usa LLM_CHECK, que solo se evalúa en ejecuciones de cumplimiento, así que una puerta de madurez haría fallar todas las entidades. Selecciona una política sin LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Cargar niveles predeterminados de activos",
+      "hint": "Añade una escala predeterminada para activos tabla y vista (Prerequisite, 1 star, 2 stars, 3 stars) con políticas de gate de ejemplo",
+      "loadedTitle": "Niveles de activos cargados",
+      "loaded_one": "{{count}} nivel de activo creado",
+      "loaded_other": "{{count}} niveles de activo creados",
+      "alreadyLoaded": "Ya existen niveles de activos: no se cambió nada",
+      "loadFailed": "No se pudieron cargar los niveles predeterminados de activos"
     }
   },
   "directory": {

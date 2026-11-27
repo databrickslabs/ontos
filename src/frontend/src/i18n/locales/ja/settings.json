@@ -111,6 +111,7 @@
     "uiCustomization": "UIカスタマイズ",
     "connectors": "コネクタ",
     "schemaImporter": "スキーマインポーター",
+    "dataProductTypes": "データプロダクトタイプ",
     "certificationLevels": "認定レベル",
     "maturityLevels": "成熟度レベル"
   },
@@ -423,10 +424,12 @@
         "title": "ホームセクション",
         "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。",
         "labels": {
-          "JOURNEY": "ジャーニーホーム"
+          "JOURNEY": "ジャーニーホーム",
+          "MARKETPLACE": "マーケットプレイスのホーム"
         },
         "descriptions": {
-          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。"
+          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。",
+          "MARKETPLACE": "ホームページ全体をマーケットプレイスに置き換えます。他のセクションとは併用できません。"
         }
       },
       "approvalPrivileges": {
@@ -578,6 +581,62 @@
       "submitFailed": "ロールアクセスリクエストの送信に失敗しました",
       "sending": "リクエストを送信中...",
       "send": "リクエストを送信"
+    }
+  },
+  "navigationPresets": {
+    "title": "ナビゲーションプリセット",
+    "help": "既定ロールのメニューとホームページを一度に設定します。プリセットが変更するのはメニューとホームページの表示だけで、アクセスレベルは変わりません。ロールは名前で照合され、適用後も各ロールを個別に編集できます。",
+    "loadFailed": "ナビゲーションプリセットを読み込めませんでした。",
+    "presets": {
+      "essentials": {
+        "name": "エッセンシャル",
+        "description": "ジャーニーのホームと短いメニュー：カタログ、アセット、コンセプトに加え、スチュワードとガバナンス向けにレビューとコンプライアンス。"
+      },
+      "data-consumer": {
+        "name": "データコンシューマー",
+        "description": "データコンシューマー向けのマーケットプレイスのホーム。メニューにはマーケットプレイスとマイプロダクトを表示します。"
+      }
+    },
+    "preview": {
+      "role": "ロール",
+      "menu": "適用後のメニュー",
+      "home": "ホームページ",
+      "status": "状態",
+      "menuEmpty": "メニュー項目なし",
+      "homeUnchanged": "変更なし",
+      "noAccess": "表示されません：このロールには {{features}} へのアクセス権がありません。"
+    },
+    "status": {
+      "changes": "変更あり",
+      "noChange": "変更なし",
+      "notFound": "ロールが見つかりません"
+    },
+    "actions": {
+      "apply": "プリセットを適用",
+      "undo": "直前のプリセットを元に戻す"
+    },
+    "nothingToApply": "すべてのロールがすでにこのプリセットと一致しています。",
+    "lastApplied": "最終適用：{{preset}}、{{user}}、{{date}}",
+    "unknownUser": "不明なユーザー",
+    "confirm": {
+      "applyTitle": "{{preset}} プリセットを適用しますか？",
+      "applyDescription_one": "{{count}} 件のロールのメニューとホームページを変更します。アクセスレベルは変わらず、後で元に戻せます。",
+      "applyDescription_other": "{{count}} 件のロールのメニューとホームページを変更します。アクセスレベルは変わらず、後で元に戻せます。",
+      "undoTitle": "直前のプリセットを元に戻しますか？",
+      "undoDescription_one": "{{preset}} が {{count}} 件のロールで変更したメニューとホームページを元に戻します。",
+      "undoDescription_other": "{{preset}} が {{count}} 件のロールで変更したメニューとホームページを元に戻します。"
+    },
+    "applied": "{{preset}} プリセットを適用しました",
+    "nothingChanged": "変更する内容はありません",
+    "appliedSummary": "変更：{{changed}}、変更なし：{{unchanged}}、見つからない：{{missing}}。",
+    "applyFailed": "プリセットを適用できませんでした",
+    "undone": "{{preset}} プリセットを元に戻しました",
+    "undoneSummary": "復元：{{restored}}、見つからない：{{missing}}。",
+    "undoFailed": "プリセットを元に戻せませんでした",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "元に戻せるプリセットの適用はありません。",
+      "navigation_preset_unknown": "このプリセットは存在しません。",
+      "generic": "リクエストに失敗しました。もう一度お試しください。"
     }
   },
   "mcpTokens": {
@@ -1035,6 +1094,24 @@
         "descriptionContract": "各テーブルに、そのテーブルを使用するデータコントラクトのライフサイクルステータスをタグ付けします。複数のコントラクトが使用するテーブルでは、最も良いステータスが優先されます(active が最優先、retired が最後)。",
         "valueLabel": "タグの値:",
         "sharedKeyHint": "プロダクトとコントラクトのステータスタグが同じキーで両方とも有効な場合は、プロダクトのステータスが書き込まれます。"
+      },
+      "maturityThreshold": {
+        "variable": "true または false: レベル番号が <order> 以上",
+        "invalid": "レベル番号を使って {ASSET.MATURITY_AT_LEAST:<order>} と書いてください。例: {ASSET.MATURITY_AT_LEAST:1}"
+      },
+      "assetVariables": {
+        "assetId": "アセット UUID",
+        "assetType": "アセットタイプ名 (Table、View など)",
+        "assetFqn": "テーブルの Unity Catalog 名 (catalog.schema.table)",
+        "assetMaturity": "テーブルまたはビューのアセットの成熟度レベル名 (最新の評価)",
+        "assetMaturityOrder": "テーブルまたはビューのアセットの成熟度レベル番号 (1 = 最初のレベル)"
+      },
+      "maturity": {
+        "title": "成熟度レベルタグ",
+        "description": "テーブルまたはビューの各アセットに成熟度レベル (最新の評価) をタグ付けします。レベルのないテーブルにはタグが付きません。",
+        "valueNeedsVariable": "キーまたは値に {ASSET.MATURITY} か {ASSET.MATURITY_ORDER} を使用してください。",
+        "tablesOnlyHint": "タグが付くのは Unity Catalog 名を持つテーブルとビューだけで、スキーマやカタログには付きません。実行の出力に、スキップしたアセットの数と理由が表示されます。",
+        "prefixHint": "テーブルがレベルを失ったときにジョブがタグを削除できるよう、キーは他の有効なキーと同じプレフィックス (既定は ontos_) で始めてください。"
       }
     },
     "entityPatterns": {
@@ -1218,6 +1295,69 @@
     "saveButton": "配信設定を正常に保存しました",
     "title": "配信モード"
   },
+  "dataProductTypes": {
+    "title": "データプロダクトタイプ",
+    "description": "データプロダクトに設定できるタイプを定義します。組み込みタイプは名前の変更や無効化はできますが、削除はできません。",
+    "addType": "タイプを追加",
+    "table": {
+      "label": "ラベル",
+      "key": "キー",
+      "products": "プロダクト",
+      "active": "有効"
+    },
+    "badges": {
+      "default": "デフォルト",
+      "builtIn": "組み込み",
+      "imported": "インポート済み"
+    },
+    "actions": {
+      "moveUp": "{{name}} を上へ移動",
+      "moveDown": "{{name}} を下へ移動",
+      "toggleActive": "有効: {{name}}",
+      "makeDefault": "デフォルトにする",
+      "makeDefaultFor": "{{name}} をデフォルトにする",
+      "edit": "{{name}} を編集",
+      "delete": "{{name}} を削除"
+    },
+    "emptyState": "データプロダクトタイプはまだありません。「タイプを追加」をクリックして作成してください。",
+    "defaultCannotBeInactive": "デフォルトのタイプは無効にできません。先に別のタイプをデフォルトにしてください。",
+    "dialog": {
+      "editTitle": "データプロダクトタイプを編集",
+      "createTitle": "データプロダクトタイプを追加",
+      "editDescription": "このタイプの表示を変更します。キーは変わりません。",
+      "createDescription": "プロデューサーがデータプロダクトに選択できるタイプを作成します。"
+    },
+    "form": {
+      "label": "ラベル",
+      "labelPlaceholder": "例: Golden Record",
+      "seededLabelHint": "組み込みタイプは、ラベルを変更するまで翻訳されて表示されます。",
+      "key": "キー",
+      "keyHint": "小文字の単語をハイフンでつないだもの (例: golden-record)。後から変更できず、ODPS ファイルで使われる値になります。",
+      "keyImmutable": "キーは変更できません。",
+      "color": "色"
+    },
+    "delete": {
+      "title": "データプロダクトタイプを削除しますか?",
+      "description": "「{{name}}」を削除してもよろしいですか? この操作は元に戻せません。"
+    },
+    "deleteBlocked": {
+      "seeded": "組み込みタイプは削除できません。代わりに無効にしてください。",
+      "inUse_other": "{{count}} 個のデータプロダクトで使用中です。代わりに無効にしてください。"
+    },
+    "messages": {
+      "updated": "データプロダクトタイプ「{{name}}」を更新しました。",
+      "created": "データプロダクトタイプ「{{name}}」を作成しました。",
+      "deleted": "データプロダクトタイプ「{{name}}」を削除しました。",
+      "reorderFailed": "並べ替えに失敗しました"
+    },
+    "errors": {
+      "data_product_type_not_found": "このデータプロダクトタイプはもう存在しません。",
+      "data_product_type_key_exists": "キー「{{key}}」のデータプロダクトタイプは既に存在します。",
+      "data_product_type_in_use_other": "「{{key}}」は {{count}} 個のデータプロダクトで使用中です。削除せずに無効にしてください。",
+      "data_product_type_seeded": "「{{key}}」は組み込みタイプのため削除できません。代わりに無効にしてください。",
+      "data_product_type_default_inactive": "「{{key}}」をデフォルトかつ無効にすることはできません。先に別のタイプをデフォルトにしてください。"
+    }
+  },
   "certificationLevels": {
     "title": "認定レベル",
     "description": "データプロダクト、契約、アセットで利用可能な認定レベルを定義します。",
@@ -1252,11 +1392,45 @@
       "reorderFailed": "並べ替えに失敗しました"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "テーブル、ビュー、メトリックビューのアセットをすべて評価",
+    "description": "現在のAssetレベルで、対象範囲のすべてのテーブル、ビュー、メトリックビューのアセットを評価します。実行開始後に評価済みのアセットはスキップされ、同時に実行できるのは1つだけです。",
+    "catalog": "カタログ（任意）",
+    "schema": "スキーマ（任意）",
+    "start": "アセットを評価",
+    "running": "評価中: {{total}} 件中 {{processed}} 件",
+    "noAssetLevels": "先にAssetレベルを追加してください。ないと何も評価されません。",
+    "lastRun": "前回の実行",
+    "none": "完了した実行はまだありません。",
+    "scope": "対象: {{scope}}",
+    "allCatalogs": "すべてのカタログ",
+    "startedBy": "開始者: {{user}}",
+    "summary": "{{total}} 件: 評価 {{evaluated}} 件、レベル変更 {{changed}} 件、エラー {{errors}} 件。",
+    "skipped": "スキップ",
+    "errors": "エラー",
+    "state": {
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "実行開始後に評価済み",
+      "maturity_bulk_skipped_not_found": "アセットが見つかりません",
+      "maturity_bulk_skipped_no_levels": "Assetレベルがありません",
+      "maturity_bulk_skipped_asset_type": "テーブル、ビュー、メトリックビューのいずれでもありません",
+      "maturity_bulk_skipped_not_stored": "保存されていません: テーブルを読み取れませんでした",
+      "maturity_bulk_evaluation_failed": "評価に失敗しました（サーバーログを確認）",
+      "maturity_bulk_run_failed": "実行が停止しました（サーバーログを確認）",
+      "maturity_bulk_authentication_failed": "停止しました: Unity Catalog がトークンを拒否しました（期限切れの可能性があります）。もう一度実行してください",
+      "maturity_bulk_run_in_progress": "一括評価がすでに実行中です。",
+      "maturity_bulk_scope_invalid": "対象範囲が無効です。"
+    }
+  },
   "maturityLevels": {
     "title": "成熟度レベル",
     "description": "データプロダクトと契約の成熟度の段階を定義します。各レベルはコンプライアンスポリシーによってゲートされます。",
     "addLevel": "レベルを追加",
-    "allTypes": "すべてのタイプ",
+    "allTypes": "プロダクトと契約",
     "gateCount_one": "{{count}} 個のゲート",
     "gateCount_other": "{{count}} 個のゲート",
     "complianceGates": "コンプライアンスポリシーゲート",
@@ -1283,7 +1457,8 @@
       "levelNamePreview": "レベル名"
     },
     "entityTypes": {
-      "all": "すべてのエンティティタイプ",
+      "all": "データプロダクトとデータ契約",
+      "Asset": "アセット（テーブル、ビュー、メトリックビュー）",
       "DataProduct": "データプロダクト",
       "DataContract": "データ契約"
     },
@@ -1299,6 +1474,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "このポリシーは LLM_CHECK を使用しますが、LLM_CHECK はコンプライアンス実行でのみ評価されるため、成熟度ゲートはすべてのエンティティを不合格にします。LLM_CHECK を使用しないポリシーを選択してください。"
+    },
+    "assetDefaults": {
+      "load": "アセットの既定レベルを読み込む",
+      "hint": "テーブルとビューのアセット用の既定のラダー (Prerequisite、1 star、2 stars、3 stars) とゲートポリシーの例を追加します",
+      "loadedTitle": "アセットのレベルを読み込みました",
+      "loaded_one": "{{count}} 件のアセットレベルを作成しました",
+      "loaded_other": "{{count}} 件のアセットレベルを作成しました",
+      "alreadyLoaded": "アセットのレベルは既に存在します。何も変更されていません",
+      "loadFailed": "アセットの既定レベルを読み込めませんでした"
     }
   },
   "directory": {

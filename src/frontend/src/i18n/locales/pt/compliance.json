@@ -198,6 +198,10 @@
       "query_failed": "a consulta falhou",
       "timed_out": "a consulta ainda estava em execução no limite de tempo",
       "budget_exceeded": "a execução atingiu o limite de consultas no SQL warehouse",
+      "table_no_access": "sem acesso à tabela",
+      "table_not_found": "a tabela não foi encontrada",
+      "table_read_failed": "não foi possível ler a tabela",
+      "table_read_limit": "a execução atingiu o limite de leituras de tabelas",
       "transient": "o SQL warehouse ficou temporariamente indisponível, mesmo após novas tentativas",
       "not_found": "a tabela de sistema não foi encontrada (o schema de sistema está habilitado?)",
       "not_loaded": "as tags deste tipo de objeto ainda não são lidas"

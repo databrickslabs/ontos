@@ -388,6 +388,7 @@
       "generate_pdf": "PDF Genereren",
       "deliver": "Leveren",
       "grant_permissions": "Machtigingen Verlenen",
+      "evaluate_asset_maturity": "Assetvolwassenheid evalueren",
       "on_behalf_of": "Namens"
     }
   },
@@ -403,6 +404,11 @@
     "assignedSuccess": "Eigenaar succesvol toegewezen.",
     "errorAssigning": "Fout bij toewijzen eigenaar",
     "ownerUserAria": "Eigenaargebruiker"
+  },
+  "assignOwnerRole": {
+    "noRoles": "Er zijn geen bedrijfsrollen geconfigureerd. Vraag een beheerder er een toe te voegen.",
+    "ownerBadge": "Eigenaar",
+    "notOwnerHint": "Eigenaren met deze rol ontvangen geen eigenaarsgoedkeuringen of -meldingen. Kies daarvoor Data Owner of Owner."
   },
   "versionFamily": {
     "countBadge_one": "{{count}} versie",

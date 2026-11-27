@@ -10,17 +10,19 @@ Handles step-by-step execution with branching, including:
 - Script execution
 """
 
+import copy
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.timestamps import utc_now
 from src.db_models.process_workflows import WorkflowStepDb, WorkflowExecutionDb
 from src.models.process_workflows import (
@@ -43,6 +45,7 @@ from src.common.api_errors import CodedValueError
 if TYPE_CHECKING:
     from src.controller.lifecycle_fields import DeprecationDetails
 from src.common.logging import get_logger
+from src.controller.notifications_manager import principal_identity
 from src.common.workflow_notification_texts import (
     DEFAULT_TEMPLATE_MESSAGE,
     DEFAULT_TEMPLATE_TITLE,
@@ -52,6 +55,7 @@ from src.common.workflow_notification_texts import (
     approval_notification_i18n,
     lifecycle_notice,
     notification_step_i18n,
+    status_change_decision_notice,
 )
 
 logger = get_logger(__name__)
@@ -212,6 +216,10 @@ def _next_step_id(workflow: 'ProcessWorkflow', step: 'WorkflowStep', result: Ste
     """
     if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
         return None
+    # So does a step a before_update gate can't run (update_gate_step_refusal),
+    # whatever its on_fail: a branch to a Pass step would let the update through
+    if (result.data or {}).get('error_code') == UPDATE_GATE_STEP_NOT_ALLOWED:
+        return None
     if is_conditional_step_type(step.step_type) and result.branch is None:
         return None
     return step.on_pass if result.takes_pass_branch() else step.on_fail
@@ -366,6 +374,133 @@ def _rule_step_error(error: Exception, data: Optional[Dict[str, Any]] = None) ->
     return StepResult(passed=False, error=str(error), data=data or None)
 
 
+def _trigger_type(context: 'StepContext') -> Optional[str]:
+    """The step's trigger type as a string (``before_update``...), None without one."""
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    return getattr(trigger_type, 'value', trigger_type)
+
+
+class UpdateGateTagWriteError(CodedValueError):
+    """A tag change of a passed ``before_update`` gate couldn't be written.
+
+    The update is refused (and rolled back) whatever the gate's ``on_error``: the
+    gates passed on the entity with that tag change. ``params``: ``entityId``.
+    """
+
+    code = 'update_gate_tag_write_failed'
+
+    def __init__(self, entity_id: str):
+        super().__init__(
+            "Update refused: a tag change of its workflow gates could not be written. "
+            "Ask an administrator to check the server log.",
+            entityId=entity_id,
+        )
+
+
+class UpdateGateTagListWriteError(CodedValueError):
+    """The tag list of an update its before_update gates passed couldn't be written.
+
+    The gates evaluated the entity with that list (``_future_tags``), so the update
+    is refused (and rolled back) instead of being saved with the old tags. Without
+    gates the update keeps its other fields. ``params``: ``entityId``.
+    """
+
+    code = 'update_gate_tag_list_write_failed'
+
+    def __init__(self, entity_id: str):
+        super().__init__(
+            "Update refused: its tags, which its workflow gates checked, could not be "
+            "written. Ask an administrator to check the server log.",
+            entityId=entity_id,
+        )
+
+
+# Step types a before_update gate can't have: they commit (entity actions, asset
+# reviews) or act outside the database (delivery, UC grants) as the gate runs, so a
+# later step, or another gate, that refuses the update would leave them done.
+UPDATE_GATE_REFUSED_STEP_TYPES = (
+    'entity_action', 'delivery', 'create_asset_review', 'grant_permissions',
+)
+UPDATE_GATE_STEP_NOT_ALLOWED = 'update_gate_step_not_allowed'
+
+
+def update_gate_step_refusal(step_type: Any, context: 'StepContext') -> Optional['StepResult']:
+    """The failed result of such a step in a before_update gate, before it acts; else None.
+
+    Saving the gate is refused (``WorkflowsManager.validate_workflow``); this stops
+    one stored before. ``error_params``: ``stepType``.
+    """
+    step_type = getattr(step_type, 'value', step_type)
+    if step_type not in UPDATE_GATE_REFUSED_STEP_TYPES or _trigger_type(context) != 'before_update':
+        return None
+    return StepResult(
+        passed=False,
+        error=f"A {step_type} step can't run in a before_update gate: "
+              "what it does would stay done when the update is refused",
+        data={'error_code': UPDATE_GATE_STEP_NOT_ALLOWED, 'error_params': {'stepType': step_type}},
+    )
+
+
+def deferred_tag_writes(executions: List[WorkflowExecution]) -> List[Dict[str, Any]]:
+    """The tag changes the tag steps of before_update gates recorded, in step order.
+
+    Assign-tag and remove-tag steps don't write while the gate runs
+    (``deferred_tag_write`` in their result): the executor commits each step
+    record, so a write there would stay even when a later step, or another
+    gate, blocks the update. Only passed steps count.
+    """
+    ordered: List[Dict[str, Any]] = []
+    for execution in executions or []:
+        writes = [
+            (step.result_data or {}).get('deferred_tag_write')
+            for step in execution.step_executions or [] if step.passed
+        ]
+        # In step order (``seq``): stored timestamps may tie
+        ordered.extend(sorted(
+            (w for w in writes if isinstance(w, dict)), key=lambda w: w.get('seq', 0),
+        ))
+    return ordered
+
+
+def apply_deferred_tag_writes(
+    db: Session, executions: List[WorkflowExecution], user_email: Optional[str],
+) -> int:
+    """Write the tag changes of the passed before_update gates, inside the update.
+
+    Called by the update, after it wrote its own fields and tags (a ``tags`` list
+    replaces the stored ones first, the gates' changes go on top, as the gates saw
+    them) and before it commits: nothing is committed here, so an update that fails
+    afterwards leaves no tag change either. A failed write raises
+    ``UpdateGateTagWriteError`` (the update is refused); returns the number written.
+    """
+    from uuid import UUID
+
+    from src.controller.tags_manager import TagsManager
+
+    writes = deferred_tag_writes(executions)
+    if not writes:
+        return 0
+    tags_mgr = TagsManager()
+    for write in writes:
+        target = {
+            'db': db, 'entity_id': write['entity_id'], 'entity_type': write['entity_type'],
+            'tag_id': UUID(write['tag_id']), 'user_email': user_email, 'commit': False,
+        }
+        try:
+            if write.get('action') == 'remove':
+                tags_mgr.remove_tag_from_entity(**target)
+            else:
+                tags_mgr.add_tag_to_entity(**target, assigned_value=write.get('assigned_value'))
+        except Exception as e:
+            logger.error(
+                "Could not write the tag change %s of a before_update gate on %s %s",
+                write.get('action'), write.get('entity_type'), write.get('entity_id'),
+                exc_info=True,
+            )
+            raise UpdateGateTagWriteError(str(write.get('entity_id'))) from e
+    return len(writes)
+
+
 def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     """What workflow rules see as ``obj``: the stored entity plus the trigger payload.
 
@@ -373,10 +508,11 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     other field passed vacuously. For data products and data contracts the
     entity is loaded with ``entity_dict_builder`` (the fields maturity gates
     use); payload keys win, so request fields such as ``current_status`` keep
-    their meaning. Other entity types get the payload unchanged, and so do
-    ``before_update`` gates: their payload is the proposed change, and values
-    derived from the stored row (``has_owner``, counts) would describe the
-    entity before it.
+    their meaning. Other entity types get the payload unchanged.
+    ``before_update`` gates see the entity as it will be after the update
+    (``_before_update_object``), as their policy checks do: the payload alone
+    is only the proposed change, so ``HAS_TAG`` or the owner of a stored
+    entity whose update doesn't resend them would read as missing.
 
     Raises when the stored entity can't be loaded, or doesn't exist (deleted
     while a workflow waited, or a wrong id): evaluating the rule on the payload
@@ -392,8 +528,10 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     )
 
     payload = context.entity if isinstance(context.entity, dict) else {}
-    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
-    if getattr(trigger_type, 'value', trigger_type) in ('before_update', 'before_create', 'on_delete'):
+    trigger_type = _trigger_type(context)
+    if trigger_type == 'before_update':
+        return _before_update_object(db, context)
+    if trigger_type in ('before_create', 'on_delete'):
         return payload
     builder = {
         'data_product': build_data_product_dict,
@@ -420,87 +558,387 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     return merged
 
 
-def _proposed_tags(db: Session, tags: Any) -> Dict[str, Any]:
-    """Proposed tag assignments (``AssignedTagCreate`` dicts) as AppEntityLoader's tags.
+def _tag_assignments(
+    db: Session, tags: Any, current: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Tag assignments as ``{namespace/name: value}``.
 
-    Keyed by ``namespace/name`` and, when no other proposed tag has the same
-    name, by name; the value is the assigned value, or True when it has none.
+    ``tags`` is a request's list (``AssignedTagCreate`` dicts, or FQN strings as
+    the managers also accept) or what assign-tag steps leave in the context
+    (``{key: value}``). A name without a namespace is in the default one, and an
+    assignment without a value has True; a later assignment of a tag wins.
+    In a list, as ``add_tag_to_entity`` stores it, a tag without a value keeps
+    its value in ``current`` (the entity's tags by ``namespace/name``) and an
+    empty string clears it.
     """
     from src.db_models.tags import TagDb
     from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
 
-    assigned = []
-    for tag in tags or []:
-        if not isinstance(tag, dict):
-            continue
-        fqn = tag.get('tag_fqn')
-        if tag.get('tag_id'):
-            # As in AssignedTagCreate, the id wins over the name
-            stored = db.get(TagDb, tag['tag_id'])
-            fqn = f"{stored.namespace_name}{SEP}{stored.name}" if stored else None
+    current = current or {}
+    if isinstance(tags, dict):
+        items = list(tags.items())
+    else:
+        items = []
+        for tag in tags or []:
+            if isinstance(tag, str):
+                tag = {'tag_fqn': tag}
+            if not isinstance(tag, dict):
+                continue
+            fqn = tag.get('tag_fqn')
+            if tag.get('tag_id'):
+                # As in AssignedTagCreate, the id wins over the name
+                tag_row = db.get(TagDb, tag['tag_id'])
+                fqn = f"{tag_row.namespace_name}{SEP}{tag_row.name}" if tag_row else None
+            value = tag.get('assigned_value')
+            if value is None and fqn:
+                key = fqn if SEP in fqn else f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
+                value = current.get(key)
+            items.append((fqn, None if value == '' else value))
+    assigned: Dict[str, Any] = {}
+    for fqn, value in items:
         if not fqn:
             continue
         if SEP not in fqn:
             fqn = f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
-        value = tag.get('assigned_value')
-        assigned.append((fqn, fqn.split(SEP, 1)[1], True if value is None else value))
-    # As in _tags_by_entity: the name is a key when one namespace has it
-    names = [name for _, name in {(fqn, name) for fqn, name, _ in assigned}]
+        assigned[fqn] = True if value is None else value
+    return assigned
+
+
+def _tags_as_rules_read_them(assigned: Dict[str, Any]) -> Dict[str, Any]:
+    """``{namespace/name: value}`` keyed as AppEntityLoader keys tags (``tag_values``).
+
+    By ``namespace/name`` and, when no other namespace has a tag of that name, by name.
+    """
+    from src.models.tags import TAG_NAMESPACE_SEPARATOR as SEP
+
+    names = [fqn.split(SEP, 1)[1] for fqn in assigned]
     values: Dict[str, Any] = {}
-    for fqn, name, value in assigned:
+    for (fqn, value), name in zip(assigned.items(), names):
         values[fqn] = value
         if names.count(name) == 1:
             values[name] = value
     return values
 
 
-def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """A before_update payload's values under AppEntityLoader's keys.
+def _deferred_removals(context: 'StepContext') -> List[str]:
+    """``namespace/name`` of the tags earlier remove-tag steps will remove.
 
-    The payload is the data contract update request (ODCS field names). A
-    field the request clears stays cleared (None).
+    Those of the gates that ran before this one (``_carried_gate_tags``), then this
+    gate's own.
+    """
+    carried = _carried_gate_tags(context.trigger_context)
+    removed = list((carried or {}).get('removals') or [])
+    for entry in (context.step_results or {}).values():
+        write = ((entry or {}).get('data') or {}).get('deferred_tag_write') or {}
+        if write.get('action') == 'remove' and write.get('tag_fqn'):
+            removed.append(write['tag_fqn'])
+    return removed
+
+
+def _carried_gate_tags(trigger_context: Any) -> Optional[Dict[str, Any]]:
+    """The tags and pending removals the earlier before_update gates left, else None.
+
+    The update writes the tag changes of every gate (``apply_deferred_tag_writes``),
+    so each gate is evaluated on the entity after the earlier gates' changes.
+    """
+    if getattr(getattr(trigger_context, 'trigger_type', None), 'value', None) != 'before_update':
+        return None
+    return getattr(trigger_context, '_update_gate_tags', None)
+
+
+def _start_from_earlier_gates(context: 'StepContext') -> None:
+    """Put the tags the earlier before_update gates left on a gate's entity."""
+    carried = _carried_gate_tags(context.trigger_context)
+    if carried is not None and 'tags' in carried:
+        context.entity['tags'] = copy.deepcopy(carried['tags'])
+
+
+def _carry_to_later_gates(context: 'StepContext') -> None:
+    """Keep a before_update gate's tags and pending removals for the next gate."""
+    trigger_context = context.trigger_context
+    if getattr(getattr(trigger_context, 'trigger_type', None), 'value', None) != 'before_update':
+        return
+    carried: Dict[str, Any] = {'removals': _deferred_removals(context)}
+    if 'tags' in context.entity:
+        carried['tags'] = copy.deepcopy(context.entity['tags'])
+    trigger_context._update_gate_tags = carried
+
+
+def _with_listed_tag(
+    tags: List[Any], fqn: str, value: Optional[str], tag_id: Optional[str] = None,
+) -> List[Any]:
+    """An update's tag list with ``fqn`` assigned on top, as an assign-tag step writes it.
+
+    A value replaces the listed one; without a value a listed tag keeps its value
+    (``add_tag_to_entity`` keeps a stored value), else it is added key-only.
+    """
+    if value is None and _listed(tags, fqn, tag_id):
+        return tags
+    return [*_without_listed_tag(tags, fqn, tag_id), {'tag_fqn': fqn, 'assigned_value': value}]
+
+
+def _without_listed_tag(tags: List[Any], fqn: str, tag_id: Optional[str] = None) -> List[Any]:
+    """An update's tag list without ``fqn`` (by ``namespace/name``, a name alone or its id)."""
+    return [tag for tag in tags if not _listed([tag], fqn, tag_id)]
+
+
+def _listed(tags: List[Any], fqn: str, tag_id: Optional[str] = None) -> bool:
+    """Whether a tag list (FQN strings or ``AssignedTagCreate`` dicts) names the tag."""
+    from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
+
+    def full(name: Any) -> Optional[str]:
+        if not isinstance(name, str) or not name:
+            return None
+        return name if SEP in name else f"{DEFAULT_NAMESPACE_NAME}{SEP}{name}"
+
+    wanted = full(fqn)
+    for tag in tags:
+        listed_id = None if isinstance(tag, str) else (tag or {}).get('tag_id')
+        if tag_id and listed_id:
+            if str(listed_id) == tag_id:
+                return True
+            continue  # as in AssignedTagCreate, the id wins over the name
+        name = tag if isinstance(tag, str) else (tag or {}).get('tag_fqn')
+        if full(name) == wanted:
+            return True
+    return False
+
+
+def _future_tags(
+    db: Session, payload: Dict[str, Any], stored: Optional[Dict[str, Any]],
+    removed: Optional[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
+    """The tags an entity will have after a before_update gate's update, as assignments.
+
+    A list in the update replaces the stored tags (``[]`` clears them), as
+    ``set_tags_for_entity`` does (a listed tag without a value keeps its stored
+    value); earlier tag steps of the gate changed the list itself (the update
+    writes their changes after it). Without one (no ``tags``, or None) the stored
+    tags stay less the ones earlier remove-tag steps remove (``removed``, written
+    with the update), and tags earlier assign-tag steps set (a dict) go on
+    top. None when the update sends no list and there is no stored entity to
+    read the tags from.
+    """
+    from src.models.tags import TAG_NAMESPACE_SEPARATOR as SEP
+
+    tags = payload.get('tags')
+    # Every stored tag is under its namespace/name; names alone are aliases
+    current = {
+        key: value for key, value in ((stored or {}).get('tags') or {}).items() if SEP in key
+    }
+    if isinstance(tags, list):
+        return _tag_assignments(db, tags, current)
+    if stored is None:
+        return None
+    future = {key: value for key, value in current.items() if key not in (removed or [])}
+    if isinstance(tags, dict):
+        future.update(_tag_assignments(db, tags))
+    return future
+
+
+def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A before_update payload's values under AppEntityLoader's keys, except tags.
+
+    The payload is the data contract update request (ODCS field names). As
+    ``update_contract_with_relations`` does, a null leaves the stored value
+    (the key is omitted here); a domain field replaces the primary domain
+    (``domain`` its name, ``domain_id`` its id). Tags: ``_future_tags``.
     """
     proposed = {}
-    if 'tags' in payload:
-        tags = payload['tags']
-        # An assign-tag step puts {name: value} there; the request has a list
-        proposed['tags'] = tags if isinstance(tags, dict) else _proposed_tags(db, tags)
-    if 'owner_team_id' in payload:
+    if payload.get('owner_team_id') is not None:
         proposed['owner'] = payload['owner_team_id']
-    if 'descriptionPurpose' in payload or 'description' in payload:
-        # As DataContractsManager stores it: descriptionPurpose, else description.purpose
-        description = payload.get('description')
-        purpose = description.get('purpose') if isinstance(description, dict) else description
-        proposed['description'] = payload.get('descriptionPurpose') or purpose
+    # As DataContractsManager stores it: descriptionPurpose, else description.purpose
+    description = payload.get('description')
+    purpose = description.get('purpose') if isinstance(description, dict) else description
+    purpose = payload.get('descriptionPurpose') or purpose
+    if purpose is not None:
+        proposed['description'] = purpose
+    if any(payload.get(key) is not None for key in _DOMAIN_FIELDS):
+        proposed['domain_id'], proposed['domain'] = _proposed_primary_domain(db, payload)
     return proposed
 
 
+# The update fields that replace a contract's domains, as update_contract_with_relations
+# reads them (DataContractUpdate dumps the first ones; the assistant tool sends ``domain``,
+# a business-domain name).
+_DOMAIN_FIELDS = (
+    'domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain',
+)
+
+
+def _proposed_primary_domain(
+    db: Session, payload: Dict[str, Any],
+) -> Tuple[Optional[str], Optional[str]]:
+    """The primary domain an update leaves, as ``_resolve_domain_assignment`` picks it.
+
+    ``(id, name)``, the keys the compliance loader gives an entity's primary
+    domain (``domain_id``, ``domain``). The ids with the primary id (else the
+    first id), else the legacy ``domainId``, else ``domain``: a name, resolved
+    to its domain as the manager does (an unknown name leaves the contract
+    unassigned). ``(None, None)`` when none of them has a value (the update
+    unassigns the contract); an id that matches no domain has no name.
+    """
+    from src.db_models.data_domains import DataDomain
+
+    ids = payload.get('domain_ids') or payload.get('domainIds')
+    if isinstance(ids, list) and ids:
+        primary = payload.get('primary_domain_id') or payload.get('primaryDomainId')
+        domain_id = primary if primary in ids else ids[0]
+    elif payload.get('domainId'):
+        domain_id = payload['domainId']
+    elif payload.get('domain'):
+        row = db.query(DataDomain.id, DataDomain.name).filter(
+            DataDomain.name == payload['domain'],
+        ).first()
+        return (str(row[0]), row[1]) if row else (None, None)
+    else:
+        return None, None
+    row = db.query(DataDomain.name).filter(DataDomain.id == domain_id).first()
+    return domain_id, row[0] if row else None
+
+
+# Derived fields of a contract an update can change (see _future_contract_fields)
+_FUTURE_CONTRACT_FIELDS = ('has_owner', 'has_purpose', 'has_description', 'schema_object_count')
+
+
+def _future_contract_fields(
+    db: Session, context: 'StepContext', payload: Dict[str, Any],
+    stored: Optional[Dict[str, Any]], proposed: Dict[str, Any],
+) -> Dict[str, Any]:
+    """A data contract's derived fields (``build_data_contract_dict``) after an update.
+
+    What the rules of the other triggers see (``_rule_object``): the
+    relationship and quality item counts, certification and publication flags
+    stay as stored (a contract update doesn't write them: ``quality_check_count``
+    counts quality items from the quality API, not the ODCS ``qualityRules`` an
+    update replaces); ``has_owner``,
+    ``has_purpose`` / ``has_description`` and ``schema_object_count`` are
+    computed from the update when it sends the field (a ``contract_schema``
+    list replaces the schema objects), else from the stored row. Empty for
+    other types and without a stored contract.
+    """
+    if (context.entity_type or '').lower() != 'data_contract' or not stored:
+        return {}
+    from src.controller.entity_dict_builder import build_data_contract_dict
+    from src.db_models.data_contracts import DataContractDb
+
+    row = build_data_contract_dict(db, context.entity_id)
+    if not row:
+        return {}
+    columns = set(DataContractDb.__table__.columns.keys())
+    derived = {
+        key: value for key, value in row.items()
+        if key not in columns and key not in ('entity_type', 'tags', 'tag_count', 'has_tags')
+    }
+    owner = proposed.get('owner', stored.get('owner'))
+    purpose = proposed.get('description', stored.get('description'))
+    description = payload.get('description')
+    usage = payload.get('descriptionUsage') or (
+        description.get('usage') if isinstance(description, dict) else None
+    ) or row.get('description_usage')
+    derived['has_owner'] = bool(owner)
+    derived['has_purpose'] = bool(purpose)
+    derived['has_description'] = bool(purpose or usage)
+    if payload.get('contract_schema') is not None or payload.get('schema') is not None:
+        # As the manager picks the list it writes
+        schema = payload.get('contract_schema') or payload.get('schema') or []
+        derived['schema_object_count'] = len(schema) if isinstance(schema, list) else 0
+    return derived
+
+
+def _with_stored_primary_domain(
+    db: Session, context: 'StepContext', stored: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """A stored contract with its primary domain as ``domain`` (name) and ``domain_id``.
+
+    The keys ``_proposed_values`` gives an update that sends a domain, so a rule
+    reads the same keys whether or not the update changes the domain. Kept as
+    loaded when the loader already gives ``domain_id`` (#1540) or for other types.
+    """
+    if (context.entity_type or '').lower() != 'data_contract' or not stored \
+            or 'domain_id' in stored:
+        return stored
+    from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+    assigned = entity_domain_repo.get_domains_for_entity(
+        db, entity_type='data_contract', entity_id=str(context.entity_id),
+    )
+    # Primary first; the first one when none is primary, as the update picks it
+    primary = assigned[0] if assigned else None
+    return {
+        **stored,
+        'domain_id': str(primary.domain_id) if primary else None,
+        'domain': primary.domain_name if primary else None,
+    }
+
+
+def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """The entity as it will be after a before_update gate's update.
+
+    What both WHERE and ASSERT of its policy check see: the stored entity as
+    AppEntityLoader gives it, with the update's fields over it (also under the
+    loader's keys), and the future tags (``_future_tags``) with their
+    ``tag_count`` / ``has_tags``, so ``HAS_TAG`` and the count agree. A data
+    contract also gets the derived fields the other triggers' rules see
+    (``_future_contract_fields``: ``has_owner``, ``schema_object_count``...),
+    for the entity after the update. A type the loader doesn't read, or a step
+    without an entity id, gets the payload with the update's values; a stored
+    entity that isn't found fails the step (``_compliance_entity``).
+
+    Other request fields (``contract_schema``, ``servers``, ``team``, ``sla``...)
+    are overlaid in the request's shape, which isn't the shape other triggers
+    see: rules should read the loader's keys and the derived fields.
+    """
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    stored = _compliance_entity(db, context)
+    try:
+        # Savepoint and coded error as in _rule_object (tags by id, a domain by name)
+        with db.begin_nested():
+            tags = _future_tags(db, payload, stored, _deferred_removals(context))
+            proposed = _proposed_values(db, payload)
+            derived = _future_contract_fields(db, context, payload, stored, proposed)
+            stored = _with_stored_primary_domain(db, context, stored)
+    except Exception as e:
+        raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+    stored = stored or {}
+    # A null in the update leaves the stored value, as the manager does. The request's
+    # description object never replaces the stored purpose: _proposed_values maps it
+    sent = {
+        key: value for key, value in payload.items()
+        if key not in stored or (value is not None and key != 'description')
+    }
+    state = {**derived, **stored, **sent, **proposed}
+    # The derived fields describe the entity after the update, not the request
+    state.update({key: derived[key] for key in _FUTURE_CONTRACT_FIELDS if key in derived})
+    if state.get('tags') is None:
+        state.pop('tags', None)  # a null, with no stored tags to keep: none known
+    if tags is not None:
+        state['tags'] = _tags_as_rules_read_them(tags)
+        state['tag_count'] = len(tags)
+        state['has_tags'] = bool(tags)
+    return state
+
+
 def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
-    """What a policy check's rule sees as ``obj``: the entity as a compliance run sees it.
+    """What a policy check's rule (WHERE and ASSERT) sees as ``obj``.
 
     For the types AppEntityLoader reads, the dict it gives a run
     (``description``, ``owner``, ``tags``...) over ``_rule_object``: the
     other triggers fire on the stored entity, and their payload's
     ``description`` / ``tags`` have the request's shape, not the run's.
-    Payload keys the loader doesn't have stay. ``before_update`` gates still
-    see only the proposed change (see ``_rule_object``), with its values
-    also under the loader's keys; ``before_create`` and ``on_delete`` have
-    no stored entity. As in ``_rule_object``, an entity the loader doesn't
-    find raises ``RuleEntityNotFoundError`` (the step fails) instead of
-    falling back to the payload.
+    Payload keys the loader doesn't have stay. ``before_update`` gates see
+    the entity as it will be after the update (``_before_update_object``);
+    ``before_create`` and ``on_delete`` have no stored entity. As in
+    ``_rule_object``, an entity the loader doesn't find raises
+    ``RuleEntityNotFoundError`` (the step fails) instead of falling back to
+    the payload.
     """
-    obj = _rule_object(db, context)
-    payload = context.entity if isinstance(context.entity, dict) else {}
     trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
     trigger_type = getattr(trigger_type, 'value', trigger_type)
     if trigger_type == 'before_update':
-        try:
-            # Savepoint and coded error as in _rule_object (it may read tags)
-            with db.begin_nested():
-                proposed = _proposed_values(db, payload)
-        except Exception as e:
-            raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
-        return {**obj, **proposed}
+        return _before_update_object(db, context)
+    obj = _rule_object(db, context)
+    payload = context.entity if isinstance(context.entity, dict) else {}
     if trigger_type in ('before_create', 'on_delete'):
         return obj
     loaded = _compliance_entity(db, context)
@@ -535,33 +973,6 @@ def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str
     if not loaded:
         raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
     return loaded
-
-
-def _policy_where_object(
-    db: Session, context: 'StepContext', rule_object: Dict[str, Any],
-) -> Dict[str, Any]:
-    """What a policy check's WHERE sees: the entity as it will be.
-
-    The rule object, except for ``before_update`` gates: their rule object is
-    only the proposed change, and a WHERE on a field the update doesn't carry
-    (``c.status = 'active'`` on an update of the description) would leave the
-    entity unselected and let the gate pass. Their WHERE sees the stored
-    entity with the proposed change over it; ASSERT still sees only the
-    change (#1019).
-    """
-    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
-    if getattr(trigger_type, 'value', trigger_type) != 'before_update':
-        return rule_object
-    stored = _compliance_entity(db, context)
-    if stored is None:
-        return rule_object
-    merged = {**stored, **rule_object}
-    # A dict is what an assign-tag step adds to the context: it adds to the stored
-    # tags, while the request's list replaces them
-    payload_tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
-    if isinstance(payload_tags, dict) and isinstance(stored.get('tags'), dict):
-        merged['tags'] = {**stored['tags'], **rule_object.get('tags', {})}
-    return merged
 
 
 class ValidationStepHandler(StepHandler):
@@ -616,6 +1027,73 @@ def _underlying_entity(context: 'StepContext') -> Tuple[str, str]:
         context.entity_type, context.entity_id, underlying_type, underlying_id,
     )
     return underlying_type, underlying_id
+
+
+class ClarifyNotSupportedError(CodedValueError):
+    """A clarification asked of an approval step with no on_clarify branch."""
+
+    code = 'clarify_not_supported'
+
+
+CLARIFY_NOT_SUPPORTED = ClarifyNotSupportedError.code
+
+
+def _step_clarify_target(step: 'WorkflowStep') -> Optional[str]:
+    """The step a clarification of this approval step goes to (config.on_clarify), if any."""
+    config = getattr(step, 'config', None) or {}
+    target = config.get('on_clarify') if isinstance(config, dict) else None
+    return target if isinstance(target, str) and target else None
+
+
+# An access request has no state for "waiting for the requester" (it is pending, approved,
+# denied, expired or cancelled): a clarification there would leave it pending and unrecorded
+_NO_CLARIFY_ENTITY_TYPES = frozenset({'access_grant'})
+
+
+def _takes_clarification(entity_type: Optional[str]) -> bool:
+    """Whether a request of this entity type can be answered with a clarification."""
+    return (entity_type or '').lower() not in _NO_CLARIFY_ENTITY_TYPES
+
+
+def _execution_takes_clarification(db_execution: Any) -> bool:
+    """Whether the execution's trigger entity can be answered with a clarification."""
+    try:
+        context = json.loads(getattr(db_execution, 'trigger_context', None) or '{}') or {}
+    except (TypeError, ValueError):
+        return True
+    return _takes_clarification(context.get('entity_type') if isinstance(context, dict) else None)
+
+
+# The (entity type, trigger) pairs whose request is closed when its review is clarified: the
+# run has no step left to decide it. Other reviews keep no request state of their own.
+_CLARIFICATION_CLOSES_REQUEST = frozenset({
+    ('data_product', 'on_request_status_change'),
+    ('data_contract', 'on_request_status_change'),
+    ('metric_view', 'on_request_definition_change'),
+})
+
+
+def _clarification_closes_request(entity_type: Optional[str], trigger_type: Any) -> bool:
+    """Whether a clarified review of this entity and trigger still closes its request."""
+    trigger = str(getattr(trigger_type, 'value', trigger_type) or '').lower()
+    return ((entity_type or ''), trigger) in _CLARIFICATION_CLOSES_REQUEST
+
+
+def _approval_result(step_result: bool, clarify: bool, decision: bool = False) -> str:
+    """The approval's outcome: the approval_result (or, with decision, the decision) text."""
+    if clarify:
+        return 'clarify' if decision else 'clarification_requested'
+    return 'approved' if step_result else 'rejected'
+
+
+def _status_change_target(context: 'StepContext') -> Optional[str]:
+    """The status a status change request asks for (the trigger's to_status)."""
+    trigger_context = getattr(context, 'trigger_context', None)
+    to_status = getattr(trigger_context, 'to_status', None)
+    if to_status:
+        return to_status
+    entity_data = getattr(trigger_context, 'entity_data', None) or {}
+    return entity_data.get('target_status') if isinstance(entity_data, dict) else None
 
 
 def _requester_email(context: 'StepContext') -> Optional[str]:
@@ -735,6 +1213,32 @@ def _owner_approvers(
     )
 
 
+# Explicit principal forms in an approvers / recipients spec (see
+# ``_resolve_role_to_users``)
+_USER_PREFIX = 'user:'
+_GROUP_PREFIX = 'group:'
+
+
+# A comma separates principals, so the designer writes a group name's ``,`` as
+# ``%2C`` (and ``%`` as ``%25``) after ``group:``
+_GROUP_NAME_ESCAPE_RE = re.compile(r'%(2[cC]|25)')
+
+
+def _decode_group_name(name: str) -> str:
+    """A ``group:`` name as the designer escaped it, with its commas back."""
+    return _GROUP_NAME_ESCAPE_RE.sub(lambda m: '%' if m.group(1) == '25' else ',', name)
+
+
+def _strip_user_prefix(identifier: str) -> str:
+    """``identifier`` without a ``user:`` marker (``group:`` ones are kept)."""
+    return identifier[len(_USER_PREFIX):] if identifier.startswith(_USER_PREFIX) else identifier
+
+
+_UUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
 def _resolve_role_to_users(
     db: Session,
     role_spec: str,
@@ -742,16 +1246,25 @@ def _resolve_role_to_users(
 ) -> List[tuple]:
     """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
 
-    Handles:
+    Explicit forms are resolved first, so a principal named like a token or a
+    role (a group called 'reviewer' or 'admins') is never read as one:
+    - 'user:<x>' → the user ``x``: 'user:<x>' (an email: bare)
+    - 'group:<name>' → the group ``name``: 'group:<name>' (what the Workflow
+      Designer's PrincipalPicker emits for a group; a ``,`` in the name is
+      written ``%2C``, a ``%`` ``%25``)
+    - 'user@email.com' → direct email
+    - '<uuid>' of an app role → that role
+
+    Then:
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
     - 'reviewer' → entity reviewer_email (falls back to the Admin role)
     - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
-    - '<uuid>' → app role UUID
-    - 'user@email.com' → direct email
     - Legacy aliases like 'data_stewards', 'admins', etc.
+    - Any other name: an app role id or name, else the name as written (a bare
+      group name, as stored before the picker sent the prefix)
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -766,7 +1279,7 @@ def _resolve_role_to_users(
     # role tokens / aliases / business: prefixes still resolve.
     if ',' in role_spec:
         out: List[tuple] = []
-        seen: set = set()
+        seen: Dict[tuple, int] = {}
         for segment in role_spec.split(','):
             seg = segment.strip()
             if not seg:
@@ -774,11 +1287,40 @@ def _resolve_role_to_users(
             for identifier, role_uuid in _resolve_role_to_users(db, seg, context):
                 if not identifier:
                     continue
-                key = (identifier, role_uuid)
+                # One principal, one row: emails and names ignore case and
+                # ``user:alice`` is ``alice``, as on delivery (``is_user``)
+                key = (principal_identity(identifier) if not role_uuid else identifier,
+                       role_uuid)
                 if key not in seen:
-                    seen.add(key)
+                    seen[key] = len(out)
                     out.append((identifier, role_uuid))
+                elif out[seen[key]][0].startswith(_USER_PREFIX) and not role_uuid \
+                        and not identifier.startswith(_USER_PREFIX):
+                    # The bare name also reaches a group of that name: keep it
+                    out[seen[key]] = (identifier, role_uuid)
         return out
+
+    # The explicit forms keep their prefix in what is stored, so the delivery
+    # (NotificationsManager) never reads them as a role name; an email can't
+    # be one and stays bare.
+    if role_spec.startswith(_USER_PREFIX):
+        user = role_spec[len(_USER_PREFIX):].strip()
+        if not user:
+            return []
+        return [(user if '@' in user else _USER_PREFIX + user, None)]
+
+    if role_spec.startswith(_GROUP_PREFIX):
+        group = _decode_group_name(role_spec[len(_GROUP_PREFIX):]).strip()
+        return [(_GROUP_PREFIX + group, None)] if group else []
+
+    if '@' in role_spec:
+        # Pre-comma-split single email -- treat as a direct recipient.
+        return [(role_spec, None)]
+
+    if _UUID_RE.match(role_spec):
+        role_by_id = db.query(AppRoleDb).filter(AppRoleDb.id == role_spec).first()
+        if role_by_id:
+            return [(role_by_id.name, role_by_id.id)]
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
@@ -827,14 +1369,6 @@ def _resolve_role_to_users(
                 if r.name.lower().replace(' ', '') == normalized:
                     return [(r.name, r.id)]
         return [(role_name, role.id if role else None)]
-
-    # Strip "user:" prefix emitted by the PrincipalPicker (e.g. "user:foo@bar.com").
-    if role_spec.startswith('user:'):
-        role_spec = role_spec[len('user:'):]
-
-    if '@' in role_spec:
-        # Pre-comma-split single email -- treat as a direct recipient.
-        return [(role_spec, None)]
 
     # Business role: prefixed with "business:"
     if role_spec.startswith('business:'):
@@ -909,7 +1443,35 @@ def _humanize_entity_type(entity_type: Optional[str]) -> str:
     return entity_type.replace("_", " ").title()
 
 
-def _extract_approval_facets(context: "StepContext") -> Dict[str, Any]:
+def _server_entity_name(db: Optional[Session], entity_type: Any, entity_id: Any) -> Optional[str]:
+    """The name Ontos stores for a data product or contract; None when it can't say.
+
+    Approvers see this name, never one sent with the request (#1615 review): a requester
+    could otherwise make an approval read as being for another entity.
+    """
+    if db is None or not entity_id:
+        return None
+    kind = str(entity_type or '').lower().replace(' ', '')
+    try:
+        if kind in ('data_product', 'dataproduct'):
+            from src.db_models.data_products import DataProductDb as model
+        elif kind in ('data_contract', 'datacontract'):
+            from src.db_models.data_contracts import DataContractDb as model
+        else:
+            return None
+        # a savepoint: a failed SELECT aborts the whole transaction on Postgres, and
+        # this session is the step's own
+        with db.begin_nested():
+            name = db.query(model.name).filter(model.id == str(entity_id)).scalar()
+    except SQLAlchemyError:
+        logger.warning(f"Could not read the name of {kind} {entity_id}", exc_info=True)
+        return None
+    return str(name) if name else None
+
+
+def _extract_approval_facets(
+    context: "StepContext", db: Optional[Session] = None,
+) -> Dict[str, Any]:
     """Pull readable request facets out of the trigger entity_data.
 
     The approval step is generic, but the most common payload — access
@@ -932,10 +1494,8 @@ def _extract_approval_facets(context: "StepContext") -> Dict[str, Any]:
     if context.entity_type and context.entity_type.lower() == "access_grant":
         underlying_type = entity.get("entity_type")
         underlying_id = entity.get("entity_id")
-        underlying_name = (
-            entity.get("entity_name")
-            or entity.get("data_product_name")
-        )
+        # From the database, never the request's own entity_name / data_product_name
+        underlying_name = _server_entity_name(db, underlying_type, underlying_id)
         if underlying_type:
             facets["underlying_entity_type"] = str(underlying_type)
         if underlying_id:
@@ -1121,11 +1681,13 @@ class ApprovalStepHandler(StepHandler):
             # instead of just the proxy ``access_grant`` UUID. Best-effort —
             # the approval step is generic and only access-grant triggers
             # populate these fields today.
-            facets = _extract_approval_facets(context)
+            facets = _extract_approval_facets(context, self._db)
 
+            # An access request's proxy name is the requester's: not shown to approvers
+            proxy = (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES
             entity_display = (
                 facets.get("underlying_entity_name")
-                or context.entity_name
+                or (None if proxy else context.entity_name)
                 or facets.get("underlying_entity_id")
                 or context.entity_id
             )
@@ -1168,7 +1730,10 @@ class ApprovalStepHandler(StepHandler):
                             "workflow_name": context.workflow_name,
                             "entity_type": context.entity_type,
                             "entity_id": context.entity_id,
-                            "entity_name": context.entity_name,
+                            "entity_name": entity_display if proxy else context.entity_name,
+                            # The name the requester gave: only for texts to the requester
+                            **({"requester_entity_name": context.entity_name}
+                               if proxy and context.entity_name else {}),
                             "requester_email": _requester_email(context),
                             "timeout_days": timeout_days,
                             # Structured request context for the approval
@@ -1177,6 +1742,12 @@ class ApprovalStepHandler(StepHandler):
                             # fields today.
                             **facets,
                             "workflow_message": approval_message or None,
+                            # The step has an on_clarify branch: the dialog offers
+                            # "Request clarification" (config.on_clarify)
+                            "can_clarify": bool(
+                                self._config.get('on_clarify')
+                                and _takes_clarification(context.entity_type)
+                            ),
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,
@@ -1224,6 +1795,40 @@ class ApprovalStepHandler(StepHandler):
         return _resolve_role_to_users(self._db, approvers, context)
 
 
+def _notification_subtitle(
+    context: StepContext, name: Optional[str] = None,
+) -> Optional[str]:
+    """Subtitle of a notification step: the entity's type and name (else its id).
+
+    An access request runs on the proxy ``access_grant`` whose id is the request's: the
+    subtitle names the requested entity instead (#1615), by ``name`` (the caller picks it
+    per recipient, see ``_recipient_entity_name``), else its id.
+    """
+    if (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES:
+        entity = context.entity if isinstance(context.entity, dict) else {}
+        underlying_type = entity.get('entity_type')
+        ref = name or entity.get('entity_id') or context.entity_id
+        if underlying_type and ref:
+            return f"{_humanize_entity_type(str(underlying_type))}: {ref}"
+    ref = context.entity_name or context.entity_id
+    return f"{context.entity_type}: {ref}" if ref else None
+
+
+def _recipient_entity_name(
+    context: StepContext, recipient: Optional[str], server_name: Optional[str],
+) -> Optional[str]:
+    """The requested entity's name a recipient of an access request's notice sees.
+
+    The requester: the name they sent (what they saw), so nothing new becomes readable to
+    them. Anyone else: the stored name (``_server_entity_name``), never the sent one.
+    """
+    entity = context.entity if isinstance(context.entity, dict) else {}
+    requester = (_requester_email(context) or '').strip().lower()
+    if requester and (recipient or '').strip().lower() == requester:
+        return entity.get('entity_name') or context.entity_name
+    return server_name
+
+
 class NotificationStepHandler(StepHandler):
     """Handler for notification steps - sends notifications via NotificationsManager."""
 
@@ -1243,16 +1848,27 @@ class NotificationStepHandler(StepHandler):
             # Resolve recipients
             resolved_recipients = self._resolve_recipients(recipients, context)
             
-            # Build notification message with variable substitution
-            raw_message = custom_message or self._get_template_message(template, context)
-            message = substitute_template(raw_message, context)
-            title = substitute_template(self._get_template_title(template, context), context)
-            # Keys of the built-in texts, so the bell shows them in the user's language
-            i18n_data = notification_step_i18n(
-                template, custom_message, context.entity_type,
-                context.entity_name or context.entity_id,
-                lambda name: substitute_template('${' + name + '}', context),
+            # The decision of a status change request (approved / denied /
+            # clarification): the product, target status, approver and the
+            # approver's message, built from params (translated by the frontend)
+            decision_notice = None if custom_message else status_change_decision_notice(
+                template, context.entity_type, context.entity_name, context.entity_id,
+                _status_change_target(context), context.user_email,
+                list((context.step_results or {}).values()),
             )
+            if decision_notice:
+                title, message, i18n_data = decision_notice
+            else:
+                # Build notification message with variable substitution
+                raw_message = custom_message or self._get_template_message(template, context)
+                message = substitute_template(raw_message, context)
+                title = substitute_template(self._get_template_title(template, context), context)
+                # Keys of the built-in texts, so the bell shows them in the user's language
+                i18n_data = notification_step_i18n(
+                    template, custom_message, context.entity_type,
+                    context.entity_name or context.entity_id,
+                    lambda name: substitute_template('${' + name + '}', context),
+                )
             link = None
             if not custom_message and template in LIFECYCLE_TEMPLATES:
                 # Reason, sunset date and replacement, each on its own line when set
@@ -1289,8 +1905,12 @@ class NotificationStepHandler(StepHandler):
             
             # Typed-ID manual runs have no entity name: fall back to the id and
             # leave the subtitle out when neither is known.
-            subtitle_ref = context.entity_name or context.entity_id
-            subtitle = f"{context.entity_type}: {subtitle_ref}" if subtitle_ref else None
+            proxy = (context.entity_type or '').lower() in _PROXY_ENTITY_TYPES
+            entity = context.entity if isinstance(context.entity, dict) else {}
+            server_name = _server_entity_name(
+                self._db, entity.get('entity_type'), entity.get('entity_id'),
+            ) if proxy else None
+            subtitle = _notification_subtitle(context)
 
             created_count = 0
             email_count = 0
@@ -1307,7 +1927,10 @@ class NotificationStepHandler(StepHandler):
                             created_at=utc_now(),
                             type=notification_type,
                             title=title,
-                            subtitle=subtitle,
+                            subtitle=_notification_subtitle(
+                                context, _recipient_entity_name(
+                                    context, recipient_id, server_name),
+                            ) if proxy else subtitle,
                             description=message,
                             link=link,
                             recipient=recipient_id,
@@ -1331,7 +1954,10 @@ class NotificationStepHandler(StepHandler):
                     from src.common.email_service import EmailService
                     email_svc = EmailService.from_settings(self._db)
                     if email_svc:
-                        email_addrs = [r[0] for r in resolved_recipients if '@' in r[0]]
+                        email_addrs = [
+                            a for a in (_strip_user_prefix(r[0]) for r in resolved_recipients)
+                            if '@' in a
+                        ]
                         if email_addrs:
                             sent = email_svc.send(
                                 to=email_addrs,
@@ -1427,13 +2053,15 @@ class NotificationStepHandler(StepHandler):
         """Get notification type based on template."""
         from src.models.notifications import NotificationType
         
-        if template in ('validation_failed', 'request_rejected', 'product_rejected', 'pii_detected'):
+        if template in ('validation_failed', 'request_rejected', 'product_rejected', 'pii_detected',
+                         'status_change_denied'):
             return NotificationType.ERROR
         elif template in ('approval_requested',):
             return NotificationType.ACTION_REQUIRED
         elif template in LIFECYCLE_TEMPLATES:
             return NotificationType.WARNING
-        elif template in ('validation_passed', 'request_approved', 'product_approved'):
+        elif template in ('validation_passed', 'request_approved', 'product_approved',
+                          'status_change_approved'):
             return NotificationType.SUCCESS
         else:
             return NotificationType.INFO
@@ -1478,9 +2106,15 @@ class AssignTagStepHandler(StepHandler):
 
             # Persist via TagsManager. ``effective_value`` is what the entity holds
             # afterwards: a key-only assign keeps a value the entity already has.
+            # A before_update gate only records the write (``deferred``): the step
+            # records are committed as the gate runs, so a tag written here would
+            # stay when a later step blocks the update. The update writes it
+            # (``apply_deferred_tag_writes``), after its own tags and in its commit.
             persisted = False
             wrote = False
+            deferred = None
             effective_value = resolved_value
+            tag = None
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
@@ -1491,7 +2125,10 @@ class AssignTagStepHandler(StepHandler):
                     tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                     if tag:
                         existing = None
-                        if resolved_value is None:
+                        # A tag an earlier remove-tag step of this gate removes isn't there
+                        # any more: assign it again (recorded after the removal)
+                        removed = tag.fully_qualified_name in _deferred_removals(context)
+                        if resolved_value is None and not removed:
                             existing = next(
                                 (t for t in tags_mgr.list_assigned_tags(
                                     self._db, entity_id=context.entity_id,
@@ -1502,7 +2139,18 @@ class AssignTagStepHandler(StepHandler):
                         if existing is not None:
                             # Already assigned: nothing to write (and no change-log entry).
                             effective_value = existing.assigned_value
-                        else:
+                        if _trigger_type(context) == 'before_update':
+                            # Recorded even when the tag is stored: a ``tags`` list in
+                            # the update may drop it, and the update writes this after it
+                            deferred = {
+                                'action': 'assign',
+                                'seq': len(context.step_results or {}),
+                                'entity_type': context.entity_type,
+                                'entity_id': str(context.entity_id),
+                                'tag_id': str(tag.id),
+                                'assigned_value': resolved_value,
+                            }
+                        elif existing is None:
                             tags_mgr.add_tag_to_entity(
                                 db=self._db,
                                 entity_id=context.entity_id,
@@ -1513,7 +2161,7 @@ class AssignTagStepHandler(StepHandler):
                                 commit=False,
                             )
                             wrote = True
-                        persisted = True
+                        persisted = deferred is None
                 if not tag:
                     # Nothing was assigned, so the step must not pass
                     return _rule_step_error(TagNotFoundError(key))
@@ -1525,21 +2173,32 @@ class AssignTagStepHandler(StepHandler):
                 logger.exception("TagsManager failed assigning tag %s", key)
                 return StepResult(passed=False, error=f"Could not assign tag '{key}'")
 
-            if 'tags' not in context.entity:
-                context.entity['tags'] = {}
-            if effective_value is not None:
-                context.entity['tags'][key] = effective_value
+            if isinstance(context.entity.get('tags'), list):
+                # A before_update request's tag list (the tags after the update):
+                # this tag goes on top of it, as the update writes it
+                context.entity['tags'] = _with_listed_tag(
+                    context.entity['tags'], tag.fully_qualified_name if tag else key,
+                    resolved_value, str(tag.id) if tag else None,
+                )
             else:
-                # Key-only, with no stored value: rules see the tag as true, like
-                # the compliance loader shows key-only tags.
-                context.entity['tags'].setdefault(key, True)
+                if context.entity.get('tags') is None:
+                    context.entity['tags'] = {}  # none yet, or an update request's null
+                if effective_value is not None:
+                    context.entity['tags'][key] = effective_value
+                else:
+                    # Key-only, with no stored value: rules see the tag as true, like
+                    # the compliance loader shows key-only tags.
+                    context.entity['tags'].setdefault(key, True)
 
             label = f"{key}={resolved_value}" if resolved_value is not None else key
-            return StepResult(
-                passed=True,
-                message=f"Assigned tag {label}" + (" (persisted)" if persisted else " (context only)"),
-                data={'key': key, 'value': resolved_value, 'persisted': persisted}
-            )
+            if deferred is not None:
+                suffix = " (written when the update passes its gates)"
+            else:
+                suffix = " (persisted)" if persisted else " (context only)"
+            data = {'key': key, 'value': resolved_value, 'persisted': persisted}
+            if deferred is not None:
+                data['deferred_tag_write'] = deferred
+            return StepResult(passed=True, message=f"Assigned tag {label}{suffix}", data=data)
         except Exception as e:
             logger.exception(f"Assign tag step failed: {e}")
             return StepResult(passed=False, error=str(e))
@@ -1570,8 +2229,11 @@ class RemoveTagStepHandler(StepHandler):
         try:
             logger.info(f"Removing tag {key} from {context.entity_type} {context.entity_id}")
 
-            # Persist via TagsManager
+            # Persist via TagsManager; a before_update gate only records the
+            # removal, as an assign-tag step does (``apply_deferred_tag_writes``)
             persisted = False
+            deferred = None
+            tag = None
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
@@ -1579,7 +2241,16 @@ class RemoveTagStepHandler(StepHandler):
                 # not leave the run unable to record the step
                 with self._db.begin_nested():
                     tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
-                    if tag:
+                    if tag and _trigger_type(context) == 'before_update':
+                        deferred = {
+                            'action': 'remove',
+                            'seq': len(context.step_results or {}),
+                            'entity_type': context.entity_type,
+                            'entity_id': str(context.entity_id),
+                            'tag_id': str(tag.id),
+                            'tag_fqn': tag.fully_qualified_name,
+                        }
+                    elif tag:
                         persisted = tags_mgr.remove_tag_from_entity(
                             db=self._db,
                             entity_id=context.entity_id,
@@ -1596,14 +2267,23 @@ class RemoveTagStepHandler(StepHandler):
                 persisted = False
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
             
-            if 'tags' in context.entity and key in context.entity['tags']:
+            if isinstance(context.entity.get('tags'), dict) and key in context.entity['tags']:
                 del context.entity['tags'][key]
-            
-            return StepResult(
-                passed=True,
-                message=f"Removed tag {key}" + (" (persisted)" if persisted else " (context only)"),
-                data={'key': key, 'persisted': persisted}
-            )
+            elif isinstance(context.entity.get('tags'), list):
+                # A before_update request's tag list: the update removes it after the list
+                context.entity['tags'] = _without_listed_tag(
+                    context.entity['tags'], tag.fully_qualified_name if tag else key,
+                    str(tag.id) if tag else None,
+                )
+
+            if deferred is not None:
+                suffix = " (written when the update passes its gates)"
+            else:
+                suffix = " (persisted)" if persisted else " (context only)"
+            data = {'key': key, 'persisted': persisted}
+            if deferred is not None:
+                data['deferred_tag_write'] = deferred
+            return StepResult(passed=True, message=f"Removed tag {key}{suffix}", data=data)
         except Exception as e:
             logger.exception(f"Remove tag step failed: {e}")
             return StepResult(passed=False, error=str(e))
@@ -1911,8 +2591,8 @@ class PolicyCheckStepHandler(StepHandler):
             if not self._match_selects(parsed, context):
                 return self._not_applicable(policy, context, 'match_type')
             rule_object = _policy_rule_object(self._db, context)
-            where_object = partial(_policy_where_object, self._db, context, rule_object)
-            if not self._where_selects(parsed, policy, context, where_object):
+            # The same object as ASSERT: for before_update, the entity after the update
+            if not self._where_selects(parsed, policy, context, rule_object):
                 return self._not_applicable(policy, context, 'where')
 
             # Evaluate the policy's rule against the entity
@@ -1971,7 +2651,7 @@ class PolicyCheckStepHandler(StepHandler):
     @staticmethod
     def _where_selects(
         parsed: Optional[Dict[str, Any]], policy, context: StepContext,
-        where_object: Callable[[], Dict[str, Any]],
+        obj: Dict[str, Any],
     ) -> bool:
         """Whether WHERE selects the entity.
 
@@ -1984,7 +2664,6 @@ class PolicyCheckStepHandler(StepHandler):
         where = (parsed or {}).get('where_clause')
         if where is None:
             return True
-        obj = where_object()  # Loaded only for a WHERE; its errors fail the step as coded
         try:
             return bool(Evaluator(obj).evaluate(where))
         except Exception as e:
@@ -2690,7 +3369,6 @@ class EntityActionStepHandler(StepHandler):
         action = self._config.get('action')
         if not action:
             return StepResult(passed=False, error="No action configured for entity_action step")
-
         entity_type = context.entity_type
         entity_id = context.entity_id
 
@@ -3186,6 +3864,47 @@ class GrantPermissionsStepHandler(StepHandler):
         return None
 
 
+class EvaluateAssetMaturityStepHandler(StepHandler):
+    """Runs the bulk maturity evaluation of table and view assets (#1414) and waits for it.
+
+    Config: optional ``catalog`` and ``schema_name`` (a schema needs its catalog); none
+    evaluates every table, view and metric view asset. The run is the one
+    ``POST /api/maturity-evaluations/assets`` starts, in this step's thread, with the
+    app's identity reading the UC tables. The result data has the run's counts. While
+    another run is going the step fails with ``maturity_bulk_run_in_progress``.
+    """
+
+    SUMMARY_KEYS = ('state', 'scope', 'total', 'processed', 'evaluated', 'changed', 'skipped',
+                    'error_count')
+
+    def execute(self, context: StepContext) -> StepResult:
+        from src.controller import maturity_bulk_evaluator as bulk
+        from src.controller.workflow_scheduler import SCHEDULER_USER
+
+        # The run takes minutes and this session would sit idle in the transaction its
+        # last read opened (the execution row's refresh); Lakebase ends such sessions
+        self._db.commit()
+        try:
+            scope = bulk.normalize_scope(self._config.get('catalog'),
+                                         self._config.get('schema_name'))
+            summary = bulk.run_now(scope, started_by=context.user_email or SCHEDULER_USER)
+        except (bulk.MaturityBulkScopeError, bulk.MaturityBulkRunInProgressError) as e:
+            return StepResult(passed=False, error=str(e),
+                              data={'error_code': e.code, 'error_params': e.params})
+        data = {'run_id': summary.get('id'), **{key: summary.get(key) for key in self.SUMMARY_KEYS}}
+        skipped = sum((summary.get('skipped') or {}).values())
+        message = (
+            f"Evaluated {summary.get('evaluated', 0)} of {summary.get('total', 0)} assets: "
+            f"{summary.get('changed', 0)} changed level, {skipped} skipped, "
+            f"{summary.get('error_count', 0)} errors"
+        )
+        if summary.get('state') != 'completed':
+            data.update(error_code=bulk.ERROR_RUN_FAILED, error_params={})
+            return StepResult(passed=False, message=message, data=data,
+                              error="The bulk maturity evaluation failed")
+        return StepResult(passed=True, message=message, data=data)
+
+
 class WorkflowExecutor:
     """Executes process workflows."""
 
@@ -3206,6 +3925,7 @@ class WorkflowExecutor:
         'webhook': WebhookStepHandler,
         'entity_action': EntityActionStepHandler,
         'grant_permissions': GrantPermissionsStepHandler,
+        'evaluate_asset_maturity': EvaluateAssetMaturityStepHandler,
     }
 
     def __init__(self, db: Session):
@@ -3288,6 +4008,8 @@ class WorkflowExecutor:
             step_results={},
             on_behalf_of=on_behalf_of,
         )
+        # A before_update gate sees the tag changes of the gates that ran before it
+        _start_from_earlier_gates(context)
 
         # Build step lookup
         steps_by_id = {s.step_id: s for s in workflow.steps}
@@ -3360,6 +4082,8 @@ class WorkflowExecutor:
                     final_status = ExecutionStatus.FAILED
                     error_message = result.message or result.error
         
+        _carry_to_later_gates(context)
+
         # Finalize execution
         if final_status != ExecutionStatus.PAUSED:
             workflow_execution_repo.update_status(
@@ -3554,8 +4278,9 @@ class WorkflowExecutor:
         Every notification target resolved when the step paused must decide:
         a user target needs that user's decision, a group or role target one
         decision from any member. ``decides_for(target, role_id)`` tells which
-        targets the caller can fill. One person fills at most one target per
-        step: their own user target if it is pending, else the first pending
+        targets the caller can fill. One person decides once per step: the
+        decision fills every pending user target naming them (their email,
+        username or ``user:<x>``: the same person), else the first pending
         group or role target in the order the step resolved them. Only the
         targets decide: a caller who is none of them (an admin, who may act on
         any approval without ``require_all``) is refused. The decisions are
@@ -3605,18 +4330,23 @@ class WorkflowExecutor:
             if not open_targets:
                 outcome = 'no_longer_pending'
             else:
-                # Their own user target first, else the first pending group/role
-                own = [(k, t) for k, t in open_targets if not t[1] and t[0].lower() in caller]
-                key, (target, role_id) = (own or open_targets)[0]
-                decisions.append({
-                    'target': target,
-                    'role_id': role_id,
-                    'decided_by': user_email or username,
-                    'decision': 'approved' if approved else 'rejected',
-                    'at': utc_now().isoformat(),
-                    'reason': reason,
-                })
-                pending.remove(key)
+                # Every user target naming them (``user:alice``, ``alice`` and
+                # ``alice@x.com`` are one person), else the first group/role
+                own = [
+                    (k, t) for k, t in open_targets
+                    if not t[1] and principal_identity(t[0]) in caller
+                ]
+                at = utc_now().isoformat()
+                for key, (target, role_id) in own or open_targets[:1]:
+                    decisions.append({
+                        'target': target,
+                        'role_id': role_id,
+                        'decided_by': user_email or username,
+                        'decision': 'approved' if approved else 'rejected',
+                        'at': at,
+                        'reason': reason,
+                    })
+                    pending.remove(key)
                 record.result_data = json.dumps({**data, 'decisions': decisions})
                 self._db.add(record)
                 self._db.flush()
@@ -3633,6 +4363,34 @@ class WorkflowExecutor:
             'outcome': outcome, 'pending_approvers': len(pending), 'decisions': decisions,
             'rejection': rejection,
         }
+
+    def record_decision_terms(
+        self, execution_id: str, decided_by: Optional[str], terms: Dict[str, Any],
+    ) -> bool:
+        """Keep what an approval grants with its ``require_all`` decision.
+
+        An access request's checked terms (duration, level) are stored on the caller's
+        approving decisions of the paused step, so the step's outcome can grant the
+        narrowest of every approver's. Call right after ``record_required_approval``.
+        Flushed, not committed. Whether a decision was found.
+        """
+        paused = self._paused_approval(execution_id, lock=True)
+        if paused is None or paused[1] is None or not decided_by:
+            return False
+        _, record, data = paused
+        decisions = [d for d in (data.get('decisions') or []) if isinstance(d, dict)]
+        who = decided_by.strip().lower()
+        found = False
+        for decision in decisions:
+            if (str(decision.get('decided_by') or '').strip().lower() == who
+                    and decision.get('decision') == 'approved' and 'terms' not in decision):
+                decision['terms'] = terms
+                found = True
+        if found:
+            record.result_data = json.dumps({**data, 'decisions': decisions})
+            self._db.add(record)
+            self._db.flush()
+        return found
 
     def _restored_step_results(
         self, execution_id: str, steps_by_id: Dict[str, Any],
@@ -3692,6 +4450,33 @@ class WorkflowExecutor:
             restored[key] = entry
         return restored
 
+    def clarify_refusal(self, execution_id: str) -> Optional[str]:
+        """The code refusing a clarification of the paused step, or None.
+
+        A clarification needs the paused approval step's ``on_clarify`` branch,
+        and no ``require_all`` (each approver's decision is then counted).
+        """
+        from src.repositories.process_workflows_repository import process_workflow_repo
+        from src.controller.workflows_manager import WorkflowsManager
+
+        db_execution = workflow_execution_repo.get(self._db, execution_id)
+        if not db_execution or db_execution.status != 'paused':
+            return None
+        db_workflow = process_workflow_repo.get(self._db, db_execution.workflow_id)
+        if not db_workflow:
+            return None
+        workflow = WorkflowsManager(self._db)._db_to_model(db_workflow)
+        step = next((s for s in workflow.steps if s.step_id == db_execution.current_step_id), None)
+        if step is None or step.step_type != StepType.APPROVAL:
+            return None
+        if (
+            not _step_clarify_target(step)
+            or not _execution_takes_clarification(db_execution)
+            or self.paused_at_required_approval(execution_id)
+        ):
+            return CLARIFY_NOT_SUPPORTED
+        return None
+
     def resume_workflow(
         self,
         execution_id: str,
@@ -3700,6 +4485,7 @@ class WorkflowExecutor:
         result_data: Optional[Dict[str, Any]] = None,
         user_email: Optional[str] = None,
         failure_message: Optional[str] = None,
+        clarify: bool = False,
     ) -> Optional[WorkflowExecution]:
         """Resume a paused workflow after approval/external action.
         
@@ -3751,6 +4537,24 @@ class WorkflowExecutor:
         
         current_step = steps_by_id[current_step_id]
         
+        # A clarification is no approval nor rejection: it follows the step's
+        # on_clarify target (config), and only a step that has one can take it
+        if clarify:
+            step_result = False
+            if not _step_clarify_target(current_step):
+                raise ClarifyNotSupportedError("This approval step has no clarification branch")
+            if not _execution_takes_clarification(db_execution):
+                raise ClarifyNotSupportedError("An access request takes no clarification")
+            # A step that needs every approver (its pause record decides, as for a
+            # decision) is not resumed by one approver's clarification
+            paused = self._paused_approval(execution_id, lock=True)
+            if paused is not None and paused[1] is not None and self._requires_every_approver(
+                paused[0], paused[2],
+            ):
+                raise ClarifyNotSupportedError(
+                    "A step that requires every approver takes no clarification"
+                )
+        
         # Claim the paused step before anything commits: the commit below,
         # which releases the lock, already says the execution has left
         # 'paused', so a decision waiting for the lock finds it decided
@@ -3779,7 +4583,7 @@ class WorkflowExecutor:
             status=StepExecutionStatus.SUCCEEDED.value if step_result else StepExecutionStatus.FAILED.value,
             passed=step_result,
             result_data={
-                'approval_result': 'approved' if step_result else 'rejected',
+                'approval_result': _approval_result(step_result, clarify),
                 'responded_by': user_email,
                 **(result_data or {}),
                 **({'decisions': decisions} if decisions else {}),
@@ -3798,7 +4602,10 @@ class WorkflowExecutor:
         )
         
         # Determine next step based on approval result
-        next_step_id = current_step.on_pass if step_result else current_step.on_fail
+        if clarify:
+            next_step_id = _step_clarify_target(current_step)
+        else:
+            next_step_id = current_step.on_pass if step_result else current_step.on_fail
         
         logger.info(
             f"Resuming workflow {execution_id} from step '{current_step_id}' "
@@ -3842,9 +4649,12 @@ class WorkflowExecutor:
                 **self._restored_step_results(execution_id, steps_by_id),
                 current_step_id: {
                     'passed': step_result,
-                    'decision': 'approved' if step_result else 'rejected',
+                    'decision': _approval_result(step_result, clarify, decision=True),
                     # Flatten result_data so ${step_results.approve.reason} works directly
                     **(result_data or {}),
+                    # The normalized outcome (approved / rejected / clarify): callers'
+                    # own 'decision' texts (denied, cancelled) can't override it
+                    'outcome': _approval_result(step_result, clarify, decision=True),
                 },
             },
             on_behalf_of=on_behalf_of,
@@ -3862,7 +4672,8 @@ class WorkflowExecutor:
         # governing workflow the single source of truth for a governed concept
         # (no separate DataAssetReview needed). Best-effort: a reflection failure
         # must not sink the workflow resume.
-        if context.entity_type == 'ontology_concept' and context.entity_id:
+        # A clarification is no decision yet: the concept stays as it is
+        if context.entity_type == 'ontology_concept' and context.entity_id and not clarify:
             try:
                 from src.common.app_state import get_app_state_manager
                 smm = get_app_state_manager('semantic_models_manager')
@@ -4044,6 +4855,7 @@ class WorkflowExecutor:
                 responded_by=user_email,
                 approved=step_result,
                 execution_id=execution_id,
+                clarified=clarify,
             )
         
         # Return updated execution
@@ -4132,7 +4944,9 @@ class WorkflowExecutor:
         )
 
     # Notification templates that tell the requester their request was approved
-    _APPROVAL_NOTICE_TEMPLATES = ('request_approved', 'product_approved')
+    _APPROVAL_NOTICE_TEMPLATES = (
+        'request_approved', 'product_approved', 'status_change_approved',
+    )
 
     def _withdraw_approval_notices(self, execution_id: Optional[str], recipient: Optional[str]) -> int:
         """Delete the "approved" notices this run sent ``recipient``.
@@ -4248,6 +5062,7 @@ class WorkflowExecutor:
         responded_by: Optional[str] = None,
         approved: Optional[bool] = None,
         execution_id: Optional[str] = None,
+        clarified: bool = False,
     ) -> None:
         """Handle entity status updates when a workflow completes.
         
@@ -4264,6 +5079,14 @@ class WorkflowExecutor:
         if not entity_type or not entity_id or not trigger_type:
             return
         
+        # A clarification is "no decision yet": the entity keeps its status and
+        # only the notification goes out. The requests that have a state of
+        # their own (_CLARIFICATION_CLOSES_REQUEST) still end it below: a status
+        # change request is closed ('workflow_clarified'), a metric view change
+        # request goes back to a draft; neither is recorded as rejected.
+        if clarified and not _clarification_closes_request(entity_type, trigger_type):
+            return
+
         try:
             # Handle asset review completion (covers former dataset reviews)
             if entity_type in ('asset', 'dataset') and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
@@ -4341,6 +5164,7 @@ class WorkflowExecutor:
                 MetricViewChangeRequestsManager(self._db).on_workflow_completed(
                     (trigger_context.entity_data or {}).get('request_id'),
                     approved=approved, responded_by=responded_by, execution_id=execution_id,
+                    clarified=clarified,
                 )
 
             # Handle data product activation completion
@@ -4392,7 +5216,9 @@ class WorkflowExecutor:
                 ):
                     close_request(
                         self._db, entity_type, entity_id, request_id,
-                        'workflow_approved' if approved_request else 'workflow_rejected',
+                        'workflow_clarified' if clarified else (
+                            'workflow_approved' if approved_request else 'workflow_rejected'
+                        ),
                         responded_by,
                     )
                     
@@ -4832,6 +5658,10 @@ class WorkflowExecutor:
         if not handler_class:
             return StepResult(passed=False, error=f"Unknown step type: {step_type}")
         
+        refusal = update_gate_step_refusal(step_type, context)
+        if refusal is not None:
+            return refusal
+
         try:
             # Handle config - may be a JSON string from DB or already a dict
             config = step.config or {}

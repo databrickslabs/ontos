@@ -100,6 +100,7 @@ export type StepType =
   | 'generate_pdf'               // Approval: generate PDF artifact
   | 'deliver'                    // Approval: send agreement via channels (non-visual)
   | 'grant_permissions'          // Process: grant UC permissions via SP workspace client
+  | 'evaluate_asset_maturity'    // Process: bulk maturity evaluation of table/view assets
   | 'on_behalf_of';              // Approval: capture self/group/SP principal in wizard ()
 
 /** Canonical step type value for lifecycle actions on the trigger entity */

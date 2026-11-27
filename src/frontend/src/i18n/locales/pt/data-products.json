@@ -1014,7 +1014,28 @@
     "required": "Obrigatório",
     "advisory": "Recomendado",
     "overTime": "Maturidade ao longo do tempo",
-    "retry": "Tentar novamente"
+    "retry": "Tentar novamente",
+    "currentLevel": "Nível atual",
+    "nextLevel": "Próximo nível",
+    "belowFirstLevel": "Abaixo do primeiro nível",
+    "topLevelReached": "Nível mais alto alcançado",
+    "noLevels": "Ainda não há níveis de maturidade definidos para este tipo.",
+    "gateStatus": {
+      "pass": "Aprovado",
+      "fail": "Reprovado",
+      "warn": "Não atendido"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Não foi possível acessar o Unity Catalog, então faltam os campos da tabela {{tableName}}.",
+    "maturity_uc_table_unreadable": "A tabela {{tableName}} não pode ser lida do Unity Catalog, por isso os campos dela estão ausentes.",
+    "maturity_uc_table_read_failed": "Não foi possível ler a tabela {{tableName}} do Unity Catalog, então faltam os campos dela.",
+    "maturity_gate_error": "Não foi possível avaliar o gate {{gateName}}. Os detalhes estão no log do servidor.",
+    "maturity_level_partial": "O nível conta apenas as verificações que não precisam da tabela {{tableName}}; o ativo pode atingir um nível mais alto."
+  },
+  "maturityResult": {
+    "notStored": "Calculado agora e não salvo: o histórico mostra as avaliações salvas. Reavalie para salvar este resultado.",
+    "notEvaluated": "Não avaliado"
   },
   "createDialog": {
     "editTitle": "Editar metadados do produto de dados",
@@ -1066,7 +1087,7 @@
     "contractLabel": "Contrato:",
     "productNameLabel": "Nome do produto *",
     "productNamePlaceholder": "ex.: Produto de análise de clientes",
-    "productTypeLabel": "Tipo de produto *",
+    "productTypeLabel": "Tipo de produto",
     "productTypePlaceholder": "Selecione o tipo de produto",
     "versionLabel": "Versão *",
     "versionPlaceholder": "ex.: v1.0.0",
@@ -1078,8 +1099,8 @@
     "errors": {
       "nameRequired": "O nome do produto é obrigatório",
       "versionRequired": "A versão é obrigatória",
-      "typeRequired": "O tipo de produto é obrigatório",
-      "createError": "Falha ao criar produto a partir do contrato"
+      "createError": "Falha ao criar produto a partir do contrato",
+      "unknown_data_product_type": "O tipo de produto \"{{key}}\" não existe ou foi desativado. Escolha outro tipo."
     },
     "messages": {
       "productCreated": "Produto criado",
@@ -1187,5 +1208,12 @@
     "colSubscriber": "Assinante",
     "colSubscribed": "Assinado em",
     "colReason": "Motivo"
+  },
+  "dataProductType": {
+    "source-aligned": "Alinhado à origem",
+    "aggregate": "Agregado",
+    "consumer-aligned": "Alinhado ao consumidor",
+    "source": "Origem",
+    "sink": "Destino"
   }
 }

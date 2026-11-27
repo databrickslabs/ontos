@@ -2014,6 +2014,7 @@ ON_FAIL action
 | `LENGTH(str)` | String length | `LENGTH(obj.name) <= 64` |
 | `UPPER(str)` | To uppercase | `UPPER(obj.name)` |
 | `LOWER(str)` | To lowercase | `LOWER(obj.name) = obj.name` |
+| `HAS_CONCEPT(iri_or_label)` | Linked semantic concept (products, contracts, domains) | `HAS_CONCEPT('Customer')` |
 
 ### Available Actions
 
@@ -2232,6 +2233,72 @@ reader and can differ from the score you see in a run's results.
 - Remediation tracking
 - Audit trails
 
+### Maturity Levels for Tables and Views
+
+Table and view assets have their own maturity ladder (levels with entity type **Asset**,
+in **Settings → Maturity Levels**). Each level has gates: compliance policies evaluated
+against the asset. A table reaches a level when it passes the required gates of that
+level and of every level below it. The asset's page has a **Maturity** card: the current
+level, the next level to reach, and the gates of that level, each passed or failed with
+the reason (the policy's failure message, or why a Unity Catalog field is missing), plus a
+button to re-evaluate it.
+
+**Default ladder.** No asset ladder is created at startup. While there is none,
+**Load default asset levels** adds this one, with one example policy per gate (category
+`Maturity`, named `[Asset maturity L<n>] ...`). Edit them, or add your own levels and
+gates, like any other level and policy. As for products, a level that an evaluation has
+already reached can't be deleted while its snapshots exist (opening an asset page
+evaluates it):
+
+| Level | Required gates |
+|-------|----------------|
+| 1. Prerequisite | an owner (`obj.has_owner`), a domain (`obj.has_domain`) |
+| 2. 1 star | a description of at least 50 characters (`LENGTH(obj.description)`), half of the columns commented (`obj.column_comment_ratio >= 0.5`) |
+| 3. 2 stars | every column commented (`obj.columns_without_comment_count = 0`), linked business terms (`obj.business_term_count > 0`); tags are advisory |
+| 4. 3 stars | certified (`obj.effective_certification >= 1`), certification not expired; quality checks are advisory |
+
+Column fields come from the Unity Catalog table the asset points to (platform Databricks,
+location `catalog.schema.table`). When the table can't be read they are missing, so the
+gates that use them fail and the page says why.
+
+**Publishing the level to Unity Catalog.** The *Unity Catalog Tag Sync* job (Settings →
+Background Jobs) can write the level as a tag on each table, so tools that read Unity
+Catalog see it. In the job's tag configuration, on the **Asset** tab, turn on the
+**Maturity level tag** card and set the key and value:
+
+| Variable | Value |
+|----------|-------|
+| `{ASSET.MATURITY}` | name of the level, e.g. `2 stars` |
+| `{ASSET.MATURITY_ORDER}` | number of the level, e.g. `3` |
+| `{ASSET.MATURITY_AT_LEAST:<n>}` | `true` when the level number is at least `<n>` (`1` is the first level), `false` on a table or view below that level or with no level; no tag on other asset types |
+
+For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The variables can
+also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
+`{ASSET.FQN}`.
+
+For a yes/no flag, use the threshold variable: key `ontos_agent_readable` and value
+`{ASSET.MATURITY_AT_LEAST:1}` publish `true` on the tables at or above the first level and
+`false` on the others. Asset types without maturity levels, such as metric views, get no
+tag from an entry that uses this variable (not `false`), and a tag written for them by an
+earlier run is removed. Change `<n>` to set another threshold. A malformed variable such as
+`{ASSET.MATURITY_AT_LEAST:x}` publishes no tag.
+
+- The job publishes the level of the latest stored evaluation: when an asset changes, or
+  with re-evaluate. It doesn't evaluate assets itself.
+- Only tables and views get the tag; schemas and catalogs don't. The run output counts
+  the assets it skipped and why: no `catalog.schema.table` name, an asset type other
+  than table or view, or no level (not evaluated yet, or no level reached).
+- A table that loses its level loses the tag at the next run. The job removes only a
+  maturity tag it recorded writing, while it still has the value it wrote: a tag set by
+  hand under the same key, or one whose value was changed in Unity Catalog, is kept, also
+  when the table has no level or the maturity card is off. Keep the key under the same
+  prefix as the other enabled keys (`ontos_` by default): the job only reads tags with
+  that prefix. The prefix is the common prefix of all enabled keys: a key without it (for
+  example `agent_readable` next to `ontos_*` keys) empties that prefix, and the job then
+  falls back to `x_ontos_`, so it stops reading and removing the `ontos_` tags.
+- The threshold variable gives `false` to every asset the job reads without a level,
+  including the assets it skips for their type (for example metric views).
+
 ### Compliance Best Practices
 
 1. **Start Simple**: Begin with 3-5 high-priority policies
@@ -2241,6 +2308,43 @@ reader and can differ from the score you see in a run's results.
 5. **Notify Sparingly**: Avoid alert fatigue; only notify on critical violations
 6. **Test First**: Run with limits to validate rules before full deployment
 7. **Document Examples**: Help users understand what passes and fails
+
+---
+
+## Maturity Levels: Evaluate All Tables, Views and Metric Views
+
+Admins can evaluate the maturity of every table, view and metric view asset at once, instead of waiting
+for each asset to change or be opened. Go to **Settings → Maturity Levels**, open the
+**Evaluate all table, view and metric view assets** card, optionally type a catalog and a schema, and
+click **Evaluate assets**. The card polls the run while it goes and then shows its summary.
+
+- **Scope.** Without a catalog, every table, view and metric view asset is considered. A catalog (and
+  optionally a schema) limits the run to assets whose `catalog.schema.table` name starts
+  with it. Other asset types are never evaluated.
+- **Idempotent.** An asset evaluated since the run started (for example by a retry or a
+  second request) is skipped and counted as such. Running the same scope again evaluates
+  the assets again, and only a level change is logged and fires `ON_MATURITY_CHANGE`.
+- **Summary.** Evaluated, changed level, skipped (with a reason for each: evaluated since the
+  run started, asset not found, no Asset levels, not a table, view or metric view, not stored) and
+  errors, each with a code. An error never shows the exception text; the server log has it.
+  "Not stored" is an asset whose table the run couldn't read and whose level that table
+  could change: it keeps its stored level and is not counted as evaluated. A run started
+  here reads the tables with the admin's token for the whole run, so a run that outlasts
+  that token counts the tables after it expires as not stored; start it again to evaluate
+  them.
+- **One run at a time.** While a run is going, a new one is refused. The last summary stays
+  visible after a restart.
+- **Permission.** Only users with Settings read/write access (admins) can start a run. The
+  summary can be read by users with Settings read access.
+- **Scheduling.** A run is started from this card, from the API
+  (`POST /api/maturity-evaluations/assets`), or by a workflow with an **Evaluate Asset
+  Maturity** step on a schedule. The default workflow **Nightly Asset Maturity Evaluation**
+  (inactive) runs it every night at 02:00 UTC; set a catalog or schema on its step, change
+  the schedule, and activate it in **Settings → Workflows**. Saving, activating or running
+  such a workflow needs Settings read/write access as well. A scheduled run reads the Unity
+  Catalog tables with the app's identity, not an admin's, and is listed here like any other
+  run (started by `system:scheduler`). See the
+  [Workflow Authoring Guide](workflow-authoring-guide.md#asset-maturity-evaluation).
 
 ---
 
@@ -2324,7 +2428,7 @@ Steps are the building blocks of workflows:
 | Step Type | Description | Configuration |
 |-----------|-------------|---------------|
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
-| **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role, one person for one approver); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role; one person decides once, for every approver entry naming them or else for one group or role); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
 | **Notification** | Send a notification | Recipients, template, message |
 | **Assign Tag** | Add or update a tag | Key, and a fixed value, a value from the run, or no value |
 | **Remove Tag** | Remove a tag | Key to remove |

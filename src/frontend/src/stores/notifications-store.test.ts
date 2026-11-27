@@ -486,6 +486,98 @@ describe('Notifications Store', () => {
     });
   });
 
+  describe('deleteNotification refused by the server', () => {
+    it('keeps the notification and stores the coded refusal', async () => {
+      const note = {
+        id: '1', type: 'action_required', title: 'Approval Required', created_at: '2026-01-01',
+        read: false, can_delete: true,
+      } as Notification;
+      act(() => {
+        useNotificationsStore.setState({ notifications: [note], unreadCount: 1, error: null });
+      });
+      const detail = {
+        code: 'notification_not_deletable', message: 'text', params: { notification_id: '1' },
+      };
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ detail }),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().deleteNotification('1');
+      });
+
+      const state = useNotificationsStore.getState();
+      expect(state.notifications).toHaveLength(1);
+      expect(state.unreadCount).toBe(1);
+      expect(state.deleteError).toEqual(detail);
+      expect(state.error).toBeNull();
+    });
+
+    it('keeps the refusal across a fetch and clears it on clearDeleteError', async () => {
+      const detail = { code: 'notification_not_deletable', message: 'text' };
+      act(() => {
+        useNotificationsStore.setState({ notifications: [], deleteError: detail });
+      });
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true, text: async () => JSON.stringify([]),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().fetchNotifications();
+      });
+      expect(useNotificationsStore.getState().deleteError).toEqual(detail);
+
+      act(() => useNotificationsStore.getState().clearDeleteError());
+      expect(useNotificationsStore.getState().deleteError).toBeNull();
+    });
+
+    it('treats a 404 as already deleted: the row stays removed, no error', async () => {
+      const note = {
+        id: '1', type: 'info', title: 'Gone', created_at: '2026-01-01', read: true,
+        can_delete: true,
+      } as Notification;
+      act(() => {
+        useNotificationsStore.setState({ notifications: [note], unreadCount: 0, error: null });
+      });
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false, status: 404, statusText: 'Not Found',
+        json: async () => ({ detail: 'Notification not found' }),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().deleteNotification('1');
+      });
+
+      const state = useNotificationsStore.getState();
+      expect(state.notifications).toHaveLength(0);
+      expect(state.deleteError).toBeNull();
+      expect(state.error).toBeNull();
+    });
+
+    it('takes the error path on a 500: the row comes back, error is set, no refusal', async () => {
+      const note = {
+        id: '1', type: 'info', title: 'Kept', created_at: '2026-01-01', read: true,
+        can_delete: true,
+      } as Notification;
+      act(() => {
+        useNotificationsStore.setState({ notifications: [note], unreadCount: 0, error: null });
+      });
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false, status: 500, statusText: 'Server Error',
+        json: async () => ({ detail: 'Internal server error deleting notification.' }),
+      });
+
+      await act(async () => {
+        await useNotificationsStore.getState().deleteNotification('1');
+      });
+
+      const state = useNotificationsStore.getState();
+      expect(state.notifications).toHaveLength(1);
+      expect(state.deleteError).toBeNull();
+      expect(state.error).toContain('500');
+    });
+  });
+
   describe('Polling', () => {
     it('starts polling and fetches immediately', async () => {
       (global.fetch as any).mockResolvedValue({

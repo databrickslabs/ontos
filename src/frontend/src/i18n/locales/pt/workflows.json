@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Solicitar esclarecimento",
+    "messageRequiredTitle": "Mensagem obrigatória",
+    "messageRequiredDesc": "Escreva o que o solicitante precisa esclarecer.",
+    "requestedTitle": "Esclarecimento solicitado",
+    "requestedDesc": "O solicitante foi questionado sobre mais informações sobre '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Esta etapa de aprovação não aceita pedido de esclarecimento.",
+      "clarification_message_required": "Um pedido de esclarecimento precisa de uma mensagem para o solicitante."
+    }
+  },
   "designer": {
     "newWorkflow": "Novo fluxo de trabalho",
     "newStepName": "Nova etapa {{type}}",
@@ -85,6 +96,7 @@
       "create_asset_review": "Revisão de ativos",
       "webhook": "Webhook",
       "grant_permissions": "Conceder permissões",
+      "evaluate_asset_maturity": "Avaliar maturidade dos assets",
       "on_behalf_of": "Em nome de",
       "legal_document": "Documento legal",
       "acknowledgement_checklist": "Checklist de confirmação",
@@ -115,6 +127,10 @@
       "descriptionPlaceholder": "Descrição do fluxo de trabalho",
       "failClosed": "Recusar a transição se este gate não puder ser avaliado",
       "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a mudança de status é recusada. Desligado (fail open), a mudança acontece e o erro é registrado no log e na auditoria.",
+      "updateGate": {
+        "failClosed": "Recusar a atualização se este gate não puder ser avaliado",
+        "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a atualização é recusada. Desligado (fail open), a atualização acontece e o erro é registrado no log e na auditoria."
+      },
       "disabledFor": {
         "title": "Desligado para",
         "hint": "Este gate não roda para os domínios, produtos de dados e contratos de dados listados aqui (um domínio cobre seus produtos e contratos). Cada vez que ele é pulado, isso fica no log e na auditoria.",
@@ -337,6 +353,9 @@
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
       "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
+      "updateGate": {
+        "stepNotAllowed": "A etapa \"{{step}}\" ({{type}}) não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update."
+      },
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
@@ -377,6 +396,13 @@
     "adjustTerms": "Ajustar termos da aprovação",
     "durationDays": "Duração (dias)",
     "permissionLevel": "Nível de permissão",
+    "accessDecision": {
+      "adminHint": "Como administrador, você pode decidir sua própria solicitação e conceder mais do que foi solicitado. O log de auditoria registra isso como uma substituição.",
+      "failedTitle": "Decisão registrada, acesso ainda não atualizado",
+      "failed": "O workflow tem sua decisão, mas a solicitação de acesso não pôde ser atualizada. Isso será tentado novamente de forma automática.",
+      "narrowedTitle": "Termos reduzidos por uma etapa anterior",
+      "narrowed": "Uma etapa de aprovação anterior concedeu menos do que você escolheu: {{granted_level}} por {{granted_days}} dias (você enviou {{sent_level}}, {{sent_days}} dias)."
+    },
     "reasonLabel": "Motivo da aprovação ou rejeição",
     "reasonPlaceholder": "Digite seu motivo...",
     "approved": "Aprovado",
@@ -403,6 +429,13 @@
       "waitingForApprovers_other": "Aguardando mais {{count}} aprovadores."
     },
     "errors": {
+      "access_request_already_decided": "Esta solicitação de acesso já foi decidida.",
+      "access_terms_duration_not_allowed": "{{days}} dias não é uma duração permitida (permitidas: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Você pode conceder no máximo os {{requested}} dias solicitados.",
+      "access_terms_exceed_requested_permission": "Você pode conceder no máximo o nível solicitado ({{requested}}).",
+      "access_terms_invalid_duration": "A duração deve ser de {{min}} a {{max}} dias.",
+      "access_terms_invalid_permission": "Este nível de permissão não pode ser concedido.",
+      "own_access_request_approval": "Você não pode decidir sua própria solicitação de acesso.",
       "own_owner_approval": "Esta aprovação cabe aos proprietários; você não pode aprovar a sua própria solicitação.",
       "own_change_request_approval": "Você não pode aprovar a sua própria solicitação de alteração.",
       "approval_already_decided": "Você já decidiu esta aprovação.",
@@ -527,6 +560,22 @@
       "previewCancelled": "Visualização cancelada"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catálogo",
+    "catalogPlaceholder": "Todos os catálogos",
+    "schema": "Schema",
+    "schemaPlaceholder": "Todos os schemas (exige um catálogo)",
+    "help": "Avalia a maturidade dos assets de tabela, view e metric view neste escopo, como Configurações > Níveis de maturidade, e registra as contagens no resultado da etapa. Use um gatilho agendado para executá-la regularmente.",
+    "identityNote": "A execução lê as tabelas do Unity Catalog com a identidade do app. Salvar, ativar ou executar este workflow exige acesso de escrita em Configurações.",
+    "triggerHint": "Esta etapa roda apenas em workflows agendados e manuais.",
+    "allCatalogs": "Todos os catálogos",
+    "triggerUnsupported": "A etapa '{{step}}' avalia a maturidade dos assets, que roda apenas em workflows agendados e manuais, não em {{trigger}}.",
+    "permissionRequired": "Este workflow executa a avaliação de maturidade dos assets. Salvá-lo, ativá-lo ou executá-lo exige acesso de escrita em Configurações.",
+    "summary": "{{evaluated}} de {{total}} assets avaliados: {{changed}} mudaram de nível, {{skipped}} ignorados, {{errors}} erros",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Informe um catálogo para o schema, sem pontos nem crases."
+    }
+  },
   "entityTypeSelect": {
     "label": "Aplica-se a",
     "helper": "Em quais tipos de objetos ele é acionado",
@@ -548,7 +597,11 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "Não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
       "tag_not_found": "A tag '{{tag}}' não foi encontrada no catálogo de tags, então não foi atribuída",
+      "update_gate_step_not_allowed": "Uma etapa {{stepType}} não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.",
       "approval_rejected": "Solicitação negada",
+      "maturity_bulk_run_in_progress": "Já há uma avaliação em massa da maturidade dos assets em andamento, então esta execução não começou",
+      "maturity_bulk_scope_invalid": "O catálogo ou o schema da etapa não é válido",
+      "maturity_bulk_run_failed": "A avaliação em massa da maturidade dos assets falhou; os detalhes estão no log do servidor",
       "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
       "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",
       "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
@@ -886,6 +939,7 @@
       "rejectResumeSuccess": "Fluxo de trabalho rejeitado e retomado",
       "rejectFailed": "Falha ao rejeitar fluxo de trabalho",
       "forceDecisionRequireAll": "Somente os aprovadores podem decidir esta etapa (todos precisam decidir). Em vez disso, você pode cancelar a execução.",
+      "forceDecisionAccessRequest": "Solicitações de acesso são decididas pelos aprovadores, não forçadas daqui.",
       "noChanges": "Nenhuma alteração",
       "allAlreadyEnabled": "Todos os fluxos de trabalho selecionados já estão habilitados.",
       "allAlreadyDisabled": "Todos os fluxos de trabalho selecionados já estão desabilitados.",

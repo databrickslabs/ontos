@@ -388,6 +388,7 @@
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver",
       "grant_permissions": "Grant Permissions",
+      "evaluate_asset_maturity": "Evaluate Asset Maturity",
       "on_behalf_of": "On Behalf Of"
     }
   },
@@ -403,6 +404,11 @@
     "assignedSuccess": "Owner assigned successfully.",
     "errorAssigning": "Error assigning owner",
     "ownerUserAria": "Owner user"
+  },
+  "assignOwnerRole": {
+    "noRoles": "No business roles are configured. Ask an admin to add one.",
+    "ownerBadge": "Owner",
+    "notOwnerHint": "Owners with this role don't receive owner approvals or owner notifications. Pick Data Owner or Owner for that."
   },
   "versionFamily": {
     "countBadge_one": "{{count}} version",

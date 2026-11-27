@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Solicitar aclaración",
+    "messageRequiredTitle": "Mensaje obligatorio",
+    "messageRequiredDesc": "Escribe qué necesita aclarar el solicitante.",
+    "requestedTitle": "Aclaración solicitada",
+    "requestedDesc": "Se pidió al solicitante más información sobre '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Este paso de aprobación no admite aclaración.",
+      "clarification_message_required": "Una aclaración necesita un mensaje para el solicitante."
+    }
+  },
   "designer": {
     "newWorkflow": "Nuevo flujo de trabajo",
     "newStepName": "Nuevo paso de {{type}}",
@@ -85,6 +96,7 @@
       "create_asset_review": "Revisión de activo",
       "webhook": "Webhook",
       "grant_permissions": "Conceder permisos",
+      "evaluate_asset_maturity": "Evaluar madurez de activos",
       "on_behalf_of": "En nombre de",
       "legal_document": "Documento legal",
       "acknowledgement_checklist": "Lista de confirmación",
@@ -115,6 +127,10 @@
       "descriptionPlaceholder": "Descripción del flujo de trabajo",
       "failClosed": "Rechazar la transición si esta compuerta no se puede evaluar",
       "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), el cambio de estado se rechaza. Desactivado (fail open), el cambio se aplica y el error se registra y se audita.",
+      "updateGate": {
+        "failClosed": "Rechazar la actualización si esta compuerta no se puede evaluar",
+        "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), la actualización se rechaza. Desactivado (fail open), la actualización se aplica y el error se registra y se audita."
+      },
       "disabledFor": {
         "title": "Desactivado para",
         "hint": "Esta compuerta no se ejecuta para los dominios, productos de datos y contratos de datos indicados aquí (un dominio cubre sus productos y contratos). Cada omisión se registra y se audita.",
@@ -337,6 +353,9 @@
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
       "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
       "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
+      "updateGate": {
+        "stepNotAllowed": "El paso \"{{step}}\" ({{type}}) no puede ejecutarse en un gate before update: lo que hace quedaría hecho cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update."
+      },
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"
@@ -377,6 +396,13 @@
     "adjustTerms": "Ajustar los términos de aprobación",
     "durationDays": "Duración (días)",
     "permissionLevel": "Nivel de permiso",
+    "accessDecision": {
+      "adminHint": "Como administrador puede decidir su propia solicitud y conceder más de lo solicitado. El registro de auditoría lo registra como una anulación.",
+      "failedTitle": "Decisión registrada, acceso aún no actualizado",
+      "failed": "El flujo de trabajo tiene su decisión, pero no se pudo actualizar la solicitud de acceso. Se reintentará automáticamente.",
+      "narrowedTitle": "Condiciones reducidas por un paso anterior",
+      "narrowed": "Un paso de aprobación anterior concedió menos de lo que elegiste: {{granted_level}} durante {{granted_days}} días (enviaste {{sent_level}}, {{sent_days}} días)."
+    },
     "reasonLabel": "Motivo de la aprobación o el rechazo",
     "reasonPlaceholder": "Introduce tu motivo...",
     "approved": "Aprobado",
@@ -403,6 +429,13 @@
       "waitingForApprovers_other": "Faltan {{count}} aprobadores más."
     },
     "errors": {
+      "access_request_already_decided": "Esta solicitud de acceso ya se decidió.",
+      "access_terms_duration_not_allowed": "{{days}} días no es una duración permitida (permitidas: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Puedes conceder como máximo los {{requested}} días solicitados.",
+      "access_terms_exceed_requested_permission": "Puedes conceder como máximo el nivel solicitado ({{requested}}).",
+      "access_terms_invalid_duration": "La duración debe estar entre {{min}} y {{max}} días.",
+      "access_terms_invalid_permission": "Este nivel de permiso no se puede conceder.",
+      "own_access_request_approval": "No puedes decidir tu propia solicitud de acceso.",
       "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
       "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
       "approval_already_decided": "Ya has decidido esta aprobación.",
@@ -527,6 +560,22 @@
       "previewCancelled": "Previsualización cancelada"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catálogo",
+    "catalogPlaceholder": "Todos los catálogos",
+    "schema": "Esquema",
+    "schemaPlaceholder": "Todos los esquemas (requiere un catálogo)",
+    "help": "Evalúa la madurez de los activos de tabla, vista y vista de métricas de este ámbito, como Configuración > Niveles de madurez, y guarda los recuentos en el resultado del paso. Use un disparador programado para ejecutarlo con regularidad.",
+    "identityNote": "La ejecución lee las tablas de Unity Catalog con la identidad de la aplicación. Guardar, activar o ejecutar este flujo de trabajo requiere acceso de escritura a Configuración.",
+    "triggerHint": "Este paso solo se ejecuta en flujos de trabajo programados y manuales.",
+    "allCatalogs": "Todos los catálogos",
+    "triggerUnsupported": "El paso '{{step}}' evalúa la madurez de activos, que solo se ejecuta en flujos de trabajo programados y manuales, no en {{trigger}}.",
+    "permissionRequired": "Este flujo de trabajo ejecuta la evaluación de madurez de activos. Guardarlo, activarlo o ejecutarlo requiere acceso de escritura a Configuración.",
+    "summary": "{{evaluated}} de {{total}} activos evaluados: {{changed}} cambiaron de nivel, {{skipped}} omitidos, {{errors}} errores",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Indique un catálogo para el esquema, sin puntos ni comillas invertidas."
+    }
+  },
   "entityTypeSelect": {
     "label": "Se aplica a",
     "helper": "En qué tipos de objetos se activa",
@@ -548,7 +597,11 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
       "tag_not_found": "No se encontró la etiqueta '{{tag}}' en el catálogo, así que no se asignó",
+      "update_gate_step_not_allowed": "Un paso {{stepType}} no puede ejecutarse en un gate before update: lo que hace quedaría hecho cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update.",
       "approval_rejected": "Solicitud denegada",
+      "maturity_bulk_run_in_progress": "Ya hay una evaluación masiva de madurez de activos en curso, por lo que esta ejecución no se inició",
+      "maturity_bulk_scope_invalid": "El catálogo o el esquema del paso no es válido",
+      "maturity_bulk_run_failed": "La evaluación masiva de madurez de activos falló; los detalles están en el registro del servidor",
       "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
       "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",
       "rule_entity_load_failed": "No se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
@@ -886,6 +939,7 @@
       "rejectResumeSuccess": "Flujo de trabajo rechazado y reanudado",
       "rejectFailed": "No se pudo rechazar el flujo de trabajo",
       "forceDecisionRequireAll": "Solo los aprobadores pueden decidir este paso (todos deben decidir). En su lugar, puedes cancelar la ejecución.",
+      "forceDecisionAccessRequest": "Las solicitudes de acceso las deciden sus aprobadores; no se fuerzan desde aquí.",
       "noChanges": "Sin cambios",
       "allAlreadyEnabled": "Todos los flujos de trabajo seleccionados ya están habilitados.",
       "allAlreadyDisabled": "Todos los flujos de trabajo seleccionados ya están deshabilitados.",

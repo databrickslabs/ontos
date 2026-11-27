@@ -1014,7 +1014,28 @@
     "required": "必須",
     "advisory": "推奨",
     "overTime": "成熟度の推移",
-    "retry": "再試行"
+    "retry": "再試行",
+    "currentLevel": "現在のレベル",
+    "nextLevel": "次のレベル",
+    "belowFirstLevel": "最初のレベル未満",
+    "topLevelReached": "最高レベルに到達済み",
+    "noLevels": "この種類の成熟度レベルはまだ定義されていません。",
+    "gateStatus": {
+      "pass": "合格",
+      "fail": "不合格",
+      "warn": "未達成"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog に接続できないため、テーブル {{tableName}} のフィールドがありません。",
+    "maturity_uc_table_unreadable": "テーブル {{tableName}} は Unity Catalog から読み取れないため、そのフィールドは不足しています。",
+    "maturity_uc_table_read_failed": "テーブル {{tableName}} を Unity Catalog から読み取れなかったため、フィールドがありません。",
+    "maturity_gate_error": "ゲート {{gateName}} を評価できませんでした。詳細はサーバーログにあります。",
+    "maturity_level_partial": "このレベルはテーブル {{tableName}} を必要としないゲートだけで判定しています。アセットはより高いレベルに達している可能性があります。"
+  },
+  "maturityResult": {
+    "notStored": "今計算した結果で、保存されていません。履歴には保存済みの評価が表示されます。この結果を保存するには再評価してください。",
+    "notEvaluated": "未評価"
   },
   "createDialog": {
     "editTitle": "データ製品のメタデータを編集",
@@ -1066,7 +1087,7 @@
     "contractLabel": "契約:",
     "productNameLabel": "製品名 *",
     "productNamePlaceholder": "例: 顧客分析製品",
-    "productTypeLabel": "製品タイプ *",
+    "productTypeLabel": "製品タイプ",
     "productTypePlaceholder": "製品タイプを選択",
     "versionLabel": "バージョン *",
     "versionPlaceholder": "例: v1.0.0",
@@ -1078,8 +1099,8 @@
     "errors": {
       "nameRequired": "製品名は必須です",
       "versionRequired": "バージョンは必須です",
-      "typeRequired": "製品タイプは必須です",
-      "createError": "契約からの製品作成に失敗しました"
+      "createError": "契約からの製品作成に失敗しました",
+      "unknown_data_product_type": "製品タイプ「{{key}}」は存在しないか、無効化されています。別のタイプを選択してください。"
     },
     "messages": {
       "productCreated": "製品を作成しました",
@@ -1187,5 +1208,12 @@
     "colSubscriber": "購読者",
     "colSubscribed": "購読日",
     "colReason": "理由"
+  },
+  "dataProductType": {
+    "source-aligned": "ソース指向",
+    "aggregate": "集約",
+    "consumer-aligned": "コンシューマー指向",
+    "source": "ソース",
+    "sink": "シンク"
   }
 }

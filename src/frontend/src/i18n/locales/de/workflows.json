@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Klärung anfordern",
+    "messageRequiredTitle": "Nachricht erforderlich",
+    "messageRequiredDesc": "Schreiben Sie, was der Antragsteller klären soll.",
+    "requestedTitle": "Klärung angefordert",
+    "requestedDesc": "Der Antragsteller wurde um weitere Informationen zu '{{name}}' gebeten.",
+    "errors": {
+      "clarify_not_supported": "Dieser Genehmigungsschritt unterstützt keine Klärung.",
+      "clarification_message_required": "Eine Klärung braucht eine Nachricht an den Antragsteller."
+    }
+  },
   "designer": {
     "newWorkflow": "Neuer Workflow",
     "newStepName": "Neuer {{type}}-Schritt",
@@ -85,6 +96,7 @@
       "create_asset_review": "Asset-Überprüfung",
       "webhook": "Webhook",
       "grant_permissions": "Berechtigungen erteilen",
+      "evaluate_asset_maturity": "Asset-Reifegrad bewerten",
       "on_behalf_of": "Im Namen von",
       "legal_document": "Rechtsdokument",
       "acknowledgement_checklist": "Bestätigungs-Checkliste",
@@ -115,6 +127,10 @@
       "descriptionPlaceholder": "Workflow-Beschreibung",
       "failClosed": "Übergang ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
       "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Statusänderung abgelehnt. Aus (fail open) wird die Änderung durchgeführt und der Fehler protokolliert und auditiert.",
+      "updateGate": {
+        "failClosed": "Aktualisierung ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
+        "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Aktualisierung abgelehnt. Aus (fail open) wird die Aktualisierung durchgeführt und der Fehler protokolliert und auditiert."
+      },
       "disabledFor": {
         "title": "Deaktiviert für",
         "hint": "Dieses Gate läuft nicht für die hier aufgeführten Domänen, Datenprodukte und Datenverträge (eine Domäne umfasst ihre Produkte und Verträge). Jedes Überspringen wird protokolliert und auditiert.",
@@ -337,6 +353,9 @@
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
       "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
+      "updateGate": {
+        "stepNotAllowed": "Schritt \"{{step}}\" ({{type}}) kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow."
+      },
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
@@ -377,6 +396,13 @@
     "adjustTerms": "Genehmigungsbedingungen anpassen",
     "durationDays": "Dauer (Tage)",
     "permissionLevel": "Berechtigungsstufe",
+    "accessDecision": {
+      "adminHint": "Als Admin können Sie Ihren eigenen Antrag entscheiden und mehr gewähren als beantragt. Das Audit-Protokoll vermerkt dies als Übersteuerung.",
+      "failedTitle": "Entscheidung gespeichert, Zugriff noch nicht aktualisiert",
+      "failed": "Der Workflow hat Ihre Entscheidung, aber der Zugriffsantrag konnte nicht aktualisiert werden. Es wird automatisch erneut versucht.",
+      "narrowedTitle": "Bedingungen durch einen früheren Schritt verringert",
+      "narrowed": "Ein früherer Genehmigungsschritt hat weniger gewährt als Sie gewählt haben: {{granted_level}} für {{granted_days}} Tage (gesendet: {{sent_level}}, {{sent_days}} Tage)."
+    },
     "reasonLabel": "Grund für Genehmigung oder Ablehnung",
     "reasonPlaceholder": "Geben Sie Ihren Grund ein...",
     "approved": "Genehmigt",
@@ -403,6 +429,13 @@
       "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
     },
     "errors": {
+      "access_request_already_decided": "Über diese Zugriffsanfrage wurde bereits entschieden.",
+      "access_terms_duration_not_allowed": "{{days}} Tage sind keine zulässige Dauer (zulässig: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "Sie können höchstens die angefragten {{requested}} Tage gewähren.",
+      "access_terms_exceed_requested_permission": "Sie können höchstens die angefragte Stufe ({{requested}}) gewähren.",
+      "access_terms_invalid_duration": "Die Dauer muss zwischen {{min}} und {{max}} Tagen liegen.",
+      "access_terms_invalid_permission": "Diese Berechtigungsstufe kann nicht erteilt werden.",
+      "own_access_request_approval": "Sie können nicht über Ihre eigene Zugriffsanfrage entscheiden.",
       "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
       "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
       "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",
@@ -527,6 +560,22 @@
       "previewCancelled": "Vorschau abgebrochen"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Katalog",
+    "catalogPlaceholder": "Alle Kataloge",
+    "schema": "Schema",
+    "schemaPlaceholder": "Alle Schemas (benötigt einen Katalog)",
+    "help": "Bewertet den Reifegrad der Tabellen-, View- und Metric-View-Assets in diesem Bereich wie Einstellungen > Reifegrade und speichert die Zahlen im Schrittergebnis. Mit einem geplanten Trigger läuft er regelmäßig.",
+    "identityNote": "Der Lauf liest Unity-Catalog-Tabellen mit der Identität der App. Speichern, Aktivieren oder Ausführen dieses Workflows erfordert Schreibzugriff auf die Einstellungen.",
+    "triggerHint": "Dieser Schritt läuft nur in geplanten und manuellen Workflows.",
+    "allCatalogs": "Alle Kataloge",
+    "triggerUnsupported": "Schritt '{{step}}' bewertet den Asset-Reifegrad und läuft nur in geplanten und manuellen Workflows, nicht bei {{trigger}}.",
+    "permissionRequired": "Dieser Workflow führt die Bewertung des Asset-Reifegrads aus. Speichern, Aktivieren oder Ausführen erfordert Schreibzugriff auf die Einstellungen.",
+    "summary": "{{evaluated}} von {{total}} Assets bewertet: {{changed}} mit geändertem Reifegrad, {{skipped}} übersprungen, {{errors}} Fehler",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Geben Sie für das Schema einen Katalog an, ohne Punkte oder Backticks."
+    }
+  },
   "entityTypeSelect": {
     "label": "Gilt für",
     "helper": "Auf welche Arten von Objekten dies angewendet wird",
@@ -548,7 +597,11 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "Die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
       "tag_not_found": "Die Tag '{{tag}}' wurde im Tag-Katalog nicht gefunden und daher nicht zugewiesen",
+      "update_gate_step_not_allowed": "Ein {{stepType}}-Schritt kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow.",
       "approval_rejected": "Anfrage abgelehnt",
+      "maturity_bulk_run_in_progress": "Es läuft bereits eine Massenbewertung des Asset-Reifegrads, daher wurde dieser Lauf nicht gestartet",
+      "maturity_bulk_scope_invalid": "Der Katalog oder das Schema des Schritts ist ungültig",
+      "maturity_bulk_run_failed": "Die Massenbewertung des Asset-Reifegrads ist fehlgeschlagen; Details stehen im Server-Log",
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
@@ -886,6 +939,7 @@
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
       "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
+      "forceDecisionAccessRequest": "Zugriffsanfragen entscheiden ihre Genehmigenden, nicht von hier aus erzwungen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

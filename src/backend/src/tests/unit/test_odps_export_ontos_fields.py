@@ -27,7 +27,7 @@ SERVER = {"host": "db.example.com", "database": "sales", "schema": "public", "ta
 
 
 @pytest.fixture
-def product_manager(db_session: Session) -> DataProductsManager:
+def product_manager(db_session: Session, seeded_product_types) -> DataProductsManager:
     return DataProductsManager(
         db=db_session, ws_client=MagicMock(),
         notifications_manager=MagicMock(), tags_manager=MagicMock(),

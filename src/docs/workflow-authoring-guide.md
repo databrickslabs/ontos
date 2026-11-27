@@ -126,6 +126,7 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 | `create_asset_review` | The review was created | It couldn't be created |
 | `entity_action` | The action (certify, decertify, publish, unpublish, set publication scope) was applied | The action isn't allowed or fails |
 | `grant_permissions` | The Unity Catalog grant was made | It couldn't be made |
+| `evaluate_asset_maturity` | The bulk maturity evaluation of its scope completed (see below) | Another run is going (`maturity_bulk_run_in_progress`), the scope is invalid (`maturity_bulk_scope_invalid`), or the run failed (`maturity_bulk_run_failed`) |
 | `pass` | Always | Never |
 | `fail` | Never | Always; its `message` becomes the execution's error |
 
@@ -134,7 +135,8 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 Validation, conditional and policy check steps evaluate their rule on `obj`:
 
 - For data products and data contracts, `obj` is the **stored entity** (the fields maturity gates use, such as `status`, `has_owner`, `has_description`, `output_port_contract_count`, `certification_level`, `is_published`) merged with the trigger payload; payload fields win.
-- For other entity types, and for `before_update` gates (whose payload is the proposed change), `obj` is the trigger payload only.
+- For `before_update` gates, `obj` is the contract **as it will be after the update**: the stored contract with the update's fields over it (a field the update leaves out or sends as `null` keeps its stored value), the tags it will have (a `tags` list replaces the stored ones, tag steps of the gate go on top), and the derived fields (`has_owner`, `has_purpose`, `schema_object_count`) for that future state; `quality_check_count` (the contract's quality items from the quality API, not its ODCS `qualityRules`) and the relationship counts keep their stored values, which a contract update doesn't change. `c.domain` is the primary domain's name and `c.domain_id` its id, whether or not the update changes the domain. Other request fields (`contract_schema`, `servers`, `team`, `sla`, ...) appear in the request's shape, which differs from what the other triggers see, so write rules on the fields above.
+- For other entity types, `obj` is the trigger payload only.
 - If the stored entity can't be loaded, the step fails with the code `rule_entity_load_failed` instead of evaluating the rule on the payload alone.
 
 A field that doesn't exist on `obj` makes comparisons like `obj.field != ''` true. Check fields that exist; the defaults use `obj.output_port_contract_count > 0`, `obj.schema_object_count > 0` and `obj.has_owner = true`.
@@ -151,6 +153,16 @@ A Python script runs with a small set of safe built-ins (`len`, `str`, `dict`, `
 - The step fails after `timeout_seconds` (default 60).
 
 A SQL script runs on the SQL warehouse set in Settings, with variables substituted into the SQL text as they are: values are not quoted or escaped, so don't build SQL from user-entered fields.
+
+### Asset maturity evaluation
+
+`evaluate_asset_maturity` runs the bulk maturity evaluation of table, view and metric view assets that **Settings → Maturity Levels** starts (`POST /api/maturity-evaluations/assets`), and waits for it to end. Use it on a `scheduled` trigger to evaluate assets regularly; the default workflow **Nightly Asset Maturity Evaluation** (inactive) does that every night at 02:00 UTC.
+
+- Config: `catalog` (optional, empty = every catalog) and `schema_name` (optional, needs `catalog`). The step is allowed only on `scheduled` and `manual` workflows (`evaluate_asset_maturity_trigger_unsupported` on others), since it evaluates every asset of its scope.
+- Result data: `run_id`, `state`, `scope`, `total`, `processed`, `evaluated`, `changed`, `skipped` (count per reason code) and `error_count`. The execution view shows the counts; the run is also the last run on the Maturity Levels card.
+- One run at a time per app instance: a slot that comes while a run is going (started from the card, or a previous slot) fails the step with `maturity_bulk_run_in_progress`, and `on_fail` can follow it. The scheduler doesn't run a workflow's next slot before its previous run ended.
+- Identity: scheduled and manual workflow runs of this step read the Unity Catalog tables with the app's identity (a step has no user token), so they see what the app's service principal can read. A run started from the Maturity Levels card uses the token of the admin who starts it. The run is started by `system:scheduler`, or by the user of a manual run.
+- Permission: creating or editing a workflow with this step, activating it, running it with **Run** and retrying one of its executions need Settings read/write access (the permission of the bulk evaluation), on top of the workflow permission (403 `workflow_step_requires_settings_write`). Removing the step or deactivating the workflow doesn't.
 
 ## Variables and Templates
 
@@ -195,7 +207,7 @@ For some trigger and entity type pairs, `GET /api/workflows/template-vars?trigge
 
 ## Recipients and Approvers
 
-Notification `recipients` and approval `approvers` take one of these values, or several separated by commas:
+Notification `recipients` and approval `approvers` take one of these values, or several separated by commas. The explicit forms (`user:<x>`, an email, an app role id, `group:<name>`) are read first, so a group or user named like a token below (`reviewer`, `admins`) is that principal, not the token:
 
 | Value | Resolves to |
 |--|--|
@@ -208,6 +220,10 @@ Notification `recipients` and approval `approvers` take one of these values, or 
 | An app role name or id | Everyone in that role's groups (case, spaces and underscores are ignored in names) |
 | `business:<role id>` | The users holding that business role for the entity |
 | An email, or `user:<email>` | That user |
+| `group:<name>` | The members of that directory group, ignoring case (the designer saves picked groups this way, with a `,` in the name written `%2C` and a `%` `%25`) |
+| `reviewer` | The reviewer chosen by the requester (`reviewer_email`), else the Admin role |
+
+A bare group name (saved before the designer added the prefix) still reaches the group's members, unless it matches a token or an app role name.
 
 **A value that matches nothing is used as written**: `data_stewardz` creates a notification addressed to `data_stewardz`, which nobody sees, and the step passes. Check the `recipients` / `approvers` in the step's result data after a test run (see [Debugging](#debugging-recent-executions)).
 
@@ -228,7 +244,7 @@ Without `require_all` (the default), the first decision resumes the execution.
 With `require_all: true`, every notification target the step resolved when it paused must decide:
 
 - a user target needs that user's decision; a group or role target needs one decision from any member. A role's members are the members of its assigned groups and the users assigned to it individually; a role nobody is assigned to falls back to the admins. The owners of a business role are one target (one decision for the role). To require N named people, list them as users;
-- one person fills at most one target per step: their own user target if it is still pending, else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member;
+- one person decides once per step: the decision fills every still-pending user target naming them (`user:alice`, `alice` and `alice@example.com` are one person), else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member. `group:<name>` and `user:<x>` targets are matched as on delivery (group names ignoring case);
 - the execution stays paused until every target has approved, then follows `on_pass`;
 - any rejection follows `on_fail` at once: the outcome follows every stored decision, so a rejection stored earlier fails the step even if a later decision approves;
 - a second decision by someone who has filled a target of the step is refused with `409`, code `approval_already_decided`; the first one stands. Someone whose targets have all been filled by others (e.g. another member of a group that has decided) gets `409`, code `approval_no_longer_pending`;
@@ -299,7 +315,15 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 **A gate that errors.** A gate whose evaluation raises an error (an exception, not a Fail step) is logged and the change goes ahead (#1103). A `PUT /api/data-products/{id}` or `PUT /api/data-contracts/{id}` that changes `status` doesn't run gates at all. STATUS_PR changes both: the trigger's `on_error` decides what a gate error does (`fail_open`, the default, lets the change through with a `GATE_ERROR` audit entry; `fail_closed` refuses it with `status_change_gate_error`), `disabled_for: {domains, data_products, data_contracts}` switches a gate off for those entities (audited as `GATE_SKIPPED`), and a `PUT` with a different `status` is refused with `status_change_requires_transition`.
 
+A `before_update` gate has the same `on_error` setting ("Refuse the update if this gate can't be evaluated" in the designer): `fail_open`, the default, lets the update through with a `GATE_ERROR` audit entry; `fail_closed` refuses it (HTTP 400, code `update_gate_error`, with the gates in `params.workflows`). This also applies when the gates can't even be listed: the `fail_closed` `before_update` gates are then read from the workflows table.
+
 **Don't put an approval in a gate.** A gate with an approval step pauses, which is not `succeeded`, so the change is refused with "waiting for approval", and approving later doesn't apply the change. To require an approval for a status change, use a status change request (`on_request_status_change`), which applies the change when it is approved.
+
+For a `before_update` gate this means: the `PUT` answers 400 "Pre-update validation failed" with the gate `paused`. Approving it runs the gate's remaining steps on the update as it was sent then, but nothing writes the update afterwards (and their tag steps write no tags). The user has to send the update again, which runs the gate again and starts a new approval round. A `before_update` gate with an approval step therefore never lets an update through.
+
+**Tag steps in a `before_update` gate** don't write while the gate runs: the update writes their tag change, after its own `tags` list and in the same commit, so a refused or failed update leaves no tag assigned or removed. Later steps of the same gate, and the gates that run after it (in workflow name order), already see the tag change (on top of the update's `tags` list, when it sends one). If the tag change can't be written, the update is refused (`update_gate_tag_write_failed`), whatever `on_error` says. Likewise, when the update's own `tags` list, which the gates checked, can't be written, the update is refused (`update_gate_tag_list_write_failed`); without gates such an update is saved with the old tags, as before.
+
+**No side-effect steps in a `before_update` gate.** Entity actions (certify, publish, unpublish), asset reviews, deliveries and permission grants commit, or act outside Ontos, as they run, so they would stay done when a later step refuses the update. Saving a `before_update` workflow with one of these steps is refused (`update_gate_step_not_allowed`, with the step type in `params.stepType`); one saved before fails at that step without running it, and the gate ends there as failed whatever the step's `on_fail`, so the update is refused. Put the step in an `on_update` workflow instead. Webhook steps stay allowed (a webhook is often the check itself, and a call that only reads changes nothing), and notification steps still notify, also when the update is then refused.
 
 ## Failures, Retries and Cancellation
 
@@ -309,7 +333,7 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 | `on_pass` / `on_fail` names a step that doesn't exist | Saving the workflow is refused (HTTP 400, `Step '<id>' references unknown step '<name>'`) |
 | An `on_*` workflow fails | The action that fired it is already done and stays done |
 | A gate fails or pauses | The action is refused |
-| A gate's evaluation raises an error | The action goes ahead (STATUS_PR adds `on_error: fail_closed` to refuse it) |
+| A gate's evaluation raises an error | The action goes ahead (STATUS_PR adds `on_error: fail_closed` to refuse it; a `before_update` gate has it too) |
 | The server restarts while an execution is paused | It stays paused and can still be decided |
 
 **Retry** (admins, failed executions only, `POST /api/workflows/executions/{id}/retry` or the Retry action in Recent Executions) runs the same execution again from the first step, with the trigger payload it was started with. Its previous step results are replaced, and every step runs again: notifications are sent again and webhooks called again.
@@ -480,5 +504,6 @@ As of this version:
 - Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by #1456: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
 - The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
+- The bulk asset maturity evaluation allows one run at a time per app instance (`evaluate_asset_maturity`, `maturity_bulk_run_in_progress`). The scheduler's claims run each slot on one instance only, but a run started on another instance (from the Maturity Levels card, or a manual workflow run) can overlap it. The overlapping run skips the assets already evaluated since it started (`maturity_bulk_skipped_evaluated_in_run`), so they are not evaluated twice by it.
 
 See also the [Future Roadmap section of the Process Workflows Guide](/user-docs/process-workflows-guide#future-roadmap-deferred-items) for timeout expiry, escalation and crash recovery.

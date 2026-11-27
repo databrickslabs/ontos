@@ -17,15 +17,19 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
 // The ordered features (menu order)
-import { features as orderedFeatures, getNavFeatureId } from '@/config/features';
+import {
+    features as orderedFeatures, getNavFeatureId, NAV_ENTRY_FEATURES,
+} from '@/config/features';
 import { usePermissions } from '@/stores/permissions-store';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { normaliseAssignedGroups } from '@/lib/assigned-groups';
 import {
-    NAV_COLUMN_CLASS, RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures,
-    roleSaveErrorText,
+    NAV_COLUMN_CLASS, RoleNavColumnHeader, RoleNavEntryRow, RoleNavVisibilityCell,
+    cleanHiddenNavFeatures, navEntriesOf, roleSaveErrorText,
 } from '@/components/settings/role-nav-visibility';
+
+const FEATURE_ROW_CLASS = 'flex items-center justify-between space-x-4 py-2';
 
 // Sub-groups within the Settings permission group mirror the Settings
 // sidebar layout (Reference Data → Configuration → Integrations →
@@ -53,6 +57,7 @@ const SETTINGS_SUB_GROUPS: SettingsSubGroup[] = [
             'settings-asset-types',
             'teams',
             'projects',
+            'settings-data-product-types',
             'settings-certification-levels',
             'settings-maturity-levels',
             'settings-lifecycle-stage-groups',
@@ -206,8 +211,13 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 
     // "Show in navigation" (#1325): only role features with a menu entry get the checkbox
     // (Search and My Requests have no role feature id, settings pages no sidebar entry).
+    // Marketplace and My Products have their own flag, under the feature they depend on.
     const navFeatureIds = useMemo(
-        () => new Set(orderedFeatures.map(getNavFeatureId).filter(id => id in featuresConfig)),
+        () => new Set(
+            orderedFeatures
+                .filter(f => (f.permissionId || f.id) in featuresConfig)
+                .map(getNavFeatureId),
+        ),
         [featuresConfig],
     );
     const watchedPermissions = watch('feature_permissions');
@@ -242,6 +252,24 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             </label>
         );
     };
+    const hiddenOf = (value: unknown): string[] => (Array.isArray(value) ? value : []);
+    // Menu entries with their own flag (Marketplace, My Products) follow their feature's level.
+    const renderNavEntryRows = (featureId: string) => navEntriesOf(featureId).map(entry => (
+        <Controller
+            key={entry.navId}
+            name="hidden_nav_features"
+            control={control}
+            render={({ field }) => (
+                <RoleNavEntryRow
+                    entry={entry}
+                    level={watchedPermissions?.[featureId]}
+                    isAdminRole={watchedIsAdmin}
+                    hidden={hiddenOf(field.value)}
+                    onChange={field.onChange}
+                />
+            )}
+        />
+    ));
     const renderNavCell = (featureId: string, label: string) => {
         if (!navFeatureIds.has(featureId)) {
             return <div className={NAV_COLUMN_CLASS} aria-hidden="true" />;
@@ -394,6 +422,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         // A feature at None has no menu entry anyway: never store it as hidden.
         const hiddenNavFeatures = cleanHiddenNavFeatures(
             data.hidden_nav_features, data.feature_permissions, Object.keys(featuresConfig),
+            NAV_ENTRY_FEATURES,
         );
 
         const basePayload: AppRole = {
@@ -702,7 +731,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                 const description = navFeature?.description ?? '';
                                                 const allowedLevels = Array.isArray(featureConf.allowed_levels) ? featureConf.allowed_levels : [];
                                                 return (
-                                                    <div key={featureId} className="flex items-center justify-between space-x-4 py-2">
+                                                    <React.Fragment key={featureId}>
+                                                    <div className={FEATURE_ROW_CLASS}>
                                                         <Label htmlFor={`permissions-${featureId}`} className="text-sm font-normal flex-1">
                                                             {label}
                                                             {description && <p className="text-xs text-muted-foreground">{description}</p>}
@@ -739,6 +769,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                         </div>
                                                         {renderNavCell(featureId, label)}
                                                     </div>
+                                                    {renderNavEntryRows(featureId)}
+                                                    </React.Fragment>
                                                 );
                                             };
 

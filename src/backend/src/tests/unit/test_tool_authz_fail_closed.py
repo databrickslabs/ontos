@@ -1,0 +1,354 @@
+"""Every assistant tool declares who may run it, and an undeclared tool is refused.
+
+Ask Ontos and MCP run the same tools. ``required_permission`` is the
+``(feature, level)`` of the matching REST route, or ``ANY_CALLER`` for a tool that
+needs no feature level. A tool that declares nothing is refused (coded
+``tool_not_permitted``), so a new tool cannot be added without a decision.
+"""
+import asyncio
+import uuid
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.common.features import APP_FEATURES, FeatureAccessLevel
+from src.db_models.data_products import DataProductDb
+from src.db_models.semantic_links import EntitySemanticLinkDb
+from src.routes.mcp_routes import MCPHandler
+from src.tools.caller import mcp_api_key_caller
+from src.tools.base import (
+    ANY_CALLER,
+    TOOL_NOT_PERMITTED_CODE,
+    USER_IDENTITY_REQUIRED_CODE,
+    BaseTool,
+    ToolCaller,
+    ToolContext,
+    ToolResult,
+    check_tool_permission,
+)
+from src.tools.registry import ToolRegistry, create_default_registry
+
+RO = FeatureAccessLevel.READ_ONLY
+NONE = FeatureAccessLevel.NONE
+
+# Tools that need no feature level, on purpose. Adding a name here is a decision:
+# the matching REST route has no PermissionChecker (or the tool is not tied to a
+# feature); a tool whose route has one declares that level instead.
+ANY_CALLER_TOOLS = {
+    # Product and contract reads: the read rules (src.tools.read_access) apply.
+    'search_data_products', 'get_data_product', 'get_data_products', 'list_data_products',
+    'search_data_contracts', 'get_data_contract', 'get_data_contracts', 'list_data_contracts',
+    'get_data_product_costs',
+    # Organisation and tag reads.
+    'search_domains', 'get_domain', 'search_teams', 'get_team', 'search_projects',
+    'get_project', 'search_tags', 'get_tag', 'list_entity_tags',
+    # Cross-cutting.
+    'global_search', 'search_ontos_handbook', 'get_app_state', 'get_current_user',
+}
+# The Unity Catalog browse and analytics tools: Read-only on 'catalog-commander',
+# the level of GET /api/catalogs/..., and a signed-in user (they read Unity Catalog
+# as the user, so an MCP API key alone is refused).
+CATALOG_TOOLS = {
+    'get_table_schema': {'table_fqn': 'main.sales.orders'},
+    'execute_analytics_query': {'sql': 'SELECT 1', 'explanation': 'x'},
+    'explore_catalog_schema': {'catalog': 'main', 'schema': 'sales'},
+    'list_catalogs': {},
+    'get_catalog_details': {'catalog_name': 'main'},
+    'list_schemas': {'catalog_name': 'main'},
+}
+# The semantic reads whose REST routes require Read-only on 'semantic-models':
+# GET /semantic-models/search, /concepts/hierarchy, /neighbors and
+# GET /semantic-links/entity/..., /by-iri.
+SEMANTIC_READS = {
+    'search_glossary_terms': {'term': 'Customer'},
+    'get_concept_hierarchy': {'concept_iri': 'http://example.com/onto#Customer'},
+    'get_concept_neighbors': {'concept_iri': 'http://example.com/onto#Customer'},
+    'list_semantic_links': {'entity_type': 'data_product', 'entity_id': 'p1'},
+    'find_entities_by_concept': {'concept_iri': 'http://example.com/onto#Customer'},
+}
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _caller(levels, email='sue@example.com'):
+    return ToolCaller(email=email, auth_path='test', permissions=dict(levels))
+
+
+def _ctx(db=None, caller=None, **managers):
+    return ToolContext(db=db if db is not None else MagicMock(), settings=MagicMock(),
+                       caller=caller, **managers)
+
+
+class _Undeclared(BaseTool):
+    """A tool whose author forgot ``required_permission``."""
+    name = 'undeclared_tool'
+    description = 'x'
+    required_scope = '*'
+
+    def __init__(self):
+        self.ran = 0
+
+    async def execute(self, ctx, **kwargs):
+        self.ran += 1
+        return ToolResult(success=True, data={'ran': True})
+
+
+class TestEveryToolDeclaresAPermission:
+    def test_each_registered_tool_declares_a_level_or_any_caller(self):
+        for tool in create_default_registry().list_tools():
+            perm = tool.required_permission
+            assert perm, f'{tool.name} declares no required_permission'
+            if perm == ANY_CALLER:
+                continue
+            feature_id, level = perm
+            assert feature_id in APP_FEATURES, f'{tool.name}: unknown feature {feature_id}'
+            assert isinstance(level, FeatureAccessLevel) and level != NONE, tool.name
+
+    def test_the_tools_that_need_no_feature_level_are_the_listed_ones(self):
+        any_caller = {
+            t.name for t in create_default_registry().list_tools()
+            if t.required_permission == ANY_CALLER
+        }
+        assert any_caller == ANY_CALLER_TOOLS
+
+    @pytest.mark.parametrize('name', sorted(SEMANTIC_READS))
+    def test_a_semantic_read_declares_the_level_of_its_rest_route(self, name):
+        tool = create_default_registry().get(name)
+        assert tool.required_permission == ('semantic-models', RO)
+
+
+class TestAnUndeclaredToolIsRefused:
+    def test_the_registry_refuses_it_and_does_not_run_it(self):
+        registry, tool = ToolRegistry(), _Undeclared()
+        registry.register(tool)
+        for ctx in (_ctx(), _ctx(caller=_caller({'tags': FeatureAccessLevel.ADMIN})),
+                    _ctx(caller=ToolCaller(email=None, auth_path='test', full_access=True))):
+            res = _run(registry.execute('undeclared_tool', ctx, {}))
+            assert res.success is False
+            assert res.error_code == TOOL_NOT_PERMITTED_CODE
+            assert 'error id' not in res.error and 'Traceback' not in res.error
+        assert tool.ran == 0
+
+    def test_the_check_the_mcp_handler_calls_refuses_it(self):
+        refusal = check_tool_permission(_Undeclared(), _ctx())
+        assert refusal is not None and refusal.error_code == TOOL_NOT_PERMITTED_CODE
+
+    def test_an_mcp_tool_call_is_refused_and_audited(self):
+        audit = MagicMock()
+        app = SimpleNamespace(state=SimpleNamespace(workspace_client=object(),
+                                                    users_manager=MagicMock()))
+        request = SimpleNamespace(headers={}, app=app, state=SimpleNamespace(),
+                                  client=SimpleNamespace(host='127.0.0.1'))
+        handler = MCPHandler(
+            db=None, settings=MagicMock(),
+            token_info=SimpleNamespace(id='t1', name='tok', created_by='admin@example.com',
+                                       scopes=['*']),
+            request=request, audit_manager=audit, session_id='s1',
+        )
+        tool = _Undeclared()
+        handler._tool_registry.register(tool)
+
+        out = _run(handler._handle_tools_call({'name': 'undeclared_tool', 'arguments': {}}))
+
+        assert out['isError'] is True and tool.ran == 0
+        assert out['structuredContent']['error_code'] == TOOL_NOT_PERMITTED_CODE
+        entry = [c.kwargs for c in audit.log_action.call_args_list
+                 if c.kwargs['action'] == 'TOOL_CALL'][0]
+        assert entry['details']['error_code'] == TOOL_NOT_PERMITTED_CODE
+
+    def test_any_caller_runs_with_or_without_an_identity(self):
+        class _Open(_Undeclared):
+            name = 'open_tool'
+            required_permission = ANY_CALLER
+
+        registry, tool = ToolRegistry(), _Open()
+        registry.register(tool)
+        assert _run(registry.execute('open_tool', _ctx(), {})).success is True
+        assert _run(registry.execute('open_tool', _ctx(caller=_caller({})), {})).success is True
+        assert tool.ran == 2
+
+
+class TestSemanticReadsNeedReadOnlyOnSemanticModels:
+    """Through the registry with the real tool body."""
+
+    @pytest.mark.parametrize('name', sorted(SEMANTIC_READS))
+    def test_without_the_level_it_is_refused(self, name):
+        registry = create_default_registry()
+        manager = MagicMock()
+        for caller in (None, _caller({}), _caller({'semantic-models': NONE}),
+                       # A level on another feature does not count.
+                       _caller({'data-products': FeatureAccessLevel.ADMIN, 'tags': RO})):
+            ctx = _ctx(caller=caller, semantic_models_manager=manager)
+            res = _run(registry.execute(name, ctx, SEMANTIC_READS[name]))
+            assert res.success is False
+            assert res.error_code == TOOL_NOT_PERMITTED_CODE
+            assert res.to_dict()['feature_id'] == 'semantic-models'
+            assert res.to_dict()['required_level'] == RO.value
+        assert manager.mock_calls == []
+
+    def test_search_glossary_terms_runs_at_read_only(self):
+        manager = MagicMock()
+        manager.search_ontology_concepts.return_value = []
+        ctx = _ctx(caller=_caller({'semantic-models': RO}), semantic_models_manager=manager)
+        res = _run(create_default_registry().execute(
+            'search_glossary_terms', ctx, SEMANTIC_READS['search_glossary_terms']))
+        assert res.success is True and res.data['terms'] == []
+        manager.search_ontology_concepts.assert_called_once()
+
+    def test_get_concept_hierarchy_runs_at_read_only(self):
+        manager = MagicMock()
+        manager.get_concept_hierarchy.return_value = None
+        ctx = _ctx(caller=_caller({'semantic-models': RO}), semantic_models_manager=manager)
+        res = _run(create_default_registry().execute(
+            'get_concept_hierarchy', ctx, SEMANTIC_READS['get_concept_hierarchy']))
+        # Reached the manager: a missing concept, not a refusal.
+        assert res.error_code != TOOL_NOT_PERMITTED_CODE
+        assert res.error == 'Concept not found: http://example.com/onto#Customer'
+        manager.get_concept_hierarchy.assert_called_once()
+
+    def test_get_concept_neighbors_runs_at_read_only(self):
+        manager = MagicMock()
+        manager.neighbors.return_value = []
+        ctx = _ctx(caller=_caller({'semantic-models': RO}), semantic_models_manager=manager)
+        res = _run(create_default_registry().execute(
+            'get_concept_neighbors', ctx, SEMANTIC_READS['get_concept_neighbors']))
+        assert res.success is True
+        manager.neighbors.assert_called_once()
+
+    @pytest.mark.parametrize('level', [FeatureAccessLevel.READ_WRITE, FeatureAccessLevel.ADMIN])
+    def test_a_higher_level_runs_too(self, level):
+        manager = MagicMock()
+        manager.search_ontology_concepts.return_value = []
+        ctx = _ctx(caller=_caller({'semantic-models': level}), semantic_models_manager=manager)
+        res = _run(create_default_registry().execute(
+            'search_glossary_terms', ctx, SEMANTIC_READS['search_glossary_terms']))
+        assert res.success is True
+
+
+class TestLinkReadsKeepTheirReadRules:
+    """list_semantic_links / find_entities_by_concept: at Read-only on
+    semantic-models (the level of their REST routes) the product and contract read
+    rules still apply on top."""
+
+    def _published_product_with_link(self, db_session):
+        entity_id = str(uuid.uuid4())
+        iri = f'http://example.com/onto#C{uuid.uuid4().hex[:6]}'
+        db_session.add(DataProductDb(id=entity_id, api_version='v1.0.0', kind='DataProduct',
+                                     name='Linked', version='1.0.0', status='active'))
+        db_session.add(EntitySemanticLinkDb(entity_type='data_product', entity_id=entity_id,
+                                            iri=iri, label='Customer'))
+        db_session.commit()
+        return entity_id, iri
+
+    def test_list_semantic_links_runs_at_read_only_on_semantic_models(self, db_session):
+        entity_id, iri = self._published_product_with_link(db_session)
+        ctx = _ctx(db_session, _caller({'data-products': RO, 'semantic-models': RO}),
+                   semantic_models_manager=MagicMock())
+        res = _run(create_default_registry().execute(
+            'list_semantic_links', ctx, {'entity_type': 'data_product', 'entity_id': entity_id,
+                          'visibility': 'readable'}))
+        assert res.success is True
+        assert [link['iri'] for link in res.data['links']] == [iri]
+
+    def test_find_entities_by_concept_runs_at_read_only_on_semantic_models(
+        self, db_session
+    ):
+        entity_id, iri = self._published_product_with_link(db_session)
+        ctx = _ctx(db_session, _caller({'data-products': RO, 'semantic-models': RO}),
+                   semantic_models_manager=MagicMock())
+        res = _run(create_default_registry().execute(
+            'find_entities_by_concept', ctx, {'concept_iri': iri, 'visibility': 'readable'}))
+        assert res.success is True
+        assert [e['entity_id'] for e in res.data['entities']] == [entity_id]
+
+
+class TestCatalogToolsNeedCatalogCommander:
+    """Through the registry with the real tool bodies (the workspace client is a mock)."""
+
+    @pytest.mark.parametrize('name', sorted(CATALOG_TOOLS))
+    def test_each_declares_the_level_of_the_catalog_routes_and_a_user(self, name):
+        tool = create_default_registry().get(name)
+        assert tool.required_permission == ('catalog-commander', RO)
+        assert tool.requires_user_identity is True
+
+    @pytest.mark.parametrize('name', sorted(CATALOG_TOOLS))
+    def test_without_the_level_it_is_refused(self, name):
+        registry = create_default_registry()
+        ws = MagicMock()
+        for caller in (None, _caller({}), _caller({'catalog-commander': NONE}),
+                       _caller({'data-products': FeatureAccessLevel.ADMIN, 'tags': RO})):
+            ctx = _ctx(caller=caller, workspace_client=ws)
+            res = _run(registry.execute(name, ctx, CATALOG_TOOLS[name]))
+            assert res.success is False
+            assert res.error_code in (TOOL_NOT_PERMITTED_CODE, USER_IDENTITY_REQUIRED_CODE)
+            if caller is not None:
+                assert res.error_code == TOOL_NOT_PERMITTED_CODE
+                assert res.to_dict()['feature_id'] == 'catalog-commander'
+        assert ws.mock_calls == []
+
+    @pytest.mark.parametrize('name', sorted(CATALOG_TOOLS))
+    def test_an_mcp_api_key_caller_is_refused_even_with_every_scope(self, name):
+        caller = mcp_api_key_caller(SimpleNamespace(scopes=['*']))
+        # The scopes give Read-only on the semantic features only; even if a role gave
+        # the feature level, the missing identity refuses the tool.
+        caller.permissions['catalog-commander'] = FeatureAccessLevel.ADMIN
+        ws = MagicMock()
+        res = _run(create_default_registry().execute(
+            name, _ctx(caller=caller, workspace_client=ws), CATALOG_TOOLS[name]))
+        assert res.success is False
+        assert res.error_code == USER_IDENTITY_REQUIRED_CODE
+        assert 'Traceback' not in res.error and 'error id' not in res.error
+        assert ws.mock_calls == []
+
+    def test_get_current_user_still_runs_for_an_api_key_caller(self):
+        ws = MagicMock()
+        ws.current_user.me.return_value = SimpleNamespace(
+            user_name='svc', display_name='Svc', id='1', active=True, emails=[], groups=[])
+        caller = mcp_api_key_caller(SimpleNamespace(scopes=['*']))
+        res = _run(create_default_registry().execute(
+            'get_current_user', _ctx(caller=caller, workspace_client=ws), {}))
+        assert res.error_code != USER_IDENTITY_REQUIRED_CODE
+        assert res.error_code != TOOL_NOT_PERMITTED_CODE
+
+    def test_get_table_schema_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.tables.get.return_value = SimpleNamespace(
+            columns=[], full_name='main.sales.orders', comment=None, table_type='MANAGED')
+        res = _run(create_default_registry().execute(
+            'get_table_schema',
+            _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws),
+            CATALOG_TOOLS['get_table_schema']))
+        assert res.error_code is None
+        ws.tables.get.assert_called_once_with(full_name='main.sales.orders')
+
+    def test_list_catalogs_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.catalogs.list.return_value = []
+        res = _run(create_default_registry().execute(
+            'list_catalogs',
+            _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws), {}))
+        assert res.success is True
+        ws.catalogs.list.assert_called_once()
+
+    def test_explore_catalog_schema_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.tables.list.return_value = []
+        res = _run(create_default_registry().execute(
+            'explore_catalog_schema',
+            _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws),
+            CATALOG_TOOLS['explore_catalog_schema']))
+        assert res.error_code is None
+        ws.tables.list.assert_called_once()
+
+    def test_execute_analytics_query_runs_at_read_only(self):
+        ws = MagicMock()
+        ws.statement_execution.execute_statement.return_value = MagicMock()
+        ctx = _ctx(caller=_caller({'catalog-commander': RO}), workspace_client=ws)
+        ctx.settings.DATABRICKS_WAREHOUSE_ID = 'wh1'
+        res = _run(create_default_registry().execute(
+            'execute_analytics_query', ctx, CATALOG_TOOLS['execute_analytics_query']))
+        assert res.error_code not in (TOOL_NOT_PERMITTED_CODE, USER_IDENTITY_REQUIRED_CODE)
+        ws.statement_execution.execute_statement.assert_called_once()

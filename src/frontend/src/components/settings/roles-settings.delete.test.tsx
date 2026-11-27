@@ -22,6 +22,7 @@ vi.mock('@/stores/permissions-store', () => ({
 vi.mock('@/stores/user-store', () => ({ useUserStore: () => ({ userInfo: null }) }));
 vi.mock('./role-form-dialog', () => ({ default: () => null }));
 vi.mock('./request-role-access-dialog', () => ({ default: () => null }));
+vi.mock('./navigation-presets-card', () => ({ default: () => null }));
 vi.mock('@/components/ui/data-table', () => ({
   DataTable: ({ columns, data }: any) => (
     <div>

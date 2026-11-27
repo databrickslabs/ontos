@@ -7,7 +7,7 @@ whoever that client belongs to (the user's on-behalf-of client, or the app's).
 """
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
 
 # Why a comment could not be written (``CommentWriteError.reason``)
 PERMISSION_DENIED = 'permission_denied'
@@ -118,14 +118,19 @@ def _call_with_timeout(call: Callable[[], Any], timeout_seconds: Optional[float]
         executor.shutdown(wait=False)
 
 
-def read_comment(
-    ws: Any, table_fqn: str, column_name: Optional[str],
-    *, timeout_seconds: Optional[float] = None,
-) -> Tuple[Optional[str], Optional[str]]:
-    """``(table_type, comment)`` of a table or view, or of one of its columns, as read.
+class TableComments(NamedTuple):
+    """The comments of a table or view and of all its columns, as read in one call."""
+    table_type: Optional[str]  # the Unity Catalog type name (e.g. ``METRIC_VIEW``)
+    comment: Optional[str]
+    columns: Dict[str, Optional[str]]  # column name -> comment (None: no comment)
 
-    ``table_type`` is the Unity Catalog type name (e.g. ``METRIC_VIEW``). Raises
-    ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED, TIMED_OUT or FAILED) when it
+
+def read_table_comments(
+    ws: Any, table_fqn: str, *, timeout_seconds: Optional[float] = None,
+) -> TableComments:
+    """The comments of a table or view and of every column (one ``tables.get``).
+
+    Raises ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED, TIMED_OUT or FAILED) when it
     can't be read; TIMED_OUT when ``timeout_seconds`` (None: the client's own timeout)
     passes first.
     """
@@ -143,11 +148,26 @@ def read_comment(
         raise CommentWriteError(FAILED, str(e)) from e
     table_type = getattr(info.table_type, 'value', info.table_type)
     table_type = str(table_type) if table_type is not None else None
+    columns = {column.name: (column.comment or None) for column in info.columns or []}
+    return TableComments(table_type, info.comment or None, columns)
+
+
+def read_comment(
+    ws: Any, table_fqn: str, column_name: Optional[str],
+    *, timeout_seconds: Optional[float] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """``(table_type, comment)`` of a table or view, or of one of its columns, as read.
+
+    ``table_type`` is the Unity Catalog type name (e.g. ``METRIC_VIEW``). Raises
+    ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED, TIMED_OUT or FAILED) when it
+    can't be read; TIMED_OUT when ``timeout_seconds`` (None: the client's own timeout)
+    passes first.
+    """
+    comments = read_table_comments(ws, table_fqn, timeout_seconds=timeout_seconds)
     if not column_name:
-        return table_type, info.comment or None
-    for column in info.columns or []:
-        if column.name == column_name:
-            return table_type, column.comment or None
+        return comments.table_type, comments.comment
+    if column_name in comments.columns:
+        return comments.table_type, comments.columns[column_name]
     raise CommentWriteError(NOT_FOUND, f'Column {column_name} not found')
 
 

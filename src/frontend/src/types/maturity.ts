@@ -29,6 +29,19 @@ export interface GateResult {
   required: boolean;
   passed: boolean;
   message: string | null;
+  /** Set when the gate failed for a known reason, e.g. the asset's UC table couldn't be read */
+  message_code?: string | null;
+  message_params?: Record<string, unknown> | null;
+  /** False when the rule reads fields that couldn't be loaded; passed is then false too */
+  evaluated?: boolean;
+  /** The gate policy's own failure text, set on a failed gate */
+  failure_message?: string | null;
+}
+
+export interface MaturityNotice {
+  code: string;
+  message: string;
+  params: Record<string, unknown>;
 }
 
 export interface LevelResult {
@@ -52,6 +65,9 @@ export interface MaturityReport {
   levels: LevelResult[];
   evaluated_at: string;
   evaluated_by: string | null;
+  notices?: MaturityNotice[];
+  /** False for a result computed live and not stored (an asset's GET) */
+  stored?: boolean;
 }
 
 export interface MaturitySnapshot {

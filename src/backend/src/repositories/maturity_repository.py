@@ -1,5 +1,6 @@
 """Repository for maturity levels, gates, and snapshots."""
-from typing import List, Optional
+import copy
+from typing import Any, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select, and_
@@ -10,6 +11,15 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Entity types whose ladder doesn't include the shared ``all`` levels
+OWN_LADDER_ENTITY_TYPES = frozenset({"Asset"})
+# Entity types the shared ``all`` levels apply to
+SHARED_LEVEL_ENTITY_TYPES = ("DataProduct", "DataContract")
+
+
+# Candidate ids per IN clause (keeps under the bind-parameter limits)
+IN_CLAUSE_CHUNK = 5000
+
 
 class MaturityLevelRepository:
 
@@ -18,12 +28,19 @@ class MaturityLevelRepository:
     # ------------------------------------------------------------------
 
     def get_all_ordered(self, db: Session, *, entity_type: Optional[str] = None) -> List[MaturityLevelDb]:
-        """Return levels ordered by level_order, optionally filtered by entity_type."""
+        """Return levels ordered by level_order, optionally filtered by entity_type.
+
+        Levels with entity type ``all`` apply to data products and data
+        contracts. Assets have their own ladder (``Asset`` levels only): the
+        shared levels gate on product/contract fields (contracts, delivery
+        channels) that an asset doesn't have.
+        """
         q = db.query(MaturityLevelDb)
         if entity_type:
-            q = q.filter(
-                MaturityLevelDb.entity_type.in_([entity_type, "all"])
-            )
+            types = [entity_type]
+            if entity_type not in OWN_LADDER_ENTITY_TYPES:
+                types.append("all")
+            q = q.filter(MaturityLevelDb.entity_type.in_(types))
         return q.order_by(MaturityLevelDb.level_order).all()
 
     def get_by_id(self, db: Session, level_id: UUID) -> Optional[MaturityLevelDb]:
@@ -95,9 +112,18 @@ class MaturityLevelRepository:
 
         return self.get_all_ordered(db)
 
-    def count_snapshots_for_level(self, db: Session, level_order: int) -> int:
+    def count_snapshots_for_level(self, db: Session, level_order: int,
+                                  entity_type: str = "all") -> int:
+        """Snapshots at ``level_order`` of the entity types the level applies to.
+
+        An ``all`` level covers data products and data contracts; any other
+        level only its own entity type, so an asset snapshot never blocks
+        deleting a product or contract level (nor the reverse).
+        """
+        types = list(SHARED_LEVEL_ENTITY_TYPES) if entity_type == "all" else [entity_type]
         return db.query(func.count(MaturitySnapshotDb.id)).filter(
-            MaturitySnapshotDb.achieved_level_order == level_order
+            MaturitySnapshotDb.achieved_level_order == level_order,
+            MaturitySnapshotDb.entity_type.in_(types),
         ).scalar() or 0
 
     def is_empty(self, db: Session, entity_type: Optional[str] = None) -> bool:
@@ -159,6 +185,74 @@ class MaturityLevelRepository:
             .all()
         )
 
+    def entity_ids_below_first_level(
+        self, db: Session, *, entity_type: str,
+        entity_ids: Optional[Sequence[Any]] = None,
+    ) -> List[str]:
+        """Ids of the entities whose latest snapshot reached no level
+        (``latest_snapshots_below_first_level`` without the gate results)."""
+        return [
+            entity_id for entity_id, _ in self.latest_snapshots_below_first_level(
+                db, entity_type=entity_type, entity_ids=entity_ids,
+            )
+        ]
+
+    def latest_snapshots_below_first_level(
+        self, db: Session, *, entity_type: str,
+        entity_ids: Optional[Sequence[Any]] = None,
+    ) -> List[Tuple[str, Optional[str]]]:
+        """``(entity_id, gate_results_json)`` of the latest snapshot of each entity
+        whose latest snapshot reached no level.
+
+        Only snapshots taken with levels defined count (``total_levels > 0``), and
+        nothing counts while ``entity_type`` has no level of its own: an entity
+        never evaluated, or evaluated without levels, isn't below the first level.
+
+        ``entity_ids`` (when not None) limits the search to those candidates in SQL;
+        an empty list returns nothing. The latest snapshot is the newest
+        ``evaluated_at``, ties broken by the highest ``id``.
+        """
+        if entity_ids is not None and not entity_ids:
+            return []
+        if self.is_empty(db, entity_type=entity_type):
+            return []
+        candidates = None if entity_ids is None else [str(i) for i in entity_ids]
+        chunks = [None] if candidates is None else [
+            candidates[i:i + IN_CLAUSE_CHUNK] for i in range(0, len(candidates), IN_CLAUSE_CHUNK)
+        ]
+        found: List[Tuple[str, Optional[str]]] = []
+        for chunk in chunks:
+            ranked = (
+                db.query(
+                    MaturitySnapshotDb.entity_id.label("entity_id"),
+                    MaturitySnapshotDb.gate_results_json.label("gate_results_json"),
+                    MaturitySnapshotDb.achieved_level_order.label("achieved_level_order"),
+                    MaturitySnapshotDb.total_levels.label("total_levels"),
+                    func.row_number().over(
+                        partition_by=MaturitySnapshotDb.entity_id,
+                        order_by=(
+                            MaturitySnapshotDb.evaluated_at.desc(),
+                            MaturitySnapshotDb.id.desc(),
+                        ),
+                    ).label("rn"),
+                )
+                .filter(MaturitySnapshotDb.entity_type == entity_type)
+            )
+            if chunk is not None:
+                ranked = ranked.filter(MaturitySnapshotDb.entity_id.in_(chunk))
+            sub = ranked.subquery()
+            rows = (
+                db.query(sub.c.entity_id, sub.c.gate_results_json)
+                .filter(
+                    sub.c.rn == 1,
+                    sub.c.achieved_level_order.is_(None),
+                    sub.c.total_levels > 0,
+                )
+                .all()
+            )
+            found.extend((r.entity_id, r.gate_results_json) for r in rows)
+        return found
+
     def get_latest_snapshot(self, db: Session, *, entity_type: str,
                             entity_id: str) -> Optional[MaturitySnapshotDb]:
         return (
@@ -169,7 +263,7 @@ class MaturityLevelRepository:
                     MaturitySnapshotDb.entity_id == entity_id,
                 )
             )
-            .order_by(MaturitySnapshotDb.evaluated_at.desc())
+            .order_by(MaturitySnapshotDb.evaluated_at.desc(), MaturitySnapshotDb.id.desc())
             .first()
         )
 
@@ -182,9 +276,6 @@ class MaturityLevelRepository:
         """
         if not self.is_empty(db):
             return self.get_all_ordered(db)
-
-        from src.db_models.compliance import CompliancePolicyDb
-        import uuid as _uuid
 
         # Define the 5-level model
         LEVELS = [
@@ -251,26 +342,122 @@ class MaturityLevelRepository:
             },
         ]
 
+        created_levels = self._create_levels_with_gates(db, LEVELS)
+        logger.info("Seeded default 5-level maturity model with compliance policy gates")
+        return created_levels
+
+
+    # Default ladder for table and view assets. Loaded on request
+    # (``seed_asset_defaults``), never at startup. The gates only use fields of
+    # the asset entity dict: Ontos fields, and the column fields read from the
+    # Unity Catalog table (absent when the table can't be read, so those gates fail).
+    ASSET_LEVELS = [
+        {
+            "level_order": 1, "name": "Prerequisite", "entity_type": "Asset",
+            "description": "The table has an owner and a domain",
+            "icon": "lock-keyhole", "color": "blue",
+            "gates": [
+                {"name": "Owner is known", "rule": "ASSERT obj.has_owner = True",
+                 "severity": "high"},
+                {"name": "Domain assigned", "rule": "ASSERT obj.has_domain = True",
+                 "severity": "high"},
+            ],
+        },
+        {
+            "level_order": 2, "name": "1 star", "entity_type": "Asset",
+            "description": "The table and most of its columns are described",
+            "icon": "file-text", "color": "cyan",
+            "gates": [
+                {"name": "Description has at least 50 characters",
+                 "rule": "ASSERT LENGTH(obj.description) >= 50", "severity": "high"},
+                {"name": "Half of the columns have a comment",
+                 "rule": "ASSERT obj.column_comment_ratio >= 0.5", "severity": "high"},
+            ],
+        },
+        {
+            "level_order": 3, "name": "2 stars", "entity_type": "Asset",
+            "description": "Every column is documented and the table is linked to business terms",
+            "icon": "book-open", "color": "green",
+            "gates": [
+                {"name": "Every column has a comment",
+                 "rule": "ASSERT obj.columns_without_comment_count = 0", "severity": "high"},
+                {"name": "Business terms linked",
+                 "rule": "ASSERT obj.business_term_count > 0", "severity": "medium"},
+                {"name": "Tags assigned", "rule": "ASSERT obj.tag_count > 0",
+                 "severity": "low", "required": False},
+            ],
+        },
+        {
+            "level_order": 4, "name": "3 stars", "entity_type": "Asset",
+            "description": "The table is certified and its quality is checked",
+            "icon": "shield-check", "color": "purple",
+            "gates": [
+                {"name": "Table is certified",
+                 "rule": "ASSERT obj.effective_certification >= 1", "severity": "high"},
+                {"name": "Certification is current",
+                 "rule": "ASSERT obj.is_certification_expired = False", "severity": "high"},
+                {"name": "Quality checks active",
+                 "rule": "ASSERT obj.quality_check_count > 0", "severity": "medium",
+                 "required": False},
+            ],
+        },
+    ]
+
+    def seed_asset_defaults(self, db: Session) -> List[MaturityLevelDb]:
+        """Load the default asset ladder (``ASSET_LEVELS``) with its gate policies.
+
+        Does nothing when a level with entity type ``Asset`` exists already,
+        and returns an empty list then; else returns the created levels. The
+        caller commits.
+        """
+        if not self.is_empty(db, entity_type="Asset"):
+            return []
+        levels = self._create_levels_with_gates(
+            db, copy.deepcopy(self.ASSET_LEVELS), slug_prefix="maturity-asset",
+            name_prefix="Asset maturity",
+        )
+        logger.info("Seeded the default asset maturity ladder (%d levels)", len(levels))
+        return levels
+
+    def _create_levels_with_gates(
+        self, db: Session, level_defs: List[dict], *, slug_prefix: str = "maturity",
+        name_prefix: str = "Maturity",
+    ) -> List[MaturityLevelDb]:
+        """Create levels and one compliance policy per gate (category ``Maturity``).
+
+        A policy whose slug exists already (left from an earlier load whose
+        levels were deleted) is reused, so loading the defaults again works.
+        """
+        from src.db_models.compliance import CompliancePolicyDb
+        import uuid as _uuid
+
         created_levels = []
-        for level_def in LEVELS:
+        for level_def in level_defs:
             gate_defs = level_def.pop("gates")
             level = self.create(db, **level_def)
+            order, level_name = level_def["level_order"], level_def.get("name")
 
             for idx, gate_def in enumerate(gate_defs):
                 is_required = gate_def.pop("required", True)
-                policy = CompliancePolicyDb(
-                    id=str(_uuid.uuid4()),
-                    slug=f"maturity-{level_def['level_order']}-{gate_def['name'].lower().replace(' ', '-')}",
-                    name=f"[Maturity L{level_def['level_order']}] {gate_def['name']}",
-                    description=f"Maturity gate for level '{level_def.get('name', level_def['level_order'])}': {gate_def['name']}",
-                    failure_message=f"Gate failed: {gate_def['name']}",
-                    rule=gate_def["rule"],
-                    category=gate_def.get("category", "Maturity"),
-                    severity=gate_def.get("severity", "medium"),
-                    is_active=True,
-                )
-                db.add(policy)
-                db.flush()
+                gate_name = gate_def["name"]
+                slug = f"{slug_prefix}-{order}-{gate_name.lower().replace(' ', '-')}"
+                policy = db.query(CompliancePolicyDb).filter(
+                    CompliancePolicyDb.slug == slug
+                ).first()
+                if policy is None:
+                    policy = CompliancePolicyDb(
+                        id=str(_uuid.uuid4()),
+                        slug=slug,
+                        name=f"[{name_prefix} L{order}] {gate_name}",
+                        description=f"Maturity gate for level '{level_name or order}': {gate_name}",
+                        failure_message=f"Gate failed: {gate_name}",
+                        rule=gate_def["rule"],
+                        category=gate_def.get("category", "Maturity"),
+                        severity=gate_def.get("severity", "medium"),
+                        is_active=True,
+                    )
+                    db.add(policy)
+                    db.flush()
 
                 self.add_gate(
                     db,
@@ -282,8 +469,6 @@ class MaturityLevelRepository:
 
             created_levels.append(level)
 
-        logger.info("Seeded default 5-level maturity model with compliance policy gates")
         return created_levels
-
 
 maturity_repo = MaturityLevelRepository()

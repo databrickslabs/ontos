@@ -18,6 +18,12 @@
   "invalidStatus": "{{status}} no es un estado del ciclo de vida. Usa uno de: {{allowed}}.",
   "gateError": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar la compuerta del flujo de trabajo {{workflows}}. Pida a un administrador que revise el flujo de trabajo.",
   "gateErrorUnnamed": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar una compuerta del flujo de trabajo. Pida a un administrador que revise el flujo de trabajo.",
+  "updateGate": {
+    "error": "Se rechazó la actualización: no se pudo evaluar el gate de workflow {{workflows}}. Pida a un administrador que revise el workflow.",
+    "errorUnnamed": "Se rechazó la actualización: no se pudo evaluar un gate de workflow. Pida a un administrador que revise el workflow.",
+    "tagWriteFailed": "Se rechazó la actualización: no se pudo guardar un cambio de etiqueta de sus gates de workflow. Pida a un administrador que revise el registro del servidor.",
+    "tagListWriteFailed": "Se rechazó la actualización: no se pudieron guardar sus etiquetas, que sus gates de workflow comprobaron. Pida a un administrador que revise el registro del servidor."
+  },
   "certifiedDeprecationRequiresApproval": "{{name}} está certificado, por lo que solo puede declararse obsoleto mediante una solicitud de cambio de estado aprobada. Solicite el cambio de estado.",
   "requestInstead": "Solicitar el cambio de estado",
   "certifiedGuard": {

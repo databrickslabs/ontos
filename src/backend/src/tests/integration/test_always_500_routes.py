@@ -42,13 +42,16 @@ class TestCreateProductFromContract:
         ports = body.get("outputPorts") or body.get("output_ports")
         assert [p.get("contractId") or p.get("contract_id") for p in ports] == [contract.id]
 
-    def test_product_type_from_older_clients_is_accepted_and_ignored(self, client, db_session):
+    def test_product_type_is_checked_against_the_configured_types(self, client, db_session):
+        # Types are admin-configurable reference data (#1209); the full rules are
+        # covered in test_data_product_routes.py.
+        from src.repositories.data_product_types_repository import data_product_types_repo
+
+        data_product_types_repo.seed_defaults(db_session)
         contract = _contract(db_session, "approved")
 
-        response = _from_contract(client, contract.id, product_type="source-aligned")
-
-        assert response.status_code == 201, response.text
-        assert "productType" not in response.json()
+        assert _from_contract(client, contract.id, product_type="source-aligned").status_code == 201
+        assert _from_contract(client, contract.id, product_type="banana").status_code == 400
 
     def test_draft_contract_is_refused_with_400(self, client, db_session):
         contract = _contract(db_session, "draft")

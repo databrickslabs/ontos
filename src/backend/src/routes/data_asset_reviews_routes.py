@@ -35,7 +35,11 @@ from src.common.dependencies import (
     WorkspaceClientDep,
     AuditManagerDep,
     AuditCurrentUserDep,
+    CurrentUserDep,
 )
+from src.common.asset_access import user_has_feature
+from src.models.metric_views import MetricViewLinks
+from src.common.metric_views import metric_view_entity_id
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -398,12 +402,16 @@ async def get_metric_view_definition(
     asset_id: str,
     request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
     user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
     """Get a metric view's definition: its YAML, its dimensions and measures, and the
-    concept links of the view and of each field (``links``)."""
+    concept links of the view and of each field (``links``).
+
+    The links need Read-only on ``semantic-models`` (like the semantic-links routes);
+    without it ``links`` is empty and the rest is returned."""
     try:
         reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
         if not reviewed_asset:
@@ -421,10 +429,15 @@ async def get_metric_view_definition(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Metric view definition not found by the workspace client, or access denied.",
             )
-        links_manager = SemanticLinksManager(
-            db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
-        )
-        links = links_manager.list_for_metric_view(reviewed_asset.asset_fqn, result['metric_view'])
+        if user_has_feature(request, current_user, 'semantic-models', FeatureAccessLevel.READ_ONLY):
+            links_manager = SemanticLinksManager(
+                db,
+                semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None),
+            )
+            links = links_manager.list_for_metric_view(
+                reviewed_asset.asset_fqn, result['metric_view'])
+        else:
+            links = MetricViewLinks(view_entity_id=metric_view_entity_id(reviewed_asset.asset_fqn))
         return {**result, 'links': links.model_dump()}
     except HTTPException:
         raise

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from databricks.sdk import WorkspaceClient
@@ -11,6 +11,7 @@ from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.common.uc_comments import split_column_location
 from src.repositories.business_owners_repository import business_owner_repo
+from src.repositories.maturity_repository import IN_CLAUSE_CHUNK, maturity_repo
 from src.models.assets import (
     description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
@@ -21,12 +22,16 @@ from src.models.assets import (
     PHYSICAL_TABLE_ASSET_TYPES, public_properties, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
+from src.common.api_errors import CodedValueError
 from src.common.errors import ConflictError, NotFoundError, ValidationError
 from src.common.logging import get_logger
 from src.common.odcs_logical_types import column_logical_type, schemas_for_version
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
+from src.controller.asset_description_history import (
+    current_description_source, record_description_change,
+)
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 
@@ -35,6 +40,19 @@ logger = get_logger(__name__)
 _UNSET = object()
 
 ONTOS_NS = "http://ontos.app/ontology#"
+
+
+class BelowFirstLevelNeedsOwnerError(CodedValueError):
+    """``below_first_maturity_level`` without ``owned_by_me``: refused, since it
+    reads the caller's UC grant on every candidate table."""
+
+    code = 'below_first_maturity_level_needs_owned_by_me'
+
+    def __init__(self):
+        super().__init__(
+            "below_first_maturity_level=true needs owned_by_me=true: it reads each "
+            "candidate table in Unity Catalog with your token."
+        )
 
 
 class AssetsManager(SearchableAsset):
@@ -221,7 +239,7 @@ class AssetsManager(SearchableAsset):
     # --- Asset CRUD ---
 
     def create_asset(self, db: Session, *, asset_in: AssetCreate, current_user_id: str) -> AssetRead:
-        """Creates a new asset."""
+        """Creates a new asset; a table, view or column description is logged in its history."""
         db_type = self._type_repo.get(db, asset_in.asset_type_id)
         if not db_type:
             raise NotFoundError(f"Asset type '{asset_in.asset_type_id}' not found.")
@@ -255,6 +273,10 @@ class AssetsManager(SearchableAsset):
             # Reload with relationships
             db_asset = self._asset_repo.get_with_relationships(db, db_asset.id)
             logger.info(f"Created asset '{db_asset.name}' (id: {db_asset.id})")
+            # Not best-effort: the history is stored with the asset, or the creation fails
+            record_description_change(
+                db, db_asset, before=None, after=db_asset.description,
+                source=current_description_source(), username=current_user_id)
             try:
                 change_log_manager.log_change(
                     db,
@@ -361,6 +383,8 @@ class AssetsManager(SearchableAsset):
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[List[UUID]] = None,
         owner_email: Optional[str] = None,
+        below_first_maturity_level: bool = False,
+        uc_workspace_client: Optional[Callable[[], Any]] = None,
     ) -> PaginatedAssetSummary:
         """Gets a paginated page of asset summaries.
 
@@ -372,9 +396,24 @@ class AssetsManager(SearchableAsset):
         ``owner_email`` (when not None) keeps only the assets with an active
         business-owner assignment for that user. It intersects with
         ``restrict_to_ids``, so it can only narrow the result.
+
+        ``below_first_maturity_level`` keeps only the assets whose latest maturity
+        evaluation reached no level (tables and views; never-evaluated assets are
+        left out). It narrows the same way, and needs ``owner_email``
+        (``BelowFirstLevelNeedsOwnerError`` without it): it reads a UC table per
+        candidate. A stored level comes from the Unity Catalog read of whoever
+        evaluated it, so an asset whose snapshot was evaluated against a UC table
+        is kept only when ``uc_workspace_client`` (the caller's own client factory)
+        reads that table now; without one, such assets are left out.
         """
+        if below_first_maturity_level and owner_email is None:
+            raise BelowFirstLevelNeedsOwnerError()
         if owner_email is not None:
             restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
+        if below_first_maturity_level:
+            restrict_to_ids = self._narrow_to_below_first_level(
+                db, restrict_to_ids, uc_workspace_client,
+            )
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
@@ -423,10 +462,59 @@ class AssetsManager(SearchableAsset):
             owned &= {UUID(str(i)) for i in restrict_to_ids}
         return sorted(owned, key=str)
 
+    @staticmethod
+    def _narrow_to_below_first_level(
+        db: Session, restrict_to_ids: Optional[List[UUID]],
+        uc_workspace_client: Optional[Callable[[], Any]] = None,
+    ) -> List[UUID]:
+        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``.
+
+        The latest snapshot of an asset is kept only when ``uc_workspace_client``
+        reads the UC table it was evaluated against (the history's rule: that
+        table, or the asset's current one when the snapshot doesn't record it;
+        one ``tables.get`` per table; fails closed).
+        """
+        from src.controller.entity_dict_builder import (
+            SNAPSHOT_UC_TABLE_UNKNOWN, snapshot_uc_table, uc_table_name, uc_table_name_readable,
+        )
+
+        snapshot_of: Dict[UUID, Optional[str]] = {}
+        candidates = None if restrict_to_ids is None else [str(i) for i in restrict_to_ids]
+        for entity_id, gate_results_json in maturity_repo.latest_snapshots_below_first_level(
+            db, entity_type="Asset", entity_ids=candidates,
+        ):
+            try:
+                snapshot_of[UUID(str(entity_id))] = gate_results_json
+            except ValueError:
+                logger.warning("Skipping a maturity snapshot with a non-UUID asset id")
+        below = sorted(snapshot_of, key=str)
+        if restrict_to_ids is not None:
+            allowed = {UUID(str(i)) for i in restrict_to_ids}
+            below = [i for i in below if i in allowed]
+        readable: Dict[Any, bool] = {}
+        kept: List[UUID] = []
+        # Chunked like the candidate list (bind-parameter limits)
+        for start in range(0, len(below), IN_CLAUSE_CHUNK):
+            chunk = below[start:start + IN_CLAUSE_CHUNK]
+            for row in db.query(AssetDb).filter(AssetDb.id.in_(chunk)).all():
+                table = snapshot_uc_table(
+                    snapshot_of[row.id], uc_table_name(row.platform, row.location),
+                )
+                if table is SNAPSHOT_UC_TABLE_UNKNOWN:
+                    continue
+                if table not in readable:
+                    readable[table] = uc_table_name_readable(
+                        table, uc_workspace_client, asset_id=str(row.id),
+                    )
+                if readable[table]:
+                    kept.append(row.id)
+        return sorted(kept, key=str)
+
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
+        previous_description = db_asset.description
 
         if asset_in.asset_type_id and asset_in.asset_type_id != db_asset.asset_type_id:
             db_type = self._type_repo.get(db, asset_in.asset_type_id)
@@ -483,6 +571,11 @@ class AssetsManager(SearchableAsset):
                 )
             updated = self._asset_repo.get_with_relationships(db, updated.id)
             logger.info(f"Updated asset '{updated.name}' (id: {asset_id})")
+            if 'description' in update_data:
+                # Not best-effort: the history is stored with the change, or the save fails
+                record_description_change(
+                    db, updated, before=previous_description, after=updated.description,
+                    source=current_description_source(), username=current_user_id)
             try:
                 change_log_manager.log_change_with_details(
                     db,

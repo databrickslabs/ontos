@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -8,6 +9,19 @@ import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 import WorkflowApprovalResponseDialog, { type WorkflowApprovalResponseDialogPayload } from '@/components/workflows/workflow-approval-response-dialog';
 import { approvalActionPayload, notificationTitle } from '@/lib/notification-text';
+
+/**
+ * The entity an approval is for, as approvers may trust it: for an access request the
+ * name the backend read for the requested entity (else its id), never the requester's
+ * own entity_name (#1615).
+ */
+export function approvalEntityName(payload: Record<string, any> | null | undefined): string {
+  if (!payload) return '';
+  if (String(payload.entity_type ?? '').toLowerCase() === 'access_grant') {
+    return payload.underlying_entity_name || payload.underlying_entity_id || '';
+  }
+  return payload.entity_name || '';
+}
 
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
@@ -96,6 +110,8 @@ export default function RequiredActionsSection({ fetchQueue = true }: RequiredAc
     date: string;
     link?: string;
     payload?: Record<string, any>;
+    /** An approval step past its timeout_days, reminded once (#1119) */
+    overdue?: boolean;
   };
 
   const unifiedApprovals: UnifiedApproval[] = [
@@ -130,10 +146,12 @@ export default function RequiredActionsSection({ fetchQueue = true }: RequiredAc
     ...workflowApprovalNotifications.map(n => ({
       id: n.id,
       type: 'workflow_approval' as const,
-      title: n.action_payload?.entity_name || notificationTitle(n, t) || t('requiredActionsSection.approvalRequest'),
+      title: approvalEntityName(n.action_payload) || notificationTitle(n, t)
+        || t('requiredActionsSection.approvalRequest'),
       subtitle: n.action_payload?.requester_email || n.subtitle,
       date: n.created_at,
       payload: approvalActionPayload(n, t),
+      overdue: Boolean(n.action_payload?.overdue_since),
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -165,6 +183,7 @@ export default function RequiredActionsSection({ fetchQueue = true }: RequiredAc
       request_id: payload.request_id,
       workflow_name: payload.workflow_name,
       workflow_message: payload.workflow_message,
+      can_clarify: payload.can_clarify,
       on_behalf_of: payload.on_behalf_of,
       full_payload: payload,
     });
@@ -235,7 +254,18 @@ export default function RequiredActionsSection({ fetchQueue = true }: RequiredAc
                     {unifiedApprovals.slice(roleRequestPage * 10, (roleRequestPage + 1) * 10).map(item => (
                       <tr key={item.id} className="hover:bg-muted/20 transition-colors">
                         <td className="p-2.5">
-                          {getTypeBadge(item.type)}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {getTypeBadge(item.type)}
+                            {item.overdue && (
+                              <Badge
+                                variant="outline"
+                                className="border-red-500/40 text-red-700 dark:text-red-300"
+                                title={t('approvalOverdue.hint')}
+                              >
+                                {t('approvalOverdue.badge')}
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2.5">
                           <div className="font-medium truncate max-w-[250px]">

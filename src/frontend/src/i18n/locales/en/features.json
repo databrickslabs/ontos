@@ -23,6 +23,14 @@
     "name": "Products",
     "description": "Group and manage related Databricks assets with tags."
   },
+  "marketplace": {
+    "name": "Marketplace",
+    "description": "Browse and subscribe to available data products."
+  },
+  "my-products": {
+    "name": "My Products",
+    "description": "View and manage your subscribed data products."
+  },
   "concepts": {
     "name": "Concepts",
     "description": "Browse, search, and manage business concepts, schemes, and hierarchies."

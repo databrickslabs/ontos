@@ -7,8 +7,9 @@ catalogs, schemas, and their metadata.
 
 from typing import Any, Dict, List, Optional
 
+from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,7 @@ class GetCurrentUserTool(BaseTool):
     parameters = {}
     required_params = []
     required_scope = "user:read"
+    required_permission = ANY_CALLER
     
     async def execute(self, ctx: ToolContext) -> ToolResult:
         """Get the current user's information from the workspace client."""
@@ -81,6 +83,10 @@ class ListCatalogsTool(BaseTool):
     }
     required_params = []
     required_scope = "analytics:read"
+    # Same level as the Catalog Commander routes (GET /api/catalogs/...); the tool
+    # reads Unity Catalog as the user, so an API key alone is refused.
+    required_permission = ("catalog-commander", FeatureAccessLevel.READ_ONLY)
+    requires_user_identity = True
     
     async def execute(
         self,
@@ -164,6 +170,10 @@ class GetCatalogDetailsTool(BaseTool):
     }
     required_params = ["catalog_name"]
     required_scope = "analytics:read"
+    # Same level as the Catalog Commander routes (GET /api/catalogs/...); the tool
+    # reads Unity Catalog as the user, so an API key alone is refused.
+    required_permission = ("catalog-commander", FeatureAccessLevel.READ_ONLY)
+    requires_user_identity = True
     
     async def execute(
         self,
@@ -248,6 +258,10 @@ class ListSchemasTool(BaseTool):
     }
     required_params = ["catalog_name"]
     required_scope = "analytics:read"
+    # Same level as the Catalog Commander routes (GET /api/catalogs/...); the tool
+    # reads Unity Catalog as the user, so an API key alone is refused.
+    required_permission = ("catalog-commander", FeatureAccessLevel.READ_ONLY)
+    requires_user_identity = True
     
     async def execute(
         self,

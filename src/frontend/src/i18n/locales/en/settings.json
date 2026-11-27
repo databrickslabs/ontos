@@ -111,6 +111,7 @@
     "uiCustomization": "UI Customization",
     "connectors": "Connectors",
     "schemaImporter": "Schema Importer",
+    "dataProductTypes": "Data Product Types",
     "certificationLevels": "Certification Levels",
     "maturityLevels": "Maturity Levels"
   },
@@ -430,10 +431,12 @@
         "title": "Home Sections",
         "description": "Select which sections appear on the home page for users with this role.",
         "labels": {
-          "JOURNEY": "Journey home"
+          "JOURNEY": "Journey home",
+          "MARKETPLACE": "Marketplace home"
         },
         "descriptions": {
-          "JOURNEY": "Replaces the full home page with Find, Understand, Trust, Publish and Maintain. It can't be combined with other sections."
+          "JOURNEY": "Replaces the full home page with Find, Understand, Trust, Publish and Maintain. It can't be combined with other sections.",
+          "MARKETPLACE": "Replaces the full home page with the marketplace. It can't be combined with other sections."
         }
       },
       "approvalPrivileges": {
@@ -585,6 +588,62 @@
       "submitFailed": "Failed to submit role access request",
       "sending": "Sending Request...",
       "send": "Send Request"
+    }
+  },
+  "navigationPresets": {
+    "title": "Navigation presets",
+    "help": "Set the menus and home page of the default roles in one step. A preset changes only what the menus and the home page show, never access levels. Roles are matched by name, and each role stays editable afterwards.",
+    "loadFailed": "Could not load the navigation presets.",
+    "presets": {
+      "essentials": {
+        "name": "Essentials",
+        "description": "Journey home and a short menu: catalog, assets and concepts, plus reviews and compliance for stewards and governance."
+      },
+      "data-consumer": {
+        "name": "Data Consumer",
+        "description": "Marketplace home for data consumers, with Marketplace and My Products in the menu."
+      }
+    },
+    "preview": {
+      "role": "Role",
+      "menu": "Menu after apply",
+      "home": "Home page",
+      "status": "Status",
+      "menuEmpty": "No menu entries",
+      "homeUnchanged": "Unchanged",
+      "noAccess": "Not shown: the role has no access to {{features}}."
+    },
+    "status": {
+      "changes": "Changes",
+      "noChange": "No change",
+      "notFound": "Role not found"
+    },
+    "actions": {
+      "apply": "Apply preset",
+      "undo": "Undo last preset"
+    },
+    "nothingToApply": "Every role already matches this preset.",
+    "lastApplied": "Last applied: {{preset}} by {{user}}, {{date}}",
+    "unknownUser": "unknown user",
+    "confirm": {
+      "applyTitle": "Apply the {{preset}} preset?",
+      "applyDescription_one": "This changes the menu and home page of {{count}} role. Access levels stay the same, and you can undo it afterwards.",
+      "applyDescription_other": "This changes the menus and home pages of {{count}} roles. Access levels stay the same, and you can undo it afterwards.",
+      "undoTitle": "Undo the last preset?",
+      "undoDescription_one": "This restores the menu and home page that {{preset}} changed on {{count}} role.",
+      "undoDescription_other": "This restores the menus and home pages that {{preset}} changed on {{count}} roles."
+    },
+    "applied": "{{preset}} preset applied",
+    "nothingChanged": "Nothing to change",
+    "appliedSummary": "Changed: {{changed}}, unchanged: {{unchanged}}, not found: {{missing}}.",
+    "applyFailed": "Could not apply the preset",
+    "undone": "{{preset}} preset undone",
+    "undoneSummary": "Restored: {{restored}}, not found: {{missing}}.",
+    "undoFailed": "Could not undo the preset",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "There is no preset application to undo.",
+      "navigation_preset_unknown": "This preset does not exist.",
+      "generic": "The request failed. Try again."
     }
   },
   "mcpTokens": {
@@ -1053,6 +1112,24 @@
         "descriptionContract": "Tags each table with the lifecycle status of the data contract that uses it. On a table used by several contracts, the best status wins (active first, retired last).",
         "valueLabel": "Tag value:",
         "sharedKeyHint": "When the product and contract status tags are both enabled with the same key, the product's status is written."
+      },
+      "maturityThreshold": {
+        "variable": "true or false: the level number is at least <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<order>} with a level number, for example {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "Asset UUID",
+        "assetType": "Asset type name (Table, View, ...)",
+        "assetFqn": "Unity Catalog name of the table (catalog.schema.table)",
+        "assetMaturity": "Maturity level name of a table or view asset (latest evaluation)",
+        "assetMaturityOrder": "Maturity level number of a table or view asset (1 = first level)"
+      },
+      "maturity": {
+        "title": "Maturity level tag",
+        "description": "Tags each table or view asset with its maturity level (latest evaluation). Tables without a level get no tag.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} or {ASSET.MATURITY_ORDER} in the key or the value.",
+        "tablesOnlyHint": "Only tables and views with a Unity Catalog name are tagged; schemas and catalogs are not. The run output counts the assets it skipped and why.",
+        "prefixHint": "Start the key with the same prefix as the other enabled keys (ontos_ by default), so the job can remove the tag when a table loses its level."
       }
     },
     "entityPatterns": {
@@ -1236,6 +1313,71 @@
     "saveButton": "Delivery settings saved successfully",
     "title": "Delivery Modes"
   },
+  "dataProductTypes": {
+    "title": "Data Product Types",
+    "description": "Define the types a data product can have. Built-in types can be renamed or deactivated, but not deleted.",
+    "addType": "Add Type",
+    "table": {
+      "label": "Label",
+      "key": "Key",
+      "products": "Products",
+      "active": "Active"
+    },
+    "badges": {
+      "default": "Default",
+      "builtIn": "Built-in",
+      "imported": "Imported"
+    },
+    "actions": {
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down",
+      "toggleActive": "Active: {{name}}",
+      "makeDefault": "Make default",
+      "makeDefaultFor": "Make {{name}} the default",
+      "edit": "Edit {{name}}",
+      "delete": "Delete {{name}}"
+    },
+    "emptyState": "No data product types yet. Click \"Add Type\" to create one.",
+    "defaultCannotBeInactive": "The default type can't be deactivated. Make another type the default first.",
+    "dialog": {
+      "editTitle": "Edit Data Product Type",
+      "createTitle": "Add Data Product Type",
+      "editDescription": "Change how this type is shown. The key stays the same.",
+      "createDescription": "Create a type producers can pick for their data products."
+    },
+    "form": {
+      "label": "Label",
+      "labelPlaceholder": "e.g., Golden Record",
+      "seededLabelHint": "Built-in types are shown translated until you change the label.",
+      "key": "Key",
+      "keyHint": "Lower-case words joined by hyphens, e.g. golden-record. It can't be changed later and is the value used in ODPS files.",
+      "keyImmutable": "The key can't be changed.",
+      "color": "Color"
+    },
+    "delete": {
+      "title": "Delete data product type?",
+      "description": "Are you sure you want to delete \"{{name}}\"? This cannot be undone."
+    },
+    "deleteBlocked": {
+      "seeded": "Built-in types can't be deleted. Deactivate it instead.",
+      "inUse_one": "Used by {{count}} data product. Deactivate it instead.",
+      "inUse_other": "Used by {{count}} data products. Deactivate it instead."
+    },
+    "messages": {
+      "updated": "Data product type \"{{name}}\" updated.",
+      "created": "Data product type \"{{name}}\" created.",
+      "deleted": "Data product type \"{{name}}\" deleted.",
+      "reorderFailed": "Failed to reorder"
+    },
+    "errors": {
+      "data_product_type_not_found": "This data product type no longer exists.",
+      "data_product_type_key_exists": "A data product type with the key \"{{key}}\" already exists.",
+      "data_product_type_in_use_one": "\"{{key}}\" is used by {{count}} data product. Deactivate it instead of deleting it.",
+      "data_product_type_in_use_other": "\"{{key}}\" is used by {{count}} data products. Deactivate it instead of deleting it.",
+      "data_product_type_seeded": "\"{{key}}\" is a built-in type and can't be deleted. Deactivate it instead.",
+      "data_product_type_default_inactive": "\"{{key}}\" can't be both the default and inactive. Make another type the default first."
+    }
+  },
   "certificationLevels": {
     "title": "Certification Levels",
     "description": "Define the certification levels available for data products, contracts, and assets.",
@@ -1270,11 +1412,45 @@
       "reorderFailed": "Failed to reorder"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Evaluate all table, view and metric view assets",
+    "description": "Evaluates every table, view and metric view asset in the scope with the current Asset levels. An asset evaluated since the run started is skipped, and only one run goes at a time.",
+    "catalog": "Catalog (optional)",
+    "schema": "Schema (optional)",
+    "start": "Evaluate assets",
+    "running": "Evaluating: {{processed}} of {{total}} assets",
+    "noAssetLevels": "Add Asset levels first: without them nothing is evaluated.",
+    "lastRun": "Last run",
+    "none": "No run has finished yet.",
+    "scope": "Scope: {{scope}}",
+    "allCatalogs": "All catalogs",
+    "startedBy": "Started by {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} evaluated, {{changed}} changed level, {{errors}} errors.",
+    "skipped": "Skipped",
+    "errors": "Errors",
+    "state": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Evaluated since the run started",
+      "maturity_bulk_skipped_not_found": "Asset not found",
+      "maturity_bulk_skipped_no_levels": "No Asset levels",
+      "maturity_bulk_skipped_asset_type": "Not a table, view or metric view",
+      "maturity_bulk_skipped_not_stored": "Not stored: the table couldn't be read",
+      "maturity_bulk_evaluation_failed": "Evaluation failed (see the server log)",
+      "maturity_bulk_run_failed": "The run stopped (see the server log)",
+      "maturity_bulk_authentication_failed": "Stopped: Unity Catalog refused the token (it may have expired); run it again",
+      "maturity_bulk_run_in_progress": "A bulk evaluation is already running.",
+      "maturity_bulk_scope_invalid": "The scope is not valid."
+    }
+  },
   "maturityLevels": {
     "title": "Maturity Levels",
     "description": "Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",
     "addLevel": "Add Level",
-    "allTypes": "All types",
+    "allTypes": "Products and contracts",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gates",
     "complianceGates": "Compliance Policy Gates",
@@ -1301,7 +1477,8 @@
       "levelNamePreview": "Level Name"
     },
     "entityTypes": {
-      "all": "All Entity Types",
+      "all": "Data products and contracts",
+      "Asset": "Assets (tables, views and metric views)",
       "DataProduct": "Data Products",
       "DataContract": "Data Contracts"
     },
@@ -1317,6 +1494,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "This policy uses LLM_CHECK, which is only evaluated in compliance runs, so a maturity gate would fail every entity. Select a policy without LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Load default asset levels",
+      "hint": "Adds a default ladder for table and view assets (Prerequisite, 1 star, 2 stars, 3 stars) with example gate policies",
+      "loadedTitle": "Asset levels loaded",
+      "loaded_one": "{{count}} asset level created",
+      "loaded_other": "{{count}} asset levels created",
+      "alreadyLoaded": "Asset levels exist already: nothing was changed",
+      "loadFailed": "The default asset levels could not be loaded"
     }
   },
   "directory": {

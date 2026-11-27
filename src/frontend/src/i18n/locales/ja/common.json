@@ -388,6 +388,7 @@
       "generate_pdf": "PDF を生成",
       "deliver": "配信",
       "grant_permissions": "権限を付与",
+      "evaluate_asset_maturity": "アセットの成熟度を評価",
       "on_behalf_of": "代理として"
     }
   },
@@ -403,6 +404,11 @@
     "assignedSuccess": "オーナーを正常に割り当てました。",
     "errorAssigning": "オーナーの割り当てエラー",
     "ownerUserAria": "オーナーユーザー"
+  },
+  "assignOwnerRole": {
+    "noRoles": "ビジネスロールが設定されていません。管理者に追加を依頼してください。",
+    "ownerBadge": "オーナー",
+    "notOwnerHint": "このロールのオーナーは、オーナー向けの承認や通知を受け取りません。受け取るには Data Owner または Owner を選択してください。"
   },
   "versionFamily": {
     "countBadge_one": "{{count}} バージョン",

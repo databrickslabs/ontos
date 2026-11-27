@@ -8,7 +8,11 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.controller.data_contracts_manager import DataContractsManager, InvalidVersionFormatError
+from src.controller.data_contracts_manager import (
+    DataContractsManager,
+    DeployRequestAlreadyDecidedError,
+    InvalidVersionFormatError,
+)
 from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
@@ -771,7 +775,14 @@ class HandlePublishPayload(BaseModel):
 class HandleDeployPayload(BaseModel):
     decision: str  # 'approve', 'deny'
     message: Optional[str] = None
-    execute_deployment: bool = False  # If true, actually trigger deployment
+    execute_deployment: bool = Field(
+        False,
+        description=(
+            "Ignored. Approving a deployment request records the decision and doesn't "
+            "deploy anything; when true, the response has a 'deployment_not_available' "
+            "warning."
+        ),
+    )
 
 
 @router.post('/data-contracts/{contract_id}/handle-review')
@@ -1237,6 +1248,17 @@ async def set_contract_publication_scope(
         raise HTTPException(status_code=500, detail="Failed to set publication scope")
 
 
+def _deploy_request_already_decided() -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        # code: translated by the UI (data-contracts:deployRequest.errors.*)
+        detail={
+            'code': DeployRequestAlreadyDecidedError.code,
+            'message': "This deployment request has already been decided.",
+        },
+    )
+
+
 @router.post('/data-contracts/{contract_id}/handle-deploy')
 async def handle_deploy_request_response(
     contract_id: str,
@@ -1249,21 +1271,42 @@ async def handle_deploy_request_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a deployment request decision (approve/deny). Optionally executes deployment."""
+    """Record a deployment request decision (approve/deny).
+
+    Only an approver of the contract's deployment request (a recipient of its
+    notification, e.g. the Admin role) other than its requester decides it,
+    once; others get 403, a second decision 409 (also when two decide at the
+    same time: the manager re-checks under a row lock). A request an
+    ``on_request_deploy`` workflow handles has no such notification: its
+    approval step decides it (``POST /api/workflows/handle-approval``), so it
+    is refused here for everyone. Nothing is deployed. ``execute_deployment`` is accepted and
+    ignored with a warning in the response.
+    """
+    access = manager.deploy_request_access(db, notifications, contract_id, current_user)
+    if access == 'decided':
+        raise _deploy_request_already_decided()
+    if access != 'pending':
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_not_an_approver',
+                'message': "Only the approvers of this deployment request can decide it.",
+            },
+        )
+    if manager.is_own_deploy_request(db, contract_id, current_user):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_own_request',
+                'message': "You can't decide your own deployment request.",
+            },
+        )
     try:
-        # Get jobs manager for deployment execution
-        jobs_manager = None
-        try:
-            from src.common.dependencies import get_jobs_manager
-            jobs_manager = request.app.state.jobs_manager
-        except Exception:
-            logger.warning("Jobs manager not available")
-        
-        # Business logic now in manager
         result = manager.handle_deploy_response(
             db=db,
             notifications_manager=notifications,
-            jobs_manager=jobs_manager,
             contract_id=contract_id,
             approver_email=current_user.email,
             decision=payload.decision,
@@ -1280,11 +1323,17 @@ async def handle_deploy_request_response(
             feature='data-contracts',
             action=f'DEPLOY_{payload.decision.upper()}',
             success=True,
-            details={'contract_id': contract_id, 'decision': payload.decision, 'deployed': payload.execute_deployment}
+            details={
+                'contract_id': contract_id, 'decision': payload.decision, 'deployed': False,
+                'execute_deployment_ignored': payload.execute_deployment,
+            }
         )
         
         return result
         
+    except DeployRequestAlreadyDecidedError:
+        # Another decision took it between the check above and the row lock
+        raise _deploy_request_already_decided()
     except ValueError as e:
         logger.error("Handle deploy validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
@@ -1583,6 +1632,8 @@ async def update_contract(
             contract_data=contract_data,
             current_user=current_user.username if current_user else None,
             background_tasks=background_tasks,
+            # The gates' tag steps write their changes with the update
+            gate_executions=pre_executions,
         )
 
         success = True
@@ -3719,6 +3770,7 @@ async def create_contract_tag(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     tag_data: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Create a new tag for a contract."""
@@ -3736,6 +3788,10 @@ async def create_contract_tag(
 
         # Create tag
         new_tag = contract_tag_repo.create_tag(db=db, contract_id=contract_id, name=tag_create.name)
+        # Shown on the page and exported through the tag assignments (#1484)
+        manager.add_odcs_tag_assignment(
+            db, contract_id, tag_create.name, current_user.username if current_user else None,
+        )
         db.commit()
 
         # Audit log
@@ -3769,6 +3825,7 @@ async def update_contract_tag(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     tag_data: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Update a contract tag."""
@@ -3787,6 +3844,9 @@ async def update_contract_tag(
         if tag_update.name is None:
             raise HTTPException(status_code=400, detail="Tag name is required for update")
 
+        existing_tag = db.query(DataContractTagDb).filter(DataContractTagDb.id == tag_id).first()
+        old_name = existing_tag.name if existing_tag else None
+
         # Update tag
         updated_tag = contract_tag_repo.update_tag(db=db, tag_id=tag_id, name=tag_update.name)
         if not updated_tag:
@@ -3795,6 +3855,13 @@ async def update_contract_tag(
         # Verify tag belongs to the contract
         if updated_tag.contract_id != contract_id:
             raise HTTPException(status_code=400, detail="Tag does not belong to this contract")
+
+        # Move the tag assignment with the rename (#1484)
+        if old_name != tag_update.name:
+            manager.remove_odcs_tag_assignment(db, contract_id, old_name)
+            manager.add_odcs_tag_assignment(
+                db, contract_id, tag_update.name, current_user.username if current_user else None,
+            )
 
         db.commit()
 
@@ -3830,6 +3897,7 @@ async def delete_contract_tag(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Delete a contract tag."""
@@ -3849,11 +3917,14 @@ async def delete_contract_tag(
         if tag.contract_id != contract_id:
             raise HTTPException(status_code=400, detail="Tag does not belong to this contract")
 
+        tag_name = tag.name
+
         # Delete tag
         success = contract_tag_repo.delete_tag(db=db, tag_id=tag_id)
         if not success:
             raise HTTPException(status_code=404, detail="Tag not found")
 
+        manager.remove_odcs_tag_assignment(db, contract_id, tag_name)  # #1484
         db.commit()
 
         # Audit log

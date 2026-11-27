@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "確認を依頼",
+    "messageRequiredTitle": "メッセージが必要です",
+    "messageRequiredDesc": "申請者に確認してほしい内容を入力してください。",
+    "requestedTitle": "確認を依頼しました",
+    "requestedDesc": "'{{name}}' について、申請者に追加情報を依頼しました。",
+    "errors": {
+      "clarify_not_supported": "この承認ステップでは確認依頼は使用できません。",
+      "clarification_message_required": "確認依頼には申請者宛てのメッセージが必要です。"
+    }
+  },
   "designer": {
     "newWorkflow": "新規ワークフロー",
     "newStepName": "新規 {{type}} ステップ",
@@ -85,6 +96,7 @@
       "create_asset_review": "アセットレビュー",
       "webhook": "Webhook",
       "grant_permissions": "権限を付与",
+      "evaluate_asset_maturity": "アセットの成熟度を評価",
       "on_behalf_of": "代理",
       "legal_document": "法的文書",
       "acknowledgement_checklist": "確認チェックリスト",
@@ -115,6 +127,10 @@
       "descriptionPlaceholder": "ワークフローの説明",
       "failClosed": "このゲートを評価できない場合は遷移を拒否する",
       "failClosedHint": "Fail closed: このゲートの評価でエラーが発生した場合（通常の失敗ではない場合）、ステータス変更は拒否されます。オフ（fail open）の場合、変更は実行され、エラーはログと監査に記録されます。",
+      "updateGate": {
+        "failClosed": "このゲートを評価できない場合は更新を拒否する",
+        "failClosedHint": "Fail closed: このゲートの評価でエラーが発生した場合（通常の失敗ではない場合）、更新は拒否されます。オフ（fail open）の場合、更新は実行され、エラーはログと監査に記録されます。"
+      },
       "disabledFor": {
         "title": "無効にする対象",
         "hint": "このゲートは、ここに挙げたドメイン、データプロダクト、データコントラクトでは実行されません（ドメインはその配下のプロダクトとコントラクトを含みます）。スキップはすべてログと監査に記録されます。",
@@ -337,6 +353,9 @@
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
       "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。",
       "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
+      "updateGate": {
+        "stepNotAllowed": "ステップ「{{step}}」({{type}}) は before update ゲートでは実行できません。更新が拒否されても、その処理は実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。"
+      },
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
@@ -377,6 +396,13 @@
     "adjustTerms": "承認条件を調整",
     "durationDays": "期間（日）",
     "permissionLevel": "権限レベル",
+    "accessDecision": {
+      "adminHint": "管理者は自分のリクエストを判断し、リクエストより多くを付与できます。監査ログにはオーバーライドとして記録されます。",
+      "failedTitle": "判断は記録されましたが、アクセスはまだ更新されていません",
+      "failed": "ワークフローには判断が記録されましたが、アクセスリクエストを更新できませんでした。自動的に再試行されます。",
+      "narrowedTitle": "前のステップで条件が縮小されました",
+      "narrowed": "前の承認ステップが、選択した内容より少ない付与を行いました: {{granted_level}}、{{granted_days}} 日間(送信: {{sent_level}}、{{sent_days}} 日間)。"
+    },
     "reasonLabel": "承認または却下の理由",
     "reasonPlaceholder": "理由を入力...",
     "approved": "承認済み",
@@ -403,6 +429,13 @@
       "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
+      "access_request_already_decided": "このアクセスリクエストはすでに判断済みです。",
+      "access_terms_duration_not_allowed": "{{days}} 日は許可された期間ではありません (許可: {{allowed}})。",
+      "access_terms_exceed_requested_duration": "付与できるのはリクエストされた {{requested}} 日までです。",
+      "access_terms_exceed_requested_permission": "付与できるのはリクエストされたレベル ({{requested}}) までです。",
+      "access_terms_invalid_duration": "期間は {{min}} 日から {{max}} 日の間で指定してください。",
+      "access_terms_invalid_permission": "この権限レベルは付与できません。",
+      "own_access_request_approval": "自分のアクセスリクエストは判断できません。",
       "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
       "own_change_request_approval": "自分の変更リクエストは承認できません。",
       "approval_already_decided": "この承認はすでにあなたが判断済みです。",
@@ -527,6 +560,22 @@
       "previewCancelled": "プレビューをキャンセルしました"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "カタログ",
+    "catalogPlaceholder": "すべてのカタログ",
+    "schema": "スキーマ",
+    "schemaPlaceholder": "すべてのスキーマ（カタログが必要）",
+    "help": "この範囲のテーブル、ビュー、メトリックビューのアセットの成熟度を「設定 > 成熟度レベル」と同様に評価し、件数をステップの結果に記録します。定期的に実行するにはスケジュールトリガーを使用します。",
+    "identityNote": "この実行はアプリの ID で Unity Catalog のテーブルを読み取ります。このワークフローの保存、有効化、実行には設定への書き込み権限が必要です。",
+    "triggerHint": "このステップはスケジュールおよび手動のワークフローでのみ実行されます。",
+    "allCatalogs": "すべてのカタログ",
+    "triggerUnsupported": "ステップ '{{step}}' はアセットの成熟度を評価します。これはスケジュールおよび手動のワークフローでのみ実行され、{{trigger}} では実行されません。",
+    "permissionRequired": "このワークフローはアセットの成熟度評価を実行します。保存、有効化、実行には設定への書き込み権限が必要です。",
+    "summary": "{{total}} 件中 {{evaluated}} 件のアセットを評価：レベル変更 {{changed}} 件、スキップ {{skipped}} 件、エラー {{errors}} 件",
+    "errors": {
+      "maturity_bulk_scope_invalid": "スキーマにはカタログを入力してください（ドットやバッククォートは使用できません）。"
+    }
+  },
   "entityTypeSelect": {
     "label": "適用対象",
     "helper": "これがどの種類のオブジェクトで発動するか",
@@ -548,7 +597,11 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
       "tag_not_found": "タグ '{{tag}}' がタグカタログに見つからなかったため、割り当てませんでした",
+      "update_gate_step_not_allowed": "{{stepType}} ステップは before update ゲートでは実行できません。更新が拒否されても、その処理は実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。",
       "approval_rejected": "リクエストが却下されました",
+      "maturity_bulk_run_in_progress": "アセット成熟度の一括評価がすでに実行中のため、この実行は開始されませんでした",
+      "maturity_bulk_scope_invalid": "ステップのカタログまたはスキーマが無効です",
+      "maturity_bulk_run_failed": "アセット成熟度の一括評価に失敗しました。詳細はサーバーログを参照してください",
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
@@ -886,6 +939,7 @@
       "rejectResumeSuccess": "ワークフローを却下して再開しました",
       "rejectFailed": "ワークフローの却下に失敗しました",
       "forceDecisionRequireAll": "このステップは承認者だけが判断できます（全員の判断が必要です）。代わりに実行をキャンセルできます。",
+      "forceDecisionAccessRequest": "アクセスリクエストは承認者が判断します。ここから強制できません。",
       "noChanges": "変更なし",
       "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
       "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",

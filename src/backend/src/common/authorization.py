@@ -406,6 +406,19 @@ async def require_ontos_admin(
     return user_details
 
 
+def is_ontos_admin(request: Request, user: Optional[UserInfo]) -> bool:
+    """Whether ``user`` is an Ontos admin, as ``require_ontos_admin`` decides, for a check
+    inside a route. False when it can't be told (no authorization manager, an error)."""
+    if user is None:
+        return False
+    try:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
+        return bool(auth_manager is not None and auth_manager.is_user_ontos_admin(user.groups))
+    except Exception:
+        logger.warning("Could not check whether the caller is an Ontos admin.", exc_info=True)
+        return False
+
+
 _TEAM_ROLES_CACHE_ATTR = "_ontos_team_roles"
 
 

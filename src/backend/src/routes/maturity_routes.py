@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError
-from src.common.dependencies import DBSessionDep
+from src.common.dependencies import CurrentUserDep, DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.routes.data_contracts_routes import readable_contract
 from src.routes.data_product_routes import readable_product
 from src.models.maturity import (
+    AssetDefaultsLoadResult,
     MaturityLevelCreate,
     MaturityLevelRead,
     MaturityLevelUpdate,
@@ -125,6 +126,29 @@ async def create_maturity_level(
         raise HTTPException(status_code=500, detail="Failed to create maturity level")
 
 
+@router.post("/maturity-levels/asset-defaults", response_model=AssetDefaultsLoadResult)
+async def load_asset_default_levels(
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Load the default maturity ladder for table and view assets. Admin only.
+
+    Optional: nothing is loaded at startup. ``created`` is 0 and nothing changes
+    when a level with entity type ``Asset`` exists already.
+    """
+    try:
+        created = maturity_repo.seed_asset_defaults(db)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Error loading the default asset maturity levels: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load the default asset levels")
+    levels = maturity_repo.get_all_ordered(db, entity_type="Asset")
+    return AssetDefaultsLoadResult(
+        created=len(created), levels=[_level_to_read(l) for l in levels],
+    )
+
+
 @router.put("/maturity-levels/reorder", response_model=List[MaturityLevelRead])
 async def reorder_maturity_levels(
     body: MaturityLevelReorder,
@@ -159,13 +183,15 @@ async def update_maturity_level(
     if not update_data:
         return _level_to_read(db_obj)
 
-    if "level_order" in update_data:
+    if "level_order" in update_data or "entity_type" in update_data:
+        # Moving a level to another entity type can collide with that type's order too
         et = update_data.get("entity_type", db_obj.entity_type)
-        existing = maturity_repo.get_by_order(db, update_data["level_order"], et)
+        order = update_data.get("level_order", db_obj.level_order)
+        existing = maturity_repo.get_by_order(db, order, et)
         if existing and existing.id != level_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Order {update_data['level_order']} is already taken for entity_type '{et}'.",
+                detail=f"Order {order} is already taken for entity_type '{et}'.",
             )
 
     try:
@@ -190,7 +216,9 @@ async def delete_maturity_level(
     if not db_obj:
         raise HTTPException(status_code=404, detail="Maturity level not found")
 
-    ref_count = maturity_repo.count_snapshots_for_level(db, db_obj.level_order)
+    ref_count = maturity_repo.count_snapshots_for_level(
+        db, db_obj.level_order, db_obj.entity_type,
+    )
     if ref_count > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -285,10 +313,13 @@ async def remove_gate(
 # ===================================================================
 
 def _get_evaluator(request: Request):
+    from src.common.run_identity import RunIdentity
     from src.controller.maturity_evaluator import MaturityEvaluator
     evaluator = getattr(request.app.state, "maturity_evaluator", None)
     if not evaluator:
-        evaluator = MaturityEvaluator()
+        # The requesting user's token reads the UC table behind an asset, so an
+        # evaluation shows (and stores) only what they can read. Built lazily.
+        evaluator = MaturityEvaluator(run_identity=RunIdentity.for_request(request))
     return evaluator
 
 
@@ -386,10 +417,101 @@ def get_contract_maturity_history(contract_id: str, db: DBSessionDep, limit: int
     return maturity_repo.list_snapshots(db, entity_type="DataContract", entity_id=contract_id, limit=limit)
 
 
+def _evaluate_asset(request: Request, db: Session, asset_id: UUID, *,
+                    persist: bool, user_email=None):
+    from src.controller.entity_dict_builder import UnsupportedMaturityAssetTypeError
+
+    evaluator = _get_evaluator(request)
+    try:
+        report = evaluator.evaluate(
+            db, entity_type="Asset", entity_id=str(asset_id), persist=persist,
+            evaluated_by=user_email,
+        )
+    except UnsupportedMaturityAssetTypeError as e:
+        # The coded handler sends {code, message, params}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Asset {asset_id} not found")
+    return report
+
+
+@router.get("/assets/{asset_id}/maturity", response_model=MaturityReport)
+def get_asset_maturity(
+    asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
+):
+    """Get the current maturity assessment for a table or view asset.
+
+    Computed on the spot and not stored: a GET writes nothing and fires no trigger.
+    Readable by the users who may read the asset. 400
+    ``maturity_asset_type_unsupported`` for other asset types.
+    """
+    from src.routes.assets_routes import _ensure_asset_readable, assets_manager
+    _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    return _evaluate_asset(request, db, asset_id, persist=False, user_email=current_user.email)
+
+
+@router.post("/assets/{asset_id}/maturity/evaluate", response_model=MaturityReport)
+def evaluate_asset_maturity(
+    asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
+):
+    """Force re-evaluate maturity for a table or view asset and store a snapshot."""
+    from src.routes.assets_routes import _ensure_asset_readable, assets_manager
+    _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    return _evaluate_asset(request, db, asset_id, persist=True, user_email=current_user.email)
+
+
+@router.get("/assets/{asset_id}/maturity/history", response_model=List[MaturitySnapshotRead])
+def get_asset_maturity_history(
+    asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
+    limit: int = 50,
+):
+    """Get maturity evaluation history for an asset.
+
+    A snapshot's level and gate results come from the Unity Catalog read of
+    whoever ran that evaluation. So a snapshot evaluated against a UC table is
+    returned only to a reader whose own UC read of that table succeeds now (their
+    token, as an evaluation reads it), also after the asset stops pointing to it or
+    points to another table. Snapshots that don't record their table are gated by
+    the table the asset points to now. Any failure hides the snapshot.
+    """
+    from src.common.run_identity import RunIdentity
+    from src.controller.entity_dict_builder import (
+        SNAPSHOT_UC_TABLE_UNKNOWN, snapshot_uc_table, uc_table_name, uc_table_name_readable,
+    )
+    from src.db_models.assets import AssetDb
+    from src.routes.assets_routes import _ensure_asset_readable, assets_manager
+    _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    asset = db.get(AssetDb, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail=f"Asset {asset_id} not found")
+    current = uc_table_name(asset.platform, asset.location)
+    get_client = RunIdentity.for_request(request).workspace_client
+    readable: dict = {}
+
+    def visible(snapshot) -> bool:
+        table = snapshot_uc_table(snapshot.gate_results_json, current)
+        if table is SNAPSHOT_UC_TABLE_UNKNOWN:
+            return False
+        if table not in readable:
+            # One UC read per table, with the viewer's token
+            readable[table] = uc_table_name_readable(
+                table, get_client, asset_id=str(asset_id),
+            )
+        return readable[table]
+
+    snapshots = maturity_repo.list_snapshots(
+        db, entity_type="Asset", entity_id=str(asset_id), limit=limit,
+    )
+    return [s for s in snapshots if visible(s)]
+
+
 # ===================================================================
 # Registration
 # ===================================================================
 
 def register_routes(app):
+    from src.routes.maturity_bulk_routes import router as bulk_router
+
     app.include_router(router)
+    app.include_router(bulk_router)
     logger.info("Maturity routes registered")

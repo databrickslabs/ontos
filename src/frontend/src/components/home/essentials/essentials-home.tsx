@@ -7,6 +7,7 @@ import {
   Inbox,
   Search,
   ShieldCheck,
+  TrendingUp,
   UploadCloud,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +52,7 @@ import {
   useEssentialsFeature,
   useMyPendingRequests,
   useOwnedAssets,
+  useOwnedBelowFirstLevel,
   useReviewRequests,
   type OwnedAsset,
 } from './use-essentials-data';
@@ -169,6 +171,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   const pageSize = useEssentialsHomePreferencesStore((s) => s.publishPageSize);
   const setPageSize = useEssentialsHomePreferencesStore((s) => s.setPublishPageSize);
   const owned = useOwnedAssets(!!assetsWrite, pageSize);
+  const belowFirst = useOwnedBelowFirstLevel(!!assetsWrite);
   const accessRequests = useMyPendingRequests(!!myRequests);
 
   const counts = useMemo(() => reviewStatusCounts(reviewList.data), [reviewList.data]);
@@ -410,6 +413,50 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                     <ClipboardCheck className="h-4 w-4 mr-2" />
                     {t('home:essentials.publish.requestReview')}
                   </Button>
+                )}
+              </JourneyCard>
+            )}
+
+            {assetsWrite && (
+              <JourneyCard
+                id="maturity"
+                icon={<TrendingUp className="h-5 w-5" />}
+                title={t('home:essentials.maturity.title')}
+                description={t('home:essentials.maturity.description')}
+              >
+                {belowFirst.loading ? null : !belowFirst.data ? (
+                  <p className="text-sm text-destructive" data-testid="essentials-maturity-error">
+                    {t('home:essentials.maturity.error')}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold" data-testid="essentials-maturity-count">
+                      {belowFirst.data.total}
+                    </p>
+                    {!belowFirst.data.items.length ? (
+                      <Empty>{t('home:essentials.maturity.empty')}</Empty>
+                    ) : (
+                      <ul className="space-y-1 text-sm" data-testid="essentials-maturity-list">
+                        {belowFirst.data.items.map((a) => (
+                          <li key={a.id} className="truncate">
+                            <Link
+                              to={`${assetsWrite.path}/${a.id}`}
+                              className="font-medium hover:underline"
+                            >
+                              {a.name}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {belowFirst.data.total > belowFirst.data.items.length && (
+                      <Empty>
+                        {t('home:essentials.maturity.more', {
+                          shown: belowFirst.data.items.length, total: belowFirst.data.total,
+                        })}
+                      </Empty>
+                    )}
+                  </>
                 )}
               </JourneyCard>
             )}

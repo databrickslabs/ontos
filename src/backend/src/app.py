@@ -44,6 +44,7 @@ from src.routes import (
     mcp_tokens_routes,
     mdm_routes,
     metadata_routes,
+    navigation_presets_routes,
     notifications_routes,
     search_routes,
     security_features_routes,
@@ -78,6 +79,7 @@ from src.routes import (
     readiness_routes,
     suggestion_routes,
     certification_levels_routes,
+    data_product_types_routes,
     lifecycle_stage_groups_routes,
     maturity_routes,
     directory_routes,
@@ -117,6 +119,30 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 # ... (rest of the function is removed)
 
 # --- Application Lifecycle Events ---
+
+def _seed_reference_data() -> None:
+    """Seed the reference data that alembic data-migrations insert but that
+    create_all()+stamp (a fresh database) cannot: certification levels, data
+    product types, maturity levels and default tags. Idempotent: each no-ops when rows exist.
+    A failure is logged and doesn't stop the app.
+    """
+    try:
+        from src.common.database import get_session_factory
+        from src.repositories.certification_levels_repository import certification_levels_repo
+        from src.repositories.data_product_types_repository import data_product_types_repo
+        from src.repositories.maturity_repository import maturity_repo
+        from src.repositories.tags_repository import seed_default_tags
+
+        with get_session_factory()() as db:
+            certification_levels_repo.seed_defaults(db)
+            data_product_types_repo.seed_defaults(db)
+            maturity_repo.seed_defaults(db)
+            seed_default_tags(db)
+            db.commit()
+        logger.info("Reference data seed step complete.")
+    except Exception as e:
+        logger.warning("Failed seeding reference data: %s", e, exc_info=True)
+
 
 def _seed_default_workflows() -> None:
     """Create the default workflows that don't exist yet; existing ones are left
@@ -243,23 +269,7 @@ async def startup_event():
         logger.critical(f"Database init failed — entering maintenance mode: {e}", exc_info=True)
         return  # Skip manager init; MaintenanceMiddleware will serve the maintenance page
 
-    # Seed reference data that alembic data-migrations would have inserted but
-    # that create_all()+stamp cannot.  Idempotent — no-ops when rows exist.
-    try:
-        from src.repositories.certification_levels_repository import certification_levels_repo
-        from src.repositories.maturity_repository import maturity_repo
-        from src.repositories.tags_repository import seed_default_tags
-        from src.common.database import get_session_factory
-        _sf = get_session_factory()
-        with _sf() as _db:
-            certification_levels_repo.seed_defaults(_db)
-            maturity_repo.seed_defaults(_db)
-            seed_default_tags(_db)
-            _db.commit()
-        logger.info("Reference data seed step complete.")
-    except Exception as e:
-        logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
-
+    _seed_reference_data()
     _seed_default_workflows()
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
@@ -528,6 +538,7 @@ business_lineage_routes.register_routes(app)
 readiness_routes.register_routes(app)
 suggestion_routes.register_routes(app)
 certification_levels_routes.register_routes(app)
+data_product_types_routes.register_routes(app)
 lifecycle_stage_groups_routes.register_routes(app)
 maturity_routes.register_routes(app)
 data_asset_reviews_routes.register_routes(app)
@@ -555,6 +566,7 @@ llm_search_routes.register_routes(app)
 jobs_routes.register_routes(app)
 user_routes.register_routes(app)
 test_personas_routes.register_routes(app)
+navigation_presets_routes.register_routes(app)
 audit_routes.register_routes(app)
 change_log_routes.register_routes(app)
 mcp_routes.register_routes(app)

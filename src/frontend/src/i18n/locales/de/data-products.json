@@ -1014,7 +1014,28 @@
     "required": "Erforderlich",
     "advisory": "Beratend",
     "overTime": "Reifegrad im Zeitverlauf",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "currentLevel": "Aktuelle Stufe",
+    "nextLevel": "Nächste Stufe",
+    "belowFirstLevel": "Unter der ersten Stufe",
+    "topLevelReached": "Höchste Stufe erreicht",
+    "noLevels": "Für diesen Typ sind noch keine Reifegradstufen definiert.",
+    "gateStatus": {
+      "pass": "Bestanden",
+      "fail": "Nicht bestanden",
+      "warn": "Nicht erfüllt"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog ist nicht erreichbar, daher fehlen die Felder der Tabelle {{tableName}}.",
+    "maturity_uc_table_unreadable": "Tabelle {{tableName}} kann nicht aus Unity Catalog gelesen werden, daher fehlen ihre Felder.",
+    "maturity_uc_table_read_failed": "Die Tabelle {{tableName}} konnte nicht aus Unity Catalog gelesen werden, daher fehlen ihre Felder.",
+    "maturity_gate_error": "Das Gate {{gateName}} konnte nicht ausgewertet werden. Die Details stehen im Serverprotokoll.",
+    "maturity_level_partial": "Die Stufe zählt nur die Prüfungen, die Tabelle {{tableName}} nicht benötigen; das Asset kann eine höhere Stufe erreichen."
+  },
+  "maturityResult": {
+    "notStored": "Jetzt berechnet und nicht gespeichert: Der Verlauf zeigt die gespeicherten Auswertungen. Neu auswerten, um dieses Ergebnis zu speichern.",
+    "notEvaluated": "Nicht ausgewertet"
   },
   "createDialog": {
     "editTitle": "Datenprodukt-Metadaten bearbeiten",
@@ -1066,7 +1087,7 @@
     "contractLabel": "Vertrag:",
     "productNameLabel": "Produktname *",
     "productNamePlaceholder": "z. B. Customer Analytics Product",
-    "productTypeLabel": "Produkttyp *",
+    "productTypeLabel": "Produkttyp",
     "productTypePlaceholder": "Produkttyp auswählen",
     "versionLabel": "Version *",
     "versionPlaceholder": "z. B. v1.0.0",
@@ -1078,8 +1099,8 @@
     "errors": {
       "nameRequired": "Produktname ist erforderlich",
       "versionRequired": "Version ist erforderlich",
-      "typeRequired": "Produkttyp ist erforderlich",
-      "createError": "Produkt konnte nicht aus dem Vertrag erstellt werden"
+      "createError": "Produkt konnte nicht aus dem Vertrag erstellt werden",
+      "unknown_data_product_type": "Der Produkttyp „{{key}}“ existiert nicht oder wurde deaktiviert. Wählen Sie einen anderen Typ."
     },
     "messages": {
       "productCreated": "Produkt erstellt",
@@ -1187,5 +1208,12 @@
     "colSubscriber": "Abonnent",
     "colSubscribed": "Abonniert",
     "colReason": "Grund"
+  },
+  "dataProductType": {
+    "source-aligned": "Quellorientiert",
+    "aggregate": "Aggregat",
+    "consumer-aligned": "Verbraucherorientiert",
+    "source": "Quelle",
+    "sink": "Senke"
   }
 }

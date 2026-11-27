@@ -23,6 +23,7 @@ import {
 import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useIsOntosAdmin } from '@/hooks/use-is-ontos-admin';
 import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
@@ -41,6 +42,12 @@ interface DefaultResponseWorkflowStep {
     required_fields?: Array<{ id: string; label: string; type: string; required?: boolean }>;
   };
 }
+
+// Coded refusals of a clarification request (their texts are in workflows:clarification)
+const CLARIFICATION_ERROR_CODES = new Set([
+  'clarify_not_supported',
+  'clarification_message_required',
+]);
 
 export interface WorkflowApprovalResponseDialogPayload {
   execution_id: string;
@@ -64,6 +71,8 @@ export interface WorkflowApprovalResponseDialogPayload {
   request_id?: string;
   workflow_name?: string;
   workflow_message?: string;
+  // The approval step has an on_clarify branch: "Request clarification" is offered
+  can_clarify?: boolean;
   on_behalf_of?: { type: string; value: string };
   full_payload?: Record<string, unknown>;
 }
@@ -77,7 +86,7 @@ interface WorkflowApprovalResponseDialogProps {
 }
 
 const SKIP_KEYS = new Set([
-  'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
+  'can_clarify', 'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
 
@@ -215,6 +224,23 @@ function buildDetailRows(
   return rows;
 }
 
+/** Permission levels of an access grant (backend ``PermissionLevel``). */
+const ACCESS_PERMISSION_LEVELS = ['READ', 'WRITE', 'MANAGE'] as const;
+
+/**
+ * The levels an approver may grant: the requested one or a narrower one. An admin may
+ * grant any level (the backend audits it as an override).
+ */
+export function grantableLevels(requested?: string, admin = false): string[] {
+  const index = ACCESS_PERMISSION_LEVELS.indexOf(requested as never);
+  return admin || index < 0
+    ? [...ACCESS_PERMISSION_LEVELS]
+    : ACCESS_PERMISSION_LEVELS.slice(0, index + 1);
+}
+
+/** The longest grant an admin may give past the request (backend ``MAX_GRANT_DAYS``). */
+export const MAX_GRANT_DAYS = 365;
+
 export default function WorkflowApprovalResponseDialog({
   isOpen,
   onOpenChange,
@@ -225,6 +251,8 @@ export default function WorkflowApprovalResponseDialog({
   const { t } = useTranslation(['workflows', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
+  const isAdmin = useIsOntosAdmin();
+  const maxRequestedDays = payload?.requested_duration_days ?? MAX_GRANT_DAYS;
   const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
   const [stepConfig, setStepConfig] = useState<DefaultResponseWorkflowStep | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
@@ -282,8 +310,16 @@ export default function WorkflowApprovalResponseDialog({
   const reasonField = requiredFields.find((f) => f.id === 'reason' || f.type === 'text');
   const isReasonRequired = reasonField?.required ?? false;
 
-  const handleSubmit = async (approved: boolean) => {
+  const handleSubmit = async (approved: boolean, clarify = false) => {
     if (!payload?.execution_id) return;
+    if (clarify && !reason.trim()) {
+      toast({
+        title: t('workflows:clarification.messageRequiredTitle'),
+        description: t('workflows:clarification.messageRequiredDesc'),
+        variant: 'destructive',
+      });
+      return;
+    }
     if (isReasonRequired && !reason.trim()) {
       toast({
         title: t('workflows:approvalResponse.messages.reasonRequiredTitle'),
@@ -297,7 +333,12 @@ export default function WorkflowApprovalResponseDialog({
       // Only what the approver wrote: without a reason the backend records a
       // coded "Request denied" (approval_rejected) that each user sees in
       // their own language, not the approver's word for it.
-      const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      const body: Record<string, unknown> = {
+        execution_id: payload.execution_id,
+        approved: approved && !clarify,
+      };
+      // Request clarification: the step's on_clarify branch, with the message
+      if (clarify) body.clarify = true;
       if (payload.step_id) body.step_id = payload.step_id;
       if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
@@ -307,7 +348,12 @@ export default function WorkflowApprovalResponseDialog({
         toast({
           title: t('common:toast.error'),
           description: response.errorCode
-            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, { defaultValue: response.error })
+            ? t(
+                CLARIFICATION_ERROR_CODES.has(response.errorCode ?? '')
+                  ? `workflows:clarification.errors.${response.errorCode}`
+                  : `workflows:approvalResponse.errors.${response.errorCode}`,
+                { ...(response.errorParams ?? {}), defaultValue: response.error },
+              )
             : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
@@ -316,7 +362,33 @@ export default function WorkflowApprovalResponseDialog({
       // require_all: the decision is recorded and other approvers still decide.
       // Only then is there a count: a step that moves on to another approval
       // step is 'paused' too, but this decision was the step's.
-      const decision = response.data as { status?: string; pending_approvers?: number } | null;
+      const decision = response.data as {
+        status?: string; pending_approvers?: number;
+        warning?: { code?: string; params?: Record<string, string | number> };
+      } | null;
+      if (decision?.warning?.code === 'access_terms_narrowed_by_earlier_step') {
+        // The decision is recorded; an earlier approval step had granted less
+        toast({
+          title: t('workflows:approvalResponse.accessDecision.narrowedTitle'),
+          description: t('workflows:approvalResponse.accessDecision.narrowed', {
+            ...decision.warning.params,
+          }),
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
+        return;
+      }
+      if (decision?.warning?.code === 'access_decision_failed') {
+        // The workflow has the decision; the access request gets it on a later pass
+        toast({
+          title: t('workflows:approvalResponse.accessDecision.failedTitle'),
+          description: t('workflows:approvalResponse.accessDecision.failed'),
+          variant: 'destructive',
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
+        return;
+      }
       const pendingApprovers = decision?.pending_approvers;
       if (typeof pendingApprovers === 'number' && pendingApprovers > 0) {
         toast({
@@ -329,13 +401,23 @@ export default function WorkflowApprovalResponseDialog({
         onDecisionMade?.();
         return;
       }
-      toast({
-        title: approved ? t('workflows:approvalResponse.approved') : t('workflows:approvalResponse.rejected'),
-        description: approved
-          ? t('workflows:approvalResponse.messages.entityApproved', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') })
-          : t('workflows:approvalResponse.messages.entityRejected', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') }),
-        variant: approved ? 'default' : 'destructive',
-      });
+      const requestName = payload.entity_name || t('workflows:approvalResponse.requestFallback');
+      if (clarify) {
+        toast({
+          title: t('workflows:clarification.requestedTitle'),
+          description: t('workflows:clarification.requestedDesc', { name: requestName }),
+        });
+      } else {
+        toast({
+          title: approved
+            ? t('workflows:approvalResponse.approved')
+            : t('workflows:approvalResponse.rejected'),
+          description: approved
+            ? t('workflows:approvalResponse.messages.entityApproved', { name: requestName })
+            : t('workflows:approvalResponse.messages.entityRejected', { name: requestName }),
+          variant: approved ? 'default' : 'destructive',
+        });
+      }
       // A concept approval changes the concept's lifecycle state (draft/
       // approved). Nudge any open concept view to refetch. Scoped to concepts
       // so other entity types don't trigger a needless knowledge-graph refresh.
@@ -402,6 +484,11 @@ export default function WorkflowApprovalResponseDialog({
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   {t('workflows:approvalResponse.adjustTerms')}
                 </div>
+                {isAdmin && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('workflows:approvalResponse.accessDecision.adminHint')}
+                  </p>
+                )}
                 {payload.requested_duration_days != null && (
                   <div className="space-y-1">
                     <Label htmlFor="granted-days" className="text-sm">{t('workflows:approvalResponse.durationDays')}</Label>
@@ -409,6 +496,7 @@ export default function WorkflowApprovalResponseDialog({
                       id="granted-days"
                       type="number"
                       min={1}
+                      max={isAdmin ? MAX_GRANT_DAYS : maxRequestedDays}
                       value={grantedDays}
                       onChange={(e) => setGrantedDays(e.target.value === '' ? '' : Number(e.target.value))}
                       disabled={submitting}
@@ -424,10 +512,13 @@ export default function WorkflowApprovalResponseDialog({
                         <SelectValue placeholder={t('common:placeholders.selectPermission')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CAN_READ">CAN_READ</SelectItem>
-                        <SelectItem value="CAN_USE">CAN_USE</SelectItem>
-                        <SelectItem value="CAN_EDIT">CAN_EDIT</SelectItem>
-                        <SelectItem value="CAN_MANAGE">CAN_MANAGE</SelectItem>
+                        {/* The access request's levels (READ / WRITE / MANAGE): the
+                            requested one must be an option to show selected (#1615) */}
+                        {grantableLevels(payload.permission_level, isAdmin).map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {t(`access-grants:permissionOptions.${level}`)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -451,6 +542,15 @@ export default function WorkflowApprovalResponseDialog({
             </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0 shrink-0">
+              {payload?.can_clarify && (
+                <Button
+                  variant="outline"
+                  disabled={submitting}
+                  onClick={() => handleSubmit(false, true)}
+                >
+                  {t('workflows:clarification.button')}
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 disabled={submitting}

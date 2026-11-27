@@ -62,6 +62,128 @@ describe('layoutLineageGraph (layer mode)', () => {
   });
 });
 
+describe('layoutLineageGraph (detail level vs. selected rows)', () => {
+  // A contract property feeding a table column: a field-level edge
+  const fieldGraph: LineageGraph = {
+    center_entity_type: 'DataContract',
+    center_entity_id: 'k',
+    nodes: [
+      node('DataContract:k', 'logical'),
+      node('SchemaObject:s', 'logical'),
+      node('SchemaProperty:f', 'logical'),
+      node('Dataset:d', 'physical'),
+      node('Table:t', 'physical'),
+      node('Column:col', 'physical'),
+    ],
+    edges: [
+      edge('DataContract:k', 'SchemaObject:s', 'hasSchemaObject'),
+      edge('SchemaObject:s', 'SchemaProperty:f', 'hasProperty'),
+      edge('Dataset:d', 'Table:t', 'hasTable'),
+      edge('Table:t', 'Column:col', 'hasColumn'),
+      edge('SchemaProperty:f', 'Column:col', 'implementedBy'),
+    ],
+  };
+  const pathRows = new Set(['SchemaProperty:f', 'Column:col', 'SchemaObject:s', 'Table:t']);
+  const childIds = (l: ReturnType<typeof layoutLineageGraph>, id: string) =>
+    l.groups.find((g) => g.id === id)!.children.map((c) => c.id);
+
+  it('shows cards only at Entities detail, even for selected rows', () => {
+    const l = layoutLineageGraph(fieldGraph, { ...defaultsWith('entities'), alwaysShow: pathRows });
+    expect(childIds(l, 'DataContract:k')).toEqual([]);
+    expect(childIds(l, 'Dataset:d')).toEqual([]);
+    // Edges between hidden rows land on the cards
+    expect(l.edges.length).toBeGreaterThan(0);
+    for (const e of l.edges) {
+      expect(e.sourceHandle).toBeUndefined();
+      expect(e.targetHandle).toBeUndefined();
+    }
+  });
+
+  it('keeps a selected field row at Structure detail, but no other fields', () => {
+    const l = layoutLineageGraph(fieldGraph, { ...defaultsWith('structure'), alwaysShow: new Set(['Column:col']) });
+    expect(childIds(l, 'Dataset:d')).toEqual(['Table:t', 'Column:col']);
+    expect(childIds(l, 'DataContract:k')).toEqual(['SchemaObject:s']);
+  });
+});
+
+describe('layoutLineageGraph (System nodes)', () => {
+  // Upstream path of a table: table <- table <- system (stored asset -> system, against the flow)
+  const sysGraph = (layered: boolean): LineageGraph => {
+    const n = (id: string) => {
+      const base = node(id, 'physical');
+      return layered ? base : { ...base, layer: undefined };
+    };
+    return {
+      center_entity_type: 'Table',
+      center_entity_id: 't',
+      nodes: [n('Table:t'), n('Table:u'), n('System:erp'), n('System:historian')],
+      edges: [
+        edge('Table:t', 'Table:u', 'derivedFrom', true),
+        edge('Table:u', 'System:erp', 'belongsToSystem', true),
+        edge('Table:u', 'System:historian', 'someSourceRel', true),
+      ],
+    };
+  };
+
+  for (const layered of [true, false]) {
+    it(`draws System nodes as upstream sources (${layered ? 'layer' : 'column'} mode)`, () => {
+      const l = layoutLineageGraph(sysGraph(layered));
+      const x = (id: string) => l.groups.find((g) => g.id === id)?.x;
+      expect(l.groups.map((g) => g.id).sort()).toEqual(
+        ['System:erp', 'System:historian', 'Table:t', 'Table:u'],
+      );
+      expect(x('System:erp')!).toBeLessThan(x('Table:u')!);
+      expect(x('Table:u')!).toBeLessThan(x('Table:t')!);
+      const pairs = l.edges.map((e) => `${e.edge.source}>${e.edge.target}`).sort();
+      expect(pairs).toEqual([
+        'Table:t>Table:u',
+        'Table:u>System:erp',
+        'Table:u>System:historian',
+      ]);
+      expect(l.groups.find((g) => g.id === 'Table:u')!.system).toBeUndefined();
+    });
+  }
+
+  for (const infraFirst of [true, false]) {
+    const order = infraFirst ? 'infra' : 'flow';
+    it(`keeps the real flow edge over a System edge (${order} first)`, () => {
+      const infra = edge('Table:u', 'System:s', 'belongsToSystem', true);
+      const feeds = edge('Table:u', 'System:s', 'feeds', true);
+      const l = layoutLineageGraph({
+        center_entity_type: 'Table',
+        center_entity_id: 'u',
+        nodes: [node('Table:u', 'physical'), node('System:s', 'physical')],
+        edges: infraFirst ? [infra, feeds] : [feeds, infra],
+      });
+      expect(l.edges).toHaveLength(1);
+      expect(l.edges[0].edge.relationship_type).toBe('feeds');
+      expect(l.edges[0].memberKeys).toHaveLength(2);
+    });
+  }
+
+  it('draws a non-reversed System edge with the System as a sink', () => {
+    const l = layoutLineageGraph({
+      center_entity_type: 'Table',
+      center_entity_id: 'u',
+      nodes: [node('Table:u', 'physical'), node('System:s', 'physical')],
+      edges: [edge('Table:u', 'System:s', 'deployedOnSystem')],
+    });
+    const x = (id: string) => l.groups.find((g) => g.id === id)!.x;
+    expect(x('System:s')).toBeGreaterThan(x('Table:u'));
+  });
+
+  it('still nests assets inside a System that is the center', () => {
+    const l = layoutLineageGraph({
+      center_entity_type: 'System',
+      center_entity_id: 'erp',
+      nodes: [node('System:erp', 'physical'), node('Table:a', 'physical')],
+      edges: [edge('Table:a', 'System:erp', 'belongsToSystem', true)],
+    });
+    expect(l.groups.map((g) => g.id)).toEqual(['System:erp']);
+    expect(l.parentOf.get('Table:a')).toBe('System:erp');
+  });
+});
+
 function defaultsWith(detail: LineageDetail) {
   return { ...DEFAULT_CONFIG, detail };
 }

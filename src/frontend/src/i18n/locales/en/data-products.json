@@ -1014,7 +1014,28 @@
     "required": "Required",
     "advisory": "Advisory",
     "overTime": "Maturity over time",
-    "retry": "Retry"
+    "retry": "Retry",
+    "currentLevel": "Current level",
+    "nextLevel": "Next level",
+    "belowFirstLevel": "Below the first level",
+    "topLevelReached": "Highest level reached",
+    "noLevels": "No maturity levels are defined for this type yet.",
+    "gateStatus": {
+      "pass": "Passed",
+      "fail": "Failed",
+      "warn": "Not met"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog can't be reached, so the fields of table {{tableName}} are missing.",
+    "maturity_uc_table_unreadable": "Table {{tableName}} can't be read from Unity Catalog, so its fields are missing.",
+    "maturity_uc_table_read_failed": "Table {{tableName}} could not be read from Unity Catalog, so its fields are missing.",
+    "maturity_gate_error": "Gate {{gateName}} could not be evaluated. The details are in the server log.",
+    "maturity_level_partial": "The level counts only the gates that don't need table {{tableName}}; the asset may reach a higher level."
+  },
+  "maturityResult": {
+    "notStored": "Computed now and not stored: the history shows the stored evaluations. Re-evaluate to store this result.",
+    "notEvaluated": "Not evaluated"
   },
   "createDialog": {
     "editTitle": "Edit Data Product Metadata",
@@ -1066,7 +1087,7 @@
     "contractLabel": "Contract:",
     "productNameLabel": "Product Name *",
     "productNamePlaceholder": "e.g., Customer Analytics Product",
-    "productTypeLabel": "Product Type *",
+    "productTypeLabel": "Product Type",
     "productTypePlaceholder": "Select product type",
     "versionLabel": "Version *",
     "versionPlaceholder": "e.g., v1.0.0",
@@ -1078,8 +1099,8 @@
     "errors": {
       "nameRequired": "Product name is required",
       "versionRequired": "Version is required",
-      "typeRequired": "Product type is required",
-      "createError": "Failed to create product from contract"
+      "createError": "Failed to create product from contract",
+      "unknown_data_product_type": "The product type \"{{key}}\" doesn't exist or has been deactivated. Choose another type."
     },
     "messages": {
       "productCreated": "Product Created",
@@ -1187,5 +1208,12 @@
     "colSubscriber": "Subscriber",
     "colSubscribed": "Subscribed",
     "colReason": "Reason"
+  },
+  "dataProductType": {
+    "source-aligned": "Source-Aligned",
+    "aggregate": "Aggregate",
+    "consumer-aligned": "Consumer-Aligned",
+    "source": "Source",
+    "sink": "Sink"
   }
 }

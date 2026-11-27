@@ -111,6 +111,7 @@
     "uiCustomization": "UI-aanpassing",
     "connectors": "Connectors",
     "schemaImporter": "Schema-importer",
+    "dataProductTypes": "Dataproducttypen",
     "certificationLevels": "Certificeringsniveaus",
     "maturityLevels": "Volwassenheidsniveaus"
   },
@@ -430,10 +431,12 @@
         "title": "Home Secties",
         "description": "Selecteer welke secties op de homepagina verschijnen voor gebruikers met deze rol.",
         "labels": {
-          "JOURNEY": "Journey-startpagina"
+          "JOURNEY": "Journey-startpagina",
+          "MARKETPLACE": "Marktplaats-startpagina"
         },
         "descriptions": {
-          "JOURNEY": "Vervangt de volledige startpagina door Vinden, Begrijpen, Vertrouwen, Publiceren en Onderhouden. Kan niet met andere secties worden gecombineerd."
+          "JOURNEY": "Vervangt de volledige startpagina door Vinden, Begrijpen, Vertrouwen, Publiceren en Onderhouden. Kan niet met andere secties worden gecombineerd.",
+          "MARKETPLACE": "Vervangt de volledige startpagina door de marktplaats. Kan niet met andere secties worden gecombineerd."
         }
       },
       "approvalPrivileges": {
@@ -585,6 +588,62 @@
       "submitFailed": "Kon rol-toegangsverzoek niet indienen",
       "sending": "Verzoek verzenden...",
       "send": "Verzoek Verzenden"
+    }
+  },
+  "navigationPresets": {
+    "title": "Navigatievoorinstellingen",
+    "help": "Stel de menu's en de startpagina van de standaardrollen in één stap in. Een voorinstelling wijzigt alleen wat de menu's en de startpagina tonen, nooit de toegangsniveaus. Rollen worden op naam herkend en blijven daarna afzonderlijk bewerkbaar.",
+    "loadFailed": "De navigatievoorinstellingen konden niet worden geladen.",
+    "presets": {
+      "essentials": {
+        "name": "Essentials",
+        "description": "Startpagina met journey en een kort menu: catalogus, assets en concepten, plus reviews en compliance voor stewards en governance."
+      },
+      "data-consumer": {
+        "name": "Dataconsument",
+        "description": "Marktplaats-startpagina voor dataconsumenten, met Marktplaats en Mijn producten in het menu."
+      }
+    },
+    "preview": {
+      "role": "Rol",
+      "menu": "Menu na toepassen",
+      "home": "Startpagina",
+      "status": "Status",
+      "menuEmpty": "Geen menu-items",
+      "homeUnchanged": "Ongewijzigd",
+      "noAccess": "Niet getoond: de rol heeft geen toegang tot {{features}}."
+    },
+    "status": {
+      "changes": "Wijzigt",
+      "noChange": "Geen wijziging",
+      "notFound": "Rol niet gevonden"
+    },
+    "actions": {
+      "apply": "Voorinstelling toepassen",
+      "undo": "Laatste voorinstelling ongedaan maken"
+    },
+    "nothingToApply": "Alle rollen komen al overeen met deze voorinstelling.",
+    "lastApplied": "Laatst toegepast: {{preset}} door {{user}}, {{date}}",
+    "unknownUser": "onbekende gebruiker",
+    "confirm": {
+      "applyTitle": "Voorinstelling {{preset}} toepassen?",
+      "applyDescription_one": "Dit wijzigt het menu en de startpagina van {{count}} rol. De toegangsniveaus blijven gelijk en je kunt het daarna ongedaan maken.",
+      "applyDescription_other": "Dit wijzigt de menu's en startpagina's van {{count}} rollen. De toegangsniveaus blijven gelijk en je kunt het daarna ongedaan maken.",
+      "undoTitle": "Laatste voorinstelling ongedaan maken?",
+      "undoDescription_one": "Dit herstelt het menu en de startpagina die {{preset}} bij {{count}} rol heeft gewijzigd.",
+      "undoDescription_other": "Dit herstelt de menu's en startpagina's die {{preset}} bij {{count}} rollen heeft gewijzigd."
+    },
+    "applied": "Voorinstelling {{preset}} toegepast",
+    "nothingChanged": "Niets te wijzigen",
+    "appliedSummary": "Gewijzigd: {{changed}}, ongewijzigd: {{unchanged}}, niet gevonden: {{missing}}.",
+    "applyFailed": "De voorinstelling kon niet worden toegepast",
+    "undone": "Voorinstelling {{preset}} ongedaan gemaakt",
+    "undoneSummary": "Hersteld: {{restored}}, niet gevonden: {{missing}}.",
+    "undoFailed": "De voorinstelling kon niet ongedaan worden gemaakt",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "Er is geen toepassing van een voorinstelling om ongedaan te maken.",
+      "navigation_preset_unknown": "Deze voorinstelling bestaat niet.",
+      "generic": "Het verzoek is mislukt. Probeer het opnieuw."
     }
   },
   "mcpTokens": {
@@ -1053,6 +1112,24 @@
         "descriptionContract": "Geeft elke tabel de levenscyclusstatus van het datacontract dat de tabel gebruikt. Bij een tabel die door meerdere contracten wordt gebruikt, wint de beste status (active eerst, retired laatst).",
         "valueLabel": "Tagwaarde:",
         "sharedKeyHint": "Als de statustags van het product en het contract allebei met dezelfde sleutel zijn ingeschakeld, wordt de status van het product geschreven."
+      },
+      "maturityThreshold": {
+        "variable": "true of false: het nummer van het niveau is minstens <order>",
+        "invalid": "Gebruik {ASSET.MATURITY_AT_LEAST:<volgorde>} met een niveaunummer, bijvoorbeeld {ASSET.MATURITY_AT_LEAST:1}."
+      },
+      "assetVariables": {
+        "assetId": "Asset-UUID",
+        "assetType": "Naam van het assettype (Table, View, ...)",
+        "assetFqn": "Unity Catalog-naam van de tabel (catalog.schema.table)",
+        "assetMaturity": "Naam van het volwassenheidsniveau van een tabel- of view-asset (laatste evaluatie)",
+        "assetMaturityOrder": "Nummer van het volwassenheidsniveau van een tabel- of view-asset (1 = eerste niveau)"
+      },
+      "maturity": {
+        "title": "Tag voor volwassenheidsniveau",
+        "description": "Geeft elke tabel- of view-asset een tag met zijn volwassenheidsniveau (laatste evaluatie). Tabellen zonder niveau krijgen geen tag.",
+        "valueNeedsVariable": "Gebruik {ASSET.MATURITY} of {ASSET.MATURITY_ORDER} in de sleutel of de waarde.",
+        "tablesOnlyHint": "Alleen tabellen en views met een Unity Catalog-naam krijgen de tag, geen schema's of catalogi. De uitvoer van de run telt de overgeslagen assets en de reden.",
+        "prefixHint": "Begin de sleutel met hetzelfde voorvoegsel als de andere actieve sleutels (standaard ontos_), zodat de job de tag kan verwijderen als een tabel zijn niveau verliest."
       }
     },
     "entityPatterns": {
@@ -1236,6 +1313,71 @@
     "saveButton": "Leveringsinstellingen succesvol opgeslagen",
     "title": "Leveringsmodi"
   },
+  "dataProductTypes": {
+    "title": "Dataproducttypen",
+    "description": "Bepaal welke typen een dataproduct kan hebben. Ingebouwde typen kunnen worden hernoemd of gedeactiveerd, maar niet verwijderd.",
+    "addType": "Type toevoegen",
+    "table": {
+      "label": "Label",
+      "key": "Sleutel",
+      "products": "Producten",
+      "active": "Actief"
+    },
+    "badges": {
+      "default": "Standaard",
+      "builtIn": "Ingebouwd",
+      "imported": "Geïmporteerd"
+    },
+    "actions": {
+      "moveUp": "{{name}} omhoog",
+      "moveDown": "{{name}} omlaag",
+      "toggleActive": "Actief: {{name}}",
+      "makeDefault": "Als standaard instellen",
+      "makeDefaultFor": "{{name}} als standaard instellen",
+      "edit": "{{name}} bewerken",
+      "delete": "{{name}} verwijderen"
+    },
+    "emptyState": "Nog geen dataproducttypen. Klik op \"Type toevoegen\" om er een te maken.",
+    "defaultCannotBeInactive": "Het standaardtype kan niet worden gedeactiveerd. Stel eerst een ander type als standaard in.",
+    "dialog": {
+      "editTitle": "Dataproducttype bewerken",
+      "createTitle": "Dataproducttype toevoegen",
+      "editDescription": "Wijzig hoe dit type wordt getoond. De sleutel blijft hetzelfde.",
+      "createDescription": "Maak een type dat producenten voor hun dataproducten kunnen kiezen."
+    },
+    "form": {
+      "label": "Label",
+      "labelPlaceholder": "bijv. Golden Record",
+      "seededLabelHint": "Ingebouwde typen worden vertaald getoond totdat u het label wijzigt.",
+      "key": "Sleutel",
+      "keyHint": "Woorden in kleine letters, verbonden met koppeltekens, bijv. golden-record. Kan later niet worden gewijzigd en is de waarde in ODPS-bestanden.",
+      "keyImmutable": "De sleutel kan niet worden gewijzigd.",
+      "color": "Kleur"
+    },
+    "delete": {
+      "title": "Dataproducttype verwijderen?",
+      "description": "Weet u zeker dat u \"{{name}}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
+    },
+    "deleteBlocked": {
+      "seeded": "Ingebouwde typen kunnen niet worden verwijderd. Deactiveer het in plaats daarvan.",
+      "inUse_one": "Gebruikt door {{count}} dataproduct. Deactiveer het in plaats daarvan.",
+      "inUse_other": "Gebruikt door {{count}} dataproducten. Deactiveer het in plaats daarvan."
+    },
+    "messages": {
+      "updated": "Dataproducttype \"{{name}}\" bijgewerkt.",
+      "created": "Dataproducttype \"{{name}}\" aangemaakt.",
+      "deleted": "Dataproducttype \"{{name}}\" verwijderd.",
+      "reorderFailed": "Herschikken mislukt"
+    },
+    "errors": {
+      "data_product_type_not_found": "Dit dataproducttype bestaat niet meer.",
+      "data_product_type_key_exists": "Er bestaat al een dataproducttype met de sleutel \"{{key}}\".",
+      "data_product_type_in_use_one": "\"{{key}}\" wordt gebruikt door {{count}} dataproduct. Deactiveer het in plaats van het te verwijderen.",
+      "data_product_type_in_use_other": "\"{{key}}\" wordt gebruikt door {{count}} dataproducten. Deactiveer het in plaats van het te verwijderen.",
+      "data_product_type_seeded": "\"{{key}}\" is een ingebouwd type en kan niet worden verwijderd. Deactiveer het in plaats daarvan.",
+      "data_product_type_default_inactive": "\"{{key}}\" kan niet tegelijk standaard en inactief zijn. Stel eerst een ander type als standaard in."
+    }
+  },
   "certificationLevels": {
     "title": "Certificeringsniveaus",
     "description": "Definieer de certificeringsniveaus die beschikbaar zijn voor dataproducten, contracten en assets.",
@@ -1270,11 +1412,45 @@
       "reorderFailed": "Kon volgorde niet wijzigen"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Alle tabel-, view- en metric-view-assets evalueren",
+    "description": "Evalueert elk tabel-, view- en metric-view-asset binnen de scope met de huidige Asset-niveaus. Een asset die sinds de start van de run is geëvalueerd, wordt overgeslagen; er loopt één run tegelijk.",
+    "catalog": "Catalogus (optioneel)",
+    "schema": "Schema (optioneel)",
+    "start": "Assets evalueren",
+    "running": "Evalueren: {{processed}} van {{total}} assets",
+    "noAssetLevels": "Voeg eerst Asset-niveaus toe: zonder die wordt niets geëvalueerd.",
+    "lastRun": "Laatste run",
+    "none": "Er is nog geen run afgerond.",
+    "scope": "Scope: {{scope}}",
+    "allCatalogs": "Alle catalogi",
+    "startedBy": "Gestart door {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} geëvalueerd, {{changed}} met gewijzigd niveau, {{errors}} fouten.",
+    "skipped": "Overgeslagen",
+    "errors": "Fouten",
+    "state": {
+      "running": "Bezig",
+      "completed": "Voltooid",
+      "failed": "Mislukt"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Geëvalueerd sinds de start van de run",
+      "maturity_bulk_skipped_not_found": "Asset niet gevonden",
+      "maturity_bulk_skipped_no_levels": "Geen Asset-niveaus",
+      "maturity_bulk_skipped_asset_type": "Geen tabel, view of metric view",
+      "maturity_bulk_skipped_not_stored": "Niet opgeslagen: de tabel kon niet worden gelezen",
+      "maturity_bulk_evaluation_failed": "Evaluatie mislukt (zie serverlog)",
+      "maturity_bulk_run_failed": "De run is gestopt (zie serverlog)",
+      "maturity_bulk_authentication_failed": "Gestopt: Unity Catalog heeft het token geweigerd (mogelijk verlopen); voer de run opnieuw uit",
+      "maturity_bulk_run_in_progress": "Er loopt al een bulkevaluatie.",
+      "maturity_bulk_scope_invalid": "De scope is ongeldig."
+    }
+  },
   "maturityLevels": {
     "title": "Volwassenheidsniveaus",
     "description": "Definieer de volwassenheidsladder voor dataproducten en contracten. Elk niveau wordt afgeschermd door compliance-beleid.",
     "addLevel": "Niveau Toevoegen",
-    "allTypes": "Alle types",
+    "allTypes": "Producten en contracten",
     "gateCount_one": "{{count}} poort",
     "gateCount_other": "{{count}} poorten",
     "complianceGates": "Compliance-beleidspoorten",
@@ -1301,7 +1477,8 @@
       "levelNamePreview": "Niveaunaam"
     },
     "entityTypes": {
-      "all": "Alle Entiteitstypes",
+      "all": "Dataproducten en datacontracten",
+      "Asset": "Assets (tabellen, views en metric views)",
       "DataProduct": "Dataproducten",
       "DataContract": "Datacontracten"
     },
@@ -1317,6 +1494,15 @@
     },
     "gateErrors": {
       "maturity_gate_policy_uses_llm_check": "Dit beleid gebruikt LLM_CHECK, dat alleen in compliance-runs wordt geëvalueerd, dus een volwassenheidspoort zou elke entiteit laten mislukken. Selecteer een beleid zonder LLM_CHECK."
+    },
+    "assetDefaults": {
+      "load": "Standaardniveaus voor assets laden",
+      "hint": "Voegt een standaardladder toe voor tabel- en view-assets (Prerequisite, 1 star, 2 stars, 3 stars) met voorbeeld-gatepolicies",
+      "loadedTitle": "Assetniveaus geladen",
+      "loaded_one": "{{count}} assetniveau aangemaakt",
+      "loaded_other": "{{count}} assetniveaus aangemaakt",
+      "alreadyLoaded": "Er bestaan al assetniveaus: er is niets gewijzigd",
+      "loadFailed": "De standaardniveaus voor assets konden niet worden geladen"
     }
   },
   "directory": {

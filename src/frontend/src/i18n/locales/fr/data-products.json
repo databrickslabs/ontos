@@ -1014,7 +1014,28 @@
     "required": "Requis",
     "advisory": "Indicatif",
     "overTime": "Maturité au fil du temps",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "currentLevel": "Niveau actuel",
+    "nextLevel": "Niveau suivant",
+    "belowFirstLevel": "Sous le premier niveau",
+    "topLevelReached": "Niveau le plus élevé atteint",
+    "noLevels": "Aucun niveau de maturité n'est encore défini pour ce type.",
+    "gateStatus": {
+      "pass": "Réussi",
+      "fail": "Échoué",
+      "warn": "Non satisfait"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog est injoignable, les champs de la table {{tableName}} sont donc absents.",
+    "maturity_uc_table_unreadable": "La table {{tableName}} ne peut pas être lue depuis Unity Catalog, ses champs sont donc manquants.",
+    "maturity_uc_table_read_failed": "La table {{tableName}} n'a pas pu être lue depuis Unity Catalog, ses champs sont donc absents.",
+    "maturity_gate_error": "Le gate {{gateName}} n'a pas pu être évalué. Les détails figurent dans le journal du serveur.",
+    "maturity_level_partial": "Le niveau ne compte que les contrôles qui n'ont pas besoin de la table {{tableName}} ; l'actif peut atteindre un niveau plus élevé."
+  },
+  "maturityResult": {
+    "notStored": "Calculé maintenant et non enregistré : l'historique montre les évaluations enregistrées. Réévaluez pour enregistrer ce résultat.",
+    "notEvaluated": "Non évalué"
   },
   "createDialog": {
     "editTitle": "Modifier les métadonnées du produit de données",
@@ -1066,7 +1087,7 @@
     "contractLabel": "Contrat :",
     "productNameLabel": "Nom du produit *",
     "productNamePlaceholder": "par ex. Produit d'analyse client",
-    "productTypeLabel": "Type de produit *",
+    "productTypeLabel": "Type de produit",
     "productTypePlaceholder": "Sélectionner le type de produit",
     "versionLabel": "Version *",
     "versionPlaceholder": "par ex. v1.0.0",
@@ -1078,8 +1099,8 @@
     "errors": {
       "nameRequired": "Le nom du produit est obligatoire",
       "versionRequired": "La version est obligatoire",
-      "typeRequired": "Le type de produit est obligatoire",
-      "createError": "Échec de la création du produit à partir du contrat"
+      "createError": "Échec de la création du produit à partir du contrat",
+      "unknown_data_product_type": "Le type de produit « {{key}} » n'existe pas ou a été désactivé. Choisissez un autre type."
     },
     "messages": {
       "productCreated": "Produit créé",
@@ -1187,5 +1208,12 @@
     "colSubscriber": "Abonné",
     "colSubscribed": "Abonné",
     "colReason": "Raison"
+  },
+  "dataProductType": {
+    "source-aligned": "Aligné sur la source",
+    "aggregate": "Agrégat",
+    "consumer-aligned": "Aligné sur le consommateur",
+    "source": "Source",
+    "sink": "Destination"
   }
 }

@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Request clarification",
+    "messageRequiredTitle": "Message required",
+    "messageRequiredDesc": "Write what the requester needs to clarify.",
+    "requestedTitle": "Clarification requested",
+    "requestedDesc": "The requester was asked for more information about '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "This approval step does not take a clarification.",
+      "clarification_message_required": "A clarification needs a message for the requester."
+    }
+  },
   "designer": {
     "newWorkflow": "New Workflow",
     "newStepName": "New {{type}} Step",
@@ -85,6 +96,7 @@
       "create_asset_review": "Asset Review",
       "webhook": "Webhook",
       "grant_permissions": "Grant Permissions",
+      "evaluate_asset_maturity": "Evaluate Asset Maturity",
       "on_behalf_of": "On Behalf Of",
       "legal_document": "Legal Document",
       "acknowledgement_checklist": "Acknowledgement Checklist",
@@ -115,6 +127,10 @@
       "descriptionPlaceholder": "Workflow description",
       "failClosed": "Refuse the transition if this gate can't be evaluated",
       "failClosedHint": "Fail closed: when evaluating this gate raises an error (not a normal failure), the status change is refused. Off (fail open), the change proceeds and the error is logged and audited.",
+      "updateGate": {
+        "failClosed": "Refuse the update if this gate can't be evaluated",
+        "failClosedHint": "Fail closed: when evaluating this gate raises an error (not a normal failure), the update is refused. Off (fail open), the update proceeds and the error is logged and audited."
+      },
       "disabledFor": {
         "title": "Switched off for",
         "hint": "This gate doesn't run for the domains, data products and data contracts listed here (a domain covers its products and contracts). Each skip is logged and audited.",
@@ -337,6 +353,9 @@
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
       "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
       "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
+      "updateGate": {
+        "stepNotAllowed": "Step \"{{step}}\" ({{type}}) can't run in a before update gate: what it does would stay done when the update is refused. Remove the step, or move it to an on update workflow."
+      },
       "branch": {
         "on_pass": "pass",
         "on_fail": "fail"
@@ -377,6 +396,13 @@
     "adjustTerms": "Adjust approval terms",
     "durationDays": "Duration (days)",
     "permissionLevel": "Permission level",
+    "accessDecision": {
+      "adminHint": "As an admin you can decide your own request and grant more than was requested. The audit log records it as an override.",
+      "failedTitle": "Decision recorded, access not updated yet",
+      "failed": "The workflow has your decision, but the access request could not be updated. It is retried automatically.",
+      "narrowedTitle": "Terms reduced by an earlier step",
+      "narrowed": "An earlier approval step granted less than you chose: {{granted_level}} for {{granted_days}} days (you sent {{sent_level}}, {{sent_days}} days)."
+    },
     "reasonLabel": "Reason for approval or rejection",
     "reasonPlaceholder": "Enter your reason...",
     "approved": "Approved",
@@ -403,6 +429,13 @@
       "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
+      "access_request_already_decided": "This access request has already been decided.",
+      "access_terms_duration_not_allowed": "{{days}} days is not an allowed duration (allowed: {{allowed}}).",
+      "access_terms_exceed_requested_duration": "You can grant at most the requested {{requested}} days.",
+      "access_terms_exceed_requested_permission": "You can grant at most the requested level ({{requested}}).",
+      "access_terms_invalid_duration": "The duration must be between {{min}} and {{max}} days.",
+      "access_terms_invalid_permission": "This permission level can't be granted.",
+      "own_access_request_approval": "You can't decide your own access request.",
       "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
       "own_change_request_approval": "You can't approve your own change request.",
       "approval_already_decided": "You have already decided this approval.",
@@ -527,6 +560,22 @@
       "previewCancelled": "Preview cancelled"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catalog",
+    "catalogPlaceholder": "All catalogs",
+    "schema": "Schema",
+    "schemaPlaceholder": "All schemas (needs a catalog)",
+    "help": "Evaluates the maturity of the table, view and metric view assets in this scope, as Settings > Maturity Levels does, and records the counts in the step result. Use a scheduled trigger to run it regularly.",
+    "identityNote": "The run reads Unity Catalog tables with the app's identity. Saving, activating or running this workflow needs write access to Settings.",
+    "triggerHint": "This step runs on scheduled and manual workflows only.",
+    "allCatalogs": "All catalogs",
+    "triggerUnsupported": "Step '{{step}}' evaluates asset maturity, which runs on scheduled and manual workflows only, not on {{trigger}}.",
+    "permissionRequired": "This workflow runs the asset maturity evaluation. Saving, activating or running it needs write access to Settings.",
+    "summary": "Evaluated {{evaluated}} of {{total}} assets: {{changed}} changed level, {{skipped}} skipped, {{errors}} errors",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Enter a catalog for the schema, without dots or backticks."
+    }
+  },
   "entityTypeSelect": {
     "label": "Applies to",
     "helper": "Which kinds of objects this fires on",
@@ -548,7 +597,11 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
       "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
+      "update_gate_step_not_allowed": "A {{stepType}} step can't run in a before update gate: what it does would stay done when the update is refused. Remove the step, or move it to an on update workflow.",
       "approval_rejected": "Request denied",
+      "maturity_bulk_run_in_progress": "A bulk asset maturity evaluation is already running, so this run did not start",
+      "maturity_bulk_scope_invalid": "The catalog or schema of the step is not valid",
+      "maturity_bulk_run_failed": "The bulk asset maturity evaluation failed; the server log has the details",
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
@@ -886,6 +939,7 @@
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
       "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
+      "forceDecisionAccessRequest": "Access requests are decided by their approvers, not forced from here.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

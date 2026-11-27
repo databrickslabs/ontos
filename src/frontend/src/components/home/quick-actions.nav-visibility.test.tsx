@@ -51,18 +51,24 @@ describe('QuickActions with hidden features', () => {
     setGroups(['consumers']);
   });
 
-  // data-products resolves to its first menu entry, Marketplace, for both of its actions.
   it('offers every accessible feature when nothing is hidden', () => {
     const { container } = renderWithProviders(<QuickActions />);
     expect(actionPaths(container)).toEqual(
-      ['/assets', '/data-catalog', '/marketplace', '/marketplace'],
+      ['/assets', '/data-catalog', '/data-products', '/marketplace'],
     );
   });
 
   it('drops a hidden feature at Read-only and one at Read/Write', () => {
     state.hiddenNavFeatures = ['data-catalog', 'data-products'];
     const { container } = renderWithProviders(<QuickActions />);
-    expect(actionPaths(container)).toEqual(['/assets']);
+    expect(actionPaths(container)).toEqual(['/assets', '/marketplace']);
+  });
+
+  it('hides Marketplace without hiding Products, and the other way round', () => {
+    state.hiddenNavFeatures = ['marketplace'];
+    expect(actionPaths(renderWithProviders(<QuickActions />).container)).toEqual(
+      ['/assets', '/data-catalog', '/data-products'],
+    );
   });
 
   it('keeps every action for an Ontos admin acting as themselves', () => {
@@ -70,7 +76,7 @@ describe('QuickActions with hidden features', () => {
     state.hiddenNavFeatures = ['data-catalog', 'data-products'];
     const { container } = renderWithProviders(<QuickActions />);
     expect(actionPaths(container)).toEqual(
-      ['/assets', '/data-catalog', '/marketplace', '/marketplace'],
+      ['/assets', '/data-catalog', '/data-products', '/marketplace'],
     );
   });
 });

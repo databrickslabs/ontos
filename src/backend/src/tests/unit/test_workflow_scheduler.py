@@ -87,6 +87,10 @@ class _Inline(Executor):
 
 def _scheduler(sessions, name='a', **kwargs):
     kwargs.setdefault('run_executor', _Inline())
+    # These tests count the scheduler's database reads of the schedules; the overdue
+    # approvals it also looks for on those passes have tests of their own
+    # (test_approval_timeouts.py)
+    kwargs.setdefault('remind_overdue_approvals', False)
     return WorkflowScheduler(sessions, instance_id=name, **kwargs)
 
 

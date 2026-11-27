@@ -1014,7 +1014,28 @@
     "required": "Vereist",
     "advisory": "Adviserend",
     "overTime": "Volwassenheid in de tijd",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "currentLevel": "Huidig niveau",
+    "nextLevel": "Volgend niveau",
+    "belowFirstLevel": "Onder het eerste niveau",
+    "topLevelReached": "Hoogste niveau bereikt",
+    "noLevels": "Er zijn nog geen volwassenheidsniveaus voor dit type gedefinieerd.",
+    "gateStatus": {
+      "pass": "Geslaagd",
+      "fail": "Niet geslaagd",
+      "warn": "Niet voldaan"
+    }
+  },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog is niet bereikbaar, dus de velden van tabel {{tableName}} ontbreken.",
+    "maturity_uc_table_unreadable": "Tabel {{tableName}} kan niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
+    "maturity_uc_table_read_failed": "Tabel {{tableName}} kon niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
+    "maturity_gate_error": "Gate {{gateName}} kon niet worden geëvalueerd. De details staan in het serverlogboek.",
+    "maturity_level_partial": "Het niveau telt alleen de controles die tabel {{tableName}} niet nodig hebben; het asset kan een hoger niveau halen."
+  },
+  "maturityResult": {
+    "notStored": "Nu berekend en niet opgeslagen: de geschiedenis toont de opgeslagen evaluaties. Evalueer opnieuw om dit resultaat op te slaan.",
+    "notEvaluated": "Niet geëvalueerd"
   },
   "createDialog": {
     "editTitle": "Dataproduct-metadata bewerken",
@@ -1066,7 +1087,7 @@
     "contractLabel": "Contract:",
     "productNameLabel": "Productnaam *",
     "productNamePlaceholder": "bijv. Customer Analytics Product",
-    "productTypeLabel": "Producttype *",
+    "productTypeLabel": "Producttype",
     "productTypePlaceholder": "Selecteer producttype",
     "versionLabel": "Versie *",
     "versionPlaceholder": "bijv. v1.0.0",
@@ -1078,8 +1099,8 @@
     "errors": {
       "nameRequired": "Productnaam is verplicht",
       "versionRequired": "Versie is verplicht",
-      "typeRequired": "Producttype is verplicht",
-      "createError": "Aanmaken van product vanuit contract mislukt"
+      "createError": "Aanmaken van product vanuit contract mislukt",
+      "unknown_data_product_type": "Het producttype \"{{key}}\" bestaat niet of is gedeactiveerd. Kies een ander type."
     },
     "messages": {
       "productCreated": "Product Aangemaakt",
@@ -1187,5 +1208,12 @@
     "colSubscriber": "Abonnee",
     "colSubscribed": "Geabonneerd",
     "colReason": "Reden"
+  },
+  "dataProductType": {
+    "source-aligned": "Brongericht",
+    "aggregate": "Aggregaat",
+    "consumer-aligned": "Consumentgericht",
+    "source": "Bron",
+    "sink": "Bestemming"
   }
 }

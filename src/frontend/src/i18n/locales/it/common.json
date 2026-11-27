@@ -388,6 +388,7 @@
       "generate_pdf": "Genera PDF",
       "deliver": "Distribuisci",
       "grant_permissions": "Concedi autorizzazioni",
+      "evaluate_asset_maturity": "Valuta maturità degli asset",
       "on_behalf_of": "Per conto di"
     }
   },
@@ -403,6 +404,11 @@
     "assignedSuccess": "Proprietario assegnato con successo.",
     "errorAssigning": "Errore nell'assegnazione del proprietario",
     "ownerUserAria": "Utente proprietario"
+  },
+  "assignOwnerRole": {
+    "noRoles": "Nessun ruolo di business configurato. Chiedi a un amministratore di crearne uno.",
+    "ownerBadge": "Proprietario",
+    "notOwnerHint": "I proprietari con questo ruolo non ricevono approvazioni né notifiche da proprietario. Per questo, scegli Data Owner o Owner."
   },
   "versionFamily": {
     "countBadge_one": "{{count}} versione",

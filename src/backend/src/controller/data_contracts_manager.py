@@ -66,6 +66,7 @@ from src.controller.entity_data_cleanup import remove_entity_data
 from src.common.timestamps import utc_now
 from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import check_status_unchanged
@@ -170,9 +171,24 @@ from src.controller.lifecycle_fields import (
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
 from src.common.api_errors import CodedValueError
-from src.common.odcs_api_version import normalized_api_version
+from src.common.odcs_api_version import (
+    check_api_version_change, checked_api_version, normalized_api_version,
+)
 
 logger = get_logger(__name__)
+
+# Warning code for a deploy decision sent with execute_deployment (see
+# handle_deploy_response)
+DEPLOYMENT_NOT_AVAILABLE_CODE = 'deployment_not_available'
+
+
+class DeployRequestAlreadyDecidedError(CodedValueError):
+    """A decision on a deployment request that another decision already took."""
+
+    code = 'deploy_request_already_decided'
+
+    def __init__(self):
+        super().__init__("This deployment request has already been decided.")
 
 
 class InvalidTagEntryError(CodedValueError):
@@ -584,13 +600,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         description = str(description_usage) if description_usage else ""
 
         tag_names: List[str] = []
+        legacy_names: List[str] = []
 
-        # 1. Legacy ODCS tags (DataContractTagDb) -- still uses selectin, lightweight
+        # 1. Legacy ODCS tags (DataContractTagDb) -- still uses selectin, lightweight.
+        # Added after the unified tags, skipping names those already cover (#1484:
+        # an upload writes each file tag to both stores).
         try:
             if getattr(contract_db_obj, 'tags', None):
                 for t in contract_db_obj.tags:
                     if getattr(t, 'name', None):
-                        tag_names.append(t.name)
+                        legacy_names.append(t.name)
         except Exception:
             pass
 
@@ -610,6 +629,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         tag_names.append(tag.fully_qualified_name)
             except Exception as tag_err:
                 logger.debug(f"Could not load unified tags for contract {contract_id}: {tag_err}")
+        covered = set(tag_names) | {n.split(TAG_NAMESPACE_SEPARATOR, 1)[-1] for n in tag_names}
+        tag_names.extend(n for n in legacy_names if n not in covered)
 
         # Owner/team: resolve the native owning team, then fall back to the ODCS-supplied team
         # (team-object name + member names) so a contract whose owner_team_id is unset is still
@@ -767,8 +788,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         status = odcs.get('status') or 'draft'
         owner = odcs.get('owner') or (current_username or 'unknown')
         kind = odcs.get('kind') or 'DataContract'
-        # The ODCS spelling ('3.0.2' -> 'v3.0.2'), as the REST models store it
-        api_version = normalized_api_version(odcs.get('apiVersion')) or 'v3.0.1'
+        # The ODCS spelling ('3.0.2' -> 'v3.0.2'); refused outside the ODCS versions, as on
+        # every create path
+        api_version = checked_api_version(odcs.get('apiVersion') or 'v3.0.1')
         description = odcs.get('description') or {}
 
         # Try to resolve owner as team name
@@ -791,12 +813,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
 
-        # tags
+        # tags: the ODCS tag rows (read by the ODCS export) and the tag
+        # assignments the contract page shows (#1484)
         tags = odcs.get('tags') or []
         if isinstance(tags, list):
             for t in tags:
                 if isinstance(t, str):
                     db.add(DataContractTagDb(contract_id=created.id, name=t))
+            self._assign_tags_on_create(
+                db, created.id, [t for t in tags if isinstance(t, str)], current_username,
+            )
         # roles
         for r in odcs.get('roles', []) or []:
             if isinstance(r, dict) and r.get('role'):
@@ -1657,9 +1683,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 auth_defs.append(ad_item)
             odcs['authoritativeDefinitions'] = auth_defs
 
-        # Legacy support for tags and roles
-        if hasattr(db_obj, 'tags') and db_obj.tags:
-            odcs['tags'] = [t.name for t in db_obj.tags]
+        # Tags: the tag assignments the contract page shows (#1484), a name in the
+        # default namespace written without it, plus the ODCS tag rows that couldn't
+        # be assigned (a name the tag pattern rejects, or a namespace that doesn't
+        # exist). The other ODCS rows aren't used: imports, the ODCS tag routes and
+        # migration t1 mirror them onto the assignments, and a tag removed on the page
+        # keeps its row. Without a session only the ODCS rows can be read.
+        legacy_tag_names = [t.name.strip() for t in (getattr(db_obj, 'tags', None) or []) if t.name and t.name.strip()]
+        if db_session is not None:
+            exported_tags = self._odcs_tag_names(db_session, db_obj.id)
+            for name in legacy_tag_names:
+                if name not in exported_tags and not self._is_assignable_tag_name(db_session, name):
+                    exported_tags.append(name)
+            if exported_tags:
+                odcs['tags'] = exported_tags
+        elif legacy_tag_names:
+            odcs['tags'] = legacy_tag_names
             
         if hasattr(db_obj, 'roles') and db_obj.roles:
             roles = []
@@ -1928,6 +1967,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     def _create_schema_objects(
         self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
+        semantic_manager: Optional[Any] = None, commit_links: bool = True,
         custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
         include_object_quality: bool = False,
         from_document: bool = False,
@@ -2145,18 +2185,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_auth_defs)
         db.flush()
 
-        # Process semantic links after bulk insert
+        # Process semantic links after bulk insert. ``semantic_manager`` /
+        # ``commit_links=False``: an update writes them in its own commit (their
+        # graph changes are that manager's pending ones, applied once it committed)
         if schema_semantic_work or prop_semantic_work:
             from src.controller.semantic_links_manager import SemanticLinksManager
             from src.utils.semantic_helpers import process_schema_semantic_links, process_property_semantic_links
-            semantic_manager = SemanticLinksManager(db)
+            semantic_manager = semantic_manager or SemanticLinksManager(db)
             for cid, sname, auth_defs in schema_semantic_work:
                 process_schema_semantic_links(
                     semantic_manager=semantic_manager,
                     contract_id=cid,
                     schema_name=sname,
                     authoritative_definitions=auth_defs,
-                    created_by=current_user
+                    created_by=current_user,
+                    commit=commit_links,
                 )
             for cid, sname, pname, auth_defs in prop_semantic_work:
                 process_property_semantic_links(
@@ -2165,7 +2208,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_name=sname,
                     property_name=pname,
                     authoritative_definitions=auth_defs,
-                    created_by=current_user
+                    created_by=current_user,
+                    commit=commit_links,
                 )
 
     @staticmethod
@@ -2271,7 +2315,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     check.implementation = dumps(edited)
             db.add(check)
     
-    def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
+    def _process_semantic_links(
+        self, db, contract_id: str, contract_data, current_user: Optional[str] = None,
+        semantic_manager: Optional[Any] = None, commit: bool = True,
+    ):
         """
         Process all semantic links from authoritative definitions.
         
@@ -2280,6 +2327,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_id: Contract UUID
             contract_data: Contract data (can be Pydantic model or dict)
             current_user: Username for semantic link creation
+            semantic_manager: The caller's SemanticLinksManager (its pending graph changes)
+            commit: False to write the links in the caller's transaction
         """
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.utils.semantic_helpers import process_contract_semantic_links
@@ -2290,7 +2339,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         else:
             contract_dict = contract_data
         
-        semantic_manager = SemanticLinksManager(db)
+        semantic_manager = semantic_manager or SemanticLinksManager(db)
         
         # Process contract-level semantic assignments
         contract_auth_defs = contract_dict.get('authoritativeDefinitions', []) or []
@@ -2299,7 +2348,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 semantic_manager=semantic_manager,
                 contract_id=contract_id,
                 authoritative_definitions=contract_auth_defs,
-                created_by=current_user
+                created_by=current_user,
+                commit=commit,
             )
     
     def _create_team_members(self, db, contract_id: str, team_data: List[dict]):
@@ -2532,6 +2582,192 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     server_id=server_db.id, key=prop_key, value=prop_value,
                 ))
     
+    @staticmethod
+    def _tag_creates(tags_data) -> list:
+        """Tag assignments from a payload's or an ODCS file's ``tags`` (FQN strings or dicts)."""
+        from src.models.tags import AssignedTagCreate
+
+        tag_creates = []
+        for tag in tags_data or []:
+            try:
+                if isinstance(tag, str):
+                    if tag.strip():
+                        tag_creates.append(AssignedTagCreate(tag_fqn=tag.strip()))
+                elif isinstance(tag, dict):
+                    tag_creates.append(AssignedTagCreate(**tag))
+                elif hasattr(tag, 'model_dump'):
+                    tag_creates.append(AssignedTagCreate(**tag.model_dump()))
+            except (ValueError, TypeError) as e:  # pydantic's ValidationError is a ValueError
+                logger.warning("Skipping unreadable tag %r: %s", tag, e)
+        return tag_creates
+
+    def _assign_tags_on_create(self, db, contract_id: str, tags_data, current_user: Optional[str]) -> None:
+        """Assign the tags a contract is created or imported with, in the caller's transaction (#1484).
+
+        Tags resolve as on update: an unknown name is created, an unknown id is
+        skipped. Each tag has its own savepoint, so one that can't be assigned
+        doesn't stop the others: a name the tag pattern rejects (ODCS tags are free
+        text, see _is_assignable_tag_name) or in a namespace that doesn't exist is
+        skipped and logged. A database error propagates, as in the version copy (#1490),
+        so it fails the create; the tag that caused it is not skipped.
+        """
+        tag_creates = self._tag_creates(tags_data)
+        if not tag_creates:
+            return
+
+        # Flush the create's own rows first, so their errors surface as themselves
+        # and not as a tag failure (begin_nested flushes before its SAVEPOINT).
+        db.flush()
+        assigned: List[str] = []
+        for tag in tag_creates:
+            try:
+                with db.begin_nested():
+                    assigned.append(self._assign_one_tag(db, contract_id, tag, current_user))
+            except ValueError as e:  # pydantic's ValidationError, an unknown id or namespace
+                logger.warning("Skipping tag %r of contract %s: %s", tag.tag_fqn or tag.tag_id, contract_id, e)
+        if not assigned:
+            return
+
+        # One TAGS_SET entry for the timeline, as the tag write of an update logs. In a
+        # savepoint, so a failed log can't abort the create (see TagsManager.set_tags_for_entity).
+        from src.controller.change_log_manager import change_log_manager
+        summary = ", ".join(assigned[:5]) + (f", ... ({len(assigned)} total)" if len(assigned) > 5 else "")
+        try:
+            with db.begin_nested():
+                change_log_manager.log_change_with_details(
+                    db, entity_type="data_contract", entity_id=str(contract_id), action="TAGS_SET",
+                    username=current_user,
+                    details={
+                        "tag_count": len(assigned),
+                        "tags": summary,
+                        "summary": f"Tags updated: {summary}" + (f" by {current_user}" if current_user else ""),
+                    },
+                    commit=False,
+                )
+        except Exception as log_err:
+            logger.warning("Failed to log change for tags of new contract %s: %s", contract_id, log_err)
+
+    @staticmethod
+    def _default_namespace(db, current_user: Optional[str]):
+        """The default tag namespace, created with a flush if missing.
+
+        Startup seeds it. get_or_create_default_namespace commits, which would end the
+        create's transaction, so a missing one is created here.
+        """
+        from src.models.tags import TagNamespaceCreate
+        from src.repositories.tags_repository import tag_namespace_repo
+
+        namespace = tag_namespace_repo.get_by_name(db, name=DEFAULT_NAMESPACE_NAME)
+        if namespace is None:
+            namespace = tag_namespace_repo.create(
+                db,
+                obj_in=TagNamespaceCreate(name=DEFAULT_NAMESPACE_NAME, description="Default system namespace"),
+                user_email=current_user,
+            )
+            db.flush()
+        return namespace
+
+    @staticmethod
+    def _assign_one_tag(db, contract_id: str, tag, current_user: Optional[str]) -> str:
+        """Assign one tag to a contract and return its fully qualified name.
+
+        Raises ValueError for a tag that can't be assigned (an unknown id, a namespace
+        that doesn't exist, a name the tag pattern rejects).
+        """
+        from src.repositories.tags_repository import entity_tag_repo, tag_repo
+
+        if tag.tag_id:
+            tag_db = tag_repo.get(db, id=tag.tag_id)
+            if tag_db is None:
+                raise ValueError(f"no tag with id {tag.tag_id}")
+        elif tag.tag_fqn:
+            parts = tag.tag_fqn.split(TAG_NAMESPACE_SEPARATOR, 1)
+            tag_db = tag_repo.find_or_create_tag(
+                db,
+                tag_name=parts[-1],
+                namespace_name=parts[0] if len(parts) > 1 else None,
+                user_email=current_user,
+                default_namespace_id=DataContractsManager._default_namespace(db, current_user).id,
+            )
+            db.flush()
+        else:
+            raise ValueError("the tag has neither an id nor a name")
+
+        entity_tag_repo.add_tag_to_entity(
+            db,
+            entity_id=str(contract_id),
+            entity_type="data_contract",
+            tag_id=tag_db.id,
+            assigned_value=tag.assigned_value,
+            assigned_by=current_user,
+        )
+        db.flush()
+        namespace_name = tag_db.namespace.name if getattr(tag_db, "namespace", None) else DEFAULT_NAMESPACE_NAME
+        return f"{namespace_name}{TAG_NAMESPACE_SEPARATOR}{tag_db.name}"
+
+    def add_odcs_tag_assignment(self, db, contract_id: str, name: str, current_user: Optional[str]) -> None:
+        """Mirror an ODCS tag row onto the tag assignments the page shows (#1484).
+
+        Used by the ODCS tag routes, so a tag added there is shown on the page and
+        exported. A name that can't be assigned is skipped, as on import.
+        """
+        if name and name.strip():
+            self._assign_tags_on_create(db, contract_id, [name.strip()], current_user)
+
+    def remove_odcs_tag_assignment(self, db, contract_id: str, name: str) -> None:
+        """Remove the tag assignment an ODCS tag row was mirrored to (see add_odcs_tag_assignment)."""
+        from src.repositories.tags_repository import entity_tag_repo, tag_repo
+
+        if not name or not name.strip():
+            return
+        fqn = name.strip() if TAG_NAMESPACE_SEPARATOR in name else f"{DEFAULT_NAMESPACE_NAME}{TAG_NAMESPACE_SEPARATOR}{name.strip()}"
+        tag = tag_repo.get_by_fully_qualified_name(db, fqn=fqn)
+        if tag is not None:
+            entity_tag_repo.remove_tag_from_entity(
+                db, entity_id=str(contract_id), entity_type="data_contract", tag_id=tag.id,
+            )
+            # Sessions don't autoflush: a later read of the contract's tags (a rename
+            # adds the new name next) must not see the removed one.
+            db.flush()
+
+    @staticmethod
+    def _is_assignable_tag_name(db, name: str) -> bool:
+        """True when an ODCS tag name can be assigned (#1484): its namespace exists (a bare
+        name is in the default namespace) and its tag name passes TagBase's pattern.
+
+        The import, the ODCS export and the ODCS tag routes use this one test. Migration
+        t1 applies the same pattern to the rows it backfills.
+        """
+        from src.models.tags import TagBase
+        from src.repositories.tags_repository import tag_namespace_repo
+
+        namespace, tag_name = (
+            name.split(TAG_NAMESPACE_SEPARATOR, 1) if TAG_NAMESPACE_SEPARATOR in name else ("", name)
+        )
+        # An empty namespace is the default one, as on import; the default one is seeded at startup.
+        if namespace not in ("", DEFAULT_NAMESPACE_NAME) and tag_namespace_repo.get_by_name(db, name=namespace) is None:
+            return False
+        try:
+            TagBase(name=tag_name)
+        except ValueError:
+            return False
+        return True
+
+    @staticmethod
+    def _odcs_tag_names(db, contract_id: str) -> List[str]:
+        """ODCS ``tags`` strings from a contract's tag assignments (default-namespace names bare)."""
+        from src.repositories.tags_repository import entity_tag_repo
+
+        names = []
+        for tag in entity_tag_repo.get_assigned_tags_for_entity(
+            db, entity_id=str(contract_id), entity_type="data_contract",
+        ):
+            if tag.namespace_name == DEFAULT_NAMESPACE_NAME:
+                names.append(tag.tag_name)
+            else:
+                names.append(tag.fully_qualified_name)
+        return names
+
     def _create_tags(self, db, contract_id: str, tags: List[str]):
         """Create tags from ODCS tags array."""
         for tag in tags:
@@ -2735,7 +2971,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 draft_owner_id=draft_owner_id,
                 project_id=project_id,  # Add project_id
                 kind=data_dict.get('kind', 'DataContract'),
-                api_version=data_dict.get('apiVersion', 'v3.1.0'),
+                # A dict caller (assistant tools) skips the create model: same check
+                api_version=checked_api_version(data_dict.get('apiVersion', 'v3.1.0')),
                 tenant=data_dict.get('tenant'),
                 data_product=data_dict.get('dataProduct'),
                 description_usage=description.get('usage'),
@@ -2782,6 +3019,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if team_data:
                 self._create_team_members(db, created.id, team_data)
             self._create_team_metadata(db, created.id, team_raw)
+
+            self._assign_tags_on_create(db, created.id, data_dict.get('tags'), current_user)
 
             db.commit()
             db.refresh(created)
@@ -2831,6 +3070,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract_data,
         current_user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
+        gate_executions: Optional[List[Any]] = None,
     ) -> DataContractDb:
         """
         Update a contract with all nested relations. Manages transaction.
@@ -2841,6 +3081,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_data: Contract update data (Pydantic DataContractUpdate model or dict)
             current_user: Username of current user
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            gate_executions: The executions of the before_update gates the update
+                passed (``run_update_gates``): their tag steps' changes are written
+                after the update's own tags, in the same commit
             
         Returns:
             Updated DataContractDb instance
@@ -2870,6 +3113,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # request-status-change, approve/reject), which runs the gates; an
             # update may only repeat it.
             check_status_unchanged(db_obj.status, data_dict.get('status'))
+            check_api_version_change(db_obj.api_version, data_dict.get('apiVersion'))
             
             # Validate required fields
             if data_dict.get('name') is not None and (not data_dict['name'] or not data_dict['name'].strip()):
@@ -2883,6 +3127,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 for i, tag in enumerate(tags_data):
                     if not isinstance(tag, (str, dict)):
                         raise InvalidTagEntryError(i)
+            semantic_manager = None  # set when the update replaces the contract's links
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
             from src.common import contract_domain_fields as dom
@@ -3021,12 +3266,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ).delete()
 
                 if schemas_to_create:
+                    from src.controller.semantic_links_manager import SemanticLinksManager
+                    semantic_manager = SemanticLinksManager(db)
                     # Object-level quality kept from a recreated object is in
-                    # its `quality`; `qualityRules` (below) still replaces it
+                    # its `quality`; `qualityRules` (below) still replaces it.
+                    # Their semantic links are written in the update's commit
                     self._create_schema_objects(
                         db, contract_id, schemas_to_create, current_user,
                         custom_property_ids=custom_property_ids,
                         include_object_quality=True,
+                        semantic_manager=semantic_manager, commit_links=False,
                     )
             
             # Handle quality rules if provided
@@ -3110,7 +3359,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
-                    # Don't fail the entire update if tags fail
+                    if gate_executions:
+                        # The before_update gates passed on this tag list as written:
+                        # saving the update with the old tags would bypass them
+                        from src.common.workflow_executor import UpdateGateTagListWriteError
+                        raise UpdateGateTagListWriteError(contract_id) from e
+                    # Without gates, don't fail the entire update if tags fail
+                    logger.warning(
+                        "Contract %s keeps its previous tags: the update's %d tag(s) "
+                        "weren't written", contract_id, len(tags_data),
+                    )
             
             # Servers (the contract page sends the whole list): replace them,
             # keeping the ODCS id, roles and custom properties of a server the
@@ -3155,21 +3413,34 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         db, contract_id, data_dict['customProperties'],
                         previous=previous)
             
-            # Handle contract-level semantic links if provided
+            # The tag changes of the before_update gates' tag steps, on top of the
+            # update's tags (as the gates saw them) and in its commit; a failed
+            # write refuses the update (UpdateGateTagWriteError)
+            if gate_executions:
+                from src.common.workflow_executor import apply_deferred_tag_writes
+                apply_deferred_tag_writes(db, gate_executions, current_user)
+
+            # Handle contract-level semantic links if provided, in the update's
+            # commit (their graph changes once it committed)
             if data_dict.get('authoritativeDefinitions') is not None:
                 from src.controller.semantic_links_manager import SemanticLinksManager
-                semantic_manager = SemanticLinksManager(db)
+                semantic_manager = semantic_manager or SemanticLinksManager(db)
                 
                 # Remove existing contract-level semantic links
                 existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')
                 for link in existing_links:
-                    semantic_manager.remove(link.id, removed_by=current_user)
+                    semantic_manager.remove(link.id, removed_by=current_user, commit=False)
                 
                 # Process new semantic links
                 if data_dict['authoritativeDefinitions']:
-                    self._process_semantic_links(db, contract_id, data_dict, current_user)
-            
+                    self._process_semantic_links(
+                        db, contract_id, data_dict, current_user,
+                        semantic_manager=semantic_manager, commit=False,
+                    )
+
             db.commit()
+            if semantic_manager is not None:
+                semantic_manager.apply_graph_changes()
             db.refresh(updated)
             
             # Log to change log for timeline
@@ -3411,11 +3682,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
-            # The ODCS spelling ('3.0.2' -> 'v3.0.2'), as the REST models store it. A value
-            # outside ODCS is kept: the import only warns (ODCS validation above)
-            api_version_val = normalized_api_version(
-                parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version')
-            ) or 'v3.1.0'
+            # The ODCS spelling ('3.0.2' -> 'v3.0.2'). A value outside the ODCS versions is
+            # refused (a failed import item with its code), as on every create path
+            api_version_val = checked_api_version(
+                parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version') or 'v3.1.0'
+            )
             
             # Extract description fields
             description = parsed_odcs.get('description', {})
@@ -3590,10 +3861,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if isinstance(servers_data, list) and servers_data:
                 self._create_servers(db, created.id, servers_data)
             
-            # Create tags if present
+            # Create tags if present: the ODCS tag rows (read by the ODCS export)
+            # and the tag assignments the contract page shows (#1484)
             tags = parsed_odcs.get('tags', [])
             if isinstance(tags, list) and tags:
                 self._create_tags(db, created.id, tags)
+                self._assign_tags_on_create(db, created.id, tags, current_user)
             
             # Create roles if present
             roles = parsed_odcs.get('roles', [])
@@ -4654,22 +4927,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     ) -> tuple[bool, List[Any]]:
         """Run the before_update gates of an update; ``(passed, executions)``.
 
-        ``changes`` are the fields sent. A gate that raises is logged and lets
-        the update proceed (``(True, [])``).
+        ``changes`` are the fields sent. A gate that raises is logged and
+        audited; it refuses the update when it is ``on_error: fail_closed``
+        (``UpdateGateEvaluationError``), else the update proceeds
+        (``workflow_triggers.run_update_gates``).
         """
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common import workflow_triggers
         from src.models.process_workflows import EntityType
-        try:
-            return get_trigger_registry(db).before_update(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=str(contract.id),
-                entity_name=getattr(contract, 'name', None),
-                entity_data=changes,
-                user_email=user_email,
-            )
-        except Exception as e:
-            logger.warning(f"before_update trigger failed for contract {contract.id}: {e}")
-            return True, []
+        return workflow_triggers.run_update_gates(
+            db,
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(contract.id),
+            entity_name=getattr(contract, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
 
     @staticmethod
     def fire_create_trigger(db: Session, contract: Any, user_email: Optional[str]) -> None:
@@ -4728,6 +5000,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None,
         deprecation: Optional[DeprecationDetails] = None,
         also_set: Optional[Dict[str, Any]] = None,
+        gates_checked: bool = False,
     ) -> DataContractDb:
         """
         Transition contract status. Validates contract exists and transition is valid.
@@ -4743,6 +5016,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             also_set: Other fields written in the same commit as the status,
                 only once the gates passed (e.g. a review request clears
                 ``draft_owner_id`` with its draft -> proposed change)
+            gates_checked: the caller already ran the transition's gates
+                (``check_transition_gates``) in this request: they don't run
+                again, the deprecation fields are still checked
             
         Returns:
             Updated DataContractDb instance
@@ -4750,35 +5026,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status transition
         """
-        contract = data_contract_repo.get(db, id=contract_id)
-        if not contract:
-            raise ValueError("Contract not found")
-        
-        # The contract's lifecycle stage group allows the move (coded
-        # InvalidStatusTransitionError otherwise). Lowercase and strict: a status
-        # that isn't a stage of the group allows no transition.
-        current_status, new_status = lifecycle_service.check_transition(
-            db, 'data_contract', contract, new_status
+        contract, current_status, new_status = self._transition_target(
+            db, contract_id, new_status,
         )
-
-        # Run before_status_change workflows (gating)
-        # (a gate that errors refuses the transition when it is fail_closed, #1103);
-        # the deprecation fields are checked after the certified guard, before the gates
-        from src.common.workflow_triggers import run_status_gates
-        from src.models.process_workflows import EntityType as WFEntityType
-        run_status_gates(
-            db,
-            entity_type=WFEntityType.DATA_CONTRACT,
-            entity_id=contract_id,
-            from_status=current_status,
-            to_status=new_status,
-            entity_name=contract.name,
-            entity_data={"name": contract.name, "status": current_status},
-            user_email=current_user,
-            before_gates=lambda: check_lifecycle_fields(
-                db, 'data_contract', contract_id, new_status, deprecation
-            ),
-        )
+        if gates_checked:
+            check_lifecycle_fields(db, 'data_contract', contract_id, new_status, deprecation)
+            from src.controller.certified_deprecation_guard import close_open_requests
+            close_open_requests(db, 'data_contract', contract_id, new_status, current_user)
+        else:
+            self._run_transition_gates(
+                db, contract, current_status, new_status, current_user, deprecation,
+            )
         
         try:
             lifecycle_changes = apply_lifecycle_fields(
@@ -4829,6 +5087,65 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             "data_contract", contract_id, current_status, new_status
         )
         return updated
+
+    @staticmethod
+    def _transition_target(db, contract_id: str, new_status: str) -> tuple:
+        """``(contract, current status, new status)``; ValueError when missing or not allowed."""
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+
+        # The contract's lifecycle stage group allows the move (coded
+        # InvalidStatusTransitionError otherwise). Lowercase and strict: a status
+        # that isn't a stage of the group allows no transition.
+        current_status, new_status = lifecycle_service.check_transition(
+            db, 'data_contract', contract, new_status
+        )
+        return contract, current_status, new_status
+
+    @staticmethod
+    def _run_transition_gates(
+        db, contract, current_status: str, new_status: str, current_user: Optional[str],
+        deprecation: Optional[DeprecationDetails], close_requests: bool = True,
+    ) -> None:
+        """The before_status_change gates of a transition (``run_status_gates``)."""
+        # (a gate that errors refuses the transition when it is fail_closed, #1103);
+        # the deprecation fields are checked after the certified guard, before the gates
+        from src.common.workflow_triggers import run_status_gates
+        from src.models.process_workflows import EntityType as WFEntityType
+        contract_id = str(contract.id)
+        run_status_gates(
+            db,
+            entity_type=WFEntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            from_status=current_status,
+            to_status=new_status,
+            entity_name=contract.name,
+            entity_data={"name": contract.name, "status": current_status},
+            user_email=current_user,
+            before_gates=lambda: check_lifecycle_fields(
+                db, 'data_contract', contract_id, new_status, deprecation
+            ),
+            close_requests=close_requests,
+        )
+
+    def check_transition_gates(
+        self, db, contract_id: str, new_status: str, current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
+    ) -> None:
+        """Run a transition's checks and before_status_change gates without writing it.
+
+        For a caller that writes other changes first and the status after them
+        (``transition_status(gates_checked=True)``), so a refused transition
+        leaves those changes unwritten too. Raises as ``transition_status`` does.
+        """
+        contract, current_status, new_status = self._transition_target(
+            db, contract_id, new_status,
+        )
+        self._run_transition_gates(
+            db, contract, current_status, new_status, current_user, deprecation,
+            close_requests=False,
+        )
 
     # --- DQX Profiling Methods ---
     
@@ -5413,11 +5730,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
 
             # Clone all nested entities
-            # Tags
+            # Tags: the ODCS tag rows, and the tag assignments the page shows
+            # with their values (#1484)
             if source_contract.tags:
                 cloned_tags = cloner.clone_tags(source_contract.tags, new_contract.id)
                 for tag_data in cloned_tags:
                     db.add(DataContractTagDb(**tag_data))
+            from src.repositories.tags_repository import entity_tag_repo
+            entity_tag_repo.copy_tags_for_entity(
+                db, source_id=str(source_contract.id), target_id=str(new_contract.id),
+                entity_type="data_contract", assigned_by=current_user or "system",
+            )
             
             # Servers
             if source_contract.servers:
@@ -5906,8 +6229,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     ) -> DataContractDb:
         """Create a new version of a contract with basic metadata cloning.
         
-        This is a lightweight version creation that only clones core metadata
-        without nested entities. For a complete deep clone, use clone_contract_for_new_version().
+        This is a lightweight version creation that clones core metadata, the
+        domain assignments and the tag assignments, without nested entities.
+        For a complete deep clone, use clone_contract_for_new_version().
         
         Args:
             db: Database session
@@ -5970,6 +6294,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 primary_domain_id=next((d.domain_id for d in original_domains if d.is_primary), None),
                 assigned_by=current_user,
             )
+        # Copy the tags the page shows, with their values, as for domains (#1484).
+        from src.repositories.tags_repository import entity_tag_repo
+        entity_tag_repo.copy_tags_for_entity(
+            db, source_id=str(original.id), target_id=str(clone.id),
+            entity_type="data_contract", assigned_by=current_user,
+        )
 
         db.commit()
         db.refresh(clone)
@@ -6727,11 +7057,89 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         return {"message": f"Publish decision '{decision}' recorded successfully"}
     
+    @staticmethod
+    def _deploy_request_notifications(db, contract_id: str, *, lock: bool = False) -> List[Any]:
+        """The contract's ``handle_deploy_request`` notifications (rows) and
+        their payloads, as ``(row, payload)``.
+
+        ``lock`` locks the rows until the transaction ends and reads them
+        afresh (``populate_existing``), so two decisions are taken one after
+        the other: the second one sees the ``handled`` the first one stored.
+        """
+        from src.db_models.notifications import NotificationDb
+
+        query = db.query(NotificationDb).filter(
+            NotificationDb.action_type == 'handle_deploy_request',
+            NotificationDb.action_payload.contains(json.dumps(contract_id)),
+        )
+        if lock:
+            query = query.populate_existing().with_for_update()
+        out = []
+        for row in query.all():
+            try:
+                payload = json.loads(row.action_payload or '{}')
+            except (TypeError, ValueError):
+                continue
+            if isinstance(payload, dict) and payload.get('contract_id') == contract_id:
+                out.append((row, payload))
+        return out
+
+    def deploy_request_access(
+        self, db, notifications_manager, contract_id: str, user_info,
+    ) -> Optional[str]:
+        """Whether the user may decide a deployment request of the contract.
+
+        ``'pending'``: the user is a recipient of one of its undecided
+        ``handle_deploy_request`` notifications (today the Admin role), by the
+        strict recipient check of workflow approvals (no broadcast; a group,
+        role or ``user:`` / ``group:`` recipient as delivered; admins).
+        ``'decided'``: only of requests already decided (``handled`` in the
+        payload). None: of none, or the contract has no such request (one an
+        ``on_request_deploy`` workflow handles is decided by its approval step).
+        Reading a notification doesn't decide it: the bell marks it read on a
+        click.
+        """
+        from src.models.notifications import Notification
+
+        if not user_info:
+            return None
+        access = None
+        for row, payload in self._deploy_request_notifications(db, contract_id):
+            if not (row.recipient or row.recipient_role_id):
+                continue
+            if not notifications_manager.can_user_access_notification(
+                db=db, notification=Notification.model_validate(row), user_info=user_info,
+                strict=True,
+            ):
+                continue
+            if not payload.get('handled'):
+                return 'pending'
+            access = 'decided'
+        return access
+
+    def is_own_deploy_request(self, db, contract_id: str, user_info) -> bool:
+        """Whether the user requested the contract's undecided deployment request.
+
+        The request goes to the Admin role, which its requester may hold; their
+        own decision is refused, as owner approvals on the workflow side
+        (``own_owner_approval``). Email and username compare case-insensitively.
+        """
+        if not user_info:
+            return False
+        caller = {
+            (getattr(user_info, 'email', None) or '').lower(),
+            (getattr(user_info, 'username', None) or '').lower(),
+        } - {''}
+        return any(
+            not payload.get('handled')
+            and str(payload.get('requester_email') or '').strip().lower() in caller
+            for _, payload in self._deploy_request_notifications(db, contract_id)
+        )
+
     def handle_deploy_response(
         self,
         db,
         notifications_manager,
-        jobs_manager,
         contract_id: str,
         approver_email: str,
         decision: str,
@@ -6740,72 +7148,86 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None
     ) -> dict:
         """Handle a deploy request decision (approve/deny).
-        
-        Optionally triggers actual deployment, updates notifications and change log.
-        
+
+        Records the decision: updates notifications and the change log. Nothing
+        is deployed; there is no deployment trigger yet. ``execute_deployment``
+        is still accepted from older clients, logged and ignored, and the
+        response says so in ``warnings``.
+
         Args:
             db: Database session
             notifications_manager: Notifications manager instance
-            jobs_manager: Jobs manager instance (for triggering deployment)
             contract_id: Contract ID
             approver_email: Email of approver
             decision: Decision ('approve' or 'deny')
-            execute_deployment: Whether to actually trigger deployment
+            execute_deployment: Ignored (see above)
             message: Optional approver message
             current_user: Username handling deploy request
-            
+
         Returns:
-            Dict with message and optional job_id
-            
+            Dict with message and, when ``execute_deployment`` was set, warnings
+
         Raises:
             ValueError: If contract not found or invalid decision
+            DeployRequestAlreadyDecidedError: The request's notifications are
+                all decided (read under a row lock, so of two concurrent
+                decisions the second one gets this)
         """
         from src.models.notifications import NotificationType, Notification
-        
+
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
-        
+
         decision = decision.lower()
         if decision not in ('approve', 'deny'):
             raise ValueError("Decision must be 'approve' or 'deny'")
-        
+
+        # Decided once: lock the request's rows and re-check ``handled`` under
+        # the lock (the route's check ran before it)
+        request_rows = self._deploy_request_notifications(db, contract_id, lock=True)
+        if request_rows and all(payload.get('handled') for _, payload in request_rows):
+            raise DeployRequestAlreadyDecidedError()
+
         now = utc_now()
         response_message = f"Deploy decision '{decision}' recorded successfully"
         result = {"message": response_message}
-        
-        # Trigger deployment if approved and requested
-        if decision == 'approve' and execute_deployment and jobs_manager:
-            try:
-                job = jobs_manager.trigger_deployment(contract_id=contract_id)
-                result["job_id"] = job.id
-                response_message += f". Deployment job {job.id} started."
-                notification_title = "Contract Deployment Started"
-                notification_desc = f"Deployment of contract '{contract.name}' to Unity Catalog has been initiated (Job ID: {job.id})."
-            except Exception as e:
-                from src.common.api_errors import new_error_id
 
-                # The exception text stays in the log; the requester gets an error id
-                error_id = new_error_id()
-                logger.error(
-                    "Failed to trigger deployment of contract %s (error id %s): %s",
-                    contract_id, error_id, e, exc_info=True,
-                )
-                notification_title = "Contract Deployment Approved"
-                notification_desc = (
-                    f"Your contract '{contract.name}' deployment was approved, but it could "
-                    f"not be started. The details are in the server log (error id {error_id})."
-                )
-        elif decision == 'approve':
+        if execute_deployment:
+            logger.warning(
+                "Deploy decision for contract %s asked to execute the deployment; "
+                "ignored, there is no deployment trigger",
+                contract_id,
+            )
+            result["warnings"] = [{
+                "code": DEPLOYMENT_NOT_AVAILABLE_CODE,
+                "message": "execute_deployment is ignored: approving a deployment request "
+                           "records the decision and doesn't deploy anything.",
+                "params": {},
+            }]
+
+        if decision == 'approve':
             notification_title = "Contract Deployment Approved"
             notification_desc = f"Your contract '{contract.name}' deployment was approved."
         else:  # deny
             notification_title = "Contract Deployment Denied"
             notification_desc = f"Your deployment request for contract '{contract.name}' was denied."
-        
+
         if message:
             notification_desc += f"\n\nApprover message: {message}"
         
+        # The request is decided: its notifications no longer let anyone decide it
+        for row, payload in request_rows:
+            if payload.get('handled'):
+                continue
+            payload.update({
+                'handled': True, 'decision': decision, 'handled_by': approver_email,
+                'handled_at': now.isoformat(),
+            })
+            row.action_payload = json.dumps(payload)
+            row.read = True
+            db.add(row)
+
         # Mark actionable notification as handled
         try:
             notifications_manager.handle_actionable_notification(
@@ -6860,7 +7282,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             },
         )
         
-        result["message"] = response_message
         return result
     
     def request_status_change(

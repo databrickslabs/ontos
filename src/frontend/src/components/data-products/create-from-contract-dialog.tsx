@@ -22,6 +22,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Loader2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { useDataProductTypes } from '@/hooks/use-data-product-types';
+import {
+  dataProductTypeLabel,
+  defaultDataProductTypeKey,
+  pickableDataProductTypes,
+} from '@/lib/data-product-types';
 
 interface CreateFromContractDialogProps {
   isOpen: boolean;
@@ -30,14 +36,6 @@ interface CreateFromContractDialogProps {
   contractName: string;
   onSuccess?: (productId: string) => void;
 }
-
-const PRODUCT_TYPES = [
-  { value: 'source', label: 'Source' },
-  { value: 'source-aligned', label: 'Source Aligned' },
-  { value: 'aggregate', label: 'Aggregate' },
-  { value: 'consumer-aligned', label: 'Consumer Aligned' },
-  { value: 'sink', label: 'Sink' },
-];
 
 const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   isOpen,
@@ -50,8 +48,14 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   const { toast } = useToast();
   const { t } = useTranslation(['data-products', 'common']);
 
+  const { types: productTypeList, loading: productTypesLoading } = useDataProductTypes(isOpen);
+  const productTypeOptions = pickableDataProductTypes(productTypeList);
+
   const [productName, setProductName] = useState('');
-  const [productType, setProductType] = useState<string>('source-aligned');
+  // The type the user picked; until they pick one, the default type is shown
+  // and sent. With neither, no type is sent (the backend then uses no type).
+  const [chosenProductType, setChosenProductType] = useState<string>('');
+  const productType = chosenProductType || defaultDataProductTypeKey(productTypeList) || '';
   const [version, setVersion] = useState('v1.0.0');
   const [outputPortName, setOutputPortName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -69,11 +73,6 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       return;
     }
 
-    if (!productType) {
-      setError(t('data-products:createFromContract.errors.typeRequired'));
-      return;
-    }
-
     setError(null);
     setSubmitting(true);
 
@@ -81,13 +80,21 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       const response = await post('/api/data-products/from-contract', {
         contract_id: contractId,
         product_name: productName.trim(),
-        product_type: productType,
+        product_type: productType || undefined,
         version: version.trim(),
         output_port_name: outputPortName.trim() || undefined,
       });
 
       if (response.error) {
-        throw new Error(response.error);
+        // A coded refusal (e.g. the type was deactivated meanwhile) in the user's language
+        throw new Error(
+          response.errorCode
+            ? t(`data-products:createFromContract.errors.${response.errorCode}`, {
+                ...(response.errorParams || {}),
+                defaultValue: response.error,
+              })
+            : response.error,
+        );
       }
 
       toast({
@@ -118,7 +125,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
 
   const handleClose = () => {
     setProductName('');
-    setProductType('source-aligned');
+    setChosenProductType('');
     setVersion('v1.0.0');
     setOutputPortName('');
     setError(null);
@@ -129,7 +136,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   React.useEffect(() => {
     if (isOpen) {
       setProductName('');
-      setProductType('source-aligned');
+      setChosenProductType('');
       setVersion('v1.0.0');
       setOutputPortName('');
       setError(null);
@@ -179,17 +186,17 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
               {t('data-products:createFromContract.productTypeLabel')}
             </Label>
             <Select
-              value={productType}
-              onValueChange={setProductType}
-              disabled={submitting}
+              value={productType || undefined}
+              onValueChange={setChosenProductType}
+              disabled={submitting || productTypesLoading}
             >
               <SelectTrigger id="product-type">
                 <SelectValue placeholder={t('data-products:createFromContract.productTypePlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {PRODUCT_TYPES.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
+                {productTypeOptions.map((type) => (
+                  <SelectItem key={type.key} value={type.key}>
+                    {dataProductTypeLabel(type, t)}
                   </SelectItem>
                 ))}
               </SelectContent>

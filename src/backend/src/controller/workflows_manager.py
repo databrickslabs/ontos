@@ -114,8 +114,44 @@ def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optiona
     return trigger
 
 
+# Trigger types an evaluate_asset_maturity step may run on (#1414 follow-up)
+_MATURITY_STEP_TRIGGER_TYPES = frozenset({TriggerType.SCHEDULED.value, TriggerType.MANUAL.value})
+
+
+def is_maturity_step(step: Any) -> bool:
+    """A step (create model, model or DB row) of type ``evaluate_asset_maturity``."""
+    step_type = getattr(step, 'step_type', None)
+    return getattr(step_type, 'value', step_type) == StepType.EVALUATE_ASSET_MATURITY.value
+
+
 # Value sources the assign_tag step resolves (AssignTagStepHandler._resolve_value_source).
 ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'timestamp')
+
+
+def _update_gate_step_errors(workflow: ProcessWorkflowCreate) -> List[str]:
+    """Steps a ``before_update`` gate can't have are refused.
+
+    Entity actions, asset reviews, deliveries and UC grants commit or act outside
+    the database as the gate runs, so a later step, or another gate, that refuses
+    the update would leave them done (``UPDATE_GATE_REFUSED_STEP_TYPES``). Tag
+    steps are fine: the update writes their change (#1403).
+    """
+    from src.common.workflow_executor import (
+        UPDATE_GATE_REFUSED_STEP_TYPES, UPDATE_GATE_STEP_NOT_ALLOWED,
+    )
+
+    if workflow.trigger is None or workflow.trigger.type != TriggerType.BEFORE_UPDATE:
+        return []
+    errors = []
+    for step in workflow.steps:
+        step_type = getattr(step.step_type, 'value', step.step_type)
+        if step_type in UPDATE_GATE_REFUSED_STEP_TYPES:
+            errors.append(CodedMessage(
+                f"Step '{step.step_id}': a {step_type} step can't run in a before_update "
+                "gate, since what it does would stay done when the update is refused",
+                UPDATE_GATE_STEP_NOT_ALLOWED, step=step.step_id, stepType=step_type,
+            ))
+    return errors
 
 
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
@@ -760,6 +796,7 @@ class WorkflowsManager:
         step_ids = [s.step_id for s in workflow.steps]
         if len(step_ids) != len(set(step_ids)):
             errors.append(CodedMessage("Duplicate step IDs found", 'duplicate_step_ids'))
+        errors.extend(_update_gate_step_errors(workflow))
 
         # Check step references
         step_id_set = set(step_ids)
@@ -825,6 +862,7 @@ class WorkflowsManager:
         for step in workflow.steps:
             step_errors = self._validate_step_config(step)
             errors.extend(step_errors)
+        errors.extend(self.maturity_step_trigger_errors(workflow.trigger, workflow.steps))
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
         errors.extend(self.changed_schedule_errors(workflow.trigger, stored_trigger))
@@ -835,6 +873,28 @@ class WorkflowsManager:
             errors=errors,
             warnings=warnings,
         )
+
+    @staticmethod
+    def maturity_step_trigger_errors(
+        trigger: Optional[WorkflowTrigger], steps: Iterable[Any],
+    ) -> List[str]:
+        """``evaluate_asset_maturity`` steps on a trigger other than scheduled or manual.
+
+        The step starts a bulk run over every asset of its scope; on an event trigger it
+        would start one per event (and fail while the previous one runs).
+        """
+        if trigger is None or trigger.type.value in _MATURITY_STEP_TRIGGER_TYPES:
+            return []
+        return [
+            CodedMessage(
+                f"Step '{step.step_id}': the asset maturity evaluation runs on scheduled "
+                "and manual workflows only",
+                'evaluate_asset_maturity_trigger_unsupported',
+                step=step.step_id, triggerType=trigger.type.value,
+            )
+            for step in steps or []
+            if is_maturity_step(step)
+        ]
 
     def trigger_widening_errors(
         self, stored: WorkflowTrigger, new: Optional[WorkflowTrigger],
@@ -1194,6 +1254,17 @@ class WorkflowsManager:
         elif step.step_type == StepType.ENTITY_ACTION:
             if not config.get('action'):
                 errors.append(_missing(step, "Entity action step requires 'action' in config", ['action']))
+
+        elif step.step_type == StepType.EVALUATE_ASSET_MATURITY:
+            from src.controller.maturity_bulk_evaluator import (
+                MaturityBulkScopeError,
+                normalize_scope,
+            )
+            try:
+                normalize_scope(config.get('catalog'), config.get('schema_name'))
+            except MaturityBulkScopeError as e:
+                errors.append(CodedMessage(f"Step '{step.step_id}': {e}", e.code,
+                                           step=step.step_id))
 
         return errors
 
@@ -1575,6 +1646,24 @@ class WorkflowsManager:
                             "description": "The dot-separated path to the principal email in step results (e.g. 'step_results.access_request.on_behalf_of').",
                             "x-visible-when": {"field": "principal_source", "value": "from_variable"},
                         },
+                    },
+                },
+                has_pass_branch=True,
+                has_fail_branch=True,
+            ),
+            StepTypeSchema(
+                type=StepType.EVALUATE_ASSET_MATURITY,
+                name="Evaluate Asset Maturity",
+                description="Run the bulk maturity evaluation of table and view assets, "
+                            "for scheduled and manual workflows.",
+                icon="gauge",
+                config_schema={
+                    "type": "object",
+                    "properties": {
+                        "catalog": {"type": "string", "title": "Catalog",
+                                    "description": "Empty: every catalog"},
+                        "schema_name": {"type": "string", "title": "Schema",
+                                        "description": "Needs a catalog; empty: every schema"},
                     },
                 },
                 has_pass_branch=True,

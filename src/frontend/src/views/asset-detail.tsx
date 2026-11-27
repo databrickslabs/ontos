@@ -14,6 +14,12 @@ import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
 import { DescriptionSyncNotice } from '@/components/assets/description-sync-notice';
+import {
+  DescriptionResetDialog, canResetDescription,
+} from '@/components/assets/description-reset-dialog';
+import {
+  DescriptionHistoryPanel, hasDescriptionHistory,
+} from '@/components/assets/description-history-panel';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -26,6 +32,7 @@ import { LineageEditor } from '@/components/common/lineage-editor';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
+import { MaturityPanel } from '@/components/data-products/maturity-panel';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
@@ -113,6 +120,7 @@ export default function AssetDetailView() {
   const [relViewMode, setRelViewMode] = useState<'table' | 'graph'>('table');
   const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
+  const [isDescriptionResetOpen, setIsDescriptionResetOpen] = useState(false);
 
   const { get: apiGet, post: apiPost, delete: apiDelete } = useApi();
   const { t, i18n } = useTranslation(['assets', 'common']);
@@ -147,7 +155,12 @@ export default function AssetDetailView() {
 
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
+  // Maturity levels apply to table and view assets (MATURITY_ASSET_TYPES in the backend)
+  const hasMaturity = entityType === 'Table' || entityType === 'View';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
+
+  // The description of a table, view or column on Databricks can be taken from Unity Catalog
+  const showDescriptionReset = canWrite && canResetDescription(entityType, asset?.platform);
 
   const fetchAsset = useCallback(async () => {
     if (!assetId) return;
@@ -312,7 +325,18 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
-        <DescriptionSyncNotice sync={asset.description_sync} />
+        <DescriptionSyncNotice
+          sync={asset.description_sync}
+          onUseUcComment={showDescriptionReset ? () => setIsDescriptionResetOpen(true) : undefined}
+        />
+        {showDescriptionReset && !asset.description_sync && (
+          <Button
+            variant="link" size="sm" className="mt-1 h-auto p-0 text-xs"
+            onClick={() => setIsDescriptionResetOpen(true)}
+          >
+            {t('assets:descriptionReset.action')}
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -431,6 +455,24 @@ export default function AssetDetailView() {
               )}
             </CardContent>
           </Card>
+
+          {/* Maturity of a table or view: current and next level, each gate and why it failed */}
+          {hasMaturity && (
+            <div data-testid="asset-maturity">
+              <MaturityPanel entityType="Asset" entityId={asset.id} />
+            </div>
+          )}
+
+          {/* Who changed the description of a table, view or column, and restore a version */}
+          {hasDescriptionHistory(entityType) && (
+            <DescriptionHistoryPanel
+              assetId={asset.id}
+              currentDescription={asset.description}
+              canRestore={canWrite}
+              refreshKey={asset.updated_at}
+              onRestored={() => fetchAsset()}
+            />
+          )}
 
           {/* Type-specific: BusinessTerm - Definition & Synonyms */}
           {isBusinessTerm && asset.properties && (
@@ -620,6 +662,16 @@ export default function AssetDetailView() {
           assetTypeName={asset.asset_type_name || 'Asset'}
           assetTypeIri={ontologyIri}
           asset={asset}
+        />
+      )}
+
+      {/* Replace the description with the Unity Catalog comment */}
+      {asset && showDescriptionReset && (
+        <DescriptionResetDialog
+          assetId={asset.id}
+          open={isDescriptionResetOpen}
+          onOpenChange={setIsDescriptionResetOpen}
+          onReset={() => fetchAsset()}
         />
       )}
 

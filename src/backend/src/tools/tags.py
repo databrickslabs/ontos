@@ -11,6 +11,7 @@ from src.tools import read_access
 
 from src.common.logging import get_logger
 from src.tools.base import (
+    ANY_CALLER,
     BaseTool,
     ToolContext,
     ToolResult,
@@ -53,6 +54,7 @@ class SearchTagsTool(BaseTool):
     }
     required_params = ["query"]
     required_scope = "tags:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -119,6 +121,7 @@ class GetTagTool(BaseTool):
     }
     required_params = []
     required_scope = "tags:read"
+    required_permission = ANY_CALLER
     
     async def execute(
         self,
@@ -455,6 +458,7 @@ class ListEntityTagsTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id"]
     required_scope = "tags:read"
+    required_permission = ANY_CALLER
     
     async def execute(
         self,

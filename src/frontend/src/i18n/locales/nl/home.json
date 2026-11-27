@@ -42,6 +42,13 @@
       "pageSize": "Per pagina",
       "requestReview": "Beoordeling aanvragen"
     },
+    "maturity": {
+      "title": "Tabellen onder het eerste niveau",
+      "description": "Uw tabellen en views waarvan de laatste volwassenheidsbeoordeling geen niveau bereikte.",
+      "empty": "Geen van uw beoordeelde tabellen zit onder het eerste niveau.",
+      "more": "{{shown}} van {{total}} getoond.",
+      "error": "Je tabellen onder het eerste niveau konden niet worden geladen."
+    },
     "maintain": {
       "title": "Onderhouden",
       "description": "Je openstaande aanvragen en beoordelingen.",
@@ -122,6 +129,10 @@
   "myActions": {
     "title": "Mijn Acties",
     "approvals": "Goedkeuringen"
+  },
+  "approvalOverdue": {
+    "badge": "Te laat",
+    "hint": "Wacht langer dan de termijn; de goedkeurders en de aanvrager zijn herinnerd."
   },
   "quickActions": {
     "title": "Snelle Acties",

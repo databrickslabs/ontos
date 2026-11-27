@@ -15,6 +15,17 @@ from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_f
 logger = get_logger(__name__)
 
 
+def _commit_earlier_work(ctx: ToolContext) -> None:
+    """Commit what earlier tool calls of this request left pending, before a domain write.
+
+    The chat and MCP requests share one session across their tool calls, and some
+    tools leave their (reported as done) writes for the commit at the end of the
+    request. A failed domain write rolls back to release the hierarchy lock: done
+    first, the rollback drops only this tool's own work.
+    """
+    ctx.db.commit()
+
+
 class SearchDomainsTool(BaseTool):
     """Search for data domains via the shared, tokenized search index."""
 
@@ -197,6 +208,7 @@ class CreateDomainTool(BaseTool):
             from src.controller.data_domains_manager import DataDomainManager
             
             manager = DataDomainManager(repository=data_domain_repo)
+            _commit_earlier_work(ctx)
             
             domain_create = DataDomainCreate(
                 name=name,
@@ -226,6 +238,8 @@ class CreateDomainTool(BaseTool):
             )
             
         except Exception as e:
+            # Only this tool's work is pending: drop it and release the hierarchy lock
+            ctx.db.rollback()
             return ToolResult(success=False, **tool_failure("create_domain", e))
 
 
@@ -274,6 +288,7 @@ class UpdateDomainTool(BaseTool):
             from src.controller.data_domains_manager import DataDomainManager
             
             manager = DataDomainManager(repository=data_domain_repo)
+            _commit_earlier_work(ctx)
             
             update_data: Dict[str, Any] = {}
             if name is not None:
@@ -299,6 +314,7 @@ class UpdateDomainTool(BaseTool):
             )
             
             if not updated:
+                ctx.db.rollback()
                 return ToolResult(
                     success=False,
                     error=f"Domain '{domain_id}' not found"
@@ -319,6 +335,8 @@ class UpdateDomainTool(BaseTool):
             )
             
         except Exception as e:
+            # Only this tool's work is pending: drop it and release the hierarchy lock
+            ctx.db.rollback()
             return ToolResult(success=False, **tool_failure("update_domain", e))
 
 
@@ -351,6 +369,7 @@ class DeleteDomainTool(BaseTool):
             from src.controller.data_domains_manager import DataDomainManager
             
             manager = DataDomainManager(repository=data_domain_repo)
+            _commit_earlier_work(ctx)
             
             deleted = manager.delete_domain(
                 db=ctx.db,
@@ -359,6 +378,7 @@ class DeleteDomainTool(BaseTool):
             )
             
             if not deleted:
+                ctx.db.rollback()
                 return ToolResult(
                     success=False,
                     error=f"Domain '{domain_id}' not found or could not be deleted"
@@ -377,4 +397,6 @@ class DeleteDomainTool(BaseTool):
             )
             
         except Exception as e:
+            # Only this tool's work is pending: drop it and release the hierarchy lock
+            ctx.db.rollback()
             return ToolResult(success=False, **tool_failure("delete_domain", e))

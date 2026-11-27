@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.common.uc_domains_client import UcDomainsClient, UcDomain
 from src.db_models.data_domains import DataDomain
+from src.repositories.data_domain_repository import data_domain_repo
 from src.models.domain_sync import (
     DomainSyncNode,
     DomainSyncPreview,
@@ -98,6 +99,9 @@ class DomainSyncManager:
         uc_domains = self._uc.list_domains()
         roots, uc_children = self._uc_trees(uc_domains)
 
+        if apply:
+            # The run adds parent links: same lock as a domain create or move (until commit)
+            data_domain_repo.lock_hierarchy(db)
         ontos = self._load_ontos(db)
         by_uc_id = {d.uc_domain_id: d for d in ontos if d.uc_domain_id}
         by_name = {(d.name or "").lower(): d for d in ontos}
@@ -223,7 +227,14 @@ class DomainSyncManager:
         nodes: List[DomainSyncNode] = []
         warnings: List[str] = []
 
+        # Each domain once: a loop stored by an older version ends the walk
+        # instead of recursing until the stack runs out.
+        visited = set()
+
         def flatten(dom: DataDomain, level: int):
+            if dom.id in visited:
+                return
+            visited.add(dom.id)
             yield dom, level
             for child in children_of.get(dom.id, []):
                 yield from flatten(child, level + 1)

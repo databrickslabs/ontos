@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2 } from 'lucide-react';
+import { domainParentErrorText } from '@/lib/domain-parent-error';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -120,7 +121,7 @@ export function DataDomainFormDialog({
     }
 
     if (result.error) {
-      throw new Error(result.error);
+      throw new Error(domainParentErrorText(result, t));
     }
     if (!result.data) {
        throw new Error('No data returned from API.');

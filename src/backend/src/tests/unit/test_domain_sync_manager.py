@@ -222,3 +222,16 @@ def test_export_unknown_anchor_raises(db_session: Session):
     mgr = DomainSyncManager(FakeUcClient([]))
     with pytest.raises(ValueError):
         mgr.preview_export(db=db_session, anchor_domain_id=uuid.uuid4())
+
+
+def test_export_ends_on_a_stored_loop(db_session: Session):
+    # X -> Y -> X, stored by an older version: each domain is exported once (#1667)
+    x = _mk(db_session, "X")
+    y = _mk(db_session, "Y", parent=x)
+    x.parent_id = y.id
+    db_session.commit()
+
+    mgr = DomainSyncManager(FakeUcClient([]))
+    preview = mgr.preview_export(db=db_session, anchor_domain_id=uuid.UUID(x.id))
+
+    assert sorted((n.name, n.level) for n in preview.nodes) == [("X", 2), ("Y", 1)]

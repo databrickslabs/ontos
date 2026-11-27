@@ -4,7 +4,20 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead
-from src.controller.data_domains_manager import DataDomainManager
+from src.controller.data_domains_manager import (
+    DataDomainManager,
+    DomainHierarchyCycleError,
+    DomainParentCycleError,
+    DomainParentNotFoundError,
+)
+
+# Answer per refused parent: missing (404), new loop (400), loop already stored (409)
+_PARENT_ERROR_STATUS = {
+    DomainParentNotFoundError: status.HTTP_404_NOT_FOUND,
+    DomainParentCycleError: status.HTTP_400_BAD_REQUEST,
+    DomainHierarchyCycleError: status.HTTP_409_CONFLICT,
+}
+_PARENT_ERRORS = tuple(_PARENT_ERROR_STATUS)
 from src.common.database import get_db
 from sqlalchemy.orm import Session
 from src.common.authorization import PermissionChecker # Import PermissionChecker
@@ -85,6 +98,12 @@ async def create_data_domain(
         logger.error("Data domain creation conflict for '%s': %s", domain_in.name, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data domain already exists")
+    except _PARENT_ERRORS as e:
+        db.rollback()
+        logger.warning("Refused data domain parent (create): %s", e)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        # The coded error handler sends the code and params from the cause.
+        raise HTTPException(status_code=_PARENT_ERROR_STATUS[type(e)], detail=str(e)) from e
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create data domain '%s'", domain_in.name)
@@ -206,6 +225,12 @@ async def update_data_domain(
         )
 
         return updated_domain
+    except _PARENT_ERRORS as e:
+        db.rollback()
+        logger.warning("Refused data domain parent (update): %s", e)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        # The coded error handler sends the code and params from the cause.
+        raise HTTPException(status_code=_PARENT_ERROR_STATUS[type(e)], detail=str(e)) from e
     except NotFoundError as e:
         db.rollback()
         logger.error("Data domain not found for update %s: %s", domain_id, e)

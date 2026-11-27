@@ -67,6 +67,11 @@
     "discardDescription": "Você tem alterações não salvas que serão perdidas se fechar esta caixa de diálogo. Tem certeza de que deseja descartá-las?",
     "continueEditing": "Continuar Editando",
     "discardChanges": "Descartar Alterações",
+    "parentErrors": {
+      "notFound": "O domínio pai selecionado não existe mais.",
+      "cycle": "Um domínio não pode ser seu próprio pai nem o pai de um de seus ancestrais.",
+      "existingCycle": "Os domínios acima do domínio pai selecionado já formam um ciclo. Mova primeiro um deles para outro domínio pai."
+    },
     "toasts": {
       "updated": "Domínio Atualizado",
       "created": "Domínio Criado",

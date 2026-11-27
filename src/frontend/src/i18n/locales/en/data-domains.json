@@ -67,6 +67,11 @@
     "discardDescription": "You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?",
     "continueEditing": "Continue Editing",
     "discardChanges": "Discard Changes",
+    "parentErrors": {
+      "notFound": "The selected parent domain no longer exists.",
+      "cycle": "A domain cannot be its own parent or the parent of one of its ancestors.",
+      "existingCycle": "The domains above the selected parent already form a loop. Move one of them to another parent first."
+    },
     "toasts": {
       "updated": "Domain Updated",
       "created": "Domain Created",

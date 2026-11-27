@@ -105,11 +105,15 @@ class TestContractDomainReconcile:
         )
         ids, _ = _assigned_ids(db_session, "data_contract", created.id)
         assert ids == set()  # no silent auto-create
-        # Provenance recorded on export.
+        # The stored provenance is written back as the root `domain` on export, and not
+        # repeated as a custom property.
         odcs = mgr.build_odcs_from_db(created, db_session)
-        original = next((c["value"] for c in odcs.get("customProperties", [])
-                         if c.get("property") == ONTOS_ORIGINAL_DOMAIN_PROPERTY), None)
-        assert original == ["GhostDomain"]
+        assert odcs["domain"] == "GhostDomain"
+        assert not [c for c in odcs.get("customProperties", [])
+                    if c.get("property") == ONTOS_ORIGINAL_DOMAIN_PROPERTY]
+        stored = [c.value for c in created.custom_properties
+                  if c.property == ONTOS_ORIGINAL_DOMAIN_PROPERTY]
+        assert stored and "GhostDomain" in stored[0]
 
     def test_create_missing_toggle_creates_and_assigns(self, db_session, sales_domain):
         mgr = _contract_manager()

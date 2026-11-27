@@ -38,8 +38,6 @@ KNOWN_GAPS = {
     '*.quality[].arguments': 'quality checks have no arguments column',
     '*.quality[].rule': 'the deprecated `rule` goes out as `metric` (intended)',
     'description.customProperties': 'the description object has no custom properties table',
-    'description.authoritativeDefinitions':
-        'stored with the root authoritativeDefinitions, which the export writes in both places',
     'support[].customProperties': 'support channels have no custom properties table',
     'team.members[].tags': 'team members have no tags column',
     'team.members[].customProperties': 'team members have no custom properties table',

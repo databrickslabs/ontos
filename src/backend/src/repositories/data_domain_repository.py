@@ -2,12 +2,17 @@ from src.common.repository import CRUDBase
 from src.db_models.data_domains import DataDomain
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate
 from src.common.logging import get_logger
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import SQLAlchemyError
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 logger = get_logger(__name__)
+
+# Key of the Postgres advisory lock that serializes changes to the domain parent links
+# (held until the transaction ends). A fixed value so every writer takes the same lock.
+HIERARCHY_LOCK_KEY = 7_340_001_017
 
 class DataDomainRepository(CRUDBase[DataDomain, DataDomainCreate, DataDomainUpdate]):
     def __init__(self):
@@ -117,6 +122,23 @@ class DataDomainRepository(CRUDBase[DataDomain, DataDomainCreate, DataDomainUpda
             logger.error(f"Database error fetching {self.model.__name__} by normalized name {name!r}: {e}", exc_info=True)
             db.rollback()
             raise
+
+    def lock_hierarchy(self, db: Session) -> None:
+        """Serialize parent changes until this transaction commits or rolls back.
+
+        A parent check reads the ancestor chain and the write comes after it: two
+        reciprocal moves (A under B, B under A) would both pass the check. The
+        advisory lock makes the second one wait and read the first one's committed
+        link. Postgres only; on SQLite this is a no-op (one writer at a time).
+        """
+        if db.get_bind().dialect.name != 'postgresql':
+            return
+        db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {'key': HIERARCHY_LOCK_KEY})
+
+    def get_parent_id(self, db: Session, id: Any) -> Optional[str]:
+        """The stored parent id of a domain, read from the table (not the session cache)."""
+        row = db.query(self.model.parent_id).filter(self.model.id == str(id)).first()
+        return row[0] if row else None
 
 # Singleton instance
 data_domain_repo = DataDomainRepository() 

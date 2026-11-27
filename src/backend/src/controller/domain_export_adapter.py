@@ -265,6 +265,39 @@ class DomainExportAdapter:
         seen: set = set()
         return [x for x in originals if not (x in seen or seen.add(x))]
 
+    def surface_original_domain(self, odcs: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        """Write the root ``domain`` back from ``ontosOriginalDomain`` (no native domain linked).
+
+        An imported ``domain`` that matches no native domain is stored only as the
+        ``ontosOriginalDomain`` provenance property. Without a native primary domain the export
+        puts the first original string that still matches no native domain back in the ODCS
+        ``domain`` field, so it round-trips as the standard field. An original that names an
+        existing domain is skipped: the user unassigned it, and the export must not link it
+        again. The provenance property is dropped when that string is all it held; with more
+        than one it stays, so the others survive. No-op when ``domain`` is set.
+        """
+        if odcs.get("domain"):
+            return odcs
+        originals = self.extract_original_domain_strings(odcs)
+        unmatched = [
+            o for o in originals
+            if not (_is_uuid(o.strip()) and self.domain_repo.get(db, o.strip()))
+            and not self.domain_repo.get_by_name_normalized(db, name=o.strip())
+        ]
+        if not unmatched:
+            return odcs
+        odcs["domain"] = unmatched[0]
+        if len(originals) == 1:
+            remaining = [
+                c for c in odcs.get("customProperties") or []
+                if not (isinstance(c, dict) and c.get("property") == ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+            ]
+            if remaining:
+                odcs["customProperties"] = remaining
+            else:
+                odcs.pop("customProperties", None)
+        return odcs
+
     def _create_domain(self, db: Session, name: str, created_by: Optional[str]):
         """Auto-create a domain by name during import (only when the caller opted in via the
         'Create missing domains' toggle). Returns the created domain or None on failure."""

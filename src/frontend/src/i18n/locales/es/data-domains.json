@@ -67,6 +67,11 @@
     "discardDescription": "Tiene cambios sin guardar que se perderán si cierra este cuadro de diálogo. ¿Seguro que desea descartarlos?",
     "continueEditing": "Seguir editando",
     "discardChanges": "Descartar cambios",
+    "parentErrors": {
+      "notFound": "El dominio padre seleccionado ya no existe.",
+      "cycle": "Un dominio no puede ser su propio padre ni el padre de uno de sus ancestros.",
+      "existingCycle": "Los dominios por encima del dominio padre seleccionado ya forman un ciclo. Mueva primero uno de ellos a otro dominio padre."
+    },
     "toasts": {
       "updated": "Dominio actualizado",
       "created": "Dominio creado",

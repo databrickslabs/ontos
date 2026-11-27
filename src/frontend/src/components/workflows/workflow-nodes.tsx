@@ -25,6 +25,7 @@ import {
   Send,
   KeyRound,
   FileOutput,
+  Activity,
 } from 'lucide-react';
 import type { WorkflowStep, WorkflowTrigger } from '@/types/process-workflow';
 import { 
@@ -140,6 +141,11 @@ const nodeColorStyles = {
     card: "border-amber-600 bg-amber-50 dark:bg-amber-900/50 dark:border-amber-500",
     icon: "text-amber-700 dark:text-amber-300",
     ring: "ring-amber-600 dark:ring-amber-500",
+  },
+  evaluate_asset_maturity: {
+    card: "border-teal-600 bg-teal-50 dark:bg-teal-900/50 dark:border-teal-500",
+    icon: "text-teal-700 dark:text-teal-300",
+    ring: "ring-teal-600 dark:ring-teal-500",
   },
   on_behalf_of: {
     card: "border-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-900/50 dark:border-fuchsia-400",
@@ -612,6 +618,40 @@ export const GrantPermissionsNode = memo((props: NodeProps<StepNodeData>) => {
   );
 });
 GrantPermissionsNode.displayName = 'GrantPermissionsNode';
+
+// Evaluate Asset Maturity Node: the bulk evaluation's scope
+export const EvaluateAssetMaturityNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
+  const config = (props.data.step.config || {}) as { catalog?: string; schema_name?: string };
+  const scope = [config.catalog, config.catalog && config.schema_name].filter(Boolean).join('.');
+  const styles = nodeColorStyles.evaluate_asset_maturity;
+  const ring = props.selected ? `ring-2 ${styles.ring}` : '';
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${ring}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <Activity className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || t('common:workflows.stepTypes.evaluate_asset_maturity')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <div className={nodeTextStyles.description} data-testid="asset-maturity-node-scope">
+          {scope || t('workflows:assetMaturityStep.allCatalogs')}
+        </div>
+      </CardContent>
+      <Handle
+        type="source" position={Position.Bottom} id="pass"
+        className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }}
+      />
+      <Handle
+        type="source" position={Position.Bottom} id="fail"
+        className="!bg-red-500 dark:!bg-red-400" style={{ left: '70%' }}
+      />
+    </Card>
+  );
+});
+EvaluateAssetMaturityNode.displayName = 'EvaluateAssetMaturityNode';
 
 // Default/unknown step node (fallback when step_type has no dedicated component)
 export const DefaultStepNode = memo((props: NodeProps<StepNodeData>) => {

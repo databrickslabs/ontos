@@ -96,6 +96,7 @@
       "create_asset_review": "Asset Review",
       "webhook": "Webhook",
       "grant_permissions": "Grant Permissions",
+      "evaluate_asset_maturity": "Evaluate Asset Maturity",
       "on_behalf_of": "On Behalf Of",
       "legal_document": "Legal Document",
       "acknowledgement_checklist": "Acknowledgement Checklist",
@@ -559,6 +560,22 @@
       "previewCancelled": "Preview cancelled"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catalog",
+    "catalogPlaceholder": "All catalogs",
+    "schema": "Schema",
+    "schemaPlaceholder": "All schemas (needs a catalog)",
+    "help": "Evaluates the maturity of the table, view and metric view assets in this scope, as Settings > Maturity Levels does, and records the counts in the step result. Use a scheduled trigger to run it regularly.",
+    "identityNote": "The run reads Unity Catalog tables with the app's identity. Saving, activating or running this workflow needs write access to Settings.",
+    "triggerHint": "This step runs on scheduled and manual workflows only.",
+    "allCatalogs": "All catalogs",
+    "triggerUnsupported": "Step '{{step}}' evaluates asset maturity, which runs on scheduled and manual workflows only, not on {{trigger}}.",
+    "permissionRequired": "This workflow runs the asset maturity evaluation. Saving, activating or running it needs write access to Settings.",
+    "summary": "Evaluated {{evaluated}} of {{total}} assets: {{changed}} changed level, {{skipped}} skipped, {{errors}} errors",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Enter a catalog for the schema, without dots or backticks."
+    }
+  },
   "entityTypeSelect": {
     "label": "Applies to",
     "helper": "Which kinds of objects this fires on",
@@ -582,6 +599,9 @@
       "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
       "update_gate_step_not_allowed": "A {{stepType}} step can't run in a before update gate: what it does would stay done when the update is refused. Remove the step, or move it to an on update workflow.",
       "approval_rejected": "Request denied",
+      "maturity_bulk_run_in_progress": "A bulk asset maturity evaluation is already running, so this run did not start",
+      "maturity_bulk_scope_invalid": "The catalog or schema of the step is not valid",
+      "maturity_bulk_run_failed": "The bulk asset maturity evaluation failed; the server log has the details",
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",

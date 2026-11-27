@@ -1441,6 +1441,7 @@
       "maturity_bulk_skipped_not_stored": "Niet opgeslagen: de tabel kon niet worden gelezen",
       "maturity_bulk_evaluation_failed": "Evaluatie mislukt (zie serverlog)",
       "maturity_bulk_run_failed": "De run is gestopt (zie serverlog)",
+      "maturity_bulk_authentication_failed": "Gestopt: Unity Catalog heeft het token geweigerd (mogelijk verlopen); voer de run opnieuw uit",
       "maturity_bulk_run_in_progress": "Er loopt al een bulkevaluatie.",
       "maturity_bulk_scope_invalid": "De scope is ongeldig."
     }

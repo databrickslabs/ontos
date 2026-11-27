@@ -1441,6 +1441,7 @@
       "maturity_bulk_skipped_not_stored": "Não armazenado: não foi possível ler a tabela",
       "maturity_bulk_evaluation_failed": "Falha na avaliação (veja o log do servidor)",
       "maturity_bulk_run_failed": "A execução parou (veja o log do servidor)",
+      "maturity_bulk_authentication_failed": "Interrompida: o Unity Catalog recusou o token (pode ter expirado); execute novamente",
       "maturity_bulk_run_in_progress": "Já há uma avaliação em massa em andamento.",
       "maturity_bulk_scope_invalid": "O escopo não é válido."
     }

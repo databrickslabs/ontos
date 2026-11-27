@@ -1423,6 +1423,7 @@
       "maturity_bulk_skipped_not_stored": "No guardado: no se pudo leer la tabla",
       "maturity_bulk_evaluation_failed": "Fallo en la evaluación (vea el log del servidor)",
       "maturity_bulk_run_failed": "La ejecución se detuvo (vea el log del servidor)",
+      "maturity_bulk_authentication_failed": "Detenida: Unity Catalog rechazó el token (puede haber caducado); vuelva a ejecutarla",
       "maturity_bulk_run_in_progress": "Ya hay una evaluación masiva en curso.",
       "maturity_bulk_scope_invalid": "El alcance no es válido."
     }

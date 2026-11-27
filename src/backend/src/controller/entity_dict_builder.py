@@ -40,6 +40,9 @@ UC_TABLE_CLIENT_UNAVAILABLE = "client_unavailable"
 # anyone whether the table exists
 UC_TABLE_UNREADABLE = "unreadable"
 UC_TABLE_READ_FAILED = "read_failed"
+# The reader's token was refused (expired or revoked): reported like ``unreadable``, but
+# a bulk evaluation stops on it instead of reading the remaining tables
+UC_TABLE_UNAUTHENTICATED = "unauthenticated"
 # Key of each gate result of a stored asset snapshot: the UC table it was evaluated
 # against (null for none)
 SNAPSHOT_UC_TABLE_KEY = "uc_table_name"
@@ -543,7 +546,9 @@ def uc_table_name(platform: Optional[str], location: Optional[str]) -> Optional[
 def _uc_read_status(error: Exception) -> str:
     from databricks.sdk.errors import NotFound, PermissionDenied, Unauthenticated
 
-    if isinstance(error, (NotFound, PermissionDenied, Unauthenticated)):
+    if isinstance(error, Unauthenticated):
+        return UC_TABLE_UNAUTHENTICATED
+    if isinstance(error, (NotFound, PermissionDenied)):
         return UC_TABLE_UNREADABLE
     return UC_TABLE_READ_FAILED
 

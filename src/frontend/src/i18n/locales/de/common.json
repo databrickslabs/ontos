@@ -388,6 +388,7 @@
       "generate_pdf": "PDF generieren",
       "deliver": "Ausliefern",
       "grant_permissions": "Berechtigungen erteilen",
+      "evaluate_asset_maturity": "Asset-Reifegrad bewerten",
       "on_behalf_of": "Im Auftrag von"
     }
   },

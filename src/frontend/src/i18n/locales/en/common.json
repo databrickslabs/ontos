@@ -388,6 +388,7 @@
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver",
       "grant_permissions": "Grant Permissions",
+      "evaluate_asset_maturity": "Evaluate Asset Maturity",
       "on_behalf_of": "On Behalf Of"
     }
   },

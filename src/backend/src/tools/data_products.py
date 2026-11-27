@@ -18,7 +18,7 @@ from src.controller import search_scoring
 from src.controller.lifecycle_fields import (
     deprecation_details_from_strings, product_status_audit,
 )
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import ANY_CALLER, BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -191,6 +191,7 @@ class SearchDataProductsTool(BaseTool):
     }
     required_params = ["query"]
     required_scope = "data-products:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -678,6 +679,7 @@ class GetDataProductTool(BaseTool):
     }
     required_params = ["product_id"]
     required_scope = "data-products:read"
+    required_permission = ANY_CALLER
     
     async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
         """Get a data product by ID."""
@@ -738,6 +740,7 @@ class GetDataProductsBulkTool(BaseTool):
 
     DEFAULT_LIMIT = 20
     MAX_LIMIT = 100
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -829,6 +832,7 @@ class ListDataProductsTool(BaseTool):
     }
     required_params = []
     required_scope = "data-products:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,

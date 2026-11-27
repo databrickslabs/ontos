@@ -19,6 +19,7 @@ import { tileRegistry, tileOrder } from '@/tiles';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import EssentialsHome, { readsApprovalQueue } from '@/components/home/essentials/essentials-home';
+import MarketplaceView from '@/components/home/marketplace-view';
 
 export default function Home() {
   const { t } = useTranslation(['home', 'common']);
@@ -58,6 +59,7 @@ export default function Home() {
       matched.forEach(r => (r.home_sections || []).forEach(s => union.add(s as HomeSection)));
       const order: HomeSection[] = [
         HomeSection.JOURNEY,
+        HomeSection.MARKETPLACE,
         HomeSection.REQUIRED_ACTIONS,
         HomeSection.DATA_CURATION,
         HomeSection.DISCOVERY,
@@ -69,9 +71,21 @@ export default function Home() {
   }, [permissionsLoading, availableRoles, appliedRoleId, userGroups]);
 
   const defaultSections: HomeSection[] = [HomeSection.DISCOVERY];
-  const orderedSections = configuredSections.length > 0 ? configuredSections : defaultSections;
+  const resolvedSections = configuredSections.length > 0 ? configuredSections : defaultSections;
   // The journey home (#1347) replaces the Full overview for the roles that have it.
-  const journeyHome = orderedSections.includes(HomeSection.JOURNEY);
+  const journeyHome = resolvedSections.includes(HomeSection.JOURNEY);
+  // The marketplace home (#1325) replaces it too, for users who can read products. On a
+  // multi-role union the journey wins, and so do the curation and required-actions sections
+  // of another role (a consumer who is also a steward keeps the steward's home). Without
+  // products access the Full home is shown.
+  const marketplaceHome = !journeyHome
+    && resolvedSections.includes(HomeSection.MARKETPLACE)
+    && !resolvedSections.includes(HomeSection.DATA_CURATION)
+    && !resolvedSections.includes(HomeSection.REQUIRED_ACTIONS)
+    && hasPermission('data-products', FeatureAccessLevel.READ_ONLY);
+  // The Full home's sections: MARKETPLACE has none of its own.
+  const withoutMarketplace = resolvedSections.filter(s => s !== HomeSection.MARKETPLACE);
+  const orderedSections = withoutMarketplace.length > 0 ? withoutMarketplace : defaultSections;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -98,7 +112,13 @@ export default function Home() {
         </>
       )}
 
-      {!permissionsLoading && hasAnyAccess && !journeyHome && (
+      {!permissionsLoading && hasAnyAccess && marketplaceHome && (
+        <div data-testid="marketplace-home">
+          <MarketplaceView />
+        </div>
+      )}
+
+      {!permissionsLoading && hasAnyAccess && !journeyHome && !marketplaceHome && (
         <>
           <div className="max-w-2xl mx-auto text-center mb-8">
             <div className="flex items-center justify-center mb-4">

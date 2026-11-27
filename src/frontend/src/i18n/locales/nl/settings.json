@@ -431,10 +431,12 @@
         "title": "Home Secties",
         "description": "Selecteer welke secties op de homepagina verschijnen voor gebruikers met deze rol.",
         "labels": {
-          "JOURNEY": "Journey-startpagina"
+          "JOURNEY": "Journey-startpagina",
+          "MARKETPLACE": "Marktplaats-startpagina"
         },
         "descriptions": {
-          "JOURNEY": "Vervangt de volledige startpagina door Vinden, Begrijpen, Vertrouwen, Publiceren en Onderhouden. Kan niet met andere secties worden gecombineerd."
+          "JOURNEY": "Vervangt de volledige startpagina door Vinden, Begrijpen, Vertrouwen, Publiceren en Onderhouden. Kan niet met andere secties worden gecombineerd.",
+          "MARKETPLACE": "Vervangt de volledige startpagina door de marktplaats. Kan niet met andere secties worden gecombineerd."
         }
       },
       "approvalPrivileges": {
@@ -586,6 +588,62 @@
       "submitFailed": "Kon rol-toegangsverzoek niet indienen",
       "sending": "Verzoek verzenden...",
       "send": "Verzoek Verzenden"
+    }
+  },
+  "navigationPresets": {
+    "title": "Navigatievoorinstellingen",
+    "help": "Stel de menu's en de startpagina van de standaardrollen in één stap in. Een voorinstelling wijzigt alleen wat de menu's en de startpagina tonen, nooit de toegangsniveaus. Rollen worden op naam herkend en blijven daarna afzonderlijk bewerkbaar.",
+    "loadFailed": "De navigatievoorinstellingen konden niet worden geladen.",
+    "presets": {
+      "essentials": {
+        "name": "Essentials",
+        "description": "Startpagina met journey en een kort menu: catalogus, assets en concepten, plus reviews en compliance voor stewards en governance."
+      },
+      "data-consumer": {
+        "name": "Dataconsument",
+        "description": "Marktplaats-startpagina voor dataconsumenten, met Marktplaats en Mijn producten in het menu."
+      }
+    },
+    "preview": {
+      "role": "Rol",
+      "menu": "Menu na toepassen",
+      "home": "Startpagina",
+      "status": "Status",
+      "menuEmpty": "Geen menu-items",
+      "homeUnchanged": "Ongewijzigd",
+      "noAccess": "Niet getoond: de rol heeft geen toegang tot {{features}}."
+    },
+    "status": {
+      "changes": "Wijzigt",
+      "noChange": "Geen wijziging",
+      "notFound": "Rol niet gevonden"
+    },
+    "actions": {
+      "apply": "Voorinstelling toepassen",
+      "undo": "Laatste voorinstelling ongedaan maken"
+    },
+    "nothingToApply": "Alle rollen komen al overeen met deze voorinstelling.",
+    "lastApplied": "Laatst toegepast: {{preset}} door {{user}}, {{date}}",
+    "unknownUser": "onbekende gebruiker",
+    "confirm": {
+      "applyTitle": "Voorinstelling {{preset}} toepassen?",
+      "applyDescription_one": "Dit wijzigt het menu en de startpagina van {{count}} rol. De toegangsniveaus blijven gelijk en je kunt het daarna ongedaan maken.",
+      "applyDescription_other": "Dit wijzigt de menu's en startpagina's van {{count}} rollen. De toegangsniveaus blijven gelijk en je kunt het daarna ongedaan maken.",
+      "undoTitle": "Laatste voorinstelling ongedaan maken?",
+      "undoDescription_one": "Dit herstelt het menu en de startpagina die {{preset}} bij {{count}} rol heeft gewijzigd.",
+      "undoDescription_other": "Dit herstelt de menu's en startpagina's die {{preset}} bij {{count}} rollen heeft gewijzigd."
+    },
+    "applied": "Voorinstelling {{preset}} toegepast",
+    "nothingChanged": "Niets te wijzigen",
+    "appliedSummary": "Gewijzigd: {{changed}}, ongewijzigd: {{unchanged}}, niet gevonden: {{missing}}.",
+    "applyFailed": "De voorinstelling kon niet worden toegepast",
+    "undone": "Voorinstelling {{preset}} ongedaan gemaakt",
+    "undoneSummary": "Hersteld: {{restored}}, niet gevonden: {{missing}}.",
+    "undoFailed": "De voorinstelling kon niet ongedaan worden gemaakt",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "Er is geen toepassing van een voorinstelling om ongedaan te maken.",
+      "navigation_preset_unknown": "Deze voorinstelling bestaat niet.",
+      "generic": "Het verzoek is mislukt. Probeer het opnieuw."
     }
   },
   "mcpTokens": {
@@ -1383,6 +1441,7 @@
       "maturity_bulk_skipped_not_stored": "Niet opgeslagen: de tabel kon niet worden gelezen",
       "maturity_bulk_evaluation_failed": "Evaluatie mislukt (zie serverlog)",
       "maturity_bulk_run_failed": "De run is gestopt (zie serverlog)",
+      "maturity_bulk_authentication_failed": "Gestopt: Unity Catalog heeft het token geweigerd (mogelijk verlopen); voer de run opnieuw uit",
       "maturity_bulk_run_in_progress": "Er loopt al een bulkevaluatie.",
       "maturity_bulk_scope_invalid": "De scope is ongeldig."
     }

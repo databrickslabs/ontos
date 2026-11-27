@@ -10,6 +10,7 @@ import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import
 import RequestRoleAccessDialog from './request-role-access-dialog'; // Import role access request dialog
+import NavigationPresetsCard from './navigation-presets-card';
 // useNotificationsStore import removed - not currently used
 // import { useNotificationsStore } from '@/stores/notifications-store';
 import { useUserStore } from '@/stores/user-store'; // Import user store
@@ -131,6 +132,16 @@ export default function RolesSettings() {
             toast({ title: t('common:status.error'), description: errorMsg, variant: 'destructive' });
             setError(errorMsg);
         }
+    };
+
+    // A navigation preset changed roles: reload the table (without the loading state, so the
+    // preset card stays mounted) and the roles the home page reads.
+    const handlePresetChanged = async () => {
+        const [rolesResponse] = await Promise.all([
+            get<AppRole[]>('/api/settings/roles'),
+            fetchAvailableRoles(),
+        ]);
+        if (!rolesResponse.error) setRoles(rolesResponse.data || []);
     };
 
     const handleDialogSubmitSuccess = async () => {
@@ -284,6 +295,8 @@ export default function RolesSettings() {
                 </h1>
                 <p className="text-muted-foreground mt-1">{t('roles.description')}</p>
             </div>
+
+            {canAdmin && <NavigationPresetsCard onChanged={handlePresetChanged} />}
 
             <DataTable
                 columns={columns}

@@ -23,6 +23,14 @@
     "name": "Produkte",
     "description": "Verwandte Databricks-Assets mit Tags gruppieren und verwalten."
   },
+  "marketplace": {
+    "name": "Marktplatz",
+    "description": "Verfügbare Datenprodukte durchsuchen und abonnieren."
+  },
+  "my-products": {
+    "name": "Meine Produkte",
+    "description": "Abonnierte Datenprodukte ansehen und verwalten."
+  },
   "concepts": {
     "name": "Konzepte",
     "description": "Durchsuchen, suchen und verwalten Sie Geschäftskonzepte, Konzeptschemata und Hierarchien."

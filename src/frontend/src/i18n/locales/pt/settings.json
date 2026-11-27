@@ -431,10 +431,12 @@
         "title": "Seções da página inicial",
         "description": "Selecione quais seções aparecem na página inicial para usuários com este papel.",
         "labels": {
-          "JOURNEY": "Início por jornada"
+          "JOURNEY": "Início por jornada",
+          "MARKETPLACE": "Início no Marketplace"
         },
         "descriptions": {
-          "JOURNEY": "Substitui a página inicial completa por Encontrar, Entender, Confiar, Publicar e Manter. Não pode ser combinada com outras seções."
+          "JOURNEY": "Substitui a página inicial completa por Encontrar, Entender, Confiar, Publicar e Manter. Não pode ser combinada com outras seções.",
+          "MARKETPLACE": "Substitui a página inicial completa pelo marketplace. Não pode ser combinada com outras seções."
         }
       },
       "approvalPrivileges": {
@@ -586,6 +588,62 @@
       "submitFailed": "Falha ao enviar a solicitação de acesso ao papel",
       "sending": "Enviando solicitação...",
       "send": "Enviar solicitação"
+    }
+  },
+  "navigationPresets": {
+    "title": "Predefinições de navegação",
+    "help": "Defina os menus e a página inicial dos papéis padrão em um só passo. Uma predefinição altera apenas o que os menus e a página inicial mostram, nunca os níveis de acesso. Os papéis são identificados pelo nome e cada papel continua editável depois.",
+    "loadFailed": "Não foi possível carregar as predefinições de navegação.",
+    "presets": {
+      "essentials": {
+        "name": "Essenciais",
+        "description": "Início por jornada e um menu enxuto: catálogo, ativos e conceitos, além de revisões e conformidade para curadores e governança."
+      },
+      "data-consumer": {
+        "name": "Consumidor de dados",
+        "description": "Início no Marketplace para consumidores de dados, com Marketplace e Meus produtos no menu."
+      }
+    },
+    "preview": {
+      "role": "Papel",
+      "menu": "Menu após aplicar",
+      "home": "Página inicial",
+      "status": "Status",
+      "menuEmpty": "Nenhuma entrada de menu",
+      "homeUnchanged": "Sem alteração",
+      "noAccess": "Não exibido: o papel não tem acesso a {{features}}."
+    },
+    "status": {
+      "changes": "Altera",
+      "noChange": "Sem alteração",
+      "notFound": "Papel não encontrado"
+    },
+    "actions": {
+      "apply": "Aplicar predefinição",
+      "undo": "Desfazer última predefinição"
+    },
+    "nothingToApply": "Todos os papéis já correspondem a esta predefinição.",
+    "lastApplied": "Última aplicação: {{preset}} por {{user}}, {{date}}",
+    "unknownUser": "usuário desconhecido",
+    "confirm": {
+      "applyTitle": "Aplicar a predefinição {{preset}}?",
+      "applyDescription_one": "Isso altera o menu e a página inicial de {{count}} papel. Os níveis de acesso não mudam e você pode desfazer depois.",
+      "applyDescription_other": "Isso altera os menus e as páginas iniciais de {{count}} papéis. Os níveis de acesso não mudam e você pode desfazer depois.",
+      "undoTitle": "Desfazer a última predefinição?",
+      "undoDescription_one": "Isso restaura o menu e a página inicial que {{preset}} alterou em {{count}} papel.",
+      "undoDescription_other": "Isso restaura os menus e as páginas iniciais que {{preset}} alterou em {{count}} papéis."
+    },
+    "applied": "Predefinição {{preset}} aplicada",
+    "nothingChanged": "Nada a alterar",
+    "appliedSummary": "Alterados: {{changed}}, sem alteração: {{unchanged}}, não encontrados: {{missing}}.",
+    "applyFailed": "Não foi possível aplicar a predefinição",
+    "undone": "Predefinição {{preset}} desfeita",
+    "undoneSummary": "Restaurados: {{restored}}, não encontrados: {{missing}}.",
+    "undoFailed": "Não foi possível desfazer a predefinição",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "Não há nenhuma aplicação de predefinição para desfazer.",
+      "navigation_preset_unknown": "Esta predefinição não existe.",
+      "generic": "A solicitação falhou. Tente novamente."
     }
   },
   "mcpTokens": {
@@ -1383,6 +1441,7 @@
       "maturity_bulk_skipped_not_stored": "Não armazenado: não foi possível ler a tabela",
       "maturity_bulk_evaluation_failed": "Falha na avaliação (veja o log do servidor)",
       "maturity_bulk_run_failed": "A execução parou (veja o log do servidor)",
+      "maturity_bulk_authentication_failed": "Interrompida: o Unity Catalog recusou o token (pode ter expirado); execute novamente",
       "maturity_bulk_run_in_progress": "Já há uma avaliação em massa em andamento.",
       "maturity_bulk_scope_invalid": "O escopo não é válido."
     }

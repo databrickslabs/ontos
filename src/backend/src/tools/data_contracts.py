@@ -17,6 +17,7 @@ from src.controller.lifecycle_fields import (
     LIFECYCLE_AUDIT_ACTIONS, contract_status_audit, deprecation_details_from_strings,
 )
 from src.tools.base import (
+    ANY_CALLER,
     BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
 )
 
@@ -595,6 +596,7 @@ class SearchDataContractsTool(BaseTool):
     }
     required_params = ["query"]
     required_scope = "contracts:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -707,6 +709,7 @@ class GetDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:read"
+    required_permission = ANY_CALLER
     
     async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
         """Get a data contract by ID."""
@@ -770,6 +773,7 @@ class GetDataContractsBulkTool(BaseTool):
 
     DEFAULT_LIMIT = 20
     MAX_LIMIT = 100
+    required_permission = ANY_CALLER
 
     async def execute(
         self,
@@ -864,6 +868,7 @@ class ListDataContractsTool(BaseTool):
     }
     required_params = []
     required_scope = "contracts:read"
+    required_permission = ANY_CALLER
 
     async def execute(
         self,

@@ -55,6 +55,63 @@
       "uc_description_import_keeps_uc": "Unity Catalog a un autre commentaire sur {{object}}, l'import le conserve donc et n'y écrit pas la description."
     }
   },
+  "descriptionReset": {
+    "action": "Utiliser le commentaire d'Unity Catalog",
+    "title": "Utiliser le commentaire d'Unity Catalog comme description",
+    "description": "Remplace la description dans Ontos par le commentaire qu'Unity Catalog a sur {{object}}.",
+    "descriptionLoading": "Lit le commentaire dans Unity Catalog avec vos autorisations.",
+    "loading": "Lecture d'Unity Catalog...",
+    "inOntos": "Dans Ontos (sera remplacée)",
+    "inUnityCatalog": "Dans Unity Catalog",
+    "empty": "(vide)",
+    "alreadyInSync": "La description correspond déjà au commentaire d'Unity Catalog.",
+    "ucEmpty": "Unity Catalog n'a pas de commentaire sur cet objet, il n'y a donc rien à récupérer. La description d'Ontos est conservée.",
+    "replaceNote": "La description précédente est conservée dans le journal des modifications.",
+    "confirm": "Remplacer la description",
+    "toast": {
+      "done": "Description remplacée",
+      "unchanged": "Description inchangée"
+    },
+    "errors": {
+      "generic": "Le commentaire n'a pas pu être lu dans Unity Catalog.",
+      "user_token_required": "Lire Unity Catalog nécessite votre connexion Databricks, et cette requête n'en contenait aucune.",
+      "user_client_unavailable": "Votre session Databricks n'a pas pu être utilisée pour lire Unity Catalog.",
+      "uc_reset_permission_denied": "Vous ne pouvez pas lire {{object}} dans Unity Catalog. La permission SELECT sur la table est nécessaire.",
+      "uc_reset_object_not_found": "{{object}} est introuvable dans Unity Catalog, ou vous n'y avez pas accès.",
+      "uc_reset_unavailable": "Unity Catalog n'a pas pu être lu pour {{object}}. Réessayez dans un instant.",
+      "uc_reset_metric_view": "{{object}} est une metric view : sa description vient de sa définition, pas d'un commentaire.",
+      "uc_reset_not_applicable": "{{object}} n'est pas une table, une vue ou une colonne d'Unity Catalog.",
+      "uc_reset_uc_changed": "Le commentaire d'Unity Catalog sur {{object}} a changé depuis que vous l'avez vu. Rouvrez la fenêtre pour voir le nouveau."
+    },
+    "warnings": {
+      "uc_description_empty": "Unity Catalog n'a pas de commentaire sur {{object}}, la description dans Ontos a donc été conservée."
+    }
+  },
+  "descriptionHistory": {
+    "title": "Historique de la description",
+    "none": "La description n'a pas encore été modifiée.",
+    "loading": "Chargement de l'historique...",
+    "loadError": "L'historique de la description n'a pas pu être chargé.",
+    "unknownUser": "Utilisateur inconnu",
+    "empty": "(vide)",
+    "before": "Avant",
+    "after": "Après",
+    "restoreAfter": "Restaurer le nouveau texte",
+    "restoreBefore": "Restaurer le texte précédent",
+    "restored": "Description restaurée",
+    "restoreFailed": "La description n'a pas été restaurée",
+    "showMore": "Afficher {{count}} de plus",
+    "sources": {
+      "manual": "Modification",
+      "uc_import": "Import depuis Unity Catalog",
+      "bulk_import": "Import de fichier (CSV/XLSX)",
+      "uc_reset": "Commentaire d'Unity Catalog",
+      "restore": "Restauration"
+    },
+    "errors": {
+      "description_history_entry_not_found": "Cette modification n'est pas dans l'historique de cet actif."
+    }
+  },
   "deleteDialog": {
     "title": "Supprimer l'actif ?",
     "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement l'actif et toutes ses relations.",

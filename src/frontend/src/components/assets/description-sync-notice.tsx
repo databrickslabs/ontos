@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import type { AssetCodedWarning, AssetDescriptionSync } from '@/types/asset';
 
 /** The translated text of a description write-back warning (the backend's code + params). */
@@ -14,8 +15,13 @@ export function descriptionSyncText(t: TFunction, warning: AssetCodedWarning): s
   );
 }
 
-/** Shown on an asset whose description could not be written to Unity Catalog. */
-export function DescriptionSyncNotice({ sync }: { sync?: AssetDescriptionSync | null }) {
+/**
+ * Shown on an asset whose description could not be written to Unity Catalog.
+ * `onUseUcComment`: opens the dialog that replaces the description with the Unity Catalog comment.
+ */
+export function DescriptionSyncNotice({
+  sync, onUseUcComment,
+}: { sync?: AssetDescriptionSync | null; onUseUcComment?: () => void }) {
   const { t } = useTranslation(['assets']);
   if (!sync) return null;
   return (
@@ -29,6 +35,14 @@ export function DescriptionSyncNotice({ sync }: { sync?: AssetDescriptionSync | 
           {t('assets:descriptionSync.notInSync', 'Not in sync with Unity Catalog')}
         </span>
         <span className="text-muted-foreground"> {descriptionSyncText(t, sync)}</span>
+        {onUseUcComment && (
+          <Button
+            type="button" variant="link" size="sm" className="ml-1 h-auto p-0 align-baseline"
+            onClick={onUseUcComment}
+          >
+            {t('assets:descriptionReset.action')}
+          </Button>
+        )}
       </div>
     </div>
   );

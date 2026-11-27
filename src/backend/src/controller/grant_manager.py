@@ -7,7 +7,7 @@ changes directly to Unity Catalog via the Databricks SDK.
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import (
@@ -99,6 +99,36 @@ class GrantResult:
         }
 
 
+# Type name → the permissions API's securable type (the REST path segment).
+# ``w.grants.get/update`` take it as a string; the ``SecurableType`` enum renders as
+# ``SecurableType.CATALOG`` and is rejected.
+_PERMISSIONS_SECURABLE_TYPES = {
+    "catalog": "catalog",
+    "schema": "schema",
+    "table": "table",
+    "view": "table",  # Views use TABLE type
+    "function": "function",
+    "volume": "volume",
+    "model": "function",  # Registered models are FUNCTION securables in the permissions API
+    "registered_model": "function",
+    "share": "share",
+    "recipient": "recipient",
+    "provider": "provider",
+    "storage_credential": "storage_credential",
+    "external_location": "external_location",
+    "connection": "connection",
+    "metastore": "metastore",
+}
+
+
+def permissions_securable_type(type_str: str) -> str:
+    """Securable type for ``/api/2.1/unity-catalog/permissions/{type}/...``.
+
+    An unknown type gives ``table``; ``GrantManager`` refuses those before it gets here.
+    """
+    return _PERMISSIONS_SECURABLE_TYPES.get((type_str or "").strip().lower(), "table")
+
+
 class GrantManager:
     """Manager for Unity Catalog GRANT/REVOKE operations.
     
@@ -124,24 +154,9 @@ class GrantManager:
         """Set the workspace client."""
         self._ws = ws_client
     
-    def _get_securable_type(self, type_str: str) -> SecurableType:
-        """Convert string type to SDK SecurableType enum."""
-        type_map = {
-            "catalog": SecurableType.CATALOG,
-            "schema": SecurableType.SCHEMA,
-            "table": SecurableType.TABLE,
-            "view": SecurableType.TABLE,  # Views use TABLE type
-            "function": SecurableType.FUNCTION,
-            "volume": SecurableType.VOLUME,
-            "model": SecurableType.REGISTERED_MODEL,
-            "share": SecurableType.SHARE,
-            "recipient": SecurableType.RECIPIENT,
-            "provider": SecurableType.PROVIDER,
-            "storage_credential": SecurableType.STORAGE_CREDENTIAL,
-            "external_location": SecurableType.EXTERNAL_LOCATION,
-        }
-        return type_map.get(type_str.lower(), SecurableType.TABLE)
-    
+    def _get_securable_type(self, type_str: str) -> str:
+        return permissions_securable_type(type_str)
+
     def _get_privileges(self, privilege_strs: List[str]) -> List[Privilege]:
         """Convert string privileges to SDK Privilege enum."""
         privileges = []
@@ -152,7 +167,54 @@ class GrantManager:
             except ValueError:
                 logger.warning(f"Unknown privilege: {priv_str}")
         return privileges
-    
+
+    @staticmethod
+    def _unknown_privileges(privilege_strs: List[str]) -> List[str]:
+        """The names that are not Unity Catalog privileges."""
+        known = {p.value for p in Privilege}
+        return [str(p) for p in privilege_strs if str(p).upper() not in known]
+
+    @staticmethod
+    def _failure(code: str, message: str, **params: Any) -> Dict[str, Any]:
+        """A failed result: a stable code and params; ``error`` is a fixed English fallback.
+
+        The text of a caught exception never goes in here (it can hold SQL, paths or hosts);
+        callers log it instead.
+        """
+        return {
+            "success": False,
+            "error": message,
+            "error_code": code,
+            "error_params": params,
+        }
+
+    def _validate_request(
+        self, securable_type: str, privileges: List[str], securable_name: str
+    ) -> Tuple[str, List[Privilege], Optional[Dict[str, Any]]]:
+        """Resolve the securable type and privileges, or return the failure to report."""
+        if (securable_type or "").strip().lower() not in _PERMISSIONS_SECURABLE_TYPES:
+            logger.warning(f"Unsupported securable type: {securable_type}")
+            return "", [], self._failure(
+                "unsupported_securable_type",
+                "Unsupported securable type",
+                securable_type=str(securable_type),
+                securable_name=securable_name,
+            )
+        unknown = self._unknown_privileges(privileges)
+        if unknown:
+            logger.warning(f"Unknown privileges: {unknown}")
+            return "", [], self._failure(
+                "unknown_privileges",
+                "Unknown privileges",
+                privileges=unknown,
+                securable_name=securable_name,
+            )
+        return (
+            self._get_securable_type(securable_type),
+            self._get_privileges(privileges),
+            None,
+        )
+
     def apply_grant(
         self,
         data: Dict[str, Any],
@@ -173,21 +235,27 @@ class GrantManager:
             Result dictionary with success status and details
         """
         if not self._ws:
-            return {
-                "success": False,
-                "error": "Workspace client not available",
-            }
+            return self._failure(
+                "workspace_client_unavailable", "Workspace client not available"
+            )
         
         principal = data.get("principal")
-        privileges = data.get("privileges", [])
+        privileges = data.get("privileges") or []
         securable_type = data.get("securable_type", "table")
         securable_name = data.get("securable_name")
         
         if not all([principal, privileges, securable_name]):
-            return {
-                "success": False,
-                "error": "Missing required fields: principal, privileges, securable_name",
-            }
+            return self._failure(
+                "missing_required_fields",
+                "Missing required fields: principal, privileges, securable_name",
+                fields=['principal', 'privileges', 'securable_name'],
+            )
+        
+        sdk_securable_type, sdk_privileges, invalid = self._validate_request(
+            securable_type, privileges, securable_name
+        )
+        if invalid:
+            return invalid
         
         logger.info(
             f"{'[DRY-RUN] ' if dry_run else ''}Granting {privileges} to {principal} "
@@ -205,18 +273,16 @@ class GrantManager:
             }
         
         try:
-            # Determine the securable type
-            sdk_securable_type = self._get_securable_type(securable_type)
-            
             # Build the permissions change
             changes = [
                 PermissionsChange(
-                    add=self._get_privileges(privileges),
+                    add=sdk_privileges,
                     principal=principal,
                 )
             ]
             
-            # Apply the grant using the grants API
+            # Apply the grant using the grants API. The SDK interpolates
+            # securable_type into the URL path, so pass the string value.
             self._ws.grants.update(
                 securable_type=sdk_securable_type,
                 full_name=securable_name,
@@ -236,8 +302,11 @@ class GrantManager:
         except Exception as e:
             logger.error(f"Failed to grant privileges: {e}", exc_info=True)
             return {
-                "success": False,
-                "error": str(e),
+                **self._failure(
+                    "grant_failed",
+                    "Failed to grant privileges",
+                    securable_name=securable_name,
+                ),
                 "principal": principal,
                 "privileges": privileges,
                 "securable_name": securable_name,
@@ -262,21 +331,27 @@ class GrantManager:
             Result dictionary with success status and details
         """
         if not self._ws:
-            return {
-                "success": False,
-                "error": "Workspace client not available",
-            }
+            return self._failure(
+                "workspace_client_unavailable", "Workspace client not available"
+            )
         
         principal = data.get("principal")
-        privileges = data.get("privileges", [])
+        privileges = data.get("privileges") or []
         securable_type = data.get("securable_type", "table")
         securable_name = data.get("securable_name")
         
         if not all([principal, securable_name]):
-            return {
-                "success": False,
-                "error": "Missing required fields: principal, securable_name",
-            }
+            return self._failure(
+                "missing_required_fields",
+                "Missing required fields: principal, securable_name",
+                fields=['principal', 'securable_name'],
+            )
+        
+        sdk_securable_type, sdk_privileges, invalid = self._validate_request(
+            securable_type, privileges, securable_name
+        )
+        if invalid:
+            return invalid
         
         logger.info(
             f"{'[DRY-RUN] ' if dry_run else ''}Revoking {privileges or 'all'} from {principal} "
@@ -294,9 +369,6 @@ class GrantManager:
             }
         
         try:
-            # Determine the securable type
-            sdk_securable_type = self._get_securable_type(securable_type)
-            
             # If no specific privileges, get current privileges first
             if not privileges:
                 try:
@@ -304,12 +376,23 @@ class GrantManager:
                         securable_type=sdk_securable_type,
                         full_name=securable_name,
                     )
-                    for assignment in current.privilege_assignments or []:
-                        if assignment.principal == principal:
-                            privileges = [p.value for p in (assignment.privileges or [])]
-                            break
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Don't report "nothing to revoke" when the lookup itself failed
+                    logger.error(f"Failed to look up grants before revoke: {e}", exc_info=True)
+                    return {
+                        **self._failure(
+                            "grants_lookup_failed",
+                            "Failed to look up the current grants",
+                            securable_name=securable_name,
+                        ),
+                        "principal": principal,
+                        "securable_name": securable_name,
+                    }
+                for assignment in current.privilege_assignments or []:
+                    if assignment.principal == principal:
+                        privileges = [p.value for p in (assignment.privileges or [])]
+                        break
+                sdk_privileges = self._get_privileges(privileges)
             
             if not privileges:
                 return {
@@ -322,7 +405,7 @@ class GrantManager:
             # Build the permissions change
             changes = [
                 PermissionsChange(
-                    remove=self._get_privileges(privileges),
+                    remove=sdk_privileges,
                     principal=principal,
                 )
             ]
@@ -347,8 +430,11 @@ class GrantManager:
         except Exception as e:
             logger.error(f"Failed to revoke privileges: {e}", exc_info=True)
             return {
-                "success": False,
-                "error": str(e),
+                **self._failure(
+                    "revoke_failed",
+                    "Failed to revoke privileges",
+                    securable_name=securable_name,
+                ),
                 "principal": principal,
                 "privileges": privileges,
                 "securable_name": securable_name,
@@ -369,10 +455,18 @@ class GrantManager:
             Dictionary with grant information
         """
         if not self._ws:
-            return {
-                "success": False,
-                "error": "Workspace client not available",
-            }
+            return self._failure(
+                "workspace_client_unavailable", "Workspace client not available"
+            )
+        
+        if (securable_type or "").strip().lower() not in _PERMISSIONS_SECURABLE_TYPES:
+            logger.warning(f"Unsupported securable type: {securable_type}")
+            return self._failure(
+                "unsupported_securable_type",
+                "Unsupported securable type",
+                securable_type=str(securable_type),
+                securable_name=securable_name,
+            )
         
         try:
             sdk_securable_type = self._get_securable_type(securable_type)
@@ -398,10 +492,11 @@ class GrantManager:
             
         except Exception as e:
             logger.error(f"Failed to get grants: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            return self._failure(
+                "grants_lookup_failed",
+                "Failed to look up the current grants",
+                securable_name=securable_name,
+            )
 
 
 # Global grant manager instance
@@ -423,4 +518,3 @@ def get_grant_manager() -> GrantManager:
     if not _grant_manager:
         raise RuntimeError("Grant manager not initialized")
     return _grant_manager
-

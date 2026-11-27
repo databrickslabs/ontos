@@ -11,8 +11,10 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-from databricks.sdk.errors import NotFound, PermissionDenied
-from databricks.sdk.service.catalog import ColumnInfo, TableInfo
+from databricks.sdk.errors import NotFound, PermissionDenied, Unauthenticated
+from databricks.sdk.service.catalog import (
+    ColumnInfo, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint, TableInfo,
+)
 
 from src.common.compliance_dsl import evaluate_rule_on_object
 from src.controller.entity_dict_builder import (
@@ -220,9 +222,34 @@ def test_builder_merges_the_uc_table_column_fields(db_session):
     assert [c['name'] for c in d['columns']] == ['id', 'amount']
 
 
+def test_builder_merges_the_uc_table_key_column_fields(db_session):
+    asset = _asset(db_session)
+    table = _table([('id', None), ('customer_id', 'Customer id')])
+    table.table_constraints = [
+        TableConstraint(
+            primary_key_constraint=PrimaryKeyConstraint(name='pk', child_columns=['id'])),
+        TableConstraint(foreign_key_constraint=ForeignKeyConstraint(
+            name='fk', child_columns=['customer_id'],
+            parent_table='main.sales.customers', parent_columns=['id'])),
+    ]
+    ws = _ws(table)
+
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: ws)
+
+    ws.tables.get.assert_called_once_with(full_name=FQN)
+    assert d['primary_key_columns'] == ['id']
+    assert d['foreign_key_columns'] == ['customer_id']
+    assert d['primary_key_columns_without_comment_count'] == 1
+    assert d['foreign_key_columns_without_comment_count'] == 0
+    # A maturity gate reads one of the key fields
+    assert evaluate_rule_on_object(
+        'ASSERT obj.primary_key_columns_without_comment_count = 0', d)[0] is False
+
+
 @pytest.mark.parametrize('error,status', [
     (NotFound('Table does not exist: main.sales.orders'), 'unreadable'),
     (PermissionDenied('User does not have SELECT on secret_catalog'), 'unreadable'),
+    (Unauthenticated('Token expired'), 'unauthenticated'),
     (RuntimeError('connection reset by 10.0.0.12'), 'read_failed'),
 ])
 def test_unreadable_table_leaves_uc_fields_absent(db_session, error, status):

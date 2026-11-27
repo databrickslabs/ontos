@@ -1429,6 +1429,36 @@ workflows:
         type: "pass"
 
   # =========================================================================
+  # Scheduled asset maturity evaluation (#1414 follow-up)
+  # =========================================================================
+  # Disabled by default. Activating it, like saving or running any workflow
+  # with an evaluate_asset_maturity step, needs write access to Settings (the
+  # permission of the bulk evaluation on Settings > Maturity Levels). Each run
+  # reads the Unity Catalog tables with the app's identity.
+
+  - id: "nightly-asset-maturity-evaluation"
+    name: "Nightly Asset Maturity Evaluation"
+    description: "Every night at 02:00 UTC, evaluates the maturity of every table, view and metric view asset. Set a catalog or schema on the step to narrow it."
+    trigger:
+      type: "scheduled"
+      schedule: "0 0 2 * * ?"
+      timezone: "UTC"
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "evaluate-assets"
+        name: "Evaluate Asset Maturity"
+        type: "evaluate_asset_maturity"
+        config: {}
+        on_pass: "success"
+
+      - id: "success"
+        name: "Evaluation Done"
+        type: "pass"
+
+  # =========================================================================
   # Lifecycle Notices (deprecation lifecycle, #998)
   # =========================================================================
   # Disabled by default; an admin enables them. The on_status_change payload

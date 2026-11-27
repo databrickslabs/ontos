@@ -388,6 +388,7 @@
       "generate_pdf": "Generar PDF",
       "deliver": "Entregar",
       "grant_permissions": "Otorgar permisos",
+      "evaluate_asset_maturity": "Evaluar madurez de activos",
       "on_behalf_of": "En nombre de"
     }
   },

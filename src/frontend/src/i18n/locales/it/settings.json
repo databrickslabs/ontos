@@ -424,10 +424,12 @@
         "title": "Sezioni home",
         "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo.",
         "labels": {
-          "JOURNEY": "Home per percorso"
+          "JOURNEY": "Home per percorso",
+          "MARKETPLACE": "Home Marketplace"
         },
         "descriptions": {
-          "JOURNEY": "Sostituisce la home completa con Trova, Comprendi, Fidati, Pubblica e Mantieni. Non può essere combinata con altre sezioni."
+          "JOURNEY": "Sostituisce la home completa con Trova, Comprendi, Fidati, Pubblica e Mantieni. Non può essere combinata con altre sezioni.",
+          "MARKETPLACE": "Sostituisce la home page completa con il marketplace. Non può essere combinata con altre sezioni."
         }
       },
       "approvalPrivileges": {
@@ -579,6 +581,62 @@
       "submitFailed": "Impossibile inviare la richiesta di accesso al ruolo",
       "sending": "Invio della richiesta...",
       "send": "Invia richiesta"
+    }
+  },
+  "navigationPresets": {
+    "title": "Preset di navigazione",
+    "help": "Imposta i menu e la home page dei ruoli predefiniti in un solo passaggio. Un preset cambia soltanto ciò che mostrano i menu e la home page, mai i livelli di accesso. I ruoli sono riconosciuti dal nome e ogni ruolo resta modificabile in seguito.",
+    "loadFailed": "Impossibile caricare i preset di navigazione.",
+    "presets": {
+      "essentials": {
+        "name": "Essenziali",
+        "description": "Home per percorso e un menu breve: catalogo, asset e concetti, più revisioni e conformità per steward e governance."
+      },
+      "data-consumer": {
+        "name": "Consumatore di dati",
+        "description": "Home Marketplace per i consumatori di dati, con Marketplace e I miei prodotti nel menu."
+      }
+    },
+    "preview": {
+      "role": "Ruolo",
+      "menu": "Menu dopo l'applicazione",
+      "home": "Home page",
+      "status": "Stato",
+      "menuEmpty": "Nessuna voce di menu",
+      "homeUnchanged": "Invariata",
+      "noAccess": "Non mostrato: il ruolo non ha accesso a {{features}}."
+    },
+    "status": {
+      "changes": "Modifica",
+      "noChange": "Nessuna modifica",
+      "notFound": "Ruolo non trovato"
+    },
+    "actions": {
+      "apply": "Applica preset",
+      "undo": "Annulla ultimo preset"
+    },
+    "nothingToApply": "Tutti i ruoli corrispondono già a questo preset.",
+    "lastApplied": "Ultima applicazione: {{preset}} da {{user}}, {{date}}",
+    "unknownUser": "utente sconosciuto",
+    "confirm": {
+      "applyTitle": "Applicare il preset {{preset}}?",
+      "applyDescription_one": "Questo modifica il menu e la home page di {{count}} ruolo. I livelli di accesso non cambiano e potrai annullare in seguito.",
+      "applyDescription_other": "Questo modifica i menu e le home page di {{count}} ruoli. I livelli di accesso non cambiano e potrai annullare in seguito.",
+      "undoTitle": "Annullare l'ultimo preset?",
+      "undoDescription_one": "Questo ripristina il menu e la home page che {{preset}} ha modificato su {{count}} ruolo.",
+      "undoDescription_other": "Questo ripristina i menu e le home page che {{preset}} ha modificato su {{count}} ruoli."
+    },
+    "applied": "Preset {{preset}} applicato",
+    "nothingChanged": "Niente da modificare",
+    "appliedSummary": "Modificati: {{changed}}, invariati: {{unchanged}}, non trovati: {{missing}}.",
+    "applyFailed": "Impossibile applicare il preset",
+    "undone": "Preset {{preset}} annullato",
+    "undoneSummary": "Ripristinati: {{restored}}, non trovati: {{missing}}.",
+    "undoFailed": "Impossibile annullare il preset",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "Non c'è nessuna applicazione di preset da annullare.",
+      "navigation_preset_unknown": "Questo preset non esiste.",
+      "generic": "La richiesta non è riuscita. Riprova."
     }
   },
   "mcpTokens": {
@@ -1365,6 +1423,7 @@
       "maturity_bulk_skipped_not_stored": "Non salvato: non è stato possibile leggere la tabella",
       "maturity_bulk_evaluation_failed": "Valutazione non riuscita (vedi il log del server)",
       "maturity_bulk_run_failed": "L'esecuzione si è interrotta (vedi il log del server)",
+      "maturity_bulk_authentication_failed": "Interrotta: Unity Catalog ha rifiutato il token (potrebbe essere scaduto); eseguila di nuovo",
       "maturity_bulk_run_in_progress": "Una valutazione in blocco è già in corso.",
       "maturity_bulk_scope_invalid": "L'ambito non è valido."
     }

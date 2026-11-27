@@ -32,6 +32,7 @@ from src.db_models.teams import TeamDb
 from src.models.users import UserInfo
 from src.routes.mcp_routes import MCP_AUTH_FAILED, MCPError, MCPHandler
 from src.tools.base import (
+    ANY_CALLER,
     TOOL_NOT_PERMITTED_CODE,
     ToolCaller,
     ToolContext,
@@ -110,8 +111,11 @@ def _assert_refused(res, feature, level):
 class TestDeclaredLevels:
     def test_each_write_tool_declares_the_level_of_its_rest_route(self):
         registry = create_default_registry()
+        # The tools that change data (Read/Write or Admin); the reads and ANY_CALLER
+        # are checked in test_tool_authz_fail_closed.
         declared = {
-            t.name: t.required_permission for t in registry.list_tools() if t.required_permission
+            t.name: t.required_permission for t in registry.list_tools()
+            if t.required_permission[1] in (RW, ADMIN)
         }
         assert declared == EXPECTED
 
@@ -180,10 +184,10 @@ class TestRegistryChecksTheLevel:
             assert _run(registry.execute(name, _ctx(caller=caller), {})).success is True
         assert sorted(calls) == sorted(EXPECTED)
 
-    def test_read_tools_need_no_caller(self, monkeypatch):
+    def test_tools_marked_any_caller_need_no_caller(self, monkeypatch):
         registry = create_default_registry()
         tool = registry.get('get_domain')
-        assert tool.required_permission is None
+        assert tool.required_permission == ANY_CALLER
 
         async def _fake(ctx, **kwargs):
             return ToolResult(success=True, data={'ok': True})

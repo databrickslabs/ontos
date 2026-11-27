@@ -388,6 +388,7 @@
       "generate_pdf": "PDF Genereren",
       "deliver": "Leveren",
       "grant_permissions": "Machtigingen Verlenen",
+      "evaluate_asset_maturity": "Assetvolwassenheid evalueren",
       "on_behalf_of": "Namens"
     }
   },

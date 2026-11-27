@@ -9,12 +9,15 @@ batches, with a bounded number of worker threads, and keeps progress and a summa
   counted reason. A level change is logged and fires ON_MATURITY_CHANGE as for any
   evaluation.
 - Errors are counted and coded (``maturity_bulk_evaluation_failed``); the exception text
-  goes to the server log only.
+  goes to the server log only. When Unity Catalog refuses the run's token (it expired
+  during a long run), the run stops and fails with ``maturity_bulk_authentication_failed``
+  instead of reading the remaining tables as unreadable.
 - The summary of the last run is stored in ``app_settings`` so it survives a restart.
   Progress of a running run lives in this process.
 
-Scheduling is not part of this module: the run is started from the API (see
-``routes/maturity_routes.py``).
+A run is started from the API (``routes/maturity_bulk_routes.py``, in the background)
+or by the ``evaluate_asset_maturity`` workflow step (``run_now``, in the step's thread),
+which a scheduled workflow runs on its slots.
 """
 import json
 import threading
@@ -35,7 +38,7 @@ from src.controller.entity_dict_builder import (
     MATURITY_ASSET_TYPES,
     UnsupportedMaturityAssetTypeError,
 )
-from src.controller.maturity_evaluator import MaturityEvaluator
+from src.controller.maturity_evaluator import MaturityEvaluator, MaturityUcAuthenticationError
 from src.db_models.app_settings import AppSettingDb
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.repositories.maturity_repository import maturity_repo
@@ -59,6 +62,8 @@ SKIP_ASSET_TYPE = "maturity_bulk_skipped_asset_type"
 SKIP_NOT_STORED = "maturity_bulk_skipped_not_stored"
 ERROR_EVALUATION_FAILED = "maturity_bulk_evaluation_failed"
 ERROR_RUN_FAILED = "maturity_bulk_run_failed"
+# Unity Catalog refused the run's token (it expired during a long run): the run stops
+ERROR_AUTHENTICATION_FAILED = "maturity_bulk_authentication_failed"
 
 SessionFactory = Callable[[], Any]
 
@@ -229,10 +234,11 @@ def _record(run_id: str, outcome: Dict[str, Any]) -> None:
                 })
 
 
-def _finish(run_id: str, state: str, session_factory: SessionFactory) -> None:
+def _finish(run_id: str, state: str, session_factory: SessionFactory) -> Optional[Dict[str, Any]]:
+    """End the run, store its summary and return it."""
     with _lock:
         if _current is None or _current["id"] != run_id:
-            return
+            return None
         _current["state"] = state
         _current["finished_at"] = _now()
         snapshot = _serialise(_current)
@@ -247,6 +253,7 @@ def _finish(run_id: str, state: str, session_factory: SessionFactory) -> None:
     except Exception:
         # The run is over either way; the summary stays in memory until the next restart
         logger.warning("Could not store the bulk maturity run summary", exc_info=True)
+    return snapshot
 
 
 # --- Evaluation -------------------------------------------------------------------
@@ -293,6 +300,11 @@ def _evaluate_one(
             }
     except UnsupportedMaturityAssetTypeError:
         return {"kind": "skipped", "code": SKIP_ASSET_TYPE}
+    except MaturityUcAuthenticationError:
+        logger.warning("Bulk maturity evaluation stopped: Unity Catalog refused the token "
+                       "while reading asset %s", asset_id)
+        return {"kind": "error", "code": ERROR_AUTHENTICATION_FAILED, "asset_id": asset_id,
+                "stop": True}
     except Exception:
         logger.warning("Bulk maturity evaluation failed for asset %s", asset_id, exc_info=True)
         return {"kind": "error", "code": ERROR_EVALUATION_FAILED, "asset_id": asset_id}
@@ -306,19 +318,21 @@ def execute_run(
     session_factory: SessionFactory = get_db_session,
     evaluator_factory: Optional[Callable[[], MaturityEvaluator]] = None,
     run_identity: Optional[RunIdentity] = None,
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """Evaluate every asset of the scope for a run registered with start_run.
 
     ``run_identity``: whose permissions the UC tables are read with. A run an
     admin starts passes theirs (a table they can't read stays unreadable for
     them); the default, the app's, is for runs no user started.
+
+    Returns the run's final summary (None when the run isn't the registered one).
     """
     make_evaluator = evaluator_factory or (
-        lambda: MaturityEvaluator(run_identity=run_identity)
+        lambda: MaturityEvaluator(run_identity=run_identity, stop_on_uc_auth_failure=True)
     )
     with _lock:
         if _current is None or _current["id"] != run_id:
-            return
+            return None
         started_at = _current["started_at"]
         max_workers = _current["max_workers"]
         batch_size = _current["batch_size"]
@@ -332,6 +346,7 @@ def execute_run(
             for _ in asset_ids:
                 _record(run_id, {"kind": "skipped", "code": SKIP_NO_LEVELS})
         else:
+            stopped = False
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 for batch in _batches(asset_ids, batch_size):
                     futures = [
@@ -343,12 +358,46 @@ def execute_run(
                         for asset_id in batch
                     ]
                     for future in as_completed(futures):
-                        _record(run_id, future.result())
-        _finish(run_id, "completed", session_factory)
+                        if future.cancelled():
+                            continue
+                        outcome = future.result()
+                        _record(run_id, outcome)
+                        if outcome.get("stop") and not stopped:
+                            # A refused token fails every later read: stop instead of
+                            # finishing green with the remaining tables as unreadable
+                            stopped = True
+                            for pending in futures:
+                                pending.cancel()
+                    if stopped:
+                        break
+            if stopped:
+                return _finish(run_id, "failed", session_factory)
+        return _finish(run_id, "completed", session_factory)
     except Exception:
         logger.error("Bulk maturity evaluation %s failed", run_id, exc_info=True)
         with _lock:
             if _current is not None and _current["id"] == run_id:
                 _current["error_count"] += 1
                 _current["errors"].append({"asset_id": "", "code": ERROR_RUN_FAILED, "params": {}})
-        _finish(run_id, "failed", session_factory)
+        return _finish(run_id, "failed", session_factory)
+
+
+def run_now(
+    scope: BulkScope,
+    *,
+    started_by: Optional[str],
+    session_factory: SessionFactory = get_db_session,
+    evaluator_factory: Optional[Callable[[], MaturityEvaluator]] = None,
+) -> Dict[str, Any]:
+    """Start a run and evaluate it in the calling thread; returns its final summary.
+
+    For the ``evaluate_asset_maturity`` workflow step: a scheduled or manual run has
+    no request, so the UC tables are read with the app's identity. Raises
+    ``MaturityBulkRunInProgressError`` while another run is going, as ``start_run``.
+    """
+    run = start_run(scope, started_by=started_by)
+    summary = execute_run(
+        run["id"], scope, evaluated_by=started_by,
+        session_factory=session_factory, evaluator_factory=evaluator_factory,
+    )
+    return summary if summary is not None else run

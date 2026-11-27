@@ -32,6 +32,11 @@ import {
     showInLanding?: boolean;
     /** When set, permission checks use this feature ID instead of `id`. */
     permissionId?: string;
+    /**
+     * The id of the role's "show in navigation" flag when it differs from the permission id
+     * (Marketplace and My Products have their own flags but follow the Products permission).
+     */
+    navId?: string;
   }
   
   export const features: FeatureConfig[] = [
@@ -46,6 +51,7 @@ import {
       maturity: 'ga',
       showInLanding: false,
       permissionId: 'data-products',
+      navId: 'marketplace',
     },
     {
       id: 'search',
@@ -118,6 +124,8 @@ import {
       group: 'Build',
       maturity: 'ga',
       showInLanding: false,
+      permissionId: 'data-products',
+      navId: 'my-products',
     },
     {
       id: 'my-requests',
@@ -223,9 +231,22 @@ import {
       return feature?.name || pathSegment;
   };
   
-  /** The role feature id a menu entry belongs to (its permission id when it has one). */
+  /**
+   * The id of the role flag that shows or hides a menu entry: its own `navId`, else its
+   * permission id, else its id.
+   */
   export const getNavFeatureId = (feature: FeatureConfig): string =>
-    feature.permissionId || feature.id;
+    feature.navId || feature.permissionId || feature.id;
+
+  /**
+   * Menu entries with their own flag (`navId`) -> the feature whose access level decides
+   * whether they can show. Mirrors NAV_ENTRY_FEATURES of the backend.
+   */
+  export const NAV_ENTRY_FEATURES: Readonly<Record<string, string>> = Object.fromEntries(
+    features
+      .filter((feature) => feature.navId)
+      .map((feature) => [feature.navId as string, feature.permissionId || feature.id]),
+  );
 
   /**
    * Whether the user's roles hide this entry from the menus (#1325). Visibility only:

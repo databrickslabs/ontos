@@ -55,7 +55,9 @@ export default function QuickActions() {
     ];
 
     actionMapping.forEach(({ featureId, requiredLevel, action }) => {
-      const feature = features.find(f => f.id === featureId || f.permissionId === featureId);
+      // The entry with that id first: Marketplace and My Products share Products' permission id.
+      const feature = features.find(f => f.id === featureId)
+        ?? features.find(f => f.permissionId === featureId);
       // Respect feature maturity gating the same way the sidebar navigation does,
       // so hidden-maturity features (e.g. alpha) never leak in as quick actions.
       if (

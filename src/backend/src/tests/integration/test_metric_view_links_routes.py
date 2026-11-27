@@ -225,3 +225,53 @@ class TestReviewMetricViewRoute:
         body = response.json()
         assert [m['name'] for m in body['metric_view']['measures']] == ['Total Revenue']
         _assert_links(body['links'])
+
+
+class TestMetricViewLinksNeedSemanticModels:
+    """The concept links of the metric view route need Read-only on ``semantic-models``
+    (the level of the semantic-links GET routes); without it they are left out."""
+
+    @pytest.fixture
+    def act_as(self, client, mock_test_user):
+        from src.app import app
+        from src.models.settings import AppRoleCreate
+
+        manager = app.state.settings_manager
+
+        def _act_as(name, levels):
+            role = manager.get_app_role_by_name(name) or manager.create_app_role(
+                AppRoleCreate(name=name, feature_permissions=levels))
+            manager.set_applied_role_override_for_user(
+                mock_test_user.email, str(role.id), caller_is_admin=True)
+
+        yield _act_as
+        manager.set_applied_role_override_for_user(mock_test_user.email, None)
+
+    def test_without_semantic_models_the_links_are_left_out(
+        self, client, act_as, asset, user_ws, links
+    ):
+        from src.common.features import FeatureAccessLevel
+
+        act_as('Metric view without concepts', {'assets': FeatureAccessLevel.ADMIN})
+
+        response = client.get(f'/api/assets/{asset.id}/metric-view', headers=TOKEN)
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body['definition'] == SPEC
+        assert body['links'] == {'view_entity_id': VIEW, 'view_links': [], 'fields': [],
+                                 'removed_fields': []}
+        assert NET_REVENUE not in response.text
+
+    def test_with_read_only_on_semantic_models_the_links_are_returned(
+        self, client, act_as, asset, user_ws, links
+    ):
+        from src.common.features import FeatureAccessLevel
+
+        act_as('Metric view concepts reader', {
+            'assets': FeatureAccessLevel.ADMIN, 'semantic-models': FeatureAccessLevel.READ_ONLY})
+
+        response = client.get(f'/api/assets/{asset.id}/metric-view', headers=TOKEN)
+
+        assert response.status_code == 200, response.text
+        _assert_links(response.json()['links'])

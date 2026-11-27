@@ -27,6 +27,7 @@ import {
   Database,
   Send,
   KeyRound,
+  Activity,
   type LucideIcon,
 } from 'lucide-react';
 import { TriggerType, EntityType, StepType } from '@/types/process-workflow';
@@ -57,6 +58,7 @@ export const STEP_ICONS: Record<StepType, LucideIcon> = {
   generate_pdf: FileText,
   deliver: Send,
   grant_permissions: KeyRound,
+  evaluate_asset_maturity: Activity,
   on_behalf_of: Users,
 };
 
@@ -86,6 +88,7 @@ export const STEP_COLORS: Record<StepType, string> = {
   generate_pdf: 'orange',
   deliver: 'cyan',
   grant_permissions: 'emerald',
+  evaluate_asset_maturity: 'teal',
   on_behalf_of: 'pink',
 };
 
@@ -366,6 +369,7 @@ export const ALL_STEP_TYPES: StepType[] = [
   'generate_pdf',
   'deliver',
   'grant_permissions',
+  'evaluate_asset_maturity',
   'on_behalf_of',
 ];
 

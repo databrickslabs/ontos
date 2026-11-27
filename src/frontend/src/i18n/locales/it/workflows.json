@@ -96,6 +96,7 @@
       "create_asset_review": "Revisione asset",
       "webhook": "Webhook",
       "grant_permissions": "Concedi autorizzazioni",
+      "evaluate_asset_maturity": "Valuta maturità degli asset",
       "on_behalf_of": "Per conto di",
       "legal_document": "Documento legale",
       "acknowledgement_checklist": "Checklist di conferma",
@@ -559,6 +560,22 @@
       "previewCancelled": "Anteprima annullata"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catalogo",
+    "catalogPlaceholder": "Tutti i cataloghi",
+    "schema": "Schema",
+    "schemaPlaceholder": "Tutti gli schemi (richiede un catalogo)",
+    "help": "Valuta la maturità degli asset tabella, vista e vista di metriche in questo ambito, come Impostazioni > Livelli di maturità, e registra i conteggi nel risultato del passaggio. Usa un trigger pianificato per eseguirlo regolarmente.",
+    "identityNote": "L'esecuzione legge le tabelle di Unity Catalog con l'identità dell'app. Salvare, attivare o eseguire questo workflow richiede l'accesso in scrittura alle Impostazioni.",
+    "triggerHint": "Questo passaggio viene eseguito solo nei workflow pianificati e manuali.",
+    "allCatalogs": "Tutti i cataloghi",
+    "triggerUnsupported": "Il passaggio '{{step}}' valuta la maturità degli asset, che viene eseguita solo nei workflow pianificati e manuali, non su {{trigger}}.",
+    "permissionRequired": "Questo workflow esegue la valutazione della maturità degli asset. Salvarlo, attivarlo o eseguirlo richiede l'accesso in scrittura alle Impostazioni.",
+    "summary": "{{evaluated}} asset valutati su {{total}}: {{changed}} hanno cambiato livello, {{skipped}} saltati, {{errors}} errori",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Inserisci un catalogo per lo schema, senza punti o apici inversi."
+    }
+  },
   "entityTypeSelect": {
     "label": "Si applica a",
     "helper": "Su quali tipi di oggetti viene attivato",
@@ -582,6 +599,9 @@
       "tag_not_found": "Il tag '{{tag}}' non è stato trovato nel catalogo, quindi non è stato assegnato",
       "update_gate_step_not_allowed": "Un passaggio {{stepType}} non può essere eseguito in un gate before update: ciò che fa resterebbe eseguito quando l'aggiornamento viene rifiutato. Rimuovi il passaggio o spostalo in un workflow on update.",
       "approval_rejected": "Richiesta rifiutata",
+      "maturity_bulk_run_in_progress": "È già in corso una valutazione massiva della maturità degli asset, quindi questa esecuzione non è partita",
+      "maturity_bulk_scope_invalid": "Il catalogo o lo schema del passaggio non è valido",
+      "maturity_bulk_run_failed": "La valutazione massiva della maturità degli asset non è riuscita; i dettagli sono nel log del server",
       "output_port_contracts_missing": "Impossibile pubblicare: le porte di output {{ports}} devono avere contratti di dati assegnati",
       "output_port_contracts_unapproved": "Impossibile pubblicare: queste porte di output hanno contratti non approvati: {{ports}}. I contratti devono prima essere approvati.",
       "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola",

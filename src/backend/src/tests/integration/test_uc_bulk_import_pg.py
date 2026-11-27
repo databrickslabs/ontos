@@ -15,6 +15,7 @@ the schema afterwards.
 """
 import os
 import sys
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import ModuleType
@@ -232,9 +233,24 @@ def test_update_matches_the_newest_version_and_keeps_deleted_ports_deleted(pg):
         assert conn.execute(text('SELECT COUNT(*) FROM data_product_output_ports')).scalar() == 0
 
 
-def _terminate(admin, pid):
+def _terminate(admin, pid, timeout_s=10.0):
+    """End a backend and wait until it is gone, so its advisory locks are released.
+
+    ``pg_terminate_backend`` only signals the backend; it can still hold its locks
+    for a moment after the call returns.
+    """
     with admin.begin() as conn:
         conn.execute(text('SELECT pg_terminate_backend(:pid)'), {'pid': pid})
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        with admin.connect() as conn:
+            alive = conn.execute(
+                text('SELECT 1 FROM pg_stat_activity WHERE pid = :pid'), {'pid': pid}
+            ).first()
+        if alive is None:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f'backend {pid} still running {timeout_s} s after terminate')
 
 
 def _names(engine, table):

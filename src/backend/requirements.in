@@ -7,7 +7,7 @@ flask-cors>=6.0.5
 # image instead of replacing those shared packages during deployment.
 flask>=3.0.0,<3.1
 python-dotenv>=1.2.3
-databricks-sdk>=0.148.0
+databricks-sdk>=0.167.0
 databricks-sql-connector>=4.5.0
 # Gradio 4.44.0 in the Databricks Apps image requires pandas below 3.
 # Ontos does not import pandas directly; keep the transitive dependency on the

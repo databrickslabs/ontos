@@ -244,6 +244,7 @@ certifi==2026.10.23 \
     --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
     # via
     #   -r src/backend/requirements.in
+    #   databricks-sdk
     #   httpcore
     #   httpx
     #   requests
@@ -598,9 +599,9 @@ cycler==0.12.1 \
     --hash=sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30 \
     --hash=sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c
     # via matplotlib
-databricks-sdk==0.148.0 \
-    --hash=sha256:3df449015485af30fceb43b655c756461a7783d60f73bc6206ac92026769cbe0 \
-    --hash=sha256:be82173d75b9700122a365ed9a09782db422f27ba693eaa289e6e61546d26d94
+databricks-sdk==0.167.0 \
+    --hash=sha256:9ed5576e1e28a94d3e47f302d5e337f3dea47d7b27bd7938b9b5e0e06f27a428 \
+    --hash=sha256:be69845d5cea026f35aa681ae19bf92ee82212c954a7a6b51055e715a383ad9d
     # via
     #   -r src/backend/requirements.in
     #   mlflow-skinny

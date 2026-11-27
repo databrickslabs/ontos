@@ -79,13 +79,17 @@ class ProductChangeAnalyzer:
         self.team_changes: List[Dict] = []
         self.support_changes: List[Dict] = []
 
-    def analyze(self, old_product: Dict, new_product: Dict) -> ChangeAnalysisResult:
+    def analyze(
+        self, old_product: Dict, new_product: Dict, partial: bool = False
+    ) -> ChangeAnalysisResult:
         """
         Analyze changes between two products.
 
         Args:
             old_product: Previous version (dict representation)
             new_product: New version (dict representation)
+            partial: True when new_product is an update payload rather than a
+                full document; sections it doesn't provide are skipped.
 
         Returns:
             ChangeAnalysisResult with detected changes and recommended version bump
@@ -98,39 +102,45 @@ class ProductChangeAnalyzer:
         # present but the value is None (common when the API serializes optional
         # nullable relationships), the fallback is skipped and `.get(...)` crashes
         # on NoneType. The `or` form covers both missing-key and None-value.
-        self._analyze_port_changes(
-            self._get(old_product, 'inputPorts', 'input_ports') or [],
-            self._get(new_product, 'inputPorts', 'input_ports') or [],
-            'input'
-        )
-        self._analyze_port_changes(
-            self._get(old_product, 'outputPorts', 'output_ports') or [],
-            self._get(new_product, 'outputPorts', 'output_ports') or [],
-            'output'
-        )
-        self._analyze_port_changes(
-            self._get(old_product, 'managementPorts', 'management_ports') or [],
-            self._get(new_product, 'managementPorts', 'management_ports') or [],
-            'management'
-        )
+        # In partial mode, sections the NEW side doesn't provide (missing key or
+        # None) are skipped, so update payloads don't read as "everything removed".
+        # An explicit empty list still counts as removal.
+        for camel, snake, port_type in (
+            ('inputPorts', 'input_ports', 'input'),
+            ('outputPorts', 'output_ports', 'output'),
+            ('managementPorts', 'management_ports', 'management'),
+        ):
+            new_ports = self._get(new_product, camel, snake)
+            if new_ports is not None or not partial:
+                self._analyze_port_changes(
+                    self._get(old_product, camel, snake) or [],
+                    new_ports or [],
+                    port_type
+                )
 
         # Analyze team changes
-        self._analyze_team_changes(
-            (old_product.get('team') or {}).get('members') or [],
-            (new_product.get('team') or {}).get('members') or []
-        )
+        new_team = self._get(new_product, 'team')
+        if new_team is not None or not partial:
+            self._analyze_team_changes(
+                (self._get(old_product, 'team') or {}).get('members') or [],
+                (new_team or {}).get('members') or []
+            )
 
         # Analyze support channel changes
-        self._analyze_support_changes(
-            self._get(old_product, 'support', 'support_channels') or [],
-            self._get(new_product, 'support', 'support_channels') or []
-        )
+        new_support = self._get(new_product, 'support', 'support_channels')
+        if new_support is not None or not partial:
+            self._analyze_support_changes(
+                self._get(old_product, 'support', 'support_channels') or [],
+                new_support or []
+            )
 
         # Analyze description changes (minor/patch)
-        self._analyze_description_changes(
-            old_product.get('description') or {},
-            new_product.get('description') or {}
-        )
+        new_desc = self._get(new_product, 'description')
+        if new_desc is not None or not partial:
+            self._analyze_description_changes(
+                self._get(old_product, 'description') or {},
+                new_desc or {}
+            )
 
         # Determine change type and version bump
         change_type, version_bump = self._determine_change_type()

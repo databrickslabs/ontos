@@ -663,6 +663,18 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize SchemaImportRunsManager: {e}", exc_info=True)
 
+        # --- ModelImportManager (staged erwin model imports, PRD #1718) ---
+        try:
+            from src.controller.model_import_manager import ModelImportManager
+            app.state.model_import_manager = ModelImportManager(
+                semantic_models_manager=getattr(app.state, "semantic_models_manager", None),
+                data_contracts_manager=getattr(app.state, "data_contracts_manager", None),
+                notifications_manager=getattr(app.state, "notifications_manager", None),
+            )
+            logger.info("ModelImportManager initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize ModelImportManager: {e}", exc_info=True)
+
         # --- EntityRelationshipsManager ---
         try:
             from src.controller.entity_relationships_manager import EntityRelationshipsManager

@@ -17,15 +17,20 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 ImportItemStatus = Literal["created", "skipped", "failed"]
-ImportDeliveryStatus = Literal["delivered", "failed", "skipped"]
+ImportDeliveryStatus = Literal["delivered", "failed", "skipped", "pending"]
 
 
 class ImportDeliveryResult(BaseModel):
     """Outcome of delivering a created entity (Unity Catalog, Git) once its import
-    committed it. A failed delivery doesn't undo the import."""
+    committed it, read from its delivery outbox rows. A failed delivery doesn't undo
+    the import; the outbox retries it."""
 
     status: ImportDeliveryStatus = Field(
-        ..., description="delivered | failed | skipped (no active mode applies to it)",
+        ...,
+        description=(
+            "delivered | failed | skipped (no active mode applies to it) | pending "
+            "(not tried yet: the outbox delivers it later)"
+        ),
     )
     code: Optional[str] = Field(None, description="Code of the reason, for the UI to translate")
     params: Optional[Dict[str, Any]] = Field(None, description="Parameters of the coded reason")

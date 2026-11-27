@@ -803,6 +803,11 @@
       "delivery_failed": "Importato, ma non consegnato. I log del server contengono i dettagli."
     }
   },
+  "importDeliveryOutbox": {
+    "pending": "Importato; la consegna è in coda e viene eseguita a breve.",
+    "notDelivered": "Non ancora consegnati: {{count}}. Ontos li ritenta automaticamente.",
+    "openSettings": "Apri Impostazioni > Modalità di consegna"
+  },
   "deprecation": {
     "reason": "Motivo della deprecazione",
     "reasonPlaceholder": "Perché viene deprecato? I consumatori vedranno questo testo.",

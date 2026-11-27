@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import DeliveryOutboxList from '@/components/settings/delivery-outbox-list';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -214,6 +215,10 @@ export default function DeliverySettings() {
           </div>
         )}
       </div>
+
+      <Separator className="my-6" />
+      {/* Changes not delivered yet, with "Deliver again" (#1688) */}
+      <DeliveryOutboxList canWrite={hasWriteAccess} />
     </>
   );
 }

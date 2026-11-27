@@ -153,7 +153,8 @@ class Settings(BaseSettings):
     # The instance that saves a workflow picks the change up at once. Every other
     # instance checks for changes (one small query) when one of its requests is
     # using the database anyway, at most once per CHANGE_CHECK_SECONDS; without
-    # requests it notices at its next due slot.
+    # requests it notices at its next due slot. Turned off, the scheduler's thread
+    # still retries the delivery outbox's pending deliveries (#1688), nothing else.
     WORKFLOW_SCHEDULER_ENABLED: bool = Field(True, env='WORKFLOW_SCHEDULER_ENABLED')
     WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS: int = Field(
         60, env='WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS',

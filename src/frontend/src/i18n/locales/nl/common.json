@@ -803,6 +803,11 @@
       "delivery_failed": "Geïmporteerd, maar niet geleverd. De serverlogs bevatten de details."
     }
   },
+  "importDeliveryOutbox": {
+    "pending": "Geïmporteerd; de levering staat in de wachtrij en wordt zo uitgevoerd.",
+    "notDelivered": "Nog niet geleverd: {{count}}. Ontos probeert ze automatisch opnieuw.",
+    "openSettings": "Instellingen > Leveringsmodi openen"
+  },
   "deprecation": {
     "reason": "Reden voor uitfasering",
     "reasonPlaceholder": "Waarom wordt het uitgefaseerd? Afnemers zien deze tekst.",

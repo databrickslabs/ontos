@@ -1276,6 +1276,55 @@
       "importErrorDescription": "Ontologie konnte nicht importiert werden"
     }
   },
+  "deliveryOutbox": {
+    "title": "Noch nicht zugestellte Änderungen",
+    "description": "In Ontos gespeicherte Änderungen, die ein Zustellmodus noch nicht zugestellt hat. Eine fehlgeschlagene Zustellung wird automatisch wiederholt, bis zu {{max}} Versuche.",
+    "empty": "Alle Änderungen wurden zugestellt.",
+    "loadError": "Die noch nicht zugestellten Änderungen konnten nicht geladen werden.",
+    "refresh": "Aktualisieren",
+    "deletedEntity": "(existiert nicht mehr)",
+    "deliverAgain": "Erneut zustellen",
+    "noRetry": "Keine weiteren automatischen Versuche",
+    "attempts": "{{attempts}} von {{max}}",
+    "columns": {
+      "entity": "Entität",
+      "change": "Änderung",
+      "mode": "Modus",
+      "status": "Status",
+      "reason": "Grund",
+      "attempts": "Versuche",
+      "nextAttempt": "Nächster Versuch"
+    },
+    "status": {
+      "pending": "Ausstehend",
+      "failed": "Fehlgeschlagen",
+      "delivered": "Zugestellt"
+    },
+    "mode": {
+      "direct": "Direkt",
+      "indirect": "Indirekt",
+      "manual": "Manuell"
+    },
+    "change": {
+      "product_create": "Datenprodukt erstellt",
+      "product_update": "Datenprodukt aktualisiert"
+    },
+    "result": {
+      "delivered": "Zugestellt.",
+      "skipped": "Nichts zuzustellen: Kein aktiver Modus gilt dafür.",
+      "pending": "In der Warteschlange: wird in Kürze zugestellt.",
+      "failed": "Immer noch nicht zugestellt: {{reason}}",
+      "refused": "Konnte nicht erneut zugestellt werden."
+    },
+    "reason": {
+      "delivery_git_unavailable": "Das Git-Repository ist nicht verfügbar. Prüfen Sie Einstellungen > Git.",
+      "delivery_git_write_failed": "Die Datei konnte nicht in das Git-Repository geschrieben werden.",
+      "delivery_entity_not_found": "Die Entität existiert nicht mehr.",
+      "delivery_entity_type_unsupported": "Diese Art von Entität kann nicht erneut zugestellt werden.",
+      "delivery_no_active_mode": "Kein Zustellmodus ist aktiv.",
+      "delivery_failed": "Die Zustellung ist fehlgeschlagen. Details stehen in den Serverprotokollen."
+    }
+  },
   "delivery": {
     "description": "Konfigurieren Sie, wie Governance-Änderungen an externe Systeme weitergegeben werden. Mehrere Modi können gleichzeitig aktiv sein.",
     "direct": {
@@ -1359,6 +1408,25 @@
       "data_product_type_seeded": "„{{key}}“ ist ein integrierter Typ und kann nicht gelöscht werden. Deaktivieren Sie ihn stattdessen.",
       "data_product_type_default_inactive": "„{{key}}“ kann nicht gleichzeitig Standard und inaktiv sein. Legen Sie zuerst einen anderen Typ als Standard fest."
     }
+  },
+  "delivery": {
+    "description": "Konfigurieren Sie, wie Governance-Änderungen an externe Systeme weitergegeben werden. Mehrere Modi können gleichzeitig aktiv sein.",
+    "direct": {
+      "description": "Änderungen direkt über das SDK auf Unity Catalog anwenden (GRANTs, Tag-Zuweisungen).",
+      "dryRun": "Testlauf-Modus (Änderungen protokollieren, ohne sie anzuwenden)",
+      "label": "Direkter Modus"
+    },
+    "indirect": {
+      "description": "Änderungen als YAML-Dateien in einem Git-Repository für die CI/CD-Integration speichern.",
+      "gitInfo": "Konfigurieren Sie das Git-Repository im Git-Tab. Änderungen werden in das konfigurierte UC-Volume unter /git-export/ exportiert.",
+      "label": "Indirekter Modus"
+    },
+    "manual": {
+      "description": "Benachrichtigungen für Administratoren erstellen, um Änderungen in externen Systemen manuell anzuwenden.",
+      "label": "Manueller Modus"
+    },
+    "saveButton": "Zustellungseinstellungen erfolgreich gespeichert",
+    "title": "Zustellungsmodi"
   },
   "certificationLevels": {
     "title": "Zertifizierungsstufen",

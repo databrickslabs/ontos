@@ -5,9 +5,12 @@
 
 export type ImportItemStatus = 'created' | 'skipped' | 'failed';
 
-/** Delivery (Git, Unity Catalog) of a created entity once its import committed it. */
+/**
+ * Delivery (Git, Unity Catalog) of a created entity once its import committed it.
+ * `pending`: not tried yet, the delivery outbox delivers it shortly (#1688).
+ */
 export interface ImportDeliveryResult {
-  status: 'delivered' | 'failed' | 'skipped';
+  status: 'delivered' | 'failed' | 'skipped' | 'pending';
   /** Code of the reason a delivery failed or was skipped. */
   code?: string | null;
   params?: Record<string, unknown> | null;

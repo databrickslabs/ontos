@@ -1294,6 +1294,55 @@
       "importErrorDescription": "Kon ontologie niet importeren"
     }
   },
+  "deliveryOutbox": {
+    "title": "Nog niet geleverde wijzigingen",
+    "description": "Wijzigingen die in Ontos zijn opgeslagen en die een leveringsmodus nog niet heeft geleverd. Een mislukte levering wordt automatisch opnieuw geprobeerd, tot {{max}} pogingen.",
+    "empty": "Alle wijzigingen zijn geleverd.",
+    "loadError": "De nog niet geleverde wijzigingen konden niet worden geladen.",
+    "refresh": "Vernieuwen",
+    "deletedEntity": "(bestaat niet meer)",
+    "deliverAgain": "Opnieuw leveren",
+    "noRetry": "Geen automatische pogingen meer",
+    "attempts": "{{attempts}} van {{max}}",
+    "columns": {
+      "entity": "Entiteit",
+      "change": "Wijziging",
+      "mode": "Modus",
+      "status": "Status",
+      "reason": "Reden",
+      "attempts": "Pogingen",
+      "nextAttempt": "Volgende poging"
+    },
+    "status": {
+      "pending": "In behandeling",
+      "failed": "Mislukt",
+      "delivered": "Geleverd"
+    },
+    "mode": {
+      "direct": "Direct",
+      "indirect": "Indirect",
+      "manual": "Handmatig"
+    },
+    "change": {
+      "product_create": "Dataproduct aangemaakt",
+      "product_update": "Dataproduct bijgewerkt"
+    },
+    "result": {
+      "delivered": "Geleverd.",
+      "skipped": "Niets te leveren: geen actieve modus is van toepassing.",
+      "pending": "In de wachtrij: wordt zo geleverd.",
+      "failed": "Nog steeds niet geleverd: {{reason}}",
+      "refused": "Kon niet opnieuw worden geleverd."
+    },
+    "reason": {
+      "delivery_git_unavailable": "De Git-repository is niet beschikbaar. Controleer Instellingen > Git.",
+      "delivery_git_write_failed": "Het bestand kon niet naar de Git-repository worden geschreven.",
+      "delivery_entity_not_found": "De entiteit bestaat niet meer.",
+      "delivery_entity_type_unsupported": "Dit soort entiteit kan niet opnieuw worden geleverd.",
+      "delivery_no_active_mode": "Er is geen leveringsmodus actief.",
+      "delivery_failed": "De levering is mislukt. De serverlogs bevatten de details."
+    }
+  },
   "delivery": {
     "description": "Configureer hoe governance-wijzigingen worden doorgegeven aan externe systemen. Meerdere modi kunnen tegelijk actief zijn.",
     "direct": {
@@ -1377,6 +1426,25 @@
       "data_product_type_seeded": "\"{{key}}\" is een ingebouwd type en kan niet worden verwijderd. Deactiveer het in plaats daarvan.",
       "data_product_type_default_inactive": "\"{{key}}\" kan niet tegelijk standaard en inactief zijn. Stel eerst een ander type als standaard in."
     }
+  },
+  "delivery": {
+    "description": "Configureer hoe governance-wijzigingen worden doorgegeven aan externe systemen. Meerdere modi kunnen tegelijk actief zijn.",
+    "direct": {
+      "description": "Pas wijzigingen rechtstreeks toe op Unity Catalog via SDK (GRANTs, tag-toewijzingen).",
+      "dryRun": "Dry-run-modus (wijzigingen loggen zonder toe te passen)",
+      "label": "Directe Modus"
+    },
+    "indirect": {
+      "description": "Leg wijzigingen vast als YAML-bestanden in een Git-repository voor CI/CD-integratie.",
+      "gitInfo": "Configureer de Git-repository op het Git-tabblad. Wijzigingen worden geëxporteerd naar het geconfigureerde UC-volume onder /git-export/.",
+      "label": "Indirecte Modus"
+    },
+    "manual": {
+      "description": "Genereer meldingen voor beheerders om wijzigingen handmatig toe te passen in externe systemen.",
+      "label": "Handmatige Modus"
+    },
+    "saveButton": "Leveringsinstellingen succesvol opgeslagen",
+    "title": "Leveringsmodi"
   },
   "certificationLevels": {
     "title": "Certificeringsniveaus",

@@ -1276,6 +1276,55 @@
       "importErrorDescription": "オントロジーのインポートに失敗しました"
     }
   },
+  "deliveryOutbox": {
+    "title": "未配信の変更",
+    "description": "Ontos に保存されたが、配信モードでまだ配信されていない変更です。失敗した配信は最大 {{max}} 回まで自動で再試行されます。",
+    "empty": "すべての変更が配信されました。",
+    "loadError": "未配信の変更を読み込めませんでした。",
+    "refresh": "更新",
+    "deletedEntity": "(存在しません)",
+    "deliverAgain": "再配信",
+    "noRetry": "自動再試行はこれ以上ありません",
+    "attempts": "{{attempts}} / {{max}}",
+    "columns": {
+      "entity": "エンティティ",
+      "change": "変更",
+      "mode": "モード",
+      "status": "ステータス",
+      "reason": "理由",
+      "attempts": "試行回数",
+      "nextAttempt": "次回の試行"
+    },
+    "status": {
+      "pending": "保留中",
+      "failed": "失敗",
+      "delivered": "配信済み"
+    },
+    "mode": {
+      "direct": "直接",
+      "indirect": "間接",
+      "manual": "手動"
+    },
+    "change": {
+      "product_create": "データプロダクトの作成",
+      "product_update": "データプロダクトの更新"
+    },
+    "result": {
+      "delivered": "配信しました。",
+      "skipped": "配信するものはありません: 適用される有効なモードがありません。",
+      "pending": "キューに入りました: まもなく配信されます。",
+      "failed": "まだ配信されていません: {{reason}}",
+      "refused": "再配信できませんでした。"
+    },
+    "reason": {
+      "delivery_git_unavailable": "Git リポジトリを利用できません。設定 > Git を確認してください。",
+      "delivery_git_write_failed": "Git リポジトリにファイルを書き込めませんでした。",
+      "delivery_entity_not_found": "エンティティはもう存在しません。",
+      "delivery_entity_type_unsupported": "この種類のエンティティは再配信できません。",
+      "delivery_no_active_mode": "有効な配信モードがありません。",
+      "delivery_failed": "配信に失敗しました。詳細はサーバーログにあります。"
+    }
+  },
   "delivery": {
     "description": "ガバナンスの変更を外部システムに伝播する方法を設定します。複数のモードを同時に有効にできます。",
     "direct": {
@@ -1357,6 +1406,25 @@
       "data_product_type_seeded": "「{{key}}」は組み込みタイプのため削除できません。代わりに無効にしてください。",
       "data_product_type_default_inactive": "「{{key}}」をデフォルトかつ無効にすることはできません。先に別のタイプをデフォルトにしてください。"
     }
+  },
+  "delivery": {
+    "description": "ガバナンスの変更を外部システムに伝播する方法を設定します。複数のモードを同時に有効にできます。",
+    "direct": {
+      "description": "SDK 経由で Unity Catalog に変更を直接適用します（GRANT、タグの割り当て）。",
+      "dryRun": "ドライランモード（適用せずに変更をログに記録）",
+      "label": "ダイレクトモード"
+    },
+    "indirect": {
+      "description": "CI/CD 連携のために、変更を Git リポジトリの YAML ファイルとして保存します。",
+      "gitInfo": "Git タブで Git リポジトリを設定してください。変更は設定された UC ボリュームの /git-export/ 配下にエクスポートされます。",
+      "label": "インダイレクトモード"
+    },
+    "manual": {
+      "description": "管理者が外部システムで手動で変更を適用するための通知を生成します。",
+      "label": "手動モード"
+    },
+    "saveButton": "配信設定を正常に保存しました",
+    "title": "配信モード"
   },
   "certificationLevels": {
     "title": "認定レベル",

@@ -61,6 +61,13 @@ most one interval and at most 24 hours old, and its claim's
 workflow's last schedule change (``schedule_changed_at``: the trigger's type, cron
 or timezone, or ``is_active``) is not run, so creating or enabling a workflow
 doesn't run a slot that passed before it; other edits and restarts keep the slot.
+
+The same thread delivers the delivery outbox's pending rows (#1688,
+``delivery_outbox_manager.DeliveryOutboxWorker``): on the first pass, when a request
+notes a new sweep slot, and when the next pending row it knows of is due (a
+deadline in ``_sleep_seconds``); with no pending row it adds no deadline. With
+``WORKFLOW_SCHEDULER_ENABLED`` off the thread still runs for the outbox only
+(``run_workflows=False``): no workflow is read or run.
 """
 import json
 import os
@@ -82,6 +89,7 @@ from src.common.quartz_cron import (
     MIN_INTERVAL, QuartzCronError, count_runs, next_runs, previous_run, resolve_timezone,
     validate_in_app_cron,
 )
+from src.controller.delivery_outbox_manager import DeliveryOutboxWorker
 from src.db_models.process_workflows import ProcessWorkflowDb
 from src.models.process_workflows import TriggerContext, TriggerType
 from src.repositories.scheduler_claims_repository import scheduler_claims_repo
@@ -131,6 +139,16 @@ def note_database_activity() -> None:
         schedulers = list(_schedulers)
     for scheduler in schedulers:
         scheduler.note_database_activity()
+        scheduler.note_outbox_activity()
+
+
+def notify_delivery_queued(when: datetime) -> None:
+    """A delivery outbox row of this instance is due at ``when`` (#1688): the
+    schedulers of this process deliver it then."""
+    with _schedulers_lock:
+        schedulers = list(_schedulers)
+    for scheduler in schedulers:
+        scheduler.note_delivery_queued(when)
 
 
 def task_key(workflow_id: str) -> str:
@@ -222,6 +240,8 @@ class WorkflowScheduler:
         self,
         session_factory: Optional[Callable[[], Session]] = None,
         *,
+        deliver_outbox: bool = True,
+        run_workflows: bool = True,
         change_check_seconds: int = 60,
         idle_recheck_seconds: int = 0,
         clock: Optional[Callable[[], datetime]] = None,
@@ -271,6 +291,10 @@ class WorkflowScheduler:
         self._no_run_logged: set = set()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._claimed_by = instance_id or f'{socket.gethostname()}:{os.getpid()}'
+        # Delivers the delivery outbox's pending rows from this thread (#1688)
+        self._outbox = DeliveryOutboxWorker(self._clock) if deliver_outbox else None
+        # False (WORKFLOW_SCHEDULER_ENABLED off): the thread only delivers the outbox
+        self._run_workflows = run_workflows
         self._schedules: Dict[str, _Schedule] = {}
         # None = unknown (read the database on the next tick); False = no active
         # scheduled workflow (no database access); True = ``_schedules`` is current.
@@ -421,7 +445,7 @@ class WorkflowScheduler:
             # Cleared before the pass, so a wake-up during it isn't lost.
             self._wake.clear()
             try:
-                delay = self.run_once()
+                delay = self._tick()
             except Exception as e:
                 logger.error(f"Workflow scheduler pass failed: {e}", exc_info=True)
                 delay = ERROR_RETRY_SECONDS
@@ -647,6 +671,9 @@ class WorkflowScheduler:
                 deadlines.extend(next_runs(schedule.cron, schedule.tz, after=now, count=1))
         if self._idle_recheck > 0 and self._last_look is not None:
             deadlines.append(self._last_look + timedelta(seconds=self._idle_recheck))
+        outbox_due = self._outbox.next_deadline() if self._outbox is not None else None
+        if outbox_due is not None:
+            deadlines.append(outbox_due)
         if not deadlines:
             return None
         # Half a second past the deadline, so the wake-up doesn't land just before it.
@@ -864,3 +891,36 @@ class WorkflowScheduler:
                 db.rollback()
         finally:
             db.close()
+
+    # --- delivery outbox (#1688) ----------------------------------------------------
+
+    def note_outbox_activity(self) -> None:
+        """A request uses the database: look for due outbox rows once per sweep slot."""
+        if self._outbox is not None and self._outbox.note_activity():
+            self._wake.set()
+
+    def note_delivery_queued(self, when: datetime) -> None:
+        """An outbox row of this instance is due at ``when``: wake up then."""
+        if self._outbox is None:
+            return
+        self._outbox.note_queued(when)
+        self._wake.set()  # the sleep is recomputed with the new deadline
+
+    def _tick(self) -> Optional[float]:
+        """One pass of the thread: the outbox, then the scheduled workflows unless they
+        are off; the seconds until the next deadline (None: none)."""
+        self.run_outbox()
+        if not self._run_workflows:
+            return self._sleep_seconds(self._clock())
+        return self.run_once()
+
+    def run_outbox(self, now: Optional[datetime] = None) -> int:
+        """Deliver the due outbox rows when a pass is due; the rows tried."""
+        now = _utc(now) if now else self._clock()
+        if self._outbox is None or not self._outbox.due(now):
+            return 0
+        try:
+            return self._outbox.run(self._session, now, claimed_by=self._claimed_by)
+        except Exception as e:
+            logger.error(f"Delivery outbox pass failed: {e}", exc_info=True)
+            return 0

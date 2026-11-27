@@ -52,7 +52,7 @@ def events(committing_session, monkeypatch):
 
     monkeypatch.setattr(committing_session, "commit", commit)
 
-    def deliver(payload):
+    def deliver(payload, modes=None):
         entity = payload.data["entity"]
         # Read the way a file model does, relationships included
         assert entity.output_ports is not None and entity.support_channels is not None
@@ -145,7 +145,7 @@ class TestDeliveryOutcome:
         assert result.delivery_failed == 0
 
     def test_a_failed_delivery_is_reported_with_its_reason(self, manager, monkeypatch):
-        def deliver(payload):
+        def deliver(payload, modes=None):
             return _results(DeliveryResult(
                 success=False, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
                 entity_type=payload.entity_type, entity_id=payload.entity_id,
@@ -165,7 +165,7 @@ class TestDeliveryOutcome:
             "failed", "delivery_git_unavailable", {"mode": "indirect"})
 
     def test_a_delivery_that_raises_is_a_failed_one(self, manager, monkeypatch):
-        def deliver(payload):
+        def deliver(payload, modes=None):
             raise OSError("disk full")
 
         service = SimpleNamespace(get_active_modes=lambda: ["indirect"], deliver=deliver)
@@ -179,7 +179,7 @@ class TestDeliveryOutcome:
             "failed", "delivery_failed")
 
     def test_a_change_no_active_mode_applies_to_is_skipped(self, manager, monkeypatch):
-        def deliver(payload):
+        def deliver(payload, modes=None):
             return _results(DeliveryResult(
                 success=True, mode=DeliveryMode.DIRECT, change_type=payload.change_type,
                 entity_type=payload.entity_type, entity_id=payload.entity_id,

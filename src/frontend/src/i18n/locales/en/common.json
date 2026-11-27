@@ -803,6 +803,11 @@
       "delivery_failed": "Imported, but not delivered. The server logs have the details."
     }
   },
+  "importDeliveryOutbox": {
+    "pending": "Imported; its delivery is queued and runs shortly.",
+    "notDelivered": "Not delivered yet: {{count}}. Ontos retries them automatically.",
+    "openSettings": "Open Settings > Delivery Modes"
+  },
   "deprecation": {
     "reason": "Deprecation reason",
     "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",

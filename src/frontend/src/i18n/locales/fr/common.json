@@ -803,6 +803,11 @@
       "delivery_failed": "Importé, mais non livré. Les journaux du serveur contiennent les détails."
     }
   },
+  "importDeliveryOutbox": {
+    "pending": "Importé ; la livraison est en file d'attente et s'exécute sous peu.",
+    "notDelivered": "Pas encore livrés : {{count}}. Ontos les réessaie automatiquement.",
+    "openSettings": "Ouvrir Paramètres > Modes de livraison"
+  },
   "deprecation": {
     "reason": "Motif de dépréciation",
     "reasonPlaceholder": "Pourquoi est-il déprécié ? Les consommateurs verront ce texte.",

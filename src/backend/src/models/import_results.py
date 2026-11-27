@@ -17,6 +17,18 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 ImportItemStatus = Literal["created", "skipped", "failed"]
+ImportDeliveryStatus = Literal["delivered", "failed", "skipped"]
+
+
+class ImportDeliveryResult(BaseModel):
+    """Outcome of delivering a created entity (Unity Catalog, Git) once its import
+    committed it. A failed delivery doesn't undo the import."""
+
+    status: ImportDeliveryStatus = Field(
+        ..., description="delivered | failed | skipped (no active mode applies to it)",
+    )
+    code: Optional[str] = Field(None, description="Code of the reason, for the UI to translate")
+    params: Optional[Dict[str, Any]] = Field(None, description="Parameters of the coded reason")
 
 
 class ImportItemResult(BaseModel):
@@ -35,6 +47,9 @@ class ImportItemResult(BaseModel):
         None,
         description="Further coded notes ({code, params, message}) when an item has more than one",
     )
+    delivery: Optional[ImportDeliveryResult] = Field(
+        None, description="Delivery of a created entity (None when no delivery mode is active)",
+    )
 
 
 class BatchImportResult(BaseModel):
@@ -46,6 +61,7 @@ class BatchImportResult(BaseModel):
     total: int = 0
     items: List[ImportItemResult] = Field(default_factory=list)
     created_ids: List[str] = Field(default_factory=list, description="Ids of successfully created entities")
+    delivery_failed: int = Field(0, description="Created entities whose delivery failed")
 
     def add(self, item: ImportItemResult) -> None:
         """Record one entity result and update the counters."""
@@ -55,6 +71,8 @@ class BatchImportResult(BaseModel):
             self.created += 1
             if item.entity_id:
                 self.created_ids.append(item.entity_id)
+            if item.delivery is not None and item.delivery.status == "failed":
+                self.delivery_failed += 1
         elif item.status == "skipped":
             self.skipped += 1
         else:

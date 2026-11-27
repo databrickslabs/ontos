@@ -794,6 +794,15 @@
     "createdFailed": "Created: {{created}}, failed: {{failed}}.",
     "createdSkippedFailed": "Created: {{created}}, skipped: {{skipped}}, failed: {{failed}}."
   },
+  "importDelivery": {
+    "notDelivered": "Delivered: {{delivered}}, not delivered: {{failed}}.",
+    "reason": {
+      "delivery_git_unavailable": "Imported, but not delivered: the Git repository isn't available. Check Settings > Git.",
+      "delivery_git_write_failed": "Imported, but not delivered: the file couldn't be written to the Git repository.",
+      "delivery_entity_not_found": "Imported, but not delivered: the product was no longer there after the import.",
+      "delivery_failed": "Imported, but not delivered. The server logs have the details."
+    }
+  },
   "deprecation": {
     "reason": "Deprecation reason",
     "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",

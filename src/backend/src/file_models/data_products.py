@@ -1,6 +1,10 @@
 """File model for Data Products YAML serialization."""
 
-from typing import Any, Dict, List
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, Tuple
+
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Session, object_session
 
 from .base import FileModel, register_file_model
 from src.db_models.data_products import DataProductDb
@@ -21,6 +25,11 @@ class DataProductFileModel(FileModel[DataProductDb]):
     @classmethod
     def get_filename(cls, entity: DataProductDb) -> str:
         """Generate filename for a data product."""
+        with _readable(entity) as (_session, product):
+            return cls._filename(product)
+
+    @staticmethod
+    def _filename(entity: DataProductDb) -> str:
         name = entity.name or "product"
         safe_name = name.lower().replace(' ', '-').replace('/', '-')
         version = entity.version or "draft"
@@ -29,84 +38,51 @@ class DataProductFileModel(FileModel[DataProductDb]):
     
     @classmethod
     def to_yaml_dict(cls, entity: DataProductDb) -> Dict[str, Any]:
-        """Convert DataProduct to YAML-serializable dictionary."""
-        result: Dict[str, Any] = {}
-        
-        # Core identity
-        result['name'] = entity.name
-        result['version'] = entity.version
-        result['status'] = entity.status
-        result['type'] = entity.type
-        
-        # Domain assignment is polymorphic (entity_domain_associations) and is emitted by the
-        # ODPS export path (DomainExportAdapter); it is not available on this session-less
-        # YAML serializer. (Previously this referenced entity.domain_id, which never existed.)
-        if entity.owner_team_id:
-            result['ownerTeamId'] = entity.owner_team_id
-        
-        # Description
-        if entity.descriptions:
-            descriptions = {}
-            for desc in entity.descriptions:
-                if desc.lang and desc.text:
-                    descriptions[desc.lang] = desc.text
-            if descriptions:
-                result['descriptions'] = descriptions
-        
-        # Output ports (data contracts exposed)
-        if entity.output_ports:
-            result['outputPorts'] = cls._serialize_output_ports(entity.output_ports)
-        
-        # Input ports (dependencies)
-        if entity.input_ports:
-            result['inputPorts'] = cls._serialize_input_ports(entity.input_ports)
-        
-        # Tags
-        if entity.tags:
-            result['tags'] = [tag.name for tag in entity.tags]
-        
-        # Support channels
-        if entity.support_channels:
-            result['supportChannels'] = [
-                {'type': sc.type, 'contact': sc.contact}
-                for sc in entity.support_channels
-            ]
-        
-        return result
-    
-    @classmethod
-    def _serialize_output_ports(cls, ports: List) -> List[Dict[str, Any]]:
-        """Serialize output port definitions."""
-        result = []
-        for port in ports:
-            p: Dict[str, Any] = {
-                'name': port.name,
-            }
-            if port.description:
-                p['description'] = port.description
-            if port.contract_id:
-                p['contractId'] = port.contract_id
-            if port.visibility:
-                p['visibility'] = port.visibility
-            if port.format:
-                p['format'] = port.format
-            result.append(p)
-        return result
-    
-    @classmethod
-    def _serialize_input_ports(cls, ports: List) -> List[Dict[str, Any]]:
-        """Serialize input port definitions."""
-        result = []
-        for port in ports:
-            p: Dict[str, Any] = {
-                'name': port.name,
-            }
-            if port.description:
-                p['description'] = port.description
-            if port.source_product_id:
-                p['sourceProductId'] = port.source_product_id
-            if port.source_output_port_id:
-                p['sourceOutputPortId'] = port.source_output_port_id
-            result.append(p)
-        return result
+        """The product's ODPS export (``GET /data-products/{id}/odps/export``): every
+        field the import stores, in a document the ODPS import reads back."""
+        with _readable(entity) as (session, product):
+            return _odps_document(session, str(product.id))
 
+    @classmethod
+    def wrap_as_resource(cls, entity: DataProductDb, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Not wrapped: the ODPS document has its own ``apiVersion``, ``kind`` and ``id``,
+        so the file stays one an ODPS import accepts."""
+        return data
+
+
+@contextmanager
+def _readable(entity: DataProductDb) -> Iterator[Tuple[Session, DataProductDb]]:
+    """The product with a session to read it in: its own, or for a detached product
+    (its session closed, e.g. a delivery that runs after the request's session) a
+    short-lived one of the app's database, where it is read again by its id."""
+    session = object_session(entity)
+    if session is not None:
+        yield session, entity
+        return
+    state = sa_inspect(entity, raiseerr=False)
+    identity = state.identity if state is not None else None
+    if not identity:
+        raise ValueError("A data product that isn't stored can't be serialized")
+    from src.common.database import get_session_factory
+
+    own = get_session_factory()()
+    try:
+        product = own.get(DataProductDb, identity[0])
+        if product is None:
+            raise ValueError(f"Data product {identity[0]} not found")
+        yield own, product
+    finally:
+        own.close()
+
+
+def _odps_document(session: Session, product_id: str) -> Dict[str, Any]:
+    """The ODPS export of a stored product, read in ``session``."""
+    from src.common.app_state import get_app_state_manager
+    from src.controller.data_products_manager import DataProductsManager
+    from src.controller.tags_manager import TagsManager
+
+    manager = DataProductsManager(
+        db=session, notifications_manager=get_app_state_manager('notifications_manager'),
+        tags_manager=TagsManager(),
+    )
+    return manager.build_odps_export(product_id, db=session)

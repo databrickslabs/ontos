@@ -338,7 +338,8 @@ class DeliveryService:
                 change_type=payload.change_type,
                 entity_type=payload.entity_type,
                 entity_id=payload.entity_id,
-                error="Git service not available"
+                error="Git service not available",
+                details={"error_code": "delivery_git_unavailable"},
             )
         
         if not self._git_service.is_cloned:
@@ -348,7 +349,8 @@ class DeliveryService:
                 change_type=payload.change_type,
                 entity_type=payload.entity_type,
                 entity_id=payload.entity_id,
-                error="Git repository not cloned"
+                error="Git repository not cloned",
+                details={"error_code": "delivery_git_unavailable"},
             )
         
         try:
@@ -410,7 +412,8 @@ class DeliveryService:
                     change_type=payload.change_type,
                     entity_type=payload.entity_type,
                     entity_id=payload.entity_id,
-                    error="Failed to save YAML file"
+                    error="Failed to save YAML file",
+                    details={"error_code": "delivery_git_write_failed"},
                 )
             
         except Exception as e:

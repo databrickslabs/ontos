@@ -794,6 +794,15 @@
     "createdFailed": "Erstellt: {{created}}, fehlgeschlagen: {{failed}}.",
     "createdSkippedFailed": "Erstellt: {{created}}, übersprungen: {{skipped}}, fehlgeschlagen: {{failed}}."
   },
+  "importDelivery": {
+    "notDelivered": "Ausgeliefert: {{delivered}}, nicht ausgeliefert: {{failed}}.",
+    "reason": {
+      "delivery_git_unavailable": "Importiert, aber nicht ausgeliefert: Das Git-Repository ist nicht verfügbar. Prüfen Sie Einstellungen > Git.",
+      "delivery_git_write_failed": "Importiert, aber nicht ausgeliefert: Die Datei konnte nicht in das Git-Repository geschrieben werden.",
+      "delivery_entity_not_found": "Importiert, aber nicht ausgeliefert: Das Produkt war nach dem Import nicht mehr vorhanden.",
+      "delivery_failed": "Importiert, aber nicht ausgeliefert. Details stehen in den Server-Logs."
+    }
+  },
   "deprecation": {
     "reason": "Grund der Abkündigung",
     "reasonPlaceholder": "Warum wird es abgekündigt? Konsumenten sehen diesen Text.",

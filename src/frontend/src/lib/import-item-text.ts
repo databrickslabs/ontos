@@ -19,13 +19,43 @@ const STATUS_CODE_KEYS: Record<string, string> = {
   certified_is_not_a_status: 'workflow-gates:certifiedIsNotAStatus',
 };
 
-/** The items an import report lists: those not created, and created ones with a note. */
+/** Codes of the reasons a delivery failed (`common:importDelivery.reason.<code>`). */
+const DELIVERY_CODES = new Set([
+  'delivery_git_unavailable',
+  'delivery_git_write_failed',
+  'delivery_entity_not_found',
+  'delivery_failed',
+]);
+
+/**
+ * The items an import report lists: those not created, and created ones with a
+ * note or whose delivery failed.
+ */
 export function reportedImportItems(result: BatchImportResult): ImportItemResult[] {
-  return result.items.filter((i) => i.status !== 'created' || !!i.message);
+  return result.items.filter(
+    (i) => i.status !== 'created' || !!i.message || i.delivery?.status === 'failed',
+  );
+}
+
+/** Why a created item wasn't delivered, or null when it was (or nothing was to be). */
+function deliveryText(item: ImportItemResult, t: TFunction): string | null {
+  if (item.delivery?.status !== 'failed') return null;
+  const code = item.delivery.code && DELIVERY_CODES.has(item.delivery.code)
+    ? item.delivery.code : 'delivery_failed';
+  return t(`common:importDelivery.reason.${code}`, { ...(item.delivery.params ?? {}) });
 }
 
 /** One line of an import report, translated when the backend sent a known code. */
 export function importItemLine(item: ImportItemResult, t: TFunction): string {
+  const delivery = deliveryText(item, t);
+  if (delivery && !item.message) {
+    return `• ${item.name || item.source_id || `#${item.index}`}: ${delivery}`;
+  }
+  const line = noteLine(item, t);
+  return delivery ? `${line} ${delivery}` : line;
+}
+
+function noteLine(item: ImportItemResult, t: TFunction): string {
   const name = item.name || item.source_id || `#${item.index}`;
   const notes = item.notes ?? [];
   if (notes.length && item.code && IMPORT_CODES.has(item.code)) {

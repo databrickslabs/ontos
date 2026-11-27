@@ -794,6 +794,15 @@
     "createdFailed": "Criados: {{created}}, com falha: {{failed}}.",
     "createdSkippedFailed": "Criados: {{created}}, ignorados: {{skipped}}, com falha: {{failed}}."
   },
+  "importDelivery": {
+    "notDelivered": "Entregues: {{delivered}}, não entregues: {{failed}}.",
+    "reason": {
+      "delivery_git_unavailable": "Importado, mas não entregue: o repositório Git não está disponível. Verifique Configurações > Git.",
+      "delivery_git_write_failed": "Importado, mas não entregue: não foi possível gravar o arquivo no repositório Git.",
+      "delivery_entity_not_found": "Importado, mas não entregue: o produto não existia mais depois da importação.",
+      "delivery_failed": "Importado, mas não entregue. Os logs do servidor têm os detalhes."
+    }
+  },
   "deprecation": {
     "reason": "Motivo da descontinuação",
     "reasonPlaceholder": "Por que está sendo descontinuado? Os consumidores verão este texto.",

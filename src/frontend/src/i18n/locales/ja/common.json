@@ -794,6 +794,15 @@
     "createdFailed": "作成: {{created}} 件、失敗: {{failed}} 件。",
     "createdSkippedFailed": "作成: {{created}} 件、スキップ: {{skipped}} 件、失敗: {{failed}} 件。"
   },
+  "importDelivery": {
+    "notDelivered": "配信: {{delivered}} 件、未配信: {{failed}} 件。",
+    "reason": {
+      "delivery_git_unavailable": "インポートしましたが配信されていません: Git リポジトリを利用できません。設定 > Git を確認してください。",
+      "delivery_git_write_failed": "インポートしましたが配信されていません: Git リポジトリにファイルを書き込めませんでした。",
+      "delivery_entity_not_found": "インポートしましたが配信されていません: インポート後にプロダクトが見つかりませんでした。",
+      "delivery_failed": "インポートしましたが配信されていません。詳細はサーバーログを確認してください。"
+    }
+  },
   "deprecation": {
     "reason": "非推奨の理由",
     "reasonPlaceholder": "非推奨にする理由。利用者に表示されます。",

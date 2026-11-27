@@ -794,6 +794,15 @@
     "createdFailed": "Creati: {{created}}, non riusciti: {{failed}}.",
     "createdSkippedFailed": "Creati: {{created}}, saltati: {{skipped}}, non riusciti: {{failed}}."
   },
+  "importDelivery": {
+    "notDelivered": "Consegnati: {{delivered}}, non consegnati: {{failed}}.",
+    "reason": {
+      "delivery_git_unavailable": "Importato, ma non consegnato: il repository Git non è disponibile. Controlla Impostazioni > Git.",
+      "delivery_git_write_failed": "Importato, ma non consegnato: non è stato possibile scrivere il file nel repository Git.",
+      "delivery_entity_not_found": "Importato, ma non consegnato: il prodotto non esisteva più dopo l'importazione.",
+      "delivery_failed": "Importato, ma non consegnato. I log del server contengono i dettagli."
+    }
+  },
   "deprecation": {
     "reason": "Motivo della deprecazione",
     "reasonPlaceholder": "Perché viene deprecato? I consumatori vedranno questo testo.",

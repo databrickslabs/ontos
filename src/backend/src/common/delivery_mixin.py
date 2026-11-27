@@ -21,11 +21,16 @@ Usage:
 
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Session
+
+from src.common.after_commit import run_after_commit
 from src.common.logging import get_logger
 
 if TYPE_CHECKING:
     from fastapi import BackgroundTasks
-    from src.controller.delivery_service import DeliveryChangeType
+    from src.controller.delivery_service import DeliveryChangeType, DeliveryResults
+    from src.models.import_results import ImportDeliveryResult
 
 logger = get_logger(__name__)
 
@@ -97,6 +102,79 @@ class DeliveryMixin:
             logger.warning(f"Failed to queue delivery for {self.DELIVERY_ENTITY_TYPE}: {e}")
             return False
     
+    def _queue_delivery_after_commit(
+        self,
+        db: Session,
+        entity: Any,
+        change_type: 'DeliveryChangeType',
+        user: Optional[str] = None,
+        on_outcome: Optional[Callable[['ImportDeliveryResult'], None]] = None,
+    ) -> None:
+        """Deliver a changed entity once ``db`` commits (synchronously, best effort).
+
+        For callers that write in a transaction they don't commit themselves (an
+        import): delivering before the commit would leave a Unity Catalog change
+        or a Git file behind for an entity a rollback removes. Nothing is
+        delivered when the transaction, or the savepoint the entity was queued
+        in, rolls back. ``on_outcome`` gets the outcome of the delivery, inside
+        the ``commit()`` call (not when no delivery mode is active).
+        """
+        # The committed session can't be used for SQL in ``after_commit``, and the
+        # entity it holds is expired: deliver a copy read in a session of its own.
+        state = sa_inspect(entity, raiseerr=False)
+        orm_class = type(entity) if state is not None and state.mapper else None
+        entity_id = self._get_entity_id(entity)
+        bind = db.get_bind()
+
+        def deliver() -> Optional['ImportDeliveryResult']:
+            if orm_class is None:
+                return self._deliver_now(entity, change_type, user)
+            with Session(bind=bind, expire_on_commit=False) as own:
+                fresh = own.get(orm_class, entity_id)
+                if fresh is None:
+                    logger.warning("Not delivering %s %s: not found after commit",
+                                   self.DELIVERY_ENTITY_TYPE, entity_id)
+                    return _delivery_failed('delivery_entity_not_found')
+                return self._deliver_now(fresh, change_type, user)
+
+        def deliver_and_report() -> None:
+            try:
+                outcome = deliver()
+            except Exception:
+                logger.warning("Delivery of %s %s failed after its commit",
+                               self.DELIVERY_ENTITY_TYPE, entity_id, exc_info=True)
+                outcome = _delivery_failed('delivery_failed')
+            if outcome is not None and outcome.status == 'failed':
+                logger.warning("%s %s was committed but not delivered: %s %s",
+                               self.DELIVERY_ENTITY_TYPE, entity_id, outcome.code,
+                               outcome.params or {})
+            if outcome is not None and on_outcome is not None:
+                on_outcome(outcome)
+
+        run_after_commit(db, deliver_and_report)
+
+    def _deliver_now(
+        self, entity: Any, change_type: 'DeliveryChangeType', user: Optional[str],
+    ) -> Optional['ImportDeliveryResult']:
+        """Deliver ``entity`` through every active mode now; its outcome, or None
+        when no delivery mode is active."""
+        from src.controller.delivery_service import DeliveryPayload, get_delivery_service
+
+        try:
+            delivery_service = get_delivery_service()
+        except RuntimeError:  # not initialized: delivery is off
+            return None
+        if not delivery_service or not delivery_service.get_active_modes():
+            return None
+        payload = DeliveryPayload(
+            change_type=change_type,
+            entity_type=self.DELIVERY_ENTITY_TYPE,
+            entity_id=self._get_entity_id(entity),
+            data={"entity": entity},
+            user=user,
+        )
+        return delivery_outcome(delivery_service.deliver(payload))
+
     def _get_entity_id(self, entity: Any) -> str:
         """Extract ID from an entity.
         
@@ -133,3 +211,25 @@ class DeliveryMixin:
             background_tasks=background_tasks,
         )
 
+
+def _delivery_failed(code: str, **params: Any) -> 'ImportDeliveryResult':
+    from src.models.import_results import ImportDeliveryResult
+    return ImportDeliveryResult(status='failed', code=code, params=params or None)
+
+
+def delivery_outcome(results: 'DeliveryResults') -> 'ImportDeliveryResult':
+    """One outcome for the results of every active mode: ``failed`` (the first failed
+    mode's coded reason) when a mode failed, ``skipped`` when none applied to the
+    change, else ``delivered``."""
+    from src.models.import_results import ImportDeliveryResult
+
+    failed = [r for r in results.results if not r.success]
+    if failed:
+        first = failed[0]
+        code = (first.details or {}).get('error_code') or 'delivery_failed'
+        return _delivery_failed(code, mode=first.mode.value)
+    if all((r.details or {}).get('skipped') for r in results.results):
+        return ImportDeliveryResult(status='skipped', code='delivery_not_applicable')
+    return ImportDeliveryResult(
+        status='delivered', params={'modes': [r.mode.value for r in results.results]},
+    )

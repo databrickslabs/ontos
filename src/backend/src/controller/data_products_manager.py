@@ -10,7 +10,7 @@ import json
 import uuid
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Any, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 from uuid import UUID
 from pathlib import Path
 
@@ -101,7 +101,22 @@ def _port_ontos_properties(port: Any) -> List[Dict[str, Any]]:
         props.append({"property": ONTOS_PORT_CONTAINS_PII_PROPERTY, "value": True})
     if port.autoApprove:
         props.append({"property": ONTOS_PORT_AUTO_APPROVE_PROPERTY, "value": True})
-    return props
+    if port.deliveryMethodId:
+        props.append({
+            "property": ONTOS_PORT_DELIVERY_METHOD_PROPERTY, "value": str(port.deliveryMethodId),
+        })
+    return props + _port_asset_properties(port)
+
+
+def _port_asset_properties(port: Any) -> List[Dict[str, Any]]:
+    """A port's Databricks asset (an Ontos extension), as ``ontos*`` custom properties."""
+    return [
+        {"property": prop, "value": value}
+        for prop, value in (
+            (ONTOS_PORT_ASSET_TYPE_PROPERTY, port.assetType),
+            (ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY, port.assetIdentifier),
+        ) if value
+    ]
 
 
 def _odps_authoritative_definition(ad: Any) -> Dict[str, Any]:
@@ -172,10 +187,15 @@ from src.models.data_products import (
     ONTOS_PORT_SERVER_PROPERTY,
     ONTOS_PORT_CONTAINS_PII_PROPERTY,
     ONTOS_PORT_AUTO_APPROVE_PROPERTY,
+    ONTOS_PORT_DELIVERY_METHOD_PROPERTY,
+    ONTOS_PORT_ASSET_TYPE_PROPERTY,
+    ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY,
     ONTOS_OWNER_TEAM_PROPERTY,
 )
 from src.models.assets import public_properties
-from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.import_results import (
+    BatchImportResult, ImportDeliveryResult, ImportItemResult,
+)
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import (
@@ -451,6 +471,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         preserve_source_id: bool = False,
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
+        on_delivery: Optional[Callable[[ImportDeliveryResult], None]] = None,
         import_links: Optional[ImportLinks] = None,
         workflow_user: Optional[str] = None,
         create_missing_type: bool = False,
@@ -474,6 +495,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 non-colliding UUID in the payload is adopted as the primary key so
                 YAML-expressed cross-entity links survive import. Otherwise (or on a
                 non-UUID / colliding id) a fresh UUID is generated as before.
+            on_delivery: For an import, called with the outcome of the product's
+                delivery once it is committed (not when no delivery mode is active).
             import_links: Set by an ODPS import, which commits the product in its
                 savepoint and records it in ``import_links`` (here it is only
                 flushed). The ontos* lifecycle properties
@@ -594,6 +617,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except ValidationError as e:
                 logger.error(f"Validation failed for ODPS product: {e}")
                 raise ValueError(f"Invalid ODPS product data: {e}") from e
+            if import_links is not None:
+                self._drop_unknown_delivery_methods(db_session, product_api_model)
 
             # Extract tags (handled separately)
             tags_data = product_data.get('tags', [])
@@ -658,13 +683,22 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except Exception as log_err:
                 logger.warning(f"Failed to log change for product creation: {log_err}")
 
-            # Queue delivery for active modes
-            self._queue_delivery(
-                entity=created_db_obj,
-                change_type=DeliveryChangeType.PRODUCT_CREATE,
-                user=user,
-                background_tasks=background_tasks,
-            )
+            # Queue delivery for active modes. An import delivers once the
+            # product is committed: a product that is rolled back must not
+            # leave a Unity Catalog change or a Git file behind.
+            if importing:
+                self._queue_delivery_after_commit(
+                    db_session, entity=created_db_obj,
+                    change_type=DeliveryChangeType.PRODUCT_CREATE, user=user,
+                    on_outcome=on_delivery,
+                )
+            else:
+                self._queue_delivery(
+                    entity=created_db_obj,
+                    change_type=DeliveryChangeType.PRODUCT_CREATE,
+                    user=user,
+                    background_tasks=background_tasks,
+                )
             
             self._update_search_index(result)
             self._fire_create_trigger(db_session, result, workflow_user or user)
@@ -2653,12 +2687,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         **product_data, 'status': status_value,
                         'lifecycle_stage_group_id': group_id,
                     }
+                    # Delivered once committed, before the import returns
+                    deliveries: List[ImportDeliveryResult] = []
                     created = self._create_imported_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
                         workflow_user=workflow_user,
+                        on_delivery=deliveries.append,
                     )
                     # Only a product that was created can be a replacement of
                     # the import: one that failed leaves no link
@@ -2666,6 +2703,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
+                        delivery=deliveries[-1] if deliveries else None,
                         **(status_note or {}),
                     ))
                 except ImportedLifecycleError as e:
@@ -3818,6 +3856,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise
 
     @staticmethod
+    def _drop_unknown_delivery_methods(session: Session, product: DataProductCreate) -> None:
+        """Clear an imported output port's delivery method that doesn't exist here (an
+        export from another Ontos): the port would otherwise fail its foreign key."""
+        from src.repositories.delivery_methods_repository import delivery_method_repo
+        for port in product.outputPorts or []:
+            if not port.deliveryMethodId:
+                continue
+            try:
+                known = delivery_method_repo.get(session, uuid.UUID(str(port.deliveryMethodId)))
+            except ValueError:  # not a UUID
+                known = None
+            if known is None:
+                logger.info("Imported output port %r: delivery method %s not found, not kept",
+                            port.name, port.deliveryMethodId)
+                port.deliveryMethodId = None
+
+    @staticmethod
     def _end_savepoint(savepoint) -> bool:
         """Roll back a savepoint that is still open, also when a failed flush
         deactivated it (``is_active`` is then False, but it needs a rollback).
@@ -4555,10 +4610,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         if product.inputPorts:
             odps["inputPorts"] = [
-                {k: v for k, v in {
-                    "name": p.name, "version": p.version,
-                    "contractId": p.contractId,
-                }.items() if v}
+                _odps_non_empty(
+                    name=p.name, version=p.version, contractId=p.contractId,
+                    customProperties=_port_asset_properties(p) or None,
+                )
                 for p in product.inputPorts
             ]
 
@@ -4571,8 +4626,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     inputContracts=[
                         {"id": c.id, "version": c.version} for c in p.inputContracts or []
                     ],
-                    # ODPS has no port status, server, PII or auto-approve: carried as
-                    # custom properties.
+                    # ODPS has no port status, server, PII, auto-approve, delivery
+                    # method or asset: carried as custom properties.
                     customProperties=_port_ontos_properties(p) or None,
                 )
                 for p in product.outputPorts

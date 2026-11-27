@@ -37,8 +37,22 @@ ONTOS_PORT_SERVER_PROPERTY = "ontosServer"
 ONTOS_PORT_CONTAINS_PII_PROPERTY = "ontosContainsPii"
 ONTOS_PORT_AUTO_APPROVE_PROPERTY = "ontosAutoApprove"
 ONTOS_OWNER_TEAM_PROPERTY = "ontosOwnerTeam"
+# The port's delivery method and Databricks asset (output and input ports)
+ONTOS_PORT_DELIVERY_METHOD_PROPERTY = "ontosDeliveryMethodId"
+ONTOS_PORT_ASSET_TYPE_PROPERTY = "ontosAssetType"
+ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY = "ontosAssetIdentifier"
 
-_PORT_FIELD_ALIASES = {'containsPii': 'contains_pii', 'autoApprove': 'auto_approve'}
+_PORT_FIELD_ALIASES = {
+    'containsPii': 'contains_pii', 'autoApprove': 'auto_approve',
+    'deliveryMethodId': 'delivery_method_id', 'assetType': 'asset_type',
+    'assetIdentifier': 'asset_identifier',
+}
+
+# Port custom property -> the InputPort field it fills on import.
+_INPUT_PORT_PROPERTY_FIELDS = {
+    ONTOS_PORT_ASSET_TYPE_PROPERTY: 'assetType',
+    ONTOS_PORT_ASSET_IDENTIFIER_PROPERTY: 'assetIdentifier',
+}
 
 # Port custom property -> the OutputPort field it fills on import.
 _PORT_PROPERTY_FIELDS = {
@@ -46,7 +60,27 @@ _PORT_PROPERTY_FIELDS = {
     ONTOS_PORT_SERVER_PROPERTY: 'server',
     ONTOS_PORT_CONTAINS_PII_PROPERTY: 'containsPii',
     ONTOS_PORT_AUTO_APPROVE_PROPERTY: 'autoApprove',
+    ONTOS_PORT_DELIVERY_METHOD_PROPERTY: 'deliveryMethodId',
+    **_INPUT_PORT_PROPERTY_FIELDS,
 }
+
+
+def _read_port_properties(data, fields: Dict[str, str]):
+    """Move the ontos* port custom properties an ODPS export writes into their fields;
+    a bare field (older exports, the API) wins when both are set."""
+    if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
+        return data
+    props = data['customProperties']
+    ours = [cp for cp in props if isinstance(cp, dict) and cp.get('property') in fields]
+    if not ours:
+        return data
+    data = dict(data)
+    for cp in ours:  # the first property of a name wins
+        field = fields[cp['property']]
+        if data.get(field) is None and data.get(_PORT_FIELD_ALIASES.get(field)) is None:
+            data[field] = cp.get('value')
+    data['customProperties'] = [cp for cp in props if cp not in ours] or None
+    return data
 
 
 # ============================================================================
@@ -181,6 +215,12 @@ class InputPort(BaseModel):
         "populate_by_name": True
     }
 
+    @model_validator(mode='before')
+    @classmethod
+    def _read_port_asset_properties(cls, data):
+        # An ODPS export carries the port's asset as ontos* custom properties
+        return _read_port_properties(data, _INPUT_PORT_PROPERTY_FIELDS)
+
 
 class SBOM(BaseModel):
     """ODPS v1.0.0 Software Bill of Materials"""
@@ -270,25 +310,9 @@ class OutputPort(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def _read_port_status_property(cls, data):
-        # An ODPS export carries the port status, server, PII and auto-approve flags as
-        # ontos* custom properties; a bare field (older exports, the API) wins when both
-        # are set.
-        if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
-            return data
-        props = data['customProperties']
-        ours = [
-            cp for cp in props
-            if isinstance(cp, dict) and cp.get('property') in _PORT_PROPERTY_FIELDS
-        ]
-        if not ours:
-            return data
-        data = dict(data)
-        for cp in ours:  # the first property of a name wins
-            field = _PORT_PROPERTY_FIELDS[cp['property']]
-            if data.get(field) is None and data.get(_PORT_FIELD_ALIASES.get(field)) is None:
-                data[field] = cp.get('value')
-        data['customProperties'] = [cp for cp in props if cp not in ours] or None
-        return data
+        # An ODPS export carries the port status, server, PII and auto-approve flags,
+        # delivery method and asset as ontos* custom properties
+        return _read_port_properties(data, _PORT_PROPERTY_FIELDS)
 
     @field_validator('deliveryMethodId', mode='before')
     @classmethod

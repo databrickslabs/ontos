@@ -794,6 +794,15 @@
     "createdFailed": "Créés : {{created}}, en échec : {{failed}}.",
     "createdSkippedFailed": "Créés : {{created}}, ignorés : {{skipped}}, en échec : {{failed}}."
   },
+  "importDelivery": {
+    "notDelivered": "Livrés : {{delivered}}, non livrés : {{failed}}.",
+    "reason": {
+      "delivery_git_unavailable": "Importé, mais non livré : le dépôt Git n'est pas disponible. Vérifiez Paramètres > Git.",
+      "delivery_git_write_failed": "Importé, mais non livré : le fichier n'a pas pu être écrit dans le dépôt Git.",
+      "delivery_entity_not_found": "Importé, mais non livré : le produit n'existait plus après l'import.",
+      "delivery_failed": "Importé, mais non livré. Les journaux du serveur contiennent les détails."
+    }
+  },
   "deprecation": {
     "reason": "Motif de dépréciation",
     "reasonPlaceholder": "Pourquoi est-il déprécié ? Les consommateurs verront ce texte.",

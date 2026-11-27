@@ -108,6 +108,7 @@ Understanding these foundational concepts will help you effectively use Ontos.
 - **Semantic Linking**: Connect schemas and properties to business concepts
 - **Lifecycle**: Draft → Proposed → Under Review → Approved → Active → Certified → Deprecated → Retired
 - **Versioning**: Track contract evolution over time
+- **Import from erwin**: Create draft contracts (and concepts) from an erwin Data Modeler model; see *Importing erwin Data Models*
 
 ### Data Products
 

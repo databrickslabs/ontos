@@ -261,6 +261,25 @@ A deep module with a narrow interface: `erwin.parse(source) -> ErwinModel`, then
 6. (#1724) **erwin Mart + drop zone**: spike → connector (browse + version tracking, and content if the spike succeeds), scheduled drop-zone job, pending-review runs.
 7. (#1725) **Docs**: user guide (export from erwin, run an import, mapping reference), admin guide (Mart, drop zone, limits), and the `10-entity-panel-matrix.mdc` update for the provenance badge.
 
+## Implementation Notes (2026-11-27)
+
+Slices 1–4 and 7 are implemented on `erwin-import`. Where the build differs from the decisions above:
+
+- **Subject areas** become an `erwin:subjectArea` annotation on each class, not a `skos:Collection`. Collections are not versioned concepts in Ontos, so they would never be stored or updated by the re-upload path.
+- **Domains** become `skos:Concept`s (base type and valid values as `erwin:*` annotations), linked from their properties, rather than `rdfs:Datatype`s. Datatypes are not concepts in Ontos, so they would not show in the UI or update on re-import.
+- **Removed concepts are deprecated** (Ontos' re-upload semantics), one by one, with failures reported as warnings. Removed *contracts* are only flagged (`erwin.removedInSource`) and their owner notified, as specified.
+- **Valid values and multi-column alternate keys** go to `erwin.*` custom properties. Ontos stores neither `logicalTypeOptions.enum` nor recorded-only quality rules from an import.
+- **`maxLength` is not emitted**. Strict ODCS 3.1 wants it under `logicalTypeOptions`, which Ontos import does not read; the physical type already carries the length.
+- **The upload is not copied to a UC volume.** The run stores the SHA-256 and the parsed model (gzipped IR), which is enough to confirm and to re-run.
+- **Concepts are applied in the confirm request**, contracts in a background thread with its own session. The app-wide semantic models manager holds one session that is not safe to use from a worker thread.
+- **Run pages live at `/model-imports`**, not under Settings: stewards without Settings access must reach their runs.
+- **Re-import of modified concepts:** the versioning event rewrites the human fields; the importer then replaces the new version's remaining triples (domain, range, `erwin:*`) with the model's.
+- **Core fixes bundled:**
+  - the re-upload preview, apply and changeset gate now diff against current rows (`rdf_triples_repo.list_current_by_context`); diffing against history made every versioned concept look modified;
+  - `create_collection` takes an explicit IRI.
+
+Not built: **#1723 (JSON)** waits for real export samples. **#1724 (Mart + drop zone)** needs the Mart spike against a real Mart server, plus a workspace for the drop-zone job.
+
 ## References
 - erwin DM 15.0 — Setting up Unity Catalogs in Databricks: https://bookshelf.quest.com/bookshelf/public_html/15.0/Content/User%20Guides/erwin%20Help/Setting%20up%20Unity%20Catalogs%20in%20Databricks.html
 - erwin DM — Save a model in XML format (Standard / Min Info / Repository): https://bookshelf.quest.com/bookshelf/9.8.00/Bookshelf_Files/HTML/erwin%20Help/Save_a_Model_in_XML_Format_XML_Export.html

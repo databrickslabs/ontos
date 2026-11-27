@@ -562,8 +562,8 @@ class TestContractRequestWorkflow:
         assert _status(db_session, DataContractDb, contract_id) == 'active'
         keys = [json.loads(n.data)['i18n'].get('description')
                 for n in _requester_notices(db_session, contract_id)]
-        assert 'notifications:workflowDefaults.messages.status-change-request.notify-rejected' \
-            in keys
+        # The default workflow's decision notice (#1321), not the old custom text
+        assert 'notifications:statusChangeDecision.deniedWithMessage' in keys
         _act_as('second_admin')
         _assert_approval_refused(_decide(client, 'data-contracts', contract_id),
                                  'no_pending_request')

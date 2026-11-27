@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "ステータス変更が承認されました",
+    "approved": "'{{name}}' のステータスを '{{toStatus}}' に変更する依頼は、'{{approver}}' により承認されました。",
+    "approvedWithMessage": "'{{name}}' のステータスを '{{toStatus}}' に変更する依頼は、'{{approver}}' により承認されました。\n\n承認者からのメッセージ: {{message}}",
+    "deniedTitle": "ステータス変更が却下されました",
+    "denied": "'{{name}}' のステータスを '{{toStatus}}' に変更する依頼は、'{{approver}}' により却下されました。",
+    "deniedWithMessage": "'{{name}}' のステータスを '{{toStatus}}' に変更する依頼は、'{{approver}}' により却下されました。\n\n承認者からのメッセージ: {{message}}",
+    "clarificationTitle": "ステータス変更: 確認が必要です",
+    "clarification": "'{{name}}' のステータスを '{{toStatus}}' に変更する依頼について、'{{approver}}' から確認が求められています。",
+    "clarificationWithMessage": "'{{name}}' のステータスを '{{toStatus}}' に変更する依頼について、'{{approver}}' から確認が求められています。\n\n承認者からのメッセージ: {{message}}"
+  },
   "metricViewDrift": {
     "title": "メトリックビューの定義が変更されました",
     "description": "Unity Catalog のメトリックビュー {{fqn}} の定義が、Ontos のベースラインと一致しなくなりました。"
@@ -22,6 +33,11 @@
     "notUnderReview": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: 契約はレビュー中ではありません（ステータス「{{currentStatus}}」）",
     "notApplied": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: {{reason}}",
     "requesterNotApplied": "契約のレビューは決定されましたが、契約は「{{toStatus}}」に変更されませんでした: {{reason}}"
+  },
+  "deleteRefused": {
+    "notDeletable": "この通知には対応が必要なため、閉じることはできません。",
+    "accessDenied": "削除できるのは自分の通知のみです。",
+    "generic": "通知を削除できませんでした。"
   },
   "ui": {
     "tooltip": "通知",
@@ -142,9 +158,7 @@
         "notify-rejected": "アクセスリクエストが拒否されました。詳しくは管理者にお問い合わせください。"
       },
       "status-change-request": {
-        "notify-requester": "ステータス変更リクエストを承認のために送信しました。",
-        "notify-approved": "ステータス変更リクエストが承認されました。",
-        "notify-rejected": "ステータス変更リクエストが拒否されました。"
+        "notify-requester": "ステータス変更リクエストを承認のために送信しました。"
       },
       "data-asset-review-request": {
         "notify-reviewer": "新しいデータアセットのレビューリクエストが割り当てられました。",

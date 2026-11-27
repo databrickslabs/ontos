@@ -7,6 +7,7 @@ and exploring Unity Catalog schemas.
 
 from typing import Any, Dict, Optional
 
+from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.sql_validator import SQLValidator, validate_and_prepare_query
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -28,6 +29,10 @@ class GetTableSchemaTool(BaseTool):
     }
     required_params = ["table_fqn"]
     required_scope = "analytics:read"
+    # Same level as the Catalog Commander routes (GET /api/catalogs/...); the tool
+    # reads Unity Catalog as the user, so an API key alone is refused.
+    required_permission = ("catalog-commander", FeatureAccessLevel.READ_ONLY)
+    requires_user_identity = True
     
     def __init__(self):
         self._sql_validator = SQLValidator(max_row_limit=1000)
@@ -100,6 +105,10 @@ class ExecuteAnalyticsQueryTool(BaseTool):
     }
     required_params = ["sql", "explanation"]
     required_scope = "analytics:read"
+    # Same level as the Catalog Commander routes (GET /api/catalogs/...); the tool
+    # reads Unity Catalog as the user, so an API key alone is refused.
+    required_permission = ("catalog-commander", FeatureAccessLevel.READ_ONLY)
+    requires_user_identity = True
     
     async def execute(
         self,
@@ -200,6 +209,10 @@ class ExploreCatalogSchemaTool(BaseTool):
     }
     required_params = ["catalog", "schema"]
     required_scope = "analytics:read"
+    # Same level as the Catalog Commander routes (GET /api/catalogs/...); the tool
+    # reads Unity Catalog as the user, so an API key alone is refused.
+    required_permission = ("catalog-commander", FeatureAccessLevel.READ_ONLY)
+    requires_user_identity = True
     
     async def execute(
         self,

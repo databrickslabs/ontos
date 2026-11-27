@@ -2,15 +2,25 @@ import { create } from 'zustand';
 // Removed useApi import as we use direct fetch below
 import { Notification } from '@/types/notification';
 
+/** The refusal of a delete as the API sends it: `detail` is a text or `{code, message, params}`. */
+export interface DeleteError {
+  code?: string;
+  message?: string;
+  params?: Record<string, unknown>;
+}
+
 interface NotificationsState {
   notifications: Notification[];
   unreadCount: number;
   isLoading: boolean;
   error: string | null;
+  /** Why the last delete was refused; kept across fetches, cleared by a delete or on close. */
+  deleteError: DeleteError | null;
   fetchNotifications: () => Promise<void>;
   refreshNotifications: () => void; // Simple alias to trigger fetch
   markAsRead: (notificationId: string) => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
+  clearDeleteError: () => void;
   startPolling: () => void; // Action to start polling
   stopPolling: () => void; // Action to stop polling
   resumePollingInterval: () => void; // Internal: (re)start the interval + fetch now
@@ -50,11 +60,26 @@ const apiPut = async (endpoint: string): Promise<{ error?: string }> => {
     }
 };
 
-const apiDelete = async (endpoint: string): Promise<{ error?: string }> => {
+const apiDelete = async (
+    endpoint: string,
+): Promise<{ error?: string; status?: number; detail?: DeleteError }> => {
      try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
          if (!response.ok && response.status !== 204) { // Allow 204 No Content
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            let detail: DeleteError | undefined;
+            try {
+                const body = await response.json();
+                if (body?.detail && typeof body.detail === 'object') {
+                    detail = body.detail as DeleteError;
+                }
+            } catch {
+                // No JSON body: the status line below is the error
+            }
+            return {
+                error: `API Error: ${response.status} ${response.statusText}`,
+                status: response.status,
+                detail,
+            };
         }
         return {}; // Success
     } catch (error: any) {
@@ -84,6 +109,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   unreadCount: 0,
   isLoading: false,
   error: null,
+  deleteError: null,
 
   fetchNotifications: async () => {
     // If a fetch is already in progress, wait for it to complete
@@ -174,6 +200,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }
   },
 
+  clearDeleteError: () => set({ deleteError: null }),
+
   deleteNotification: async (notificationId: string) => {
     const originalNotifications = get().notifications;
     const notificationToDelete = originalNotifications.find(n => n.id === notificationId);
@@ -181,6 +209,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
     // Optimistic UI update
     set(state => ({
+        deleteError: null,
         notifications: state.notifications.filter(n => n.id !== notificationId),
         unreadCount: notificationToDelete && !notificationToDelete.read
                      ? Math.max(0, state.unreadCount - 1)
@@ -189,7 +218,21 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
     try {
        const response = await apiDelete(`/api/notifications/${notificationId}`);
+        if (response.status === 404) {
+            // Already deleted (elsewhere, or by a cleanup): the optimistic removal stands
+            return;
+        }
         if (response.error) {
+            if (response.status === 403 && response.detail?.code) {
+                // The server refused with a coded error: keep the list, say why in the bell
+                console.error("Delete of notification", notificationId, "refused:", response.error);
+                set({
+                    notifications: originalNotifications,
+                    unreadCount: originalUnreadCount,
+                    deleteError: response.detail,
+                });
+                return;
+            }
             throw new Error(response.error);
         }
        // Successfully deleted on backend

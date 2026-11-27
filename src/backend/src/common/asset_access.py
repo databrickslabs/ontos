@@ -45,13 +45,14 @@ def get_data_products_manager(request: Request):
     return getattr(request.app.state, "data_products_manager", None)
 
 
-def user_has_assets_feature(request: Request, current_user, level: FeatureAccessLevel) -> bool:
-    """Check whether the current user has the ``assets`` feature at ``level``.
+def user_has_feature(
+    request: Request, current_user, feature_id: str, level: FeatureAccessLevel
+) -> bool:
+    """Check whether the current user has ``feature_id`` at ``level``.
 
-    Used for branching: when a Data Consumer lacks the feature, we still
-    allow DP-scoped reads of linked assets (issue #347), but block writes.
     Resolved as ``PermissionChecker`` does (role switcher, groups, roles
     assigned by email, team role overrides), so reads and writes agree.
+    Fails closed: any error counts as no.
     """
     try:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
@@ -60,10 +61,19 @@ def user_has_assets_feature(request: Request, current_user, level: FeatureAccess
         effective = effective_permissions_for_request(
             request, current_user.email, current_user.groups or [], auth_manager,
         )
-        return auth_manager.has_permission(effective, ASSETS_FEATURE_ID, level)
+        return auth_manager.has_permission(effective, feature_id, level)
     except Exception:
-        logger.exception("Failed to check assets feature for user")
+        logger.exception("Failed to check feature %s for user", feature_id)
         return False
+
+
+def user_has_assets_feature(request: Request, current_user, level: FeatureAccessLevel) -> bool:
+    """Check whether the current user has the ``assets`` feature at ``level``.
+
+    Used for branching: when a Data Consumer lacks the feature, we still
+    allow DP-scoped reads of linked assets (issue #347), but block writes.
+    """
+    return user_has_feature(request, current_user, ASSETS_FEATURE_ID, level)
 
 
 def ensure_asset_readable(request: Request, db, current_user, manager, asset_id: UUID) -> None:

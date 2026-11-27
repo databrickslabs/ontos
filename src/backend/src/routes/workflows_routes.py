@@ -7,17 +7,22 @@ Provides CRUD operations for workflow definitions and execution management.
 import json
 from typing import Any, Callable, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, get_notifications_manager
+from src.common.api_errors import CodedValueError
 from src.common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
     get_user_details_from_sdk,
     is_ontos_admin,
+    user_has_feature_level,
 )
 from src.common.features import FeatureAccessLevel
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.models.users import UserInfo
 from src.models.notifications import Notification
 from src.common.workflow_approvals import (
@@ -28,8 +33,11 @@ from src.common.logging import get_logger
 from src.common.timestamps import utc_now
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
-from src.common.workflow_executor import WorkflowExecutor, public_result_data
+from src.common.workflow_executor import (
+    ClarifyNotSupportedError, WorkflowExecutor, public_result_data,
+)
 from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
+from src.controller.workflows_manager import is_maturity_step
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.notifications import NotificationDb
 from src.db_models.process_workflows import WorkflowStepDb
@@ -67,6 +75,35 @@ def get_workflows_manager(db: Session = Depends(get_db)) -> WorkflowsManager:
 def get_workflow_executor(db: Session = Depends(get_db)) -> WorkflowExecutor:
     """Get WorkflowExecutor instance."""
     return WorkflowExecutor(db)
+
+
+class MaturityStepPermissionError(CodedValueError):
+    """Saving or starting a workflow with an evaluate_asset_maturity step needs Settings write."""
+    code = 'workflow_step_requires_settings_write'
+
+
+def _require_settings_write_for_maturity_steps(
+    steps, auth_manager, current_user, request: Request,
+) -> None:
+    """An ``evaluate_asset_maturity`` step starts a bulk maturity run (#1414), which
+    ``POST /api/maturity-evaluations/assets`` allows with Settings read/write only. So
+    saving, activating, running or retrying a workflow with that step needs it too.
+
+    Scheduled runs have no acting user; they run workflows saved by users who had
+    that access.
+    """
+    if not any(is_maturity_step(step) for step in steps or []):
+        return
+    if user_has_feature_level(
+        auth_manager, current_user, 'settings', FeatureAccessLevel.READ_WRITE, request,
+    ):
+        return
+    error = MaturityStepPermissionError(
+        "This workflow runs the asset maturity evaluation; saving, activating or running "
+        "it requires write access to Settings",
+        stepType='evaluate_asset_maturity', feature='settings',
+    )
+    raise HTTPException(status_code=403, detail=str(error)) from error
 
 
 @router.get("", response_model=WorkflowListResponse)
@@ -876,10 +913,12 @@ async def create_workflow(
     current_user: AuditCurrentUserDep,
     confirm_overlap: bool = Query(False, description="Confirm creation despite overlaps"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Create a new workflow."""
     user_email = current_user.email if current_user else None
+    _require_settings_write_for_maturity_steps(workflow.steps, auth_manager, current_user, request)
     
     # Validate workflow
     validation = manager.validate_workflow(workflow)
@@ -928,6 +967,7 @@ async def update_workflow(
     current_user: AuditCurrentUserDep,
     confirm_overlap: bool = Query(False, description="Confirm update despite overlaps"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Update an existing workflow."""
@@ -935,6 +975,10 @@ async def update_workflow(
     existing = manager.get_workflow(workflow_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    _require_settings_write_for_maturity_steps(
+        workflow.steps if workflow.steps is not None else existing.steps,
+        auth_manager, current_user, request,
+    )
     if workflow.steps is None and workflow.is_active and not existing.is_active:
         # Activating without touching the steps: the stored steps must be able to run
         _refuse_unrunnable_policy_steps(manager, existing)
@@ -967,6 +1011,7 @@ async def update_workflow(
         trigger_errors = [
             *trigger_errors,
             *manager.changed_schedule_errors(workflow.trigger, existing.trigger),
+            *manager.maturity_step_trigger_errors(workflow.trigger, existing.steps),
         ]
     if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
@@ -1066,6 +1111,7 @@ async def toggle_workflow_active(
     is_active: bool = Query(..., description="New active status"),
     confirm_overlap: bool = Query(False, description="Confirm activation despite overlaps"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Toggle workflow active status."""
@@ -1074,6 +1120,10 @@ async def toggle_workflow_active(
     existing = manager.get_workflow(workflow_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    if is_active:
+        _require_settings_write_for_maturity_steps(
+            existing.steps, auth_manager, current_user, request,
+        )
     if is_active and not existing.is_active:
         # A workflow whose policy_check steps point at missing policies would fail on every
         # event; checked only on a real inactive -> active change, like the overlap check
@@ -1147,12 +1197,14 @@ async def execute_workflow(
     entity_name: Optional[str] = Query(None, description="Entity name"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
     executor: WorkflowExecutor = Depends(get_workflow_executor),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> WorkflowExecution:
     """Manually execute a workflow."""
     workflow = manager.get_workflow(workflow_id)
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    _require_settings_write_for_maturity_steps(workflow.steps, auth_manager, current_user, request)
     
     user_email = current_user.email if current_user else None
     
@@ -1165,7 +1217,10 @@ async def execute_workflow(
         user_email=user_email,
     )
     
-    execution = executor.execute_workflow(
+    # Off the event loop: a step can run for minutes (an evaluate_asset_maturity
+    # step waits for its bulk run), and other requests must not wait for it
+    execution = await run_in_threadpool(
+        executor.execute_workflow,
         workflow=workflow,
         entity={'id': entity_id, 'name': entity_name, 'type': entity_type.value},
         entity_type=entity_type.value,
@@ -1407,8 +1462,9 @@ async def resume_workflow_execution(
         # Open before the resume: a loop-back into this step opens a new round
         open_before = open_approval_ids(db, execution_id)
 
-        # Resume the workflow
-        result = executor.resume_workflow(
+        # Resume the workflow, off the event loop (the steps after it can be long)
+        result = await run_in_threadpool(
+            executor.resume_workflow,
             execution_id=execution_id,
             step_result=approved,
             result_data={
@@ -2216,9 +2272,27 @@ async def handle_workflow_approval(
         message = body.get('message') or body.get('reason')
         # The step the caller decides, from the notification (optional)
         step_id = body.get('step_id') if isinstance(body.get('step_id'), str) else None
+        # Request clarification: neither approved nor rejected; the step's
+        # on_clarify branch runs, with the approver's message
+        clarify = body.get('clarify') is True
 
         if not execution_id:
             raise HTTPException(status_code=400, detail="execution_id is required")
+        if clarify:
+            approved = False
+            if not str(message or '').strip():
+                raise HTTPException(status_code=400, detail={
+                    'code': 'clarification_message_required',
+                    'message': 'A clarification needs the message for the requester',
+                    'params': {},
+                })
+            refusal = executor.clarify_refusal(execution_id)
+            if refusal:
+                raise HTTPException(status_code=400, detail={
+                    'code': refusal,
+                    'message': 'This approval step does not take a clarification',
+                    'params': {},
+                })
 
         # A late decision, on a step that has ended: 409, not 404 (#1119)
         _assert_approval_still_pending(
@@ -2268,7 +2342,7 @@ async def handle_workflow_approval(
         # themselves, any one member for a group or role). The execution stays
         # paused until all have approved; any rejection resumes it as rejected.
         decides_for = notifications_manager.recipient_matcher(current_user)
-        required = executor.record_required_approval(
+        required = None if clarify else executor.record_required_approval(
             execution_id,
             bool(approved),
             decides_for=decides_for,
@@ -2331,20 +2405,31 @@ async def handle_workflow_approval(
             current_user.email if current_user else None,
             current_user.username if current_user else None,
         ):
-            result = executor.resume_workflow(
-                execution_id=execution_id,
-                step_result=approved,
-                result_data={
-                    'message': message,
-                    'reason': message,
-                    'decision': 'approved' if approved else 'rejected',
-                    # Kept with the step: applied later if recording it below fails
-                    **({ACCESS_DECISION_KEY: _access_decision_record(
-                        access_row, bool(approved), user_email, access_terms, message,
-                    )} if access_row is not None else {}),
-                },
-                user_email=user_email,
-            )
+            # Off the event loop (the steps after it can be long); the thread
+            # sees eligible_approver's context variable
+            try:
+                result = await run_in_threadpool(
+                    executor.resume_workflow,
+                    execution_id=execution_id,
+                    step_result=approved,
+                    result_data={
+                        'message': message,
+                        'reason': message,
+                        'decision': (
+                            'clarify' if clarify else ('approved' if approved else 'rejected')
+                        ),
+                        # Kept with the step: applied later if recording it below fails
+                        **({ACCESS_DECISION_KEY: _access_decision_record(
+                            access_row, bool(approved), user_email, access_terms, message,
+                        )} if access_row is not None else {}),
+                    },
+                    user_email=user_email,
+                    clarify=clarify,
+                )
+            except ClarifyNotSupportedError as e:
+                raise HTTPException(status_code=400, detail={
+                    'code': e.code, 'message': str(e), 'params': {},
+                }) from e
 
         if not result:
             # Another decision ended the step meanwhile: 409, as above
@@ -2358,6 +2443,7 @@ async def handle_workflow_approval(
 
         _mark_step_notifications_handled(
             db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+            decision='clarify' if clarify else None,
         )
         if required is not None:
             # A decision that ends a require_all step: the shared rows of its round too
@@ -2381,7 +2467,7 @@ async def handle_workflow_approval(
             action='HANDLE_APPROVAL',
             success=True,
             details={
-                'execution_id': execution_id, 'approved': approved,
+                'execution_id': execution_id, 'approved': approved, 'clarify': clarify,
                 **({'access_grant': access_decision} if access_decision else {}),
                 **({ACCESS_DECISION_FAILED: True} if access_failed else {}),
                 **({'narrowed_by_earlier_step': True} if narrowed_from else {}),
@@ -2397,12 +2483,16 @@ async def handle_workflow_approval(
                 logger.warning("Could not mark the access request's notifications handled",
                                exc_info=True)
 
-        logger.info(f"Workflow approval handled for execution {execution_id}: {'approved' if approved else 'rejected'}")
+        outcome = 'clarification requested' if clarify else ('approved' if approved else 'rejected')
+        logger.info(f"Workflow approval handled for execution {execution_id}: {outcome}")
         
         response = {
             'execution_id': result.id,
             'status': result.status.value,
-            'message': f"Request {'approved' if approved else 'rejected'} successfully",
+            'message': (
+                'Clarification requested successfully' if clarify
+                else f"Request {'approved' if approved else 'rejected'} successfully"
+            ),
         }
         if access_failed:
             # The workflow has the decision; the request gets it on a later pass
@@ -2551,6 +2641,7 @@ async def retry_execution(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('process-workflows', FeatureAccessLevel.ADMIN)),
 ) -> Dict[str, Any]:
     """Retry a failed workflow execution from the beginning.
@@ -2558,6 +2649,12 @@ async def retry_execution(
     Requires ADMIN permission. Only failed executions can be retried.
     Resets the execution state and re-runs all steps.
     """
+    stored = workflow_execution_repo.get(db, execution_id)
+    stored_workflow = process_workflow_repo.get(db, stored.workflow_id) if stored else None
+    if stored_workflow is not None:
+        _require_settings_write_for_maturity_steps(
+            stored_workflow.steps, auth_manager, current_user, request,
+        )
     # Reset the execution
     reset_result = workflow_execution_repo.reset_for_retry(db, execution_id)
     
@@ -2587,7 +2684,9 @@ async def retry_execution(
         # Get entity data from trigger context
         entity_data = trigger_data.get('entity_data', {}) or {}
 
-        result = executor.execute_workflow(
+        # Off the event loop, as a manual run (execute_workflow route)
+        result = await run_in_threadpool(
+            executor.execute_workflow,
             workflow,
             entity_data,  # positional argument
             entity_type=trigger_data.get('entity_type', 'unknown'),

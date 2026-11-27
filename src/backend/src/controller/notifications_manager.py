@@ -5,6 +5,7 @@ import json
 from sqlalchemy.orm import Session # Import Session for type hinting
 from pydantic import ValidationError # Import for error handling
 
+from src.common.api_errors import CodedValueError
 from src.common.timestamps import utc_now
 from src.common.workflow_approvals import has_decided
 from src.models.notifications import Notification, NotificationType # Import the enum too
@@ -150,6 +151,25 @@ class _RecipientMembership:
         # A bare group name (stored before the designer sent ``group:``)
         return bool(not recipient_role_id and self.in_group(recipient))
 
+
+class NotificationNotDeletableError(CodedValueError):
+    """Raised when a notification is marked ``can_delete=False``.
+
+    Actionable notifications (approval requests, access grants, contract
+    deploy requests, role access requests) are created with
+    ``can_delete=False`` to mean "you must respond to this, you cannot
+    dismiss it". Only an admin may override.
+    """
+
+    code = 'notification_not_deletable'
+
+
+class NotificationAccessDeniedError(CodedValueError):
+    """Raised when a user acts on a notification that is not addressed to them."""
+
+    code = 'notification_access_denied'
+
+
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
         """Initialize the notification manager.
@@ -172,11 +192,17 @@ class NotificationsManager:
             logger.error(f"Error getting notification {notification_id}: {e}", exc_info=True)
             return None
 
-    def get_notifications(self, db: Session, user_info: Optional[UserInfo] = None) -> List[Notification]:
+    def get_notifications(
+        self, db: Session, user_info: Optional[UserInfo] = None, *, ontos_admin: bool = False,
+    ) -> List[Notification]:
         """Get the notifications addressed to the user, newest first.
 
         The repository selects the user's rows in SQL: every pending actionable one, and the
         newest BELL_HISTORY_LIMIT of the rest. The row-by-row check below is the final word (#1526).
+
+        ``ontos_admin`` (the caller holds a role flagged ``is_admin``, decided by the route with
+        the check DELETE uses) makes every listed notification deletable, so the bell offers
+        exactly the deletes the API accepts (#675).
         """
         membership = self._membership(user_info, "notification filtering") if user_info else None
         all_notifications_db = self._repo.get_addressed_to(
@@ -211,8 +237,8 @@ class NotificationsManager:
             if n.action_type == 'workflow_approval' and has_decided(n, user_info):
                 continue
             if broadcast or membership.is_recipient(n.recipient, n.recipient_role_id):
-                # Admins can delete any notification they can see
-                if membership.is_admin:
+                # Ontos admins can delete any notification they can see
+                if ontos_admin:
                     n.can_delete = True
                 filtered_notifications.append(n)
 
@@ -223,7 +249,7 @@ class NotificationsManager:
 
     def can_user_access_notification(
         self, db: Session, notification: Notification, user_info: UserInfo,
-        *, strict: bool = False,
+        *, strict: bool = False, admin_fallback: bool = True,
     ) -> bool:
         """Check if a user can access/modify a specific notification.
         
@@ -240,6 +266,9 @@ class NotificationsManager:
                 business role, or a deleted role) only the user the
                 notification names, not the admins. The default (the bell)
                 treats an unresolvable role as a broadcast.
+            admin_fallback: Members of the role named Admin access any notification
+                (the default). The delete route turns it off and decides admins itself,
+                by the Ontos admin check (a role flagged ``is_admin``).
             
         Returns:
             True if user can access the notification, False otherwise
@@ -262,7 +291,7 @@ class NotificationsManager:
         if membership.is_recipient(recipient, role_id):
             return True
         # Admins can access any notification
-        return membership.is_admin
+        return admin_fallback and membership.is_admin
 
     def _membership(self, user_info: UserInfo, purpose: str) -> _RecipientMembership:
         """The user's recipient membership, with the roles loaded once."""
@@ -344,11 +373,57 @@ class NotificationsManager:
              logger.error(f"Error creating notification in DB: {e}", exc_info=True)
              raise # Re-raise to be handled by the caller/route
 
-    def delete_notification(self, db: Session, notification_id: str) -> bool:
-        """Delete a notification by ID using the repository."""
+    def delete_notification(
+        self,
+        db: Session,
+        notification_id: str,
+        *,
+        is_admin: bool = False,
+    ) -> bool:
+        """Delete a notification by ID using the repository.
+
+        Enforces ``can_delete`` server-side. The flag was previously honoured
+        by the frontend alone, so a direct API call could dismiss a
+        notification that exists specifically to force a response.
+
+        Admins may override, matching ``get_notifications``, which reports
+        ``can_delete=True`` on every notification an admin can see. Without the
+        override an admin's UI would offer a delete button that always fails,
+        and orphaned notifications from dead workflows would be undeletable.
+
+        Args:
+            db: Database session
+            notification_id: ID of the notification to delete
+            is_admin: Whether the caller is an Ontos admin (decided by the route)
+
+        Returns:
+            True if the notification was deleted
+
+        Raises:
+            NotificationNotFoundError: No notification with that ID
+            NotificationNotDeletableError: ``can_delete`` is False and the
+                caller is not an admin
+        """
         try:
-             deleted_obj = self._repo.remove(db=db, id=notification_id)
-             return deleted_obj is not None
+            db_obj = self._repo.get(db=db, id=notification_id)
+            if not db_obj:
+                raise NotificationNotFoundError(f"Notification {notification_id} not found")
+
+            if not db_obj.can_delete and not is_admin:
+                raise NotificationNotDeletableError(
+                    "This notification requires a response and cannot be dismissed.",
+                    notification_id=notification_id,
+                )
+
+            if not db_obj.can_delete:
+                logger.info(
+                    f"Admin override: deleting non-deletable notification {notification_id}"
+                )
+
+            deleted_obj = self._repo.remove(db=db, id=notification_id)
+            return deleted_obj is not None
+        except (NotificationNotFoundError, NotificationNotDeletableError):
+            raise
         except Exception as e:
              logger.error(f"Error deleting notification {notification_id}: {e}", exc_info=True)
              raise

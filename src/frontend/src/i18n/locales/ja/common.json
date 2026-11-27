@@ -388,6 +388,7 @@
       "generate_pdf": "PDF を生成",
       "deliver": "配信",
       "grant_permissions": "権限を付与",
+      "evaluate_asset_maturity": "アセットの成熟度を評価",
       "on_behalf_of": "代理として"
     }
   },

@@ -23,7 +23,9 @@ TOKEN = {"x-forwarded-access-token": "user-token"}
 SUE = UserInfo(email="sue@example.com", username="sue@example.com", user="Sue", ip=None,
                groups=["g"])
 NON_UC_TOOL = "get_domain"
-UC_TOOL = "list_catalogs"
+# An ANY_CALLER tool that reads the workspace client: this module tests how the
+# client is built, not the permission gate (see test_tool_authz_fail_closed.py).
+UC_TOOL = "get_current_user"
 
 
 def _run(coro):

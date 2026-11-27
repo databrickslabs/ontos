@@ -120,6 +120,27 @@ export function getStepErrorText(
   });
 }
 
+// The counts of an evaluate_asset_maturity step's bulk run, from its result data
+export function getAssetMaturitySummary(
+  run: Pick<WorkflowStepExecutionResult, 'result_data'> | undefined,
+  t: TFunction
+): string | undefined {
+  const data = run?.result_data;
+  if (!data || typeof data.total !== 'number') return undefined;
+  const count = (value: unknown) => (typeof value === 'number' ? value : 0);
+  const skipped = data.skipped && typeof data.skipped === 'object'
+    ? Object.values(data.skipped as Record<string, unknown>).reduce<number>(
+      (sum, value) => sum + count(value), 0)
+    : 0;
+  return t('workflows:assetMaturityStep.summary', {
+    evaluated: count(data.evaluated),
+    total: data.total,
+    changed: count(data.changed),
+    skipped,
+    errors: count(data.error_count),
+  });
+}
+
 // The branch a Conditional step took ('true' / 'false'), from its last run
 export function getConditionalBranch(
   run: Pick<WorkflowStepExecutionResult, 'result_data'> | undefined
@@ -214,6 +235,8 @@ function SimpleWorkflowFlow({
         const lastRun = state === 'failed' || state === 'succeeded' ? getLastStepRun(step, execution) : undefined;
         const errorText = state === 'failed' && lastRun ? getStepErrorText(lastRun, t) : undefined;
         const branch = state === 'succeeded' ? getConditionalBranch(lastRun) : undefined;
+        const isMaturityRun = state === 'succeeded' && step.step_type === 'evaluate_asset_maturity';
+        const maturitySummary = isMaturityRun ? getAssetMaturitySummary(lastRun, t) : undefined;
         const Icon = getStepIcon(step.step_type);
         const color = getStepColor(step.step_type);
         
@@ -252,6 +275,14 @@ function SimpleWorkflowFlow({
                 {branch && (
                   <div className="text-xs text-muted-foreground mt-1">
                     {t(`workflows:execution.conditionalBranch.${branch}`)}
+                  </div>
+                )}
+                {maturitySummary && (
+                  <div
+                    className="text-xs text-muted-foreground mt-1"
+                    data-testid="asset-maturity-summary"
+                  >
+                    {maturitySummary}
                   </div>
                 )}
               </div>

@@ -103,6 +103,47 @@ export interface AssetDescriptionSync extends AssetCodedWarning {
   at?: string | null;
 }
 
+/** GET /api/assets/{id}/description/uc-comment: the Ontos description next to the UC comment. */
+export interface AssetUcCommentPreview {
+  asset_id: string;
+  /** The Unity Catalog object: catalog.schema.table[.column] */
+  target: string;
+  object_type: string;
+  description?: string | null;
+  uc_comment?: string | null;
+  in_sync: boolean;
+  table_type?: string | null;
+}
+
+/** POST /api/assets/{id}/description/reset-to-uc */
+export interface AssetDescriptionResetResult {
+  asset_id: string;
+  target: string;
+  changed: boolean;
+  previous_description?: string | null;
+  description?: string | null;
+  warnings: AssetCodedWarning[];
+}
+
+/** One change of the description of an asset (GET /api/assets/{id}/description/history). */
+export interface AssetDescriptionHistoryEntry {
+  id: string;
+  timestamp: string;
+  username?: string | null;
+  /** manual, uc_import, bulk_import, uc_reset, restore (more may come) */
+  source?: string | null;
+  object_type?: string | null;
+  before?: string | null;
+  after?: string | null;
+  restored_from?: string | null;
+}
+
+export interface AssetDescriptionHistory {
+  asset_id: string;
+  total: number;
+  items: AssetDescriptionHistoryEntry[];
+}
+
 /** PUT /api/assets/{id}: the saved asset, with what the save could not do. */
 export interface AssetUpdateResult extends AssetRead {
   warnings?: AssetCodedWarning[];

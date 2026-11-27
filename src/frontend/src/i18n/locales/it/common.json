@@ -388,6 +388,7 @@
       "generate_pdf": "Genera PDF",
       "deliver": "Distribuisci",
       "grant_permissions": "Concedi autorizzazioni",
+      "evaluate_asset_maturity": "Valuta maturità degli asset",
       "on_behalf_of": "Per conto di"
     }
   },

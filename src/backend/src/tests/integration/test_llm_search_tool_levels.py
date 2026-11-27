@@ -37,12 +37,12 @@ class _ScriptedLLM:
         return self._script.pop(0)
 
 
-def _add_role(db_session, group, level):
+def _add_role(db_session, group, level, feature='data-products'):
     db_session.add(AppRoleDb(
         id=str(uuid.uuid4()),
         name=f'Tool level {level} {uuid.uuid4().hex[:6]}',
         description='test role',
-        feature_permissions=json.dumps({'data-products': level}),
+        feature_permissions=json.dumps({feature: level}),
         assigned_groups=json.dumps([group]),
         home_sections='[]',
         approval_privileges='{}',
@@ -59,10 +59,11 @@ def chat_as(client, db_session, test_settings, monkeypatch):
     test_settings.LLM_SYSTEM_PROMPT = None
     monkeypatch.setattr(config_module, 'get_settings', lambda: test_settings)
 
-    def _chat(level, product_id, tool='delete_data_product'):
+    def _chat(level, product_id, tool='delete_data_product', args=None,
+              feature='data-products'):
         group = f'tool-level-{uuid.uuid4().hex[:6]}'
         if level is not None:  # None: a user whose groups match no role
-            _add_role(db_session, group, level)
+            _add_role(db_session, group, level, feature)
         user = UserInfo(email=f'{group}@example.com', username=group, user=group,
                         ip='127.0.0.1', groups=[group])
 
@@ -71,7 +72,7 @@ def chat_as(client, db_session, test_settings, monkeypatch):
 
         app.dependency_overrides[get_user_details_from_sdk] = _user
         call = SimpleNamespace(id='call-1', function=SimpleNamespace(
-            name=tool, arguments=json.dumps({'product_id': product_id})))
+            name=tool, arguments=json.dumps(args or {'product_id': product_id})))
         llm = _ScriptedLLM([_response(tool_calls=[call]), _response(content='Done.')])
         monkeypatch.setattr(LLMSearchManager, '_get_openai_client',
                             lambda self, user_token=None: llm)
@@ -158,3 +159,31 @@ def test_a_consumer_reads_a_published_product(chat_as, published_product_id):
     source = _source(chat_as('Read-only', published_product_id, 'get_data_product'),
                      'get_data_product')
     assert source['success'] is True
+
+
+# The semantic read tools need Read-only on 'semantic-models', the level of
+# GET /api/semantic-models/search, /concepts/hierarchy and /neighbors.
+SEMANTIC_READS = {
+    'search_glossary_terms': {'term': 'Customer'},
+    'get_concept_hierarchy': {'concept_iri': 'http://example.com/onto#Customer'},
+    'get_concept_neighbors': {'concept_iri': 'http://example.com/onto#Customer'},
+}
+
+
+@pytest.mark.parametrize('tool', sorted(SEMANTIC_READS))
+@pytest.mark.parametrize('level', ['None', None])
+def test_without_read_only_on_semantic_models_a_semantic_read_is_refused(
+    chat_as, tool, level
+):
+    source = _source(chat_as(level, None, tool, SEMANTIC_READS[tool], 'semantic-models'), tool)
+    assert source['success'] is False
+    assert source['error_code'] == TOOL_NOT_PERMITTED_CODE
+    assert source['feature_id'] == 'semantic-models' and source['required_level'] == 'Read-only'
+
+
+@pytest.mark.parametrize('tool', sorted(SEMANTIC_READS))
+def test_with_read_only_on_semantic_models_a_semantic_read_runs(chat_as, tool):
+    source = _source(chat_as('Read-only', None, tool, SEMANTIC_READS[tool], 'semantic-models'),
+                     tool)
+    # Whatever the answer for an unknown concept, the tool ran: it was not refused.
+    assert source.get('error_code') != TOOL_NOT_PERMITTED_CODE

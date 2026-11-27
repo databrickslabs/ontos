@@ -44,6 +44,7 @@ from src.routes import (
     mcp_tokens_routes,
     mdm_routes,
     metadata_routes,
+    navigation_presets_routes,
     notifications_routes,
     search_routes,
     security_features_routes,
@@ -565,6 +566,7 @@ llm_search_routes.register_routes(app)
 jobs_routes.register_routes(app)
 user_routes.register_routes(app)
 test_personas_routes.register_routes(app)
+navigation_presets_routes.register_routes(app)
 audit_routes.register_routes(app)
 change_log_routes.register_routes(app)
 mcp_routes.register_routes(app)

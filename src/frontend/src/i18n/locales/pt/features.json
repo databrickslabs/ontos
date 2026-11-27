@@ -23,6 +23,14 @@
     "name": "Produtos",
     "description": "Agrupe e gerencie ativos relacionados do Databricks com tags."
   },
+  "marketplace": {
+    "name": "Marketplace",
+    "description": "Navegue pelos produtos de dados disponíveis e assine."
+  },
+  "my-products": {
+    "name": "Meus produtos",
+    "description": "Veja e gerencie os produtos de dados que você assina."
+  },
   "concepts": {
     "name": "Conceitos",
     "description": "Navegue, busque e gerencie conceitos de negócio, esquemas de conceitos e hierarquias."

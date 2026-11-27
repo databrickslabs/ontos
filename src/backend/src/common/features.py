@@ -428,6 +428,44 @@ SETTINGS_SUBPAGE_FEATURE_IDS: List[str] = [
 ]
 
 
+# Menu entries that have their own "show in navigation" flag although they are not features
+# (#1325). Key: the entry id a role stores in ``hidden_nav_features``; value: the feature
+# whose access level decides whether the entry can show at all (the entry's permission id in
+# frontend/src/config/features.ts). Hiding Marketplace therefore doesn't hide Products.
+NAV_ENTRY_FEATURES: Dict[str, str] = {
+    'marketplace': 'data-products',
+    'my-products': 'data-products',
+}
+
+# Every sidebar entry a role can hide: entry id -> the feature whose access level decides
+# whether the entry can show. Mirrors the sidebar entries of frontend/src/config/features.ts
+# in their order (Search and My Requests have no feature and no flag; ``semantic-models`` is
+# the Concepts entry).
+NAV_MENU_ENTRIES: Dict[str, str] = {
+    'marketplace': 'data-products',
+    'data-catalog': 'data-catalog',
+    'assets': 'assets',
+    'semantic-models': 'semantic-models',
+    'data-contracts': 'data-contracts',
+    'data-products': 'data-products',
+    'my-products': 'data-products',
+    'compliance': 'compliance',
+    'master-data': 'master-data',
+    'data-asset-reviews': 'data-asset-reviews',
+    'security-features': 'security-features',
+    'entitlements': 'entitlements',
+    'entitlements-sync': 'entitlements-sync',
+    'estate-manager': 'estate-manager',
+    'catalog-commander': 'catalog-commander',
+}
+
+
+def is_known_nav_id(entry_id: str) -> bool:
+    """Whether a role may list ``entry_id`` in ``hidden_nav_features``: a feature id or a
+    menu entry with its own flag."""
+    return entry_id in APP_FEATURES or entry_id in NAV_ENTRY_FEATURES
+
+
 def get_feature_config() -> Dict[str, Dict[str, str | List[FeatureAccessLevel]]]:
     """Returns the application feature configuration."""
     return APP_FEATURES

@@ -275,6 +275,14 @@ export default function Workflows() {
         return { updated: null, conflicts: [], refusal };
       }
     }
+    if (response.status === 403) {
+      // Activating a workflow that runs the asset maturity evaluation needs Settings write
+      const body = await response.json().catch(() => null);
+      if (body?.detail?.code === 'workflow_step_requires_settings_write') {
+        const refusal = t('workflows:assetMaturityStep.permissionRequired');
+        return { updated: null, conflicts: [], refusal };
+      }
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return { updated: await response.json() as ProcessWorkflow, conflicts: [], refusal: null };
   };

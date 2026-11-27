@@ -25,7 +25,12 @@ def get_manager(request: Request, db: DBSessionDep) -> SemanticLinksManager:
 
 
 @router.get("/semantic-links/entity/{entity_type}/{entity_id:path}", response_model=List[EntitySemanticLink])
-async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksManager = Depends(get_manager)):
+async def list_links(
+    entity_type: str,
+    entity_id: str,
+    manager: SemanticLinksManager = Depends(get_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+):
     try:
         return manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
     except Exception as e:
@@ -35,7 +40,10 @@ async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksMan
 
 @router.get("/semantic-links/entity-prefix/{entity_type}/{entity_id_prefix:path}", response_model=List[EntitySemanticLink])
 async def list_links_by_entity_prefix(
-    entity_type: str, entity_id_prefix: str, manager: SemanticLinksManager = Depends(get_manager)
+    entity_type: str,
+    entity_id_prefix: str,
+    manager: SemanticLinksManager = Depends(get_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
 ):
     """List all links whose entity_id starts with the given prefix.
 
@@ -54,6 +62,7 @@ async def list_links_by_entity_prefix(
 async def list_links_by_iri(
     iri: str = Query(..., min_length=1, description="Concept IRI (query param survives %2F%2F proxy collapse)"),
     manager: SemanticLinksManager = Depends(get_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
 ):
     try:
         return manager.list_for_iri(iri=iri)

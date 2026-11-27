@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "Demander des précisions",
+    "messageRequiredTitle": "Message requis",
+    "messageRequiredDesc": "Indiquez ce que le demandeur doit préciser.",
+    "requestedTitle": "Précisions demandées",
+    "requestedDesc": "Des informations supplémentaires ont été demandées au demandeur sur '{{name}}'.",
+    "errors": {
+      "clarify_not_supported": "Cette étape d'approbation n'accepte pas de demande de précisions.",
+      "clarification_message_required": "Une demande de précisions nécessite un message pour le demandeur."
+    }
+  },
   "designer": {
     "newWorkflow": "Nouveau workflow",
     "newStepName": "Nouvelle étape {{type}}",
@@ -85,6 +96,7 @@
       "create_asset_review": "Révision d'actif",
       "webhook": "Webhook",
       "grant_permissions": "Accorder des permissions",
+      "evaluate_asset_maturity": "Évaluer la maturité des actifs",
       "on_behalf_of": "Au nom de",
       "legal_document": "Document juridique",
       "acknowledgement_checklist": "Liste de contrôle d'accusé de réception",
@@ -548,6 +560,22 @@
       "previewCancelled": "Aperçu annulé"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catalogue",
+    "catalogPlaceholder": "Tous les catalogues",
+    "schema": "Schéma",
+    "schemaPlaceholder": "Tous les schémas (nécessite un catalogue)",
+    "help": "Évalue la maturité des actifs de type table, vue et vue de métriques de ce périmètre, comme Paramètres > Niveaux de maturité, et enregistre les nombres dans le résultat de l'étape. Utilisez un déclencheur planifié pour l'exécuter régulièrement.",
+    "identityNote": "L'exécution lit les tables Unity Catalog avec l'identité de l'application. Enregistrer, activer ou exécuter ce workflow nécessite un accès en écriture aux Paramètres.",
+    "triggerHint": "Cette étape ne s'exécute que dans les workflows planifiés et manuels.",
+    "allCatalogs": "Tous les catalogues",
+    "triggerUnsupported": "L'étape '{{step}}' évalue la maturité des actifs, qui ne s'exécute que dans les workflows planifiés et manuels, pas sur {{trigger}}.",
+    "permissionRequired": "Ce workflow exécute l'évaluation de la maturité des actifs. L'enregistrer, l'activer ou l'exécuter nécessite un accès en écriture aux Paramètres.",
+    "summary": "{{evaluated}} actifs évalués sur {{total}} : {{changed}} ont changé de niveau, {{skipped}} ignorés, {{errors}} erreurs",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Indiquez un catalogue pour le schéma, sans points ni accents graves."
+    }
+  },
   "entityTypeSelect": {
     "label": "S'applique à",
     "helper": "Sur quels types d'objets ce workflow se déclenche",
@@ -571,6 +599,9 @@
       "tag_not_found": "L'étiquette '{{tag}}' est introuvable dans le catalogue, elle n'a donc pas été attribuée",
       "update_gate_step_not_allowed": "Une étape {{stepType}} ne peut pas s'exécuter dans un gate before update : ce qu'elle fait resterait effectué si la mise à jour est refusée. Supprimez l'étape ou déplacez-la dans un workflow on update.",
       "approval_rejected": "Demande refusée",
+      "maturity_bulk_run_in_progress": "Une évaluation groupée de la maturité des actifs est déjà en cours, cette exécution n'a donc pas démarré",
+      "maturity_bulk_scope_invalid": "Le catalogue ou le schéma de l'étape n'est pas valide",
+      "maturity_bulk_run_failed": "L'évaluation groupée de la maturité des actifs a échoué ; le journal du serveur contient les détails",
       "output_port_contracts_missing": "Publication impossible : les ports de sortie {{ports}} doivent avoir des contrats de données assignés",
       "output_port_contracts_unapproved": "Publication impossible : ces ports de sortie ont des contrats non approuvés : {{ports}}. Les contrats doivent d'abord être approuvés.",
       "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",

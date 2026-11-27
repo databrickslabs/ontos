@@ -157,9 +157,9 @@ def test_a_refused_product_activation_leaves_the_requester_one_notice(db_session
     assert _requester_titles(db_session) == ['Status change not applied']
 
 
-def _request_deprecation(db, product):
+def _request_deprecation(db, product, template='request_approved'):
     workflow = _review_workflow(
-        db, EntityType.DATA_PRODUCT, 'request_approved', TriggerType.ON_REQUEST_STATUS_CHANGE,
+        db, EntityType.DATA_PRODUCT, template, TriggerType.ON_REQUEST_STATUS_CHANGE,
     )
     return _paused(
         db, workflow, 'data_product', product, TriggerType.ON_REQUEST_STATUS_CHANGE,
@@ -167,11 +167,12 @@ def _request_deprecation(db, product):
     )
 
 
-def test_a_refused_requested_status_change_leaves_the_requester_one_notice(db_session):
+@pytest.mark.parametrize('template', ['request_approved', 'status_change_approved'])
+def test_a_refused_requested_status_change_leaves_the_requester_one_notice(db_session, template):
     product = _product(db_session)
     product.status = 'active'
     db_session.commit()
-    execution = _request_deprecation(db_session, product)
+    execution = _request_deprecation(db_session, product, template)
 
     _approve(db_session, execution, gate_passes=False)
 

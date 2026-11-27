@@ -20,7 +20,7 @@ from src.controller.llm_search_manager import (
     LLMSearchManager,
     chat_error_code,
 )
-from src.tools.base import BaseTool, ToolResult
+from src.tools.base import ANY_CALLER, BaseTool, ToolResult
 from src.tools.registry import ToolRegistry
 
 SECRET = "SELECT ssn FROM main.hr.salaries WHERE token='dapi-secret'"
@@ -109,6 +109,7 @@ class _BrokenTool(BaseTool):
     description = "Always raises"
     parameters = {}
     required_params = []
+    required_permission = ANY_CALLER
 
     async def execute(self, ctx, **kwargs) -> ToolResult:
         raise RuntimeError(SECRET)

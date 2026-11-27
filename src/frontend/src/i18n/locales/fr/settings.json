@@ -424,10 +424,12 @@
         "title": "Sections d'accueil",
         "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle.",
         "labels": {
-          "JOURNEY": "Accueil par parcours"
+          "JOURNEY": "Accueil par parcours",
+          "MARKETPLACE": "Accueil Marketplace"
         },
         "descriptions": {
-          "JOURNEY": "Remplace la page d'accueil complète par Trouver, Comprendre, Faire confiance, Publier et Maintenir. Elle ne peut pas être combinée avec d'autres sections."
+          "JOURNEY": "Remplace la page d'accueil complète par Trouver, Comprendre, Faire confiance, Publier et Maintenir. Elle ne peut pas être combinée avec d'autres sections.",
+          "MARKETPLACE": "Remplace la page d'accueil complète par le marketplace. Ne peut pas être combiné avec d'autres sections."
         }
       },
       "approvalPrivileges": {
@@ -579,6 +581,62 @@
       "submitFailed": "Échec de la soumission de la demande d'accès au rôle",
       "sending": "Envoi de la demande...",
       "send": "Envoyer la demande"
+    }
+  },
+  "navigationPresets": {
+    "title": "Préréglages de navigation",
+    "help": "Définissez les menus et la page d'accueil des rôles par défaut en une seule étape. Un préréglage ne modifie que ce que montrent les menus et la page d'accueil, jamais les niveaux d'accès. Les rôles sont reconnus par leur nom et restent modifiables ensuite.",
+    "loadFailed": "Impossible de charger les préréglages de navigation.",
+    "presets": {
+      "essentials": {
+        "name": "Essentiels",
+        "description": "Accueil par parcours et menu court : catalogue, assets et concepts, plus revues et conformité pour les stewards et la gouvernance."
+      },
+      "data-consumer": {
+        "name": "Consommateur de données",
+        "description": "Accueil Marketplace pour les consommateurs de données, avec Marketplace et Mes produits dans le menu."
+      }
+    },
+    "preview": {
+      "role": "Rôle",
+      "menu": "Menu après application",
+      "home": "Page d'accueil",
+      "status": "Statut",
+      "menuEmpty": "Aucune entrée de menu",
+      "homeUnchanged": "Inchangée",
+      "noAccess": "Non affiché : le rôle n'a pas accès à {{features}}."
+    },
+    "status": {
+      "changes": "Modifie",
+      "noChange": "Aucun changement",
+      "notFound": "Rôle introuvable"
+    },
+    "actions": {
+      "apply": "Appliquer le préréglage",
+      "undo": "Annuler le dernier préréglage"
+    },
+    "nothingToApply": "Tous les rôles correspondent déjà à ce préréglage.",
+    "lastApplied": "Dernière application : {{preset}} par {{user}}, {{date}}",
+    "unknownUser": "utilisateur inconnu",
+    "confirm": {
+      "applyTitle": "Appliquer le préréglage {{preset}} ?",
+      "applyDescription_one": "Cela modifie le menu et la page d'accueil de {{count}} rôle. Les niveaux d'accès ne changent pas et vous pourrez annuler ensuite.",
+      "applyDescription_other": "Cela modifie les menus et les pages d'accueil de {{count}} rôles. Les niveaux d'accès ne changent pas et vous pourrez annuler ensuite.",
+      "undoTitle": "Annuler le dernier préréglage ?",
+      "undoDescription_one": "Cela restaure le menu et la page d'accueil que {{preset}} a modifiés sur {{count}} rôle.",
+      "undoDescription_other": "Cela restaure les menus et les pages d'accueil que {{preset}} a modifiés sur {{count}} rôles."
+    },
+    "applied": "Préréglage {{preset}} appliqué",
+    "nothingChanged": "Rien à modifier",
+    "appliedSummary": "Modifiés : {{changed}}, inchangés : {{unchanged}}, introuvables : {{missing}}.",
+    "applyFailed": "Impossible d'appliquer le préréglage",
+    "undone": "Préréglage {{preset}} annulé",
+    "undoneSummary": "Restaurés : {{restored}}, introuvables : {{missing}}.",
+    "undoFailed": "Impossible d'annuler le préréglage",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "Aucune application de préréglage à annuler.",
+      "navigation_preset_unknown": "Ce préréglage n'existe pas.",
+      "generic": "La requête a échoué. Réessayez."
     }
   },
   "mcpTokens": {
@@ -1365,6 +1423,7 @@
       "maturity_bulk_skipped_not_stored": "Non enregistré : la table n'a pas pu être lue",
       "maturity_bulk_evaluation_failed": "Échec de l'évaluation (voir le journal du serveur)",
       "maturity_bulk_run_failed": "L'exécution s'est arrêtée (voir le journal du serveur)",
+      "maturity_bulk_authentication_failed": "Arrêtée : Unity Catalog a refusé le jeton (il a peut-être expiré) ; relancez-la",
       "maturity_bulk_run_in_progress": "Une évaluation en masse est déjà en cours.",
       "maturity_bulk_scope_invalid": "Le périmètre n'est pas valide."
     }

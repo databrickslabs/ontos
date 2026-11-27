@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Cambio de estado aprobado",
+    "approved": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue aprobada por '{{approver}}'.",
+    "approvedWithMessage": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue aprobada por '{{approver}}'.\n\nMensaje del aprobador: {{message}}",
+    "deniedTitle": "Cambio de estado denegado",
+    "denied": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue denegada por '{{approver}}'.",
+    "deniedWithMessage": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' fue denegada por '{{approver}}'.\n\nMensaje del aprobador: {{message}}",
+    "clarificationTitle": "Cambio de estado: se necesita aclaración",
+    "clarification": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' requiere aclaración de '{{approver}}'.",
+    "clarificationWithMessage": "Tu solicitud para cambiar el estado de '{{name}}' a '{{toStatus}}' requiere aclaración de '{{approver}}'.\n\nMensaje del aprobador: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definición de la metric view modificada",
     "description": "La definición de la metric view {{fqn}} en Unity Catalog ya no coincide con su línea base en Ontos."
@@ -22,6 +33,11 @@
     "notUnderReview": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: el contrato no está en revisión (estado «{{currentStatus}}»)",
     "notApplied": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}",
     "requesterNotApplied": "La revisión de su contrato se decidió, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}"
+  },
+  "deleteRefused": {
+    "notDeletable": "Esta notificación requiere una respuesta y no se puede descartar.",
+    "accessDenied": "Solo puedes eliminar tus propias notificaciones.",
+    "generic": "No se pudo eliminar la notificación."
   },
   "ui": {
     "tooltip": "Notificaciones",
@@ -142,9 +158,7 @@
         "notify-rejected": "Su solicitud de acceso ha sido denegada. Póngase en contacto con un administrador para más información."
       },
       "status-change-request": {
-        "notify-requester": "Su solicitud de cambio de estado se ha enviado para aprobación.",
-        "notify-approved": "Su solicitud de cambio de estado ha sido aprobada.",
-        "notify-rejected": "Su solicitud de cambio de estado ha sido denegada."
+        "notify-requester": "Su solicitud de cambio de estado se ha enviado para aprobación."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Se le ha asignado una nueva solicitud de revisión de activos de datos.",

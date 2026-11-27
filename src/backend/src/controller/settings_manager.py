@@ -38,7 +38,10 @@ if TYPE_CHECKING:
 from src.models.notifications import NotificationType, Notification
 from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection, ApprovalEntity
 from src.models.workflow_installations import WorkflowInstallation
-from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
+from src.common.features import (
+    get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES,
+    ACCESS_LEVEL_ORDER, is_known_nav_id,
+)
 from src.common.logging import get_logger
 from src.common.thread_session import ThreadBoundDb, thread_session
 from src.common.api_errors import CodedValueError
@@ -2226,9 +2229,8 @@ class SettingsManager(ThreadBoundDb):
         # feature config later are filtered out so they never reach the API.
         try:
             hidden_raw = json.loads(getattr(role_db, 'hidden_nav_features', '[]') or '[]')
-            known_features = get_feature_config()
             hidden_nav_features = [
-                f for f in hidden_raw if isinstance(f, str) and f in known_features
+                f for f in hidden_raw if isinstance(f, str) and is_known_nav_id(f)
             ] if isinstance(hidden_raw, list) else []
         except (json.JSONDecodeError, TypeError) as e:
             logger.warning(
@@ -2527,15 +2529,14 @@ class SettingsManager(ThreadBoundDb):
 
     @staticmethod
     def _validate_hidden_nav_features(feature_ids: Optional[List[str]]) -> None:
-        """Refuse feature ids that aren't in the feature configuration (#1325).
+        """Refuse ids that are neither features nor menu entries with their own flag (#1325).
 
         Unlike stale permission keys, these come straight from the role editor, so an
         unknown id is a client error and is answered with a coded 400 instead of
         being dropped silently. Search and My Requests have no feature id and can't
         be hidden per role.
         """
-        feature_config = get_feature_config()
-        unknown = [fid for fid in (feature_ids or []) if fid not in feature_config]
+        unknown = [fid for fid in (feature_ids or []) if not is_known_nav_id(fid)]
         if unknown:
             raise RoleNavFeatureUnknownError(
                 f"Unknown feature ids in hidden_nav_features: {', '.join(map(str, unknown))}",

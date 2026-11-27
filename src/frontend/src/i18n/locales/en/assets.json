@@ -55,6 +55,63 @@
       "uc_description_import_keeps_uc": "Unity Catalog has another comment on {{object}}, so the import keeps it and does not write the description there."
     }
   },
+  "descriptionReset": {
+    "action": "Use the Unity Catalog comment",
+    "title": "Use the Unity Catalog comment as the description",
+    "description": "Replaces the description in Ontos with the comment Unity Catalog has on {{object}}.",
+    "descriptionLoading": "Reads the comment from Unity Catalog with your permissions.",
+    "loading": "Reading Unity Catalog...",
+    "inOntos": "In Ontos (will be replaced)",
+    "inUnityCatalog": "In Unity Catalog",
+    "empty": "(empty)",
+    "alreadyInSync": "The description already matches the Unity Catalog comment.",
+    "ucEmpty": "Unity Catalog has no comment on this object, so there is nothing to bring. The Ontos description is kept.",
+    "replaceNote": "The previous description is kept in the change log.",
+    "confirm": "Replace description",
+    "toast": {
+      "done": "Description replaced",
+      "unchanged": "Description unchanged"
+    },
+    "errors": {
+      "generic": "The comment could not be read from Unity Catalog.",
+      "user_token_required": "Reading Unity Catalog needs your Databricks sign-in, and this request had none.",
+      "user_client_unavailable": "Your Databricks session could not be used to read Unity Catalog.",
+      "uc_reset_permission_denied": "You can't read {{object}} in Unity Catalog. SELECT permission on the table is needed.",
+      "uc_reset_object_not_found": "{{object}} was not found in Unity Catalog, or you don't have access to it.",
+      "uc_reset_unavailable": "Unity Catalog could not be read for {{object}}. Try again in a moment.",
+      "uc_reset_metric_view": "{{object}} is a metric view: its description comes from its definition, not from a comment.",
+      "uc_reset_not_applicable": "{{object}} is not a Unity Catalog table, view or column.",
+      "uc_reset_uc_changed": "The Unity Catalog comment of {{object}} changed since you looked at it. Open this again to see the new one."
+    },
+    "warnings": {
+      "uc_description_empty": "Unity Catalog has no comment on {{object}}, so its description in Ontos was kept."
+    }
+  },
+  "descriptionHistory": {
+    "title": "Description history",
+    "none": "No changes to the description yet.",
+    "loading": "Loading history...",
+    "loadError": "The description history could not be loaded.",
+    "unknownUser": "Unknown user",
+    "empty": "(empty)",
+    "before": "Before",
+    "after": "After",
+    "restoreAfter": "Restore the new text",
+    "restoreBefore": "Restore the previous text",
+    "restored": "Description restored",
+    "restoreFailed": "The description was not restored",
+    "showMore": "Show {{count}} more",
+    "sources": {
+      "manual": "Edit",
+      "uc_import": "Unity Catalog import",
+      "bulk_import": "File import (CSV/XLSX)",
+      "uc_reset": "Unity Catalog comment",
+      "restore": "Restore"
+    },
+    "errors": {
+      "description_history_entry_not_found": "That change is not in the history of this asset."
+    }
+  },
   "deleteDialog": {
     "title": "Delete Asset?",
     "description": "This action cannot be undone. This will permanently delete the asset and all its relationships.",

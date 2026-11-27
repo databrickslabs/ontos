@@ -23,6 +23,14 @@
     "name": "Producten",
     "description": "Groepeer en beheer gerelateerde Databricks assets met tags."
   },
+  "marketplace": {
+    "name": "Marktplaats",
+    "description": "Blader door beschikbare dataproducten en abonneer je erop."
+  },
+  "my-products": {
+    "name": "Mijn producten",
+    "description": "Bekijk en beheer je geabonneerde dataproducten."
+  },
   "concepts": {
     "name": "Concepten",
     "description": "Blader, zoek en beheer bedrijfsconcepten, conceptschema's en hiërarchieën."

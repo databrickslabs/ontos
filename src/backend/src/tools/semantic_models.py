@@ -33,6 +33,7 @@ class SearchGlossaryTermsTool(BaseTool):
     }
     required_params = ["term"]
     required_scope = "semantic:read"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,
@@ -226,6 +227,8 @@ class ListSemanticLinksTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id"]
     required_scope = "semantic:read"
+    # Same level as GET /semantic-links/entity/... and /by-iri.
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,
@@ -391,6 +394,8 @@ class FindEntitiesByConceptTool(BaseTool):
     }
     required_params = ["concept_iri"]
     required_scope = "semantic:read"
+    # Same level as GET /semantic-links/entity/... and /by-iri.
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,
@@ -557,6 +562,7 @@ class GetConceptHierarchyTool(BaseTool):
     }
     required_params = ["concept_iri"]
     required_scope = "semantic:read"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,
@@ -660,6 +666,7 @@ class GetConceptNeighborsTool(BaseTool):
     }
     required_params = ["concept_iri"]
     required_scope = "semantic:read"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_ONLY)
     
     async def execute(
         self,

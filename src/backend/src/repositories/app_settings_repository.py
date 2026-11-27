@@ -25,13 +25,17 @@ class AppSettingsRepository:
         setting = db.query(AppSettingDb).filter(AppSettingDb.key == key).first()
         return setting.value if setting else None
 
-    def set(self, db: Session, key: str, value: Optional[str]) -> AppSettingDb:
+    def set(
+        self, db: Session, key: str, value: Optional[str], commit: bool = True
+    ) -> AppSettingDb:
         """Set a setting value (upsert).
         
         Args:
             db: Database session
             key: Setting key
             value: Setting value (can be None to clear)
+            commit: Commit now (default). False only flushes, so the caller can commit the
+                setting together with other changes in one transaction.
             
         Returns:
             The created or updated setting
@@ -44,7 +48,10 @@ class AppSettingsRepository:
             setting = AppSettingDb(key=key, value=value)
             db.add(setting)
             logger.debug(f"Created app setting '{key}'")
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         db.refresh(setting)
         return setting
 
@@ -60,12 +67,13 @@ class AppSettingsRepository:
         settings = db.query(AppSettingDb).all()
         return {s.key: s.value for s in settings}
 
-    def delete(self, db: Session, key: str) -> bool:
+    def delete(self, db: Session, key: str, commit: bool = True) -> bool:
         """Delete a setting by key.
         
         Args:
             db: Database session
             key: Setting key to delete
+            commit: Commit now (default). False only flushes (see ``set``).
             
         Returns:
             True if deleted, False if not found
@@ -73,7 +81,10 @@ class AppSettingsRepository:
         setting = db.query(AppSettingDb).filter(AppSettingDb.key == key).first()
         if setting:
             db.delete(setting)
-            db.commit()
+            if commit:
+                db.commit()
+            else:
+                db.flush()
             logger.debug(f"Deleted app setting '{key}'")
             return True
         return False

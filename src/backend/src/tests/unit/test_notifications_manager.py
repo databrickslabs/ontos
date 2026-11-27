@@ -5,7 +5,11 @@ import pytest
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
-from src.controller.notifications_manager import NotificationsManager
+from src.controller.notifications_manager import (
+    NotificationNotDeletableError,
+    NotificationNotFoundError,
+    NotificationsManager,
+)
 from src.models.notifications import Notification, NotificationType
 from src.models.users import UserInfo
 
@@ -199,13 +203,38 @@ class TestNotificationsManager:
     def test_delete_notification_success(self, manager):
         """Deleting removes through the repository and returns True."""
         mock_db = Mock()
+        manager._repo.get.return_value = _db_notif("notif-123")
         manager._repo.remove.return_value = _db_notif("notif-123")
 
         assert manager.delete_notification(mock_db, notification_id="notif-123") is True
         manager._repo.remove.assert_called_once_with(db=mock_db, id="notif-123")
 
     def test_delete_notification_not_found(self, manager):
-        """Deleting a missing notification returns False (the route maps it to 404)."""
-        manager._repo.remove.return_value = None
+        """Deleting a missing notification raises (the route maps it to 404)."""
+        manager._repo.get.return_value = None
 
-        assert manager.delete_notification(Mock(), notification_id="nonexistent") is False
+        with pytest.raises(NotificationNotFoundError):
+            manager.delete_notification(Mock(), notification_id="nonexistent")
+
+        manager._repo.remove.assert_not_called()
+
+    def test_delete_notification_cannot_delete(self, manager):
+        """A non-deletable notification raises, so the route answers 403 and not 404 (#675)."""
+        manager._repo.get.return_value = _db_notif("notif-123", can_delete=False)
+
+        with pytest.raises(NotificationNotDeletableError):
+            manager.delete_notification(Mock(), notification_id="notif-123")
+
+        manager._repo.remove.assert_not_called()
+
+    def test_delete_notification_admin_override(self, manager):
+        """Admins may delete a non-deletable notification (#675)."""
+        row = _db_notif("notif-123", can_delete=False)
+        manager._repo.get.return_value = row
+        manager._repo.remove.return_value = row
+
+        result = manager.delete_notification(Mock(), notification_id="notif-123", is_admin=True)
+
+        assert result is True
+        manager._repo.remove.assert_called_once()
+

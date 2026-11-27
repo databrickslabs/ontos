@@ -40,6 +40,12 @@ export function scriptSchema(schema: JsonSchema | undefined) {
 
 /** The translated text of a step config issue (English text from the backend as fallback). */
 export function stepConfigIssueText(issue: StepConfigIssue, t: TFunction): string {
+  if (issue.code.startsWith('maturity_bulk_')) {
+    return t(`workflows:assetMaturityStep.errors.${issue.code}`, {
+      ...(issue.params || {}),
+      defaultValue: issue.message || issue.code,
+    });
+  }
   const namespace = issue.code.startsWith('script_') ? 'script' : 'conditional';
   return t(`workflows:designer.${namespace}.errors.${issue.code}`, {
     ...(issue.params || {}),
@@ -65,6 +71,12 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
       return t('workflows:designer.validationIssues.stepsRequired', { defaultValue: fallback });
     case 'duplicate_step_ids':
       return t('workflows:designer.validationIssues.duplicateStepIds', { defaultValue: fallback });
+    case 'evaluate_asset_maturity_trigger_unsupported':
+      return t('workflows:assetMaturityStep.triggerUnsupported', {
+        step: params.step,
+        trigger: getTriggerTypeLabel(String(params.triggerType) as TriggerType, t),
+        defaultValue: fallback,
+      });
     // Trigger entity types (#1151): one the app doesn't know, or one the trigger never fires for
     case 'trigger_entity_type_unknown':
       return t('workflows:triggerEntityChecks.unknownOnSave', {
@@ -124,11 +136,11 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
       });
     default:
       if (isScheduleIssue(issue.code)) return scheduleIssueText(issue, t);
-      if (!(issue.code.startsWith('condition_') || issue.code.startsWith('script_'))) {
+      if (!['condition_', 'script_', 'maturity_bulk_'].some(p => issue.code.startsWith(p))) {
         // An error the designer has no text for: the backend's English text.
         return fallback;
       }
-      // Conditional and Script checks keep their own codes (stepConfigIssueText).
+      // Conditional, Script and asset maturity checks keep their codes (stepConfigIssueText).
       return t('workflows:designer.messages.stepConfigInvalid', {
         step: params.step,
         issue: stepConfigIssueText({ code: issue.code, params, message: null }, t),
@@ -147,6 +159,14 @@ export function localStepConfigIssue(
     const condition = config.condition;
     if (typeof condition !== 'string' || !condition.trim()) {
       return { code: 'condition_required' };
+    }
+  }
+  if (step.step_type === 'evaluate_asset_maturity') {
+    // As normalize_scope (maturity_bulk_evaluator.py): a schema needs its catalog
+    const catalog = typeof config.catalog === 'string' ? config.catalog.trim() : '';
+    const schemaName = typeof config.schema_name === 'string' ? config.schema_name.trim() : '';
+    if ((schemaName && !catalog) || /[.`]/.test(catalog + schemaName)) {
+      return { code: 'maturity_bulk_scope_invalid' };
     }
   }
   if (step.step_type === 'script') {

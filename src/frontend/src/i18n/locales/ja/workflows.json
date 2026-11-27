@@ -1,4 +1,15 @@
 {
+  "clarification": {
+    "button": "確認を依頼",
+    "messageRequiredTitle": "メッセージが必要です",
+    "messageRequiredDesc": "申請者に確認してほしい内容を入力してください。",
+    "requestedTitle": "確認を依頼しました",
+    "requestedDesc": "'{{name}}' について、申請者に追加情報を依頼しました。",
+    "errors": {
+      "clarify_not_supported": "この承認ステップでは確認依頼は使用できません。",
+      "clarification_message_required": "確認依頼には申請者宛てのメッセージが必要です。"
+    }
+  },
   "designer": {
     "newWorkflow": "新規ワークフロー",
     "newStepName": "新規 {{type}} ステップ",
@@ -85,6 +96,7 @@
       "create_asset_review": "アセットレビュー",
       "webhook": "Webhook",
       "grant_permissions": "権限を付与",
+      "evaluate_asset_maturity": "アセットの成熟度を評価",
       "on_behalf_of": "代理",
       "legal_document": "法的文書",
       "acknowledgement_checklist": "確認チェックリスト",
@@ -548,6 +560,22 @@
       "previewCancelled": "プレビューをキャンセルしました"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "カタログ",
+    "catalogPlaceholder": "すべてのカタログ",
+    "schema": "スキーマ",
+    "schemaPlaceholder": "すべてのスキーマ（カタログが必要）",
+    "help": "この範囲のテーブル、ビュー、メトリックビューのアセットの成熟度を「設定 > 成熟度レベル」と同様に評価し、件数をステップの結果に記録します。定期的に実行するにはスケジュールトリガーを使用します。",
+    "identityNote": "この実行はアプリの ID で Unity Catalog のテーブルを読み取ります。このワークフローの保存、有効化、実行には設定への書き込み権限が必要です。",
+    "triggerHint": "このステップはスケジュールおよび手動のワークフローでのみ実行されます。",
+    "allCatalogs": "すべてのカタログ",
+    "triggerUnsupported": "ステップ '{{step}}' はアセットの成熟度を評価します。これはスケジュールおよび手動のワークフローでのみ実行され、{{trigger}} では実行されません。",
+    "permissionRequired": "このワークフローはアセットの成熟度評価を実行します。保存、有効化、実行には設定への書き込み権限が必要です。",
+    "summary": "{{total}} 件中 {{evaluated}} 件のアセットを評価：レベル変更 {{changed}} 件、スキップ {{skipped}} 件、エラー {{errors}} 件",
+    "errors": {
+      "maturity_bulk_scope_invalid": "スキーマにはカタログを入力してください（ドットやバッククォートは使用できません）。"
+    }
+  },
   "entityTypeSelect": {
     "label": "適用対象",
     "helper": "これがどの種類のオブジェクトで発動するか",
@@ -571,6 +599,9 @@
       "tag_not_found": "タグ '{{tag}}' がタグカタログに見つからなかったため、割り当てませんでした",
       "update_gate_step_not_allowed": "{{stepType}} ステップは before update ゲートでは実行できません。更新が拒否されても、その処理は実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。",
       "approval_rejected": "リクエストが却下されました",
+      "maturity_bulk_run_in_progress": "アセット成熟度の一括評価がすでに実行中のため、この実行は開始されませんでした",
+      "maturity_bulk_scope_invalid": "ステップのカタログまたはスキーマが無効です",
+      "maturity_bulk_run_failed": "アセット成熟度の一括評価に失敗しました。詳細はサーバーログを参照してください",
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",

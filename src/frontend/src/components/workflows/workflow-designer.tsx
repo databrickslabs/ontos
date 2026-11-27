@@ -73,6 +73,7 @@ import {
   Database,
   Send,
   KeyRound,
+  Activity,
   Eye,
   Edit2,
   Check,
@@ -109,9 +110,14 @@ import {
   GeneratePdfNode,
   DeliverNode,
   GrantPermissionsNode,
+  EvaluateAssetMaturityNode,
   OnBehalfOfNode,
 } from './workflow-nodes';
-import { ConditionalStepConfig, ScriptStepConfig } from './step-config-forms';
+import {
+  ConditionalStepConfig,
+  EvaluateAssetMaturityStepConfig,
+  ScriptStepConfig,
+} from './step-config-forms';
 import {
   localStepConfigIssue,
   stepConfigIssueText,
@@ -487,6 +493,7 @@ const nodeTypes = {
   generate_pdf: GeneratePdfNode,
   deliver: DeliverNode,
   grant_permissions: GrantPermissionsNode,
+  evaluate_asset_maturity: EvaluateAssetMaturityNode,
   on_behalf_of: OnBehalfOfNode,
   default: DefaultStepNode,
 };
@@ -720,6 +727,7 @@ const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shiel
   { type: 'create_asset_review', label: 'Asset Review', icon: FileSearch },
   { type: 'webhook', label: 'Webhook', icon: Globe },
   { type: 'grant_permissions', label: 'Grant Permissions', icon: KeyRound },
+  { type: 'evaluate_asset_maturity', label: 'Evaluate Asset Maturity', icon: Activity },
 ];
 
 const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield; disabled?: boolean }[] = [
@@ -1771,6 +1779,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           setShowOverlapDialog(true);
           return;
         }
+        if (response.errorCode === 'workflow_step_requires_settings_write') {
+          toast({
+            title: t('common:toast.error'),
+            description: t('workflows:assetMaturityStep.permissionRequired'),
+            variant: 'destructive',
+          });
+          return;
+        }
         const issues = response.errorCode === 'workflow_invalid' && Array.isArray(response.errorParams?.issues)
           ? (response.errorParams.issues as WorkflowValidationIssue[])
           : null;
@@ -2577,6 +2593,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       key={selectedStep.step_id}
                       config={(selectedStep.config || {}) as Record<string, unknown>}
                       onChange={(config) => updateStep(selectedStep.step_id, { config })}
+                      showRequired={invalidStepId === selectedStep.step_id}
+                    />
+                  )}
+
+                  {selectedStep.step_type === 'evaluate_asset_maturity' && (
+                    <EvaluateAssetMaturityStepConfig
+                      key={selectedStep.step_id}
+                      config={(selectedStep.config || {}) as Record<string, unknown>}
+                      onChange={(config) => updateStep(selectedStep.step_id, { config })}
+                      triggerType={triggerType}
                       showRequired={invalidStepId === selectedStep.step_id}
                     />
                   )}

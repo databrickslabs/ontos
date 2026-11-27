@@ -470,6 +470,12 @@ class UcDescriptionSyncManager:
         asset.properties = {**(asset.properties or {}), DESCRIPTION_SYNC_PROPERTY: stored}
         db.flush()
 
+    def clear_state(self, db: Session, asset: AssetDb) -> None:
+        """Drop the "not in sync" mark (and the agreed comment) of an asset whose
+        description was just set to the Unity Catalog comment."""
+        if self._stored_state(asset) is not None or _agreed(asset) is not None:
+            self._store_state(db, asset, None)
+
     @staticmethod
     def _baseline(asset: AssetDb, previous_description: Optional[str]) -> Optional[str]:
         """The comment Ontos agreed to before a failed save: the stored one, else the previous text.

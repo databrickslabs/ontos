@@ -1,4 +1,15 @@
 {
+  "statusChangeDecision": {
+    "approvedTitle": "Alteração de status aprovada",
+    "approved": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi aprovado por '{{approver}}'.",
+    "approvedWithMessage": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi aprovado por '{{approver}}'.\n\nMensagem do aprovador: {{message}}",
+    "deniedTitle": "Alteração de status negada",
+    "denied": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi negado por '{{approver}}'.",
+    "deniedWithMessage": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' foi negado por '{{approver}}'.\n\nMensagem do aprovador: {{message}}",
+    "clarificationTitle": "Alteração de status: esclarecimento necessário",
+    "clarification": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' precisa de esclarecimento de '{{approver}}'.",
+    "clarificationWithMessage": "Seu pedido para alterar o status de '{{name}}' para '{{toStatus}}' precisa de esclarecimento de '{{approver}}'.\n\nMensagem do aprovador: {{message}}"
+  },
   "metricViewDrift": {
     "title": "Definição da metric view alterada",
     "description": "A definição da metric view {{fqn}} no Unity Catalog não corresponde mais à sua linha de base no Ontos."
@@ -22,6 +33,11 @@
     "notUnderReview": "Sua decisão de revisão foi registrada, mas o contrato não foi alterado para \"{{toStatus}}\": o contrato não está em revisão (status \"{{currentStatus}}\")",
     "notApplied": "Sua decisão de revisão foi registrada, mas o contrato não foi alterado para \"{{toStatus}}\": {{reason}}",
     "requesterNotApplied": "A revisão do seu contrato foi decidida, mas o contrato não foi alterado para \"{{toStatus}}\": {{reason}}"
+  },
+  "deleteRefused": {
+    "notDeletable": "Esta notificação exige uma resposta e não pode ser descartada.",
+    "accessDenied": "Você só pode excluir as suas próprias notificações.",
+    "generic": "Não foi possível excluir a notificação."
   },
   "ui": {
     "tooltip": "Notificações",
@@ -142,9 +158,7 @@
         "notify-rejected": "Sua solicitação de acesso foi negada. Entre em contato com um administrador para mais informações."
       },
       "status-change-request": {
-        "notify-requester": "Sua solicitação de mudança de status foi enviada para aprovação.",
-        "notify-approved": "Sua solicitação de mudança de status foi aprovada.",
-        "notify-rejected": "Sua solicitação de mudança de status foi negada."
+        "notify-requester": "Sua solicitação de mudança de status foi enviada para aprovação."
       },
       "data-asset-review-request": {
         "notify-reviewer": "Uma nova solicitação de revisão de ativo de dados foi atribuída a você.",

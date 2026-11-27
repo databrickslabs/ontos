@@ -424,10 +424,12 @@
         "title": "Secciones de inicio",
         "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
         "labels": {
-          "JOURNEY": "Inicio por recorrido"
+          "JOURNEY": "Inicio por recorrido",
+          "MARKETPLACE": "Inicio en el Marketplace"
         },
         "descriptions": {
-          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones.",
+          "MARKETPLACE": "Sustituye la página de inicio completa por el marketplace. No se puede combinar con otras secciones."
         }
       },
       "approvalPrivileges": {
@@ -579,6 +581,62 @@
       "submitFailed": "No se pudo enviar la solicitud de acceso a rol",
       "sending": "Enviando solicitud...",
       "send": "Enviar solicitud"
+    }
+  },
+  "navigationPresets": {
+    "title": "Preajustes de navegación",
+    "help": "Configura los menús y la página de inicio de los roles predeterminados en un solo paso. Un preajuste solo cambia lo que muestran los menús y la página de inicio, nunca los niveles de acceso. Los roles se identifican por su nombre y cada rol sigue siendo editable después.",
+    "loadFailed": "No se pudieron cargar los preajustes de navegación.",
+    "presets": {
+      "essentials": {
+        "name": "Esenciales",
+        "description": "Inicio por recorrido y un menú breve: catálogo, activos y conceptos, más revisiones y cumplimiento para stewards y gobernanza."
+      },
+      "data-consumer": {
+        "name": "Consumidor de datos",
+        "description": "Inicio en el Marketplace para consumidores de datos, con Marketplace y Mis productos en el menú."
+      }
+    },
+    "preview": {
+      "role": "Rol",
+      "menu": "Menú tras aplicar",
+      "home": "Página de inicio",
+      "status": "Estado",
+      "menuEmpty": "Sin entradas de menú",
+      "homeUnchanged": "Sin cambios",
+      "noAccess": "No se muestra: el rol no tiene acceso a {{features}}."
+    },
+    "status": {
+      "changes": "Cambia",
+      "noChange": "Sin cambios",
+      "notFound": "Rol no encontrado"
+    },
+    "actions": {
+      "apply": "Aplicar preajuste",
+      "undo": "Deshacer último preajuste"
+    },
+    "nothingToApply": "Todos los roles ya coinciden con este preajuste.",
+    "lastApplied": "Última aplicación: {{preset}} por {{user}}, {{date}}",
+    "unknownUser": "usuario desconocido",
+    "confirm": {
+      "applyTitle": "¿Aplicar el preajuste {{preset}}?",
+      "applyDescription_one": "Esto cambia el menú y la página de inicio de {{count}} rol. Los niveles de acceso no cambian y puedes deshacerlo después.",
+      "applyDescription_other": "Esto cambia los menús y las páginas de inicio de {{count}} roles. Los niveles de acceso no cambian y puedes deshacerlo después.",
+      "undoTitle": "¿Deshacer el último preajuste?",
+      "undoDescription_one": "Esto restaura el menú y la página de inicio que {{preset}} cambió en {{count}} rol.",
+      "undoDescription_other": "Esto restaura los menús y las páginas de inicio que {{preset}} cambió en {{count}} roles."
+    },
+    "applied": "Preajuste {{preset}} aplicado",
+    "nothingChanged": "Nada que cambiar",
+    "appliedSummary": "Cambiados: {{changed}}, sin cambios: {{unchanged}}, no encontrados: {{missing}}.",
+    "applyFailed": "No se pudo aplicar el preajuste",
+    "undone": "Preajuste {{preset}} deshecho",
+    "undoneSummary": "Restaurados: {{restored}}, no encontrados: {{missing}}.",
+    "undoFailed": "No se pudo deshacer el preajuste",
+    "errors": {
+      "navigation_preset_nothing_to_undo": "No hay ninguna aplicación de preajuste que deshacer.",
+      "navigation_preset_unknown": "Este preajuste no existe.",
+      "generic": "La solicitud falló. Inténtalo de nuevo."
     }
   },
   "mcpTokens": {
@@ -1365,6 +1423,7 @@
       "maturity_bulk_skipped_not_stored": "No guardado: no se pudo leer la tabla",
       "maturity_bulk_evaluation_failed": "Fallo en la evaluación (vea el log del servidor)",
       "maturity_bulk_run_failed": "La ejecución se detuvo (vea el log del servidor)",
+      "maturity_bulk_authentication_failed": "Detenida: Unity Catalog rechazó el token (puede haber caducado); vuelva a ejecutarla",
       "maturity_bulk_run_in_progress": "Ya hay una evaluación masiva en curso.",
       "maturity_bulk_scope_invalid": "El alcance no es válido."
     }

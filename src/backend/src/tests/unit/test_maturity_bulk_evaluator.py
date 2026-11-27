@@ -355,10 +355,10 @@ def test_an_evaluation_that_stored_nothing_is_neither_evaluated_nor_changed(db_s
     assert final["error_count"] == 0
 
 
-def test_a_run_that_outlasts_the_token_stores_nothing_for_the_later_tables(db_session):
+def test_a_run_that_outlasts_the_token_stops_with_an_error(db_session):
     """RunIdentity keeps one client for the run: once the token expires, Unity Catalog
-    answers 401 (Unauthenticated), the table reads as unreadable, and the asset keeps its
-    stored level and is counted as not stored, not as evaluated (and not as an error)."""
+    answers 401 (Unauthenticated) for every later table. The run stops there and fails
+    with a coded error instead of finishing green with the rest skipped (#1414 review)."""
     from unittest.mock import MagicMock
 
     from databricks.sdk.errors import Unauthenticated
@@ -376,7 +376,8 @@ def test_a_run_that_outlasts_the_token_stores_nothing_for_the_later_tables(db_se
     maturity_repo.add_gate(db_session, maturity_level_id=level.id,
                            compliance_policy_id=policy.id)
     db_session.flush()
-    ids = {fqn: _asset(db_session, fqn) for fqn in ("bulktok.sales.a", "bulktok.sales.b")}
+    fqns = ("bulktok.sales.a", "bulktok.sales.b", "bulktok.sales.c")
+    ids = {fqn: _asset(db_session, fqn) for fqn in fqns}
     for asset_id in ids.values():
         _snapshot(db_session, asset_id, 1, minutes_from_now=-30)
     calls = []
@@ -395,19 +396,32 @@ def test_a_run_that_outlasts_the_token_stores_nothing_for_the_later_tables(db_se
     identity = RunIdentity(lambda: built.append(1) or user_ws, on_behalf_of_user=True)
     scope = _bulk_scope(catalog="bulktok")
 
-    snapshot = bulk.start_run(scope, started_by="admin@example.com", max_workers=1)
+    snapshot = bulk.start_run(scope, started_by="admin@example.com", max_workers=1,
+                              batch_size=1)
     bulk.execute_run(snapshot["id"], scope, evaluated_by="admin@example.com",
                      session_factory=lambda: _same_session(db_session),
                      run_identity=identity)
     final = bulk.get_latest_run(session_factory=lambda: _same_session(db_session))
 
     assert built == [1]  # the client is built once and not re-resolved
-    assert len(calls) == 2
-    assert final["evaluated"] == 1 and final["error_count"] == 0
-    assert final["skipped"] == {"maturity_bulk_skipped_not_stored": 1}
-    # The table read before the expiry got a new snapshot; the one after it did not
-    counts = [
-        len(maturity_repo.list_snapshots(db_session, entity_type="Asset", entity_id=ids[fqn]))
-        for fqn in calls
-    ]
-    assert counts == [2, 1]
+    assert len(calls) == 2  # the table after the refused one is not read
+    assert final["state"] == "failed"
+    assert final["evaluated"] == 1 and final["skipped"] == {}
+    assert final["errors"] == [{"asset_id": ids[calls[1]],
+                                "code": "maturity_bulk_authentication_failed", "params": {}}]
+    # The table read before the expiry got a new snapshot; the refused one did not
+    counts = {
+        fqn: len(maturity_repo.list_snapshots(db_session, entity_type="Asset",
+                                              entity_id=ids[fqn]))
+        for fqn in fqns
+    }
+    assert counts[calls[0]] == 2 and counts[calls[1]] == 1
+    assert sorted(counts.values()) == [1, 1, 2]
+
+
+def test_a_refused_token_on_one_asset_read_stays_an_unreadable_table():
+    """Outside a bulk run (an asset GET or write) a refused token reads as unreadable."""
+    from src.controller.maturity_evaluator import _uc_notice
+
+    notice = _uc_notice({"uc_table_status": "unauthenticated", "uc_table_name": "a.b.c"})
+    assert notice.code == "maturity_uc_table_unreadable"

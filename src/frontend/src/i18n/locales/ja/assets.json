@@ -55,6 +55,63 @@
       "uc_description_import_keeps_uc": "{{object}} には Unity Catalog に別のコメントがあるため、インポートはそれを保持し、説明をそこに書き込みません。"
     }
   },
+  "descriptionReset": {
+    "action": "Unity Catalog のコメントを使用",
+    "title": "Unity Catalog のコメントを説明として使用",
+    "description": "Ontos の説明を、Unity Catalog の {{object}} にあるコメントで置き換えます。",
+    "descriptionLoading": "あなたの権限で Unity Catalog からコメントを読み取ります。",
+    "loading": "Unity Catalog を読み取り中...",
+    "inOntos": "Ontos（置き換えられます）",
+    "inUnityCatalog": "Unity Catalog",
+    "empty": "（空）",
+    "alreadyInSync": "説明は Unity Catalog のコメントとすでに一致しています。",
+    "ucEmpty": "このオブジェクトには Unity Catalog のコメントがないため、取り込むものはありません。Ontos の説明は保持されます。",
+    "replaceNote": "以前の説明は変更履歴に残ります。",
+    "confirm": "説明を置き換える",
+    "toast": {
+      "done": "説明を置き換えました",
+      "unchanged": "説明は変更されていません"
+    },
+    "errors": {
+      "generic": "Unity Catalog からコメントを読み取れませんでした。",
+      "user_token_required": "Unity Catalog の読み取りには Databricks のサインインが必要ですが、このリクエストにはありませんでした。",
+      "user_client_unavailable": "Databricks のセッションを使用して Unity Catalog を読み取れませんでした。",
+      "uc_reset_permission_denied": "Unity Catalog の {{object}} を読み取る権限がありません。テーブルの SELECT 権限が必要です。",
+      "uc_reset_object_not_found": "{{object}} が Unity Catalog に見つからないか、アクセス権がありません。",
+      "uc_reset_unavailable": "{{object}} の Unity Catalog を読み取れませんでした。しばらくしてからもう一度お試しください。",
+      "uc_reset_metric_view": "{{object}} はメトリックビューです。説明はコメントではなく定義から取得されます。",
+      "uc_reset_not_applicable": "{{object}} は Unity Catalog のテーブル、ビュー、または列ではありません。",
+      "uc_reset_uc_changed": "{{object}} の Unity Catalog のコメントは、表示してから変更されました。もう一度開いて新しいコメントを確認してください。"
+    },
+    "warnings": {
+      "uc_description_empty": "{{object}} には Unity Catalog のコメントがないため、Ontos の説明は保持されました。"
+    }
+  },
+  "descriptionHistory": {
+    "title": "説明の履歴",
+    "none": "説明はまだ変更されていません。",
+    "loading": "履歴を読み込み中...",
+    "loadError": "説明の履歴を読み込めませんでした。",
+    "unknownUser": "不明なユーザー",
+    "empty": "（空）",
+    "before": "変更前",
+    "after": "変更後",
+    "restoreAfter": "新しいテキストを復元",
+    "restoreBefore": "以前のテキストを復元",
+    "restored": "説明を復元しました",
+    "restoreFailed": "説明を復元できませんでした",
+    "showMore": "さらに {{count}} 件を表示",
+    "sources": {
+      "manual": "編集",
+      "uc_import": "Unity Catalog からのインポート",
+      "bulk_import": "ファイルのインポート（CSV/XLSX）",
+      "uc_reset": "Unity Catalog のコメント",
+      "restore": "復元"
+    },
+    "errors": {
+      "description_history_entry_not_found": "この変更はこのアセットの履歴にありません。"
+    }
+  },
   "deleteDialog": {
     "title": "アセットを削除しますか？",
     "description": "この操作は元に戻せません。アセットとそのすべての関係が完全に削除されます。",

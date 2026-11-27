@@ -32,8 +32,11 @@ from src.tools.visibility import INVALID_VISIBILITY_CODE, VISIBILITY_DESCRIPTION
 IRI = 'http://example.com/onto#Order'
 _RO = FeatureAccessLevel.READ_ONLY
 READ = {'data-products': _RO, 'data-contracts': _RO}
+READ_LINKS = {**READ, 'semantic-models': _RO}  # the link reads' REST level
 SUE = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ,
                  groups=['users'])
+SUE_LINKS = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ_LINKS,
+                       groups=['users'])
 CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ,
                       groups=['users'])
 ADMIN = ToolCaller(email='ann@example.com', auth_path='test', groups=['users'],
@@ -215,16 +218,16 @@ class TestOtherTools:
                 iri=IRI, label='Order', created_by='x'))
         world.db.commit()
 
-        res = _call(world, SUE, 'find_entities_by_concept', concept_iri=IRI)
+        res = _call(world, SUE_LINKS, 'find_entities_by_concept', concept_iri=IRI)
         assert {e['entity_id'] for e in res.data['entities']} == _product_ids(world, 'published')
         assert res.data['entities'][0]['publication_scope'] == 'organization'
-        res = _call(world, SUE, 'find_entities_by_concept', concept_iri=IRI,
+        res = _call(world, SUE_LINKS, 'find_entities_by_concept', concept_iri=IRI,
                     visibility='readable')
         assert {e['entity_id'] for e in res.data['entities']} == _product_ids(
             world, 'published', 'unscoped', 'own_draft')
 
         def _links(key, **kw):
-            return _call(world, SUE, 'list_semantic_links', entity_type='data_product',
+            return _call(world, SUE_LINKS, 'list_semantic_links', entity_type='data_product',
                          entity_id=world.p[key].id, **kw).data['total_found']
 
         assert (_links('published'), _links('unscoped'), _links('own_draft')) == (1, 0, 0)

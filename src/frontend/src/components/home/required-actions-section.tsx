@@ -183,6 +183,7 @@ export default function RequiredActionsSection({ fetchQueue = true }: RequiredAc
       request_id: payload.request_id,
       workflow_name: payload.workflow_name,
       workflow_message: payload.workflow_message,
+      can_clarify: payload.can_clarify,
       on_behalf_of: payload.on_behalf_of,
       full_payload: payload,
     });

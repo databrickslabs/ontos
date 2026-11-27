@@ -43,6 +43,12 @@ interface DefaultResponseWorkflowStep {
   };
 }
 
+// Coded refusals of a clarification request (their texts are in workflows:clarification)
+const CLARIFICATION_ERROR_CODES = new Set([
+  'clarify_not_supported',
+  'clarification_message_required',
+]);
+
 export interface WorkflowApprovalResponseDialogPayload {
   execution_id: string;
   // The approval step the notification is for: a decision after that step
@@ -65,6 +71,8 @@ export interface WorkflowApprovalResponseDialogPayload {
   request_id?: string;
   workflow_name?: string;
   workflow_message?: string;
+  // The approval step has an on_clarify branch: "Request clarification" is offered
+  can_clarify?: boolean;
   on_behalf_of?: { type: string; value: string };
   full_payload?: Record<string, unknown>;
 }
@@ -78,7 +86,7 @@ interface WorkflowApprovalResponseDialogProps {
 }
 
 const SKIP_KEYS = new Set([
-  'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
+  'can_clarify', 'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
 
@@ -302,8 +310,16 @@ export default function WorkflowApprovalResponseDialog({
   const reasonField = requiredFields.find((f) => f.id === 'reason' || f.type === 'text');
   const isReasonRequired = reasonField?.required ?? false;
 
-  const handleSubmit = async (approved: boolean) => {
+  const handleSubmit = async (approved: boolean, clarify = false) => {
     if (!payload?.execution_id) return;
+    if (clarify && !reason.trim()) {
+      toast({
+        title: t('workflows:clarification.messageRequiredTitle'),
+        description: t('workflows:clarification.messageRequiredDesc'),
+        variant: 'destructive',
+      });
+      return;
+    }
     if (isReasonRequired && !reason.trim()) {
       toast({
         title: t('workflows:approvalResponse.messages.reasonRequiredTitle'),
@@ -317,7 +333,12 @@ export default function WorkflowApprovalResponseDialog({
       // Only what the approver wrote: without a reason the backend records a
       // coded "Request denied" (approval_rejected) that each user sees in
       // their own language, not the approver's word for it.
-      const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      const body: Record<string, unknown> = {
+        execution_id: payload.execution_id,
+        approved: approved && !clarify,
+      };
+      // Request clarification: the step's on_clarify branch, with the message
+      if (clarify) body.clarify = true;
       if (payload.step_id) body.step_id = payload.step_id;
       if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
@@ -327,9 +348,12 @@ export default function WorkflowApprovalResponseDialog({
         toast({
           title: t('common:toast.error'),
           description: response.errorCode
-            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, {
-              ...(response.errorParams ?? {}), defaultValue: response.error,
-            })
+            ? t(
+                CLARIFICATION_ERROR_CODES.has(response.errorCode ?? '')
+                  ? `workflows:clarification.errors.${response.errorCode}`
+                  : `workflows:approvalResponse.errors.${response.errorCode}`,
+                { ...(response.errorParams ?? {}), defaultValue: response.error },
+              )
             : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
@@ -377,13 +401,23 @@ export default function WorkflowApprovalResponseDialog({
         onDecisionMade?.();
         return;
       }
-      toast({
-        title: approved ? t('workflows:approvalResponse.approved') : t('workflows:approvalResponse.rejected'),
-        description: approved
-          ? t('workflows:approvalResponse.messages.entityApproved', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') })
-          : t('workflows:approvalResponse.messages.entityRejected', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') }),
-        variant: approved ? 'default' : 'destructive',
-      });
+      const requestName = payload.entity_name || t('workflows:approvalResponse.requestFallback');
+      if (clarify) {
+        toast({
+          title: t('workflows:clarification.requestedTitle'),
+          description: t('workflows:clarification.requestedDesc', { name: requestName }),
+        });
+      } else {
+        toast({
+          title: approved
+            ? t('workflows:approvalResponse.approved')
+            : t('workflows:approvalResponse.rejected'),
+          description: approved
+            ? t('workflows:approvalResponse.messages.entityApproved', { name: requestName })
+            : t('workflows:approvalResponse.messages.entityRejected', { name: requestName }),
+          variant: approved ? 'default' : 'destructive',
+        });
+      }
       // A concept approval changes the concept's lifecycle state (draft/
       // approved). Nudge any open concept view to refetch. Scoped to concepts
       // so other entity types don't trigger a needless knowledge-graph refresh.
@@ -508,6 +542,15 @@ export default function WorkflowApprovalResponseDialog({
             </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0 shrink-0">
+              {payload?.can_clarify && (
+                <Button
+                  variant="outline"
+                  disabled={submitting}
+                  onClick={() => handleSubmit(false, true)}
+                >
+                  {t('workflows:clarification.button')}
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 disabled={submitting}

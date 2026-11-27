@@ -42,6 +42,7 @@ ON_FAIL action
 | `LENGTH(str)` | String length | `LENGTH(obj.name) <= 64` |
 | `UPPER(str)` | Convert to uppercase | `UPPER(obj.name)` |
 | `LOWER(str)` | Convert to lowercase | `LOWER(obj.name) = obj.name` |
+| `HAS_CONCEPT(iri_or_label)` | Check a linked semantic concept (products, contracts, domains) | `HAS_CONCEPT('Customer')` |
 
 On data products, data contracts and domains, a tag key is the tag's
 `namespace/name` or its name; the name alone only works while no other namespace
@@ -216,6 +217,10 @@ ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
 - `column_comment_ratio` is the share of columns with a comment (blank comments count as
   missing); it is null for a table with no columns, so such a table fails
 - `partition_columns_without_comment_count` counts partition columns without a comment
+- `primary_key_columns_without_comment_count` and `foreign_key_columns_without_comment_count`
+  count the key columns of the table's constraints that have no comment; they are read with one
+  `tables.get` per table the rule selects, and a table whose constraints can't be read is
+  reported as not evaluated, not passed (scope such a rule with `WHERE t.catalog = ...`)
 - See the DSL reference for every column field
 
 ---
@@ -270,6 +275,30 @@ ASSERT LENGTH(obj.description) >= 50 AND obj.column_comment_ratio >= 0.5
 
 ---
 
+### Example 10: Concept Coverage for Data Products
+
+**Scenario**: Active data products must be linked to at least one business concept.
+
+```
+MATCH (prod:data_product)
+WHERE prod.status = 'active'
+ASSERT HAS_CONCEPT('Customer') OR prod.concept_count > 0
+ON_FAIL FAIL 'Active data products must be linked to a business concept'
+ON_FAIL ASSIGN_TAG needs_attention: 'missing_concept'
+```
+
+Link a concept to the product; the next run reads the link. To require one
+specific concept, compare its IRI (`HAS_CONCEPT('https://example.com/ontology#Customer')`) or its
+label. To check the domain and owner together:
+
+```
+MATCH (contract:data_contract)
+ASSERT contract.has_owner = True AND LENGTH(contract.domain_name) > 0
+ON_FAIL FAIL 'Contracts need an owning team and a domain'
+```
+
+---
+
 ## Entity Types
 
 You can write rules for these entity types:
@@ -305,7 +334,9 @@ Different entities expose different properties. Here are the most common:
 |----------|-------------|---------|
 | `type` | Entity type | `obj.type = 'table'` |
 | `name` | Entity name | `obj.name MATCHES '^v_'` |
-| `owner` | Owner email | `obj.owner != 'unknown'` |
+| `owner` | Owning team id (data products, contracts, domains) | `obj.has_owner = True` |
+| `owner_emails` | Emails of the owning team's users | `LENGTH(obj.owner_emails) > 0` |
+| `concept_count` | Number of linked concepts | `obj.concept_count > 0` |
 | `status` | Status field | `obj.status = 'active'` |
 | `catalog` | Parent catalog | `obj.catalog = 'prod'` |
 | `schema` | Parent schema | `obj.schema = 'finance'` |

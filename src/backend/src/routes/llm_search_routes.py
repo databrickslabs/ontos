@@ -26,6 +26,7 @@ from src.models.llm_search import (
     SessionSummary, LLMSearchStatus
 )
 from src.models.users import UserInfo
+from src.controller.authorization_manager import normalize_email, role_matches
 from src.controller.llm_search_manager import LLMSearchManager
 from src.tools.caller import ASK_ONTOS_AUTH_PATH, resolve_tool_caller
 
@@ -45,7 +46,7 @@ def _debug_allowed(request: Request, user: UserInfo) -> bool:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
         if auth_manager is None:
             return False
-        return bool(auth_manager.is_user_ontos_admin(user.groups or []))
+        return bool(auth_manager.is_user_ontos_admin(user.groups or [], user.email))
     except Exception:
         logger.warning("Could not check whether the caller may see chat debug info.", exc_info=True)
         return False
@@ -59,8 +60,9 @@ def _derive_effective_role_label(request: Request, user: UserInfo) -> Optional[s
     1. Pull the ``AuthorizationManager`` + ``SettingsManager`` off
        ``request.app.state`` (the route doesn't take them as
        dependencies — keeping the chat endpoint footprint small).
-    2. Intersect ``user.groups`` (lowercase, case-insensitive) with
-       the ``assigned_groups`` of each configured app role.
+    2. Match each configured app role by ``user.groups`` (case-insensitive
+       intersection with ``assigned_groups``) or by ``user.email`` in
+       ``assigned_users``.
     3. If multiple roles match, join their names with commas in
        declaration order — the prompt is a tone hint, not an authz
        gate, so we don't need to pick a "winner".
@@ -91,13 +93,13 @@ def _derive_effective_role_label(request: Request, user: UserInfo) -> Optional[s
             logger.warning(f"Role-override lookup failed; falling back to groups: {e}")
 
         user_groups_lower = set(g.lower() for g in (user.groups or []))
-        if not user_groups_lower:
+        user_email_norm = normalize_email(user.email)
+        if not user_groups_lower and not user_email_norm:
             return None
 
         matched: List[str] = []
         for role in all_roles:
-            role_groups_lower = set(g.lower() for g in (role.assigned_groups or []))
-            if user_groups_lower & role_groups_lower:
+            if role_matches(role, user_groups_lower, user_email_norm):
                 matched.append(role.name)
 
         if not matched:

@@ -490,8 +490,8 @@ class SettingsManager(ThreadBoundDb):
         When role_id is None, the override is cleared and the user's actual group-based
         permissions are used. This stores state in-memory for the backend process lifetime.
 
-        Defense-in-depth: when caller_is_admin is False, the target role_id must intersect
-        with caller_groups (i.e., the user must be a member of a group assigned to that role).
+        Defense-in-depth: when caller_is_admin is False, the user must hold the target role:
+        a group of caller_groups assigned to it, or the user's email in its assigned_users (#1713).
         Admins retain the impersonation power and may set any role_id. Clearing the override
         (role_id=None) is always allowed.
 
@@ -513,11 +513,12 @@ class SettingsManager(ThreadBoundDb):
 
         # Membership validation for non-admin callers
         if not caller_is_admin:
+            from src.controller.authorization_manager import normalize_email, role_matches
+
             group_set = {(g or '').lower() for g in (caller_groups or [])}
-            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
-            if not group_set or not role_groups.intersection(group_set):
+            if not role_matches(role, group_set, normalize_email(user_email)):
                 raise PermissionError(
-                    f"User is not a member of any group assigned to role '{role.name}'"
+                    f"User is not assigned to role '{role.name}' by group or by user"
                 )
 
         self._applied_role_overrides[user_email] = role_id
@@ -556,20 +557,27 @@ class SettingsManager(ThreadBoundDb):
             raise ValueError(f"Role with id '{role_id}' not found")
         return role.feature_permissions or {}
 
-    def get_canonical_role_for_groups(self, user_groups: Optional[List[str]]) -> Optional[AppRole]:
+    def get_canonical_role_for_groups(
+        self, user_groups: Optional[List[str]], user_email: Optional[str] = None
+    ) -> Optional[AppRole]:
         """Map a user's groups to the closest configured AppRole.
 
         Algorithm:
-        1) Try direct match via assigned_groups intersection (pick highest-weight role).
+        1) Try direct match via assigned_groups intersection, or the user's email in
+           assigned_users (pick highest-weight role).
         2) If no matches, compute effective permissions from groups and choose the role
            whose permissions are closest (minimum sum of absolute level differences per feature).
         3) Heuristic: if any group contains 'admin' (case-insensitive), prefer Admin role by name.
         """
-        if not user_groups:
+        from src.controller.authorization_manager import normalize_email, role_matches
+
+        user_email_norm = normalize_email(user_email)
+        if not user_groups and not user_email_norm:
             return None
 
         roles = self.list_app_roles()
-        user_group_set = set(user_groups)
+        user_group_set = set(user_groups or [])
+        user_group_lower = {(g or '').lower() for g in user_group_set}
 
         # 3) Admin heuristic first for better UX in local dev
         try:
@@ -585,8 +593,7 @@ class SettingsManager(ThreadBoundDb):
         best_weight = -1
         for role in roles:
             try:
-                role_groups = set(role.assigned_groups or [])
-                if not role_groups.intersection(user_group_set):
+                if not role_matches(role, user_group_lower, user_email_norm):
                     continue
                 weight = sum(ACCESS_LEVEL_ORDER.get(level, 0) for level in (role.feature_permissions or {}).values())
                 if weight > best_weight:
@@ -596,12 +603,17 @@ class SettingsManager(ThreadBoundDb):
                 continue
         if best_role:
             return best_role
+        # Without groups there is nothing to compare; an email only counts by direct match
+        if not user_group_set:
+            return None
 
         # 2) Distance-based fallback using effective permissions
         try:
             from src.controller.authorization_manager import AuthorizationManager
             auth = AuthorizationManager(self)
-            effective = auth.get_user_effective_permissions(list(user_group_set))
+            effective = auth.get_user_effective_permissions(
+                list(user_group_set), user_email=user_email
+            )
             # Normalize feature set
             feature_ids = set(get_feature_config().keys())
             def level_of(perms: Dict[str, FeatureAccessLevel], fid: str) -> int:

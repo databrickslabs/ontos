@@ -96,7 +96,7 @@ def _set_admin(monkeypatch, is_admin: bool):
     monkeypatch.setattr(
         sm_routes.AuthorizationManager,
         "is_user_ontos_admin",
-        lambda self, groups: is_admin,
+        lambda self, groups, user_email=None: is_admin,
     )
 
 

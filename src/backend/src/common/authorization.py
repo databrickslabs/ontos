@@ -4,7 +4,9 @@ from typing import Optional, Dict, List
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
-from src.controller.authorization_manager import AuthorizationManager
+from src.controller.authorization_manager import (
+    AuthorizationManager, normalize_email, role_matches,
+)
 from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
@@ -385,8 +387,9 @@ async def require_ontos_admin(
 ) -> UserInfo:
     """FastAPI dependency that gates an endpoint on Ontos admin membership.
 
-    "Ontos admin" means the caller's workspace groups intersect the
-    ``assigned_groups`` of at least one ``AppRole`` flagged ``is_admin=True``.
+    "Ontos admin" means the caller holds at least one ``AppRole`` flagged
+    ``is_admin=True``, by workspace group (``assigned_groups``) or by email
+    (``assigned_users``).
     This is distinct from ``settings:ADMIN`` (which only governs administration
     of the Settings feature) and from workspace admin via
     ``APP_ADMIN_DEFAULT_GROUPS`` (which gates moderation-style operations).
@@ -394,7 +397,9 @@ async def require_ontos_admin(
     Use this for routes that grant capabilities beyond a single feature —
     impersonation, MCP token management, full role catalog access, etc.
     """
-    if not auth_manager.is_user_ontos_admin(user_details.groups):
+    if not auth_manager.is_user_ontos_admin(
+        user_details.groups, user_details.email
+    ):
         logger.warning(
             "Ontos admin required but caller '%s' is not in any is_admin role",
             user_details.user or user_details.email,
@@ -413,7 +418,10 @@ def is_ontos_admin(request: Request, user: Optional[UserInfo]) -> bool:
         return False
     try:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
-        return bool(auth_manager is not None and auth_manager.is_user_ontos_admin(user.groups))
+        return bool(
+            auth_manager is not None
+            and auth_manager.is_user_ontos_admin(user.groups, user.email)
+        )
     except Exception:
         logger.warning("Could not check whether the caller is an Ontos admin.", exc_info=True)
         return False
@@ -728,18 +736,19 @@ def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
     OR when they hold ADMIN on the target feature (#853 review). The toggle itself
     defaults to off; this check only matters when the client explicitly opts in.
 
-    Both parts are group-based: the ``can_adopt_entity_ids`` flag and the feature
-    level come from the roles matching the user's groups only, not from team role
-    overrides, email assignment or an applied role override.
+    Both parts use the roles the user holds by group or by direct assignment
+    (``assigned_users``, matched on the caller's email, #1713), not team role
+    overrides or an applied role override.
     """
     groups = getattr(user, "groups", None) or []
+    email = getattr(user, "email", None)
     try:
-        if auth_manager.user_can_adopt_entity_ids(groups):
+        if auth_manager.user_can_adopt_entity_ids(groups, email):
             return True
     except Exception:
         logger.warning("user_can_adopt_entity_ids check failed; falling back to feature-admin.", exc_info=True)
     try:
-        effective = auth_manager.get_user_effective_permissions(groups, None)
+        effective = auth_manager.get_user_effective_permissions(groups, None, user_email=email)
         return auth_manager.has_permission(effective, feature_id, FeatureAccessLevel.ADMIN)
     except Exception:
         logger.warning("Feature-admin check for adopting ids failed for '%s'; denying.", feature_id, exc_info=True)
@@ -882,16 +891,16 @@ class ApprovalChecker:
                 ap = (role.approval_privileges or {}) if role else {}
                 approval = bool(ap.get(self.entity, False))
             else:
-                # Union across roles assigned to user's groups
+                # Union across roles the user holds (by group or by user)
                 # Normalize to lowercase for case-insensitive matching
                 user_groups = set(g.lower() for g in (user_details.groups or []))
+                user_email_norm = normalize_email(user_details.email)
                 roles = settings_manager.list_app_roles()
                 ap_union: dict[ApprovalEntity, bool] = {}
                 for role in roles:
                     try:
-                        # Normalize role groups to lowercase for case-insensitive matching
-                        role_groups = set(g.lower() for g in (role.assigned_groups or []))
-                        if not role_groups.intersection(user_groups):
+                        # By group or by user assignment (case-insensitive)
+                        if not role_matches(role, user_groups, user_email_norm):
                             continue
                         for k, v in (role.approval_privileges or {}).items():
                             ap_union[ApprovalEntity(k)] = ap_union.get(ApprovalEntity(k), False) or bool(v)

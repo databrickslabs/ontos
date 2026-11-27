@@ -2,6 +2,7 @@ import re
 from typing import List, Optional
 from src.models.users import UserInfo
 from src.models.settings import DeploymentPolicy
+from src.controller.authorization_manager import normalize_email, role_matches
 from src.controller.settings_manager import SettingsManager
 from src.common.logging import get_logger
 
@@ -23,7 +24,7 @@ class DeploymentPolicyManager:
         
         Resolution order:
         1. Check for explicit role override applied to user
-        2. Union policies from all roles assigned to user's groups
+        2. Union policies from all roles the user holds (by group or by user)
         3. Resolve template variables ({username}, {email}, etc.)
         4. Return merged policy (most permissive wins)
         """
@@ -40,12 +41,12 @@ class DeploymentPolicyManager:
         policies = []
         # Normalize to lowercase for case-insensitive matching
         user_groups = set(g.lower() for g in (user.groups or []))
+        user_email_norm = normalize_email(user.email)
         
         all_roles = self.settings_manager.list_app_roles()
         for role in all_roles:
-            # Normalize role groups to lowercase for case-insensitive matching
-            role_groups = set(g.lower() for g in (role.assigned_groups or []))
-            if role_groups.intersection(user_groups):
+            # By group or by user assignment (case-insensitive)
+            if role_matches(role, user_groups, user_email_norm):
                 if role.deployment_policy:
                     policies.append(role.deployment_policy)
                     logger.debug(f"Found deployment policy from role '{role.name}' for user {user.email}")

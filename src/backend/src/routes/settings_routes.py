@@ -24,7 +24,7 @@ from ..common.dependencies import (
 )
 from ..common.authorization import PermissionChecker, get_user_details_from_sdk
 from ..common.manager_dependencies import get_auth_manager
-from ..controller.authorization_manager import AuthorizationManager
+from ..controller.authorization_manager import AuthorizationManager, normalize_email, role_matches
 from ..models.users import UserInfo
 from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
@@ -317,7 +317,8 @@ async def list_roles(
     Ontos admins (members of an AppRole with ``is_admin=True``) receive the
     full role catalog — required for the admin role-switcher impersonation
     path and for Settings admin UI. Non-admins receive only roles whose
-    ``assigned_groups`` intersect their own groups (case-insensitive); this
+    ``assigned_groups`` intersect their own groups or whose ``assigned_users``
+    hold their email (case-insensitive, #1713); this
     is the set they may legitimately switch to via the membership-scoped
     role switcher, and avoids leaking the full role catalog (see #404).
 
@@ -330,18 +331,15 @@ async def list_roles(
     """
     try:
         roles = manager.list_app_roles()
-        if auth_manager.is_user_ontos_admin(user_details.groups):
+        if auth_manager.is_user_ontos_admin(user_details.groups, user_details.email):
             return roles
 
         user_group_set = {(g or '').lower() for g in (user_details.groups or [])}
-        if not user_group_set:
+        user_email_norm = normalize_email(user_details.email)
+        if not user_group_set and not user_email_norm:
             return []
-        scoped: List[AppRole] = []
-        for role in roles:
-            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
-            if role_groups and role_groups.intersection(user_group_set):
-                scoped.append(role)
-        return scoped
+        # Roles the user holds by group or by assigned user (#1713)
+        return [r for r in roles if role_matches(r, user_group_set, user_email_norm)]
     except Exception as e:
         logger.error("Error listing roles", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list roles")

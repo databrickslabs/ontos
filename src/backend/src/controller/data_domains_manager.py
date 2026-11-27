@@ -474,8 +474,9 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         if not getattr(db_domain, 'id', None) or not getattr(db_domain, 'name', None):
             logger.warning(f"Skipping domain due to missing id or name: {db_domain}")
             return None
+        # No ``owner``: domains have no owning team, and ``created_by`` is a user
+        # email that must not reach the owner facet.
         extra_data = {
-            "owner": getattr(db_domain, 'created_by', '') or "",
             "status": getattr(db_domain, 'status', 'active') or "active",
         }
         return SearchIndexItem(

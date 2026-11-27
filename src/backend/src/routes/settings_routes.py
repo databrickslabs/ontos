@@ -9,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..common.workspace_client import get_workspace_client
 from ..controller.settings_manager import SettingsManager
+from ..controller.search_backend import PostgresBackend
 from ..models.settings import AppRole, AppRoleCreate, JobCluster
 from ..models.search_config import SearchConfig, SearchConfigResponse, SearchConfigUpdate
 from ..common.database import get_db
@@ -1197,6 +1198,15 @@ async def rebuild_search_index(
         search_manager.build_index()
         
         success = True
+        if isinstance(search_manager.backend, PostgresBackend):
+            # Postgres reconciles in a background thread; the row count is only
+            # known when it ends, and the in-memory list is always empty here.
+            details["background"] = True
+            return {
+                "status": "started",
+                "message": "Search index rebuild started in the background",
+                "index_size": None
+            }
         details["index_size"] = len(search_manager.index)
         
         return {

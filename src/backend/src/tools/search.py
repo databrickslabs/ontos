@@ -51,6 +51,8 @@ class GlobalSearchTool(BaseTool):
         "'offset' over broadening the query. Leave 'query' empty (or '*') to list everything; "
         "the response is always paginated and includes 'total_count' and 'facets' (available "
         "types/domains/statuses/tags) so you can refine instead of fetching all results. "
+        "Typo tolerance (e.g. 'custmer' finds 'customer') runs only on the Postgres search backend "
+        "with pg_trgm; the in-memory backend returns nothing for a misspelled term. "
         "For data products and contracts: " + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {

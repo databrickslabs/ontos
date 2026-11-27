@@ -8,6 +8,12 @@ env:
   - name: "APP_DB_DROP_ON_START"
     value: "false"
 
+  # DB-backed search over the search_documents table (no in-memory index, shared by
+  # all replicas). Rollback: set to "memory" and restart; the in-memory index is
+  # rebuilt from the managers at startup, no data is lost.
+  - name: "SEARCH_BACKEND"
+    value: "postgres"
+
   - name: "PYTHONPATH"
     value: "./backend:${PYTHONPATH}"
   - name: "PYTHONUNBUFFERED"

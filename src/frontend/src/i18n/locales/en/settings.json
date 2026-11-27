@@ -1224,6 +1224,7 @@
       "saveErrorDescription": "Failed to save search configuration. Please try again.",
       "rebuildSuccessTitle": "Index rebuilt",
       "rebuildSuccessDescription": "Search index rebuilt with {{count}} items.",
+      "rebuildStartedDescription": "Search index rebuild started in the background.",
       "rebuildErrorTitle": "Error rebuilding index",
       "rebuildErrorDescription": "Failed to rebuild search index. Please try again."
     },

@@ -5070,6 +5070,8 @@ class WorkflowExecutor:
                         logger.info("Asset %s status set to '%s' after the review", entity_id,
                                     target)
                         self._db.commit()
+                        from src.common.search_live_index import reindex_asset
+                        reindex_asset(db_asset)
                     
             # Data contract deploy request decided by an approver: record it in
             # the change log, as the legacy handle-deploy flow does. A
@@ -5214,6 +5216,7 @@ class WorkflowExecutor:
         """
         from src.common.app_state import get_app_state_manager
         from src.controller.data_products_manager import DataProductsManager
+        from src.common.search_live_index import reindex_product
         from src.db_models.data_products import DataProductDb
 
         product = self._db.get(DataProductDb, product_id)
@@ -5272,6 +5275,8 @@ class WorkflowExecutor:
                 manager.fire_status_change_trigger(
                     product_id, product.name, current_status, reached_status, responded_by,
                 )
+                # Keep the search entry in step with the status written above
+                reindex_product(product, self._db)
         if reached_status == target_status:
             logger.info(
                 "Data product %s moved to '%s' after its review",

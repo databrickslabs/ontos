@@ -345,3 +345,50 @@ class TestSearchManager:
         )
         assert len(results) >= 1
 
+
+
+class TestUpsertItemsDisabledTypes:
+    """upsert_items must use the same disabled-type rule as build_index/upsert_item."""
+
+    @staticmethod
+    def _manager_with_asset_disabled(uses_postgres: bool):
+        from src.models.search_config import AssetTypeConfig, SearchConfig
+
+        config = SearchConfig()
+        config.asset_types["asset"] = AssetTypeConfig(enabled=False)
+        loader = Mock()
+        loader.load.return_value = config
+        manager = SearchManager(searchable_managers=[], config_loader=loader)
+        manager._backend = MagicMock()
+        manager._uses_postgres = Mock(return_value=uses_postgres)
+        return manager
+
+    @staticmethod
+    def _asset_item():
+        return SearchIndexItem(
+            id="asset::1",
+            type="asset",
+            feature_id="assets",
+            title="Edited Asset",
+            description="",
+            link="/assets/1",
+        )
+
+    def test_postgres_keeps_disabled_type_item_indexed(self):
+        """On Postgres a disabled-type item is stored (filtered at query time), not deleted."""
+        manager = self._manager_with_asset_disabled(uses_postgres=True)
+        item = self._asset_item()
+
+        manager.upsert_items([item])
+
+        manager._backend.upsert.assert_called_once_with([item])
+        manager._backend.remove.assert_not_called()
+
+    def test_memory_removes_disabled_type_item(self):
+        """The in-memory backend still drops disabled-type items."""
+        manager = self._manager_with_asset_disabled(uses_postgres=False)
+
+        manager.upsert_items([self._asset_item()])
+
+        manager._backend.remove.assert_called_once_with("asset::1")
+        manager._backend.upsert.assert_not_called()

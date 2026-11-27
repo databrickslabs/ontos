@@ -9,6 +9,7 @@ from src.common.errors import NotFoundError
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.team_role_override import team_role_overrides
 from src.controller.teams_manager import InvalidMemberSetError, TeamsManager
+from src.db_models.settings import AppRoleDb
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.models.teams import TeamMemberCreate
 from src.models.users import UserInfo
@@ -19,6 +20,18 @@ from src.routes.teams_routes import (
     _ensure_override_within_caller_permissions,
     _would_lose_team_write_access,
 )
+
+
+# Team entries store role ids (#1453). Test roles get fixed UUIDs, seeded per test.
+ROLE_NAMES = ["Admin", "Team Admin", "Data Producer", "Data Consumer", "Data Steward"]
+ROLE_ID = {name: str(uuid.uuid5(uuid.NAMESPACE_URL, f"test-role:{name}")) for name in ROLE_NAMES}
+
+
+@pytest.fixture(autouse=True)
+def _app_roles(db_session):
+    for name in ROLE_NAMES:
+        db_session.add(AppRoleDb(id=ROLE_ID[name], name=name))
+    db_session.commit()
 
 
 def _team(db_session, name="Admin Team") -> TeamDb:
@@ -35,7 +48,7 @@ def _member(db_session, team, identifier, member_type="user", override=None) -> 
         team_id=team.id,
         member_type=member_type,
         member_identifier=identifier,
-        app_role_override=override,
+        app_role_override_id=ROLE_ID[override] if override else None,
         added_by="seed",
     )
     db_session.add(member)
@@ -158,23 +171,28 @@ class TestReplaceTeamMembers:
 
 
 class TestTeamRoleOverrides:
-    def _teams(self, *members):
-        return [SimpleNamespace(members=[
-            SimpleNamespace(member_identifier=i, app_role_override=o, member_type="user" if "@" in i else "group")
+    def _members(self, *members):
+        return [
+            SimpleNamespace(
+                member_identifier=i, app_role_override_id=ROLE_ID[o] if o else None,
+                member_type="user" if "@" in i else "group",
+            )
             for i, o in members
-        ])]
+        ]
 
     def test_group_entry_in_users_team_grants_override(self):
-        teams = self._teams(("alice@example.com", None), ("Admins", "Admin"))
-        assert team_role_overrides(teams, "alice@example.com", ["admins"]) == ["Admin"]
+        members = self._members(("alice@example.com", None), ("Admins", "Admin"))
+        assert team_role_overrides(members, "alice@example.com", ["admins"]) == [ROLE_ID["Admin"]]
 
     def test_every_applying_entry_counts(self):
-        teams = self._teams(("admins", "Data Steward"), ("alice@example.com", "Admin"))
-        assert set(team_role_overrides(teams, "alice@example.com", ["admins"])) == {"Admin", "Data Steward"}
+        members = self._members(("admins", "Data Steward"), ("alice@example.com", "Admin"))
+        assert set(team_role_overrides(members, "alice@example.com", ["admins"])) == {
+            ROLE_ID["Admin"], ROLE_ID["Data Steward"],
+        }
 
     def test_members_without_override_are_ignored(self):
-        teams = self._teams(("alice@example.com", None))
-        assert team_role_overrides(teams, "alice@example.com", []) == []
+        members = self._members(("alice@example.com", None))
+        assert team_role_overrides(members, "alice@example.com", []) == []
 
 
 class TestTeamRolesWithMembers:
@@ -188,7 +206,7 @@ class TestTeamRolesWithMembers:
             user_identifier="alice@example.com", user_groups=["admins"],
         )
 
-        assert roles == ["Admin"]
+        assert roles == [ROLE_ID["Admin"]]
 
     def test_removing_own_entry_drops_override(self, manager, db_session):
         team = _team(db_session)
@@ -210,7 +228,7 @@ class TestTeamRolesWithMembers:
         )
 
         # Identifiers match ignoring case, like the team lookup.
-        assert roles == ["Admin"]
+        assert roles == [ROLE_ID["Admin"]]
 
     def test_override_from_another_team_is_kept(self, manager, db_session):
         team = _team(db_session)
@@ -223,7 +241,7 @@ class TestTeamRolesWithMembers:
             user_identifier="alice@example.com", user_groups=["data-stewards"],
         )
 
-        assert roles == ["Data Steward"]
+        assert roles == [ROLE_ID["Data Steward"]]
 
 
 class TestSelfLockoutGuard:
@@ -232,7 +250,7 @@ class TestSelfLockoutGuard:
         auth_manager.get_user_effective_permissions.side_effect = (
             lambda groups, team_roles, user_email=None: {
                 "teams": FeatureAccessLevel.ADMIN
-                if "Admin" in (team_roles or []) or "team-admins" in groups
+                if ROLE_ID["Admin"] in (team_roles or []) or "team-admins" in groups
                 else FeatureAccessLevel.READ_ONLY
             }
         )
@@ -457,9 +475,9 @@ class TestMemberRoutesValidateOverrides:
 
         L = FeatureAccessLevel
         roles = [
-            AppRole(id=uuid.uuid4(), name="Admin", description="", assigned_groups=["admins"],
+            AppRole(id=uuid.UUID(ROLE_ID["Admin"]), name="Admin", description="", assigned_groups=["admins"],
                     feature_permissions={"teams": L.ADMIN, "settings": L.ADMIN}, home_sections=[], approval_privileges={}),
-            AppRole(id=uuid.uuid4(), name="Data Producer", description="", assigned_groups=["data-producers"],
+            AppRole(id=uuid.UUID(ROLE_ID["Data Producer"]), name="Data Producer", description="", assigned_groups=["data-producers"],
                     feature_permissions={"teams": L.READ_WRITE}, home_sections=[], approval_privileges={}),
         ]
         settings = MagicMock()

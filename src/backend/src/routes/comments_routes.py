@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import (
-    PermissionChecker, is_user_feature_admin, get_user_team_role_overrides,
+    PermissionChecker, is_user_feature_admin, lookup_user_team_roles,
 )
 from src.common.entity_metadata_access import asset_metadata_log_readable
 from src.controller.comments_manager import CommentsManager
@@ -134,8 +134,8 @@ async def _list_comments_impl(
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
         user_team_ids = [team.id for team in user_teams]
 
-        # Legacy team-override role name (kept for backward-compat with role:<name> tokens)
-        user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=request)
+        # Team role overrides (#1453): role ids, matched by role-ID and role:<name> audience tokens
+        user_team_role_ids = lookup_user_team_roles(request, current_user.email, user_groups)
 
         # Applied role-ID override (role-switcher / impersonation) — used for the
         # group-derived role resolution path introduced in issue #326.
@@ -160,7 +160,7 @@ async def _list_comments_impl(
             project_id=project_id,
             user_groups=user_groups,
             user_teams=user_team_ids,
-            user_app_role=user_app_role,
+            user_team_role_ids=user_team_role_ids,
             user_email=current_user.email,
             applied_role_override_id=applied_role_override_id,
             include_deleted=include_deleted
@@ -193,10 +193,10 @@ async def _get_entity_timeline_count_impl(
         # Get user's groups for audience filtering
         user_groups = list(current_user.groups or [])
 
-        # Get user's teams and app role
+        # Get user's teams and team role overrides
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
         user_team_ids = [team.id for team in user_teams]
-        user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=request)
+        user_team_role_ids = lookup_user_team_roles(request, current_user.email, user_groups)
 
         applied_role_override_id: Optional[str] = None
         try:
@@ -219,7 +219,7 @@ async def _get_entity_timeline_count_impl(
                 project_id=project_id,
                 user_groups=user_groups,
                 user_teams=user_team_ids,
-                user_app_role=user_app_role,
+                user_team_role_ids=user_team_role_ids,
                 user_email=current_user.email,
                 applied_role_override_id=applied_role_override_id,
                 include_deleted=include_deleted
@@ -270,10 +270,10 @@ async def _get_entity_timeline_impl(
         # Get user's groups for audience filtering
         user_groups = list(current_user.groups or [])
 
-        # Get user's teams and app role
+        # Get user's teams and team role overrides
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
         user_team_ids = [team.id for team in user_teams]
-        user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=request)
+        user_team_role_ids = lookup_user_team_roles(request, current_user.email, user_groups)
 
         applied_role_override_id: Optional[str] = None
         try:
@@ -296,7 +296,7 @@ async def _get_entity_timeline_impl(
                 project_id=project_id,
                 user_groups=user_groups,
                 user_teams=user_team_ids,
-                user_app_role=user_app_role,
+                user_team_role_ids=user_team_role_ids,
                 user_email=current_user.email,
                 applied_role_override_id=applied_role_override_id,
                 include_deleted=include_deleted

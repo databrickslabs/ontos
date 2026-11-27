@@ -172,6 +172,10 @@ class ToolResult:
 # matching REST route requires (or the caller is unknown).
 TOOL_NOT_PERMITTED_CODE = "tool_not_permitted"
 
+# A tool that needs a signed-in user (``requires_user_identity``), run by a caller
+# with none (an MCP API key without a forwarded user token).
+USER_IDENTITY_REQUIRED_CODE = "user_identity_required"
+
 # Declared by a tool that needs no feature level: any caller may run it, with or
 # without an identity (the MCP API-key caller has none). It is an explicit
 # choice, never a default: a tool that declares nothing is refused.
@@ -250,6 +254,22 @@ def check_tool_permission(tool: "BaseTool", ctx: ToolContext) -> Optional[ToolRe
     (``ANY_CALLER`` is the explicit "no feature level needed").
     """
     required = getattr(tool, "required_permission", None)
+    if (
+        required
+        and getattr(tool, "requires_user_identity", False)
+        and not (ctx.caller and ctx.caller.email)
+    ):
+        logger.warning(
+            "[%s] refused: the tool needs a user identity; caller=%s auth_path=%s",
+            getattr(tool, "name", type(tool).__name__),
+            ctx.caller.email if ctx.caller else None,
+            ctx.caller.auth_path if ctx.caller else None,
+        )
+        return ToolResult(
+            success=False,
+            error="Not allowed: this tool needs a signed-in user.",
+            error_code=USER_IDENTITY_REQUIRED_CODE,
+        )
     if not required:
         logger.error(
             "[%s] refused: the tool declares no required_permission (use ANY_CALLER "
@@ -297,6 +317,9 @@ class BaseTool(ABC):
     # route's PermissionChecker, or ``ANY_CALLER``. Every tool declares one:
     # a tool without it is refused (``check_tool_permission``).
     required_permission: Optional[tuple[str, FeatureAccessLevel]] = None
+    # True: the tool runs Unity Catalog or SQL as the user (on-behalf-of), so a
+    # caller with no user identity (an MCP API key alone) is refused.
+    requires_user_identity: bool = False
     
     @abstractmethod
     async def execute(self, ctx: ToolContext, **kwargs) -> ToolResult:

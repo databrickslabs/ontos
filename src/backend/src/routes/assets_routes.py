@@ -55,7 +55,7 @@ from src.common.dependencies import (
 from src.common.api_errors import CodedValueError
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.asset_access import (
-    ensure_asset_readable, get_data_products_manager, user_has_assets_feature,
+    ensure_asset_readable, get_data_products_manager, user_has_assets_feature, user_has_feature,
 )
 from src.common.logging import get_logger
 
@@ -971,7 +971,9 @@ def get_asset_metric_view(
     refuses it), 503 ``user_client_unavailable`` when the user's client can't be
     built, 404
     ``metric_view_not_found`` when the asset isn't a metric view the user can
-    read. The asset itself must be readable by the user.
+    read. The asset itself must be readable by the user. The concept links are
+    read only with Read-only on ``semantic-models`` (like the semantic-links
+    routes); without it they are left out (empty) and the rest is returned.
     """
     _ensure_asset_readable(request, db, current_user, manager, asset_id)
     try:
@@ -986,6 +988,8 @@ def get_asset_metric_view(
     try:
         return MetricViewsManager(db, links_manager).get_for_asset(
             asset_id, ws_client, user_email=getattr(current_user, 'email', None),
+            include_links=user_has_feature(
+                request, current_user, 'semantic-models', FeatureAccessLevel.READ_ONLY),
         )
     except MetricViewNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e

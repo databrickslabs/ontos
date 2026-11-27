@@ -50,6 +50,15 @@
     "operationLinked": "リンク済み",
     "operationUnlinked": "リンク解除済み"
   },
+  "descriptionChange": {
+    "title": "説明が変更されました",
+    "name": "名前:",
+    "location": "場所:",
+    "before": "変更前:",
+    "after": "変更後:",
+    "source": "ソース:",
+    "empty": "(空)"
+  },
   "validation": {
     "commentRequired": "コメントの内容は必須です"
   },

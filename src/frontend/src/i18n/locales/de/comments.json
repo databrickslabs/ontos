@@ -50,6 +50,15 @@
     "operationLinked": "verknüpft",
     "operationUnlinked": "Verknüpfung aufgehoben"
   },
+  "descriptionChange": {
+    "title": "Beschreibung geändert",
+    "name": "Name:",
+    "location": "Speicherort:",
+    "before": "Vorher:",
+    "after": "Nachher:",
+    "source": "Quelle:",
+    "empty": "(leer)"
+  },
   "validation": {
     "commentRequired": "Kommentarinhalt ist erforderlich"
   },

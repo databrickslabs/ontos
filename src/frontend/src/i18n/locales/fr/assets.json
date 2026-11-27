@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog n'a pas de commentaire sur cet objet, il n'y a donc rien à récupérer. La description d'Ontos est conservée.",
     "replaceNote": "La description précédente est conservée dans le journal des modifications.",
     "confirm": "Remplacer la description",
+    "confirmInSync": "Marquer comme synchronisée",
     "toast": {
       "done": "Description remplacée",
       "unchanged": "Description inchangée"
@@ -98,6 +99,7 @@
     "after": "Après",
     "restoreAfter": "Restaurer le nouveau texte",
     "restoreBefore": "Restaurer le texte précédent",
+    "restoreBeforeUnavailable": "C'était la première description, il n'y a donc pas de texte précédent à restaurer.",
     "restored": "Description restaurée",
     "restoreFailed": "La description n'a pas été restaurée",
     "showMore": "Afficher {{count}} de plus",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "Cette modification n'est pas dans l'historique de cet actif."
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "Modifié dans Unity Catalog",
+    "columnsChangedInUc": "Colonnes modifiées dans Unity Catalog : {{count}}",
+    "compare": "Comparer avec Unity Catalog",
+    "title": "Comparer avec Unity Catalog",
+    "description": "Compare les descriptions de {{object}} et de ses colonnes avec les commentaires d'Unity Catalog, lus avec vos autorisations.",
+    "descriptionLoading": "Lit les commentaires dans Unity Catalog avec vos autorisations.",
+    "loading": "Lecture d'Unity Catalog...",
+    "empty": "(vide)",
+    "noDifferences": "Les descriptions correspondent aux commentaires d'Unity Catalog.",
+    "differences": "Descriptions différentes : {{count}}",
+    "selectAll": "Tout sélectionner",
+    "selectNone": "Tout désélectionner",
+    "select": "Sélectionner {{name}}",
+    "colName": "Nom",
+    "colOntos": "Dans Ontos",
+    "colUc": "Dans Unity Catalog",
+    "changedBadge": "Modifié dans Unity Catalog",
+    "ucEmptyRow": "Unity Catalog n'a pas de commentaire ici, il n'y a donc rien à récupérer.",
+    "truncated": "Seules les 1000 premières colonnes sont listées.",
+    "replaceNote": "Les descriptions sélectionnées dans Ontos sont remplacées ; les précédentes restent dans le journal des modifications.",
+    "objectTypes": {
+      "table": "Table",
+      "view": "Vue",
+      "column": "Colonne"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} ne fait pas partie de cette table.",
+      "asset_not_found": "Cet actif n'existe plus.",
+      "uc_reset_failed": "Les descriptions n'ont pas pu être réinitialisées et aucune n'a été modifiée. Réessayez."
+    },
+    "resetSelected": "Réinitialiser la sélection ({{count}})",
+    "toast": {
+      "done": "Descriptions remplacées : {{count}}",
+      "failed": "Non remplacées : {{count}}. Les raisons sont dans la fenêtre."
     }
   },
   "deleteDialog": {

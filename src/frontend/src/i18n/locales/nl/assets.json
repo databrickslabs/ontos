@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog heeft geen opmerking bij dit object, dus er valt niets over te nemen. De Ontos-beschrijving blijft behouden.",
     "replaceNote": "De vorige beschrijving blijft bewaard in het wijzigingslogboek.",
     "confirm": "Beschrijving vervangen",
+    "confirmInSync": "Markeren als gesynchroniseerd",
     "toast": {
       "done": "Beschrijving vervangen",
       "unchanged": "Beschrijving ongewijzigd"
@@ -98,6 +99,7 @@
     "after": "Na",
     "restoreAfter": "Nieuwe tekst herstellen",
     "restoreBefore": "Vorige tekst herstellen",
+    "restoreBeforeUnavailable": "Dit was de eerste beschrijving, dus er is geen vorige tekst om te herstellen.",
     "restored": "Beschrijving hersteld",
     "restoreFailed": "De beschrijving is niet hersteld",
     "showMore": "{{count}} meer tonen",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "Deze wijziging staat niet in de geschiedenis van dit asset."
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "Gewijzigd in Unity Catalog",
+    "columnsChangedInUc": "Kolommen gewijzigd in Unity Catalog: {{count}}",
+    "compare": "Vergelijken met Unity Catalog",
+    "title": "Vergelijken met Unity Catalog",
+    "description": "Vergelijkt de beschrijvingen van {{object}} en zijn kolommen met de Unity Catalog-opmerkingen, gelezen met uw rechten.",
+    "descriptionLoading": "Leest de opmerkingen uit Unity Catalog met uw rechten.",
+    "loading": "Unity Catalog wordt gelezen...",
+    "empty": "(leeg)",
+    "noDifferences": "De beschrijvingen komen overeen met de Unity Catalog-opmerkingen.",
+    "differences": "Afwijkende beschrijvingen: {{count}}",
+    "selectAll": "Alles selecteren",
+    "selectNone": "Selectie opheffen",
+    "select": "{{name}} selecteren",
+    "colName": "Naam",
+    "colOntos": "In Ontos",
+    "colUc": "In Unity Catalog",
+    "changedBadge": "Gewijzigd in Unity Catalog",
+    "ucEmptyRow": "Unity Catalog heeft hier geen opmerking, dus er valt niets over te nemen.",
+    "truncated": "Alleen de eerste 1000 kolommen worden getoond.",
+    "replaceNote": "De geselecteerde beschrijvingen in Ontos worden vervangen; de vorige blijven in het wijzigingslogboek.",
+    "objectTypes": {
+      "table": "Tabel",
+      "view": "View",
+      "column": "Kolom"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} maakt geen deel uit van deze tabel.",
+      "asset_not_found": "Dit asset bestaat niet meer.",
+      "uc_reset_failed": "De beschrijvingen konden niet worden hersteld en er is niets gewijzigd. Probeer het opnieuw."
+    },
+    "resetSelected": "Geselecteerde resetten ({{count}})",
+    "toast": {
+      "done": "Vervangen beschrijvingen: {{count}}",
+      "failed": "Niet vervangen: {{count}}. De redenen staan in het dialoogvenster."
     }
   },
   "deleteDialog": {

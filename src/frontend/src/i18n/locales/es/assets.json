@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog no tiene comentario en este objeto, así que no hay nada que traer. Se mantiene la descripción de Ontos.",
     "replaceNote": "La descripción anterior queda guardada en el registro de cambios.",
     "confirm": "Sustituir descripción",
+    "confirmInSync": "Marcar como sincronizada",
     "toast": {
       "done": "Descripción sustituida",
       "unchanged": "Descripción sin cambios"
@@ -98,6 +99,7 @@
     "after": "Después",
     "restoreAfter": "Restaurar el texto nuevo",
     "restoreBefore": "Restaurar el texto anterior",
+    "restoreBeforeUnavailable": "Esta fue la primera descripción, así que no hay un texto anterior que restaurar.",
     "restored": "Descripción restaurada",
     "restoreFailed": "No se restauró la descripción",
     "showMore": "Mostrar {{count}} más",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "Ese cambio no está en el historial de este activo."
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "Cambiado en Unity Catalog",
+    "columnsChangedInUc": "Columnas cambiadas en Unity Catalog: {{count}}",
+    "compare": "Comparar con Unity Catalog",
+    "title": "Comparar con Unity Catalog",
+    "description": "Compara las descripciones de {{object}} y sus columnas con los comentarios de Unity Catalog, leídos con sus permisos.",
+    "descriptionLoading": "Lee los comentarios de Unity Catalog con sus permisos.",
+    "loading": "Leyendo Unity Catalog...",
+    "empty": "(vacío)",
+    "noDifferences": "Las descripciones coinciden con los comentarios de Unity Catalog.",
+    "differences": "Descripciones distintas: {{count}}",
+    "selectAll": "Seleccionar todo",
+    "selectNone": "Quitar selección",
+    "select": "Seleccionar {{name}}",
+    "colName": "Nombre",
+    "colOntos": "En Ontos",
+    "colUc": "En Unity Catalog",
+    "changedBadge": "Cambiado en Unity Catalog",
+    "ucEmptyRow": "Unity Catalog no tiene comentario aquí, así que no hay nada que traer.",
+    "truncated": "Solo se listan las primeras 1000 columnas.",
+    "replaceNote": "Las descripciones seleccionadas en Ontos se sustituyen; las anteriores quedan en el registro de cambios.",
+    "objectTypes": {
+      "table": "Tabla",
+      "view": "Vista",
+      "column": "Columna"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} no forma parte de esta tabla.",
+      "asset_not_found": "Este activo ya no existe.",
+      "uc_reset_failed": "No se pudieron restablecer las descripciones y no se cambió ninguna. Inténtelo de nuevo."
+    },
+    "resetSelected": "Restablecer seleccionadas ({{count}})",
+    "toast": {
+      "done": "Descripciones sustituidas: {{count}}",
+      "failed": "No sustituidas: {{count}}. Los motivos están en el cuadro de diálogo."
     }
   },
   "deleteDialog": {

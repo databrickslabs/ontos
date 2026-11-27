@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog has no comment on this object, so there is nothing to bring. The Ontos description is kept.",
     "replaceNote": "The previous description is kept in the change log.",
     "confirm": "Replace description",
+    "confirmInSync": "Mark as in sync",
     "toast": {
       "done": "Description replaced",
       "unchanged": "Description unchanged"
@@ -98,6 +99,7 @@
     "after": "After",
     "restoreAfter": "Restore the new text",
     "restoreBefore": "Restore the previous text",
+    "restoreBeforeUnavailable": "This was the first description, so there is no previous text to restore.",
     "restored": "Description restored",
     "restoreFailed": "The description was not restored",
     "showMore": "Show {{count}} more",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "That change is not in the history of this asset."
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "Changed in Unity Catalog",
+    "columnsChangedInUc": "Columns changed in Unity Catalog: {{count}}",
+    "compare": "Compare with Unity Catalog",
+    "title": "Compare with Unity Catalog",
+    "description": "Compares the descriptions of {{object}} and its columns with the Unity Catalog comments, as read with your permissions.",
+    "descriptionLoading": "Reads the comments from Unity Catalog with your permissions.",
+    "loading": "Reading Unity Catalog...",
+    "empty": "(empty)",
+    "noDifferences": "The descriptions match the Unity Catalog comments.",
+    "differences": "Descriptions that differ: {{count}}",
+    "selectAll": "Select all",
+    "selectNone": "Select none",
+    "select": "Select {{name}}",
+    "colName": "Name",
+    "colOntos": "In Ontos",
+    "colUc": "In Unity Catalog",
+    "changedBadge": "Changed in Unity Catalog",
+    "ucEmptyRow": "Unity Catalog has no comment here, so there is nothing to bring.",
+    "truncated": "Only the first 1000 columns are listed.",
+    "replaceNote": "The selected descriptions in Ontos are replaced; the previous ones stay in the change log.",
+    "objectTypes": {
+      "table": "Table",
+      "view": "View",
+      "column": "Column"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} is not part of this table.",
+      "asset_not_found": "This asset no longer exists.",
+      "uc_reset_failed": "The descriptions could not be reset and none was changed. Try again."
+    },
+    "resetSelected": "Reset selected ({{count}})",
+    "toast": {
+      "done": "Descriptions replaced: {{count}}",
+      "failed": "Not replaced: {{count}}. See the reasons in the dialog."
     }
   },
   "deleteDialog": {

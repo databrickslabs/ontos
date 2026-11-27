@@ -20,6 +20,7 @@ import {
 import {
   DescriptionHistoryPanel, hasDescriptionHistory,
 } from '@/components/assets/description-history-panel';
+import { DescriptionDriftNotice } from '@/components/assets/description-drift-notice';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -162,10 +163,14 @@ export default function AssetDetailView() {
   // The description of a table, view or column on Databricks can be taken from Unity Catalog
   const showDescriptionReset = canWrite && canResetDescription(entityType, asset?.platform);
 
-  const fetchAsset = useCallback(async () => {
+  // ``background``: refresh the asset in place, without the page-level spinner that would
+  // unmount an open dialog (a dialog showing what a partly failed action could not do)
+  const fetchAsset = useCallback(async (background: boolean = false) => {
     if (!assetId) return;
-    setLoading(true);
-    setError(null);
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [assetRes, linksRes] = await Promise.all([
         apiGet<AssetRead>(`/api/assets/${assetId}`),
@@ -175,9 +180,13 @@ export default function AssetDetailView() {
       setAsset(assetRes.data ?? null);
       setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
     } catch (err: any) {
-      setError(err.message || t('assets:detail.loadError'));
+      if (background) {
+        console.error('Could not refresh the asset', assetId, err);
+      } else {
+        setError(err.message || t('assets:detail.loadError'));
+      }
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [assetId, apiGet]);
 
@@ -329,6 +338,13 @@ export default function AssetDetailView() {
           sync={asset.description_sync}
           onUseUcComment={showDescriptionReset ? () => setIsDescriptionResetOpen(true) : undefined}
         />
+        <DescriptionDriftNotice
+          assetId={asset.id}
+          assetTypeName={asset.asset_type_name}
+          enabled={showDescriptionReset}
+          refreshKey={asset.updated_at}
+          onReset={() => fetchAsset(true)}
+        />
         {showDescriptionReset && !asset.description_sync && (
           <Button
             variant="link" size="sm" className="mt-1 h-auto p-0 text-xs"
@@ -470,7 +486,7 @@ export default function AssetDetailView() {
               currentDescription={asset.description}
               canRestore={canWrite}
               refreshKey={asset.updated_at}
-              onRestored={() => fetchAsset()}
+              onRestored={() => fetchAsset(true)}
             />
           )}
 
@@ -671,7 +687,7 @@ export default function AssetDetailView() {
           assetId={asset.id}
           open={isDescriptionResetOpen}
           onOpenChange={setIsDescriptionResetOpen}
-          onReset={() => fetchAsset()}
+          onReset={() => fetchAsset(true)}
         />
       )}
 

@@ -66,6 +66,12 @@ class HistoryEntryNotFoundError(CodedValueError):
     code = 'description_history_entry_not_found'
 
 
+class NoPreviousTextError(CodedValueError):
+    """The change has no text before it (a first description): there is nothing to go back to."""
+
+    code = 'description_restore_no_previous_text'
+
+
 # Asset types whose description is tracked (lower case)
 _TRACKED_TYPES = frozenset({'table', 'view', 'column'})
 

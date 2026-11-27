@@ -177,14 +177,18 @@ class TestRestore:
 
         assert response.json()['description'] == 'v0'
 
-    def test_a_description_that_was_empty_before_is_restored_as_empty(self, client, db_session):
+    def test_the_previous_text_of_a_first_description_is_refused(
+            self, client, db_session, writeback_on, user_ws):
         asset = _asset(db_session, 'Table', 't', 'main.sales.t', None)
         _put(client, asset, 'v1')
-        entry = _history(client, asset)['items'][0]
+        entry = _history(client, asset)['items'][0]  # nothing -> v1
+        user_ws.statement_execution.execute_statement.reset_mock()
 
         response = _restore(client, asset, entry['id'], 'before')
 
-        assert response.status_code == 200 and response.json()['description'] is None
+        assert response.status_code == 400
+        assert response.json()['detail']['code'] == 'description_restore_no_previous_text'
+        user_ws.statement_execution.execute_statement.assert_not_called()
 
     def test_restoring_the_current_text_changes_nothing(self, client, table):
         _put(client, table, 'v1')

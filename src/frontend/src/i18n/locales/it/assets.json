@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog non ha un commento su questo oggetto, quindi non c'è nulla da importare. La descrizione di Ontos viene mantenuta.",
     "replaceNote": "La descrizione precedente resta nel registro delle modifiche.",
     "confirm": "Sostituisci descrizione",
+    "confirmInSync": "Segna come sincronizzata",
     "toast": {
       "done": "Descrizione sostituita",
       "unchanged": "Descrizione invariata"
@@ -98,6 +99,7 @@
     "after": "Dopo",
     "restoreAfter": "Ripristina il testo nuovo",
     "restoreBefore": "Ripristina il testo precedente",
+    "restoreBeforeUnavailable": "Questa era la prima descrizione, quindi non c'è un testo precedente da ripristinare.",
     "restored": "Descrizione ripristinata",
     "restoreFailed": "La descrizione non è stata ripristinata",
     "showMore": "Mostra altri {{count}}",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "Questa modifica non è nella cronologia di questo asset."
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "Modificato in Unity Catalog",
+    "columnsChangedInUc": "Colonne modificate in Unity Catalog: {{count}}",
+    "compare": "Confronta con Unity Catalog",
+    "title": "Confronta con Unity Catalog",
+    "description": "Confronta le descrizioni di {{object}} e delle sue colonne con i commenti di Unity Catalog, letti con i tuoi permessi.",
+    "descriptionLoading": "Legge i commenti da Unity Catalog con i tuoi permessi.",
+    "loading": "Lettura di Unity Catalog...",
+    "empty": "(vuoto)",
+    "noDifferences": "Le descrizioni coincidono con i commenti di Unity Catalog.",
+    "differences": "Descrizioni diverse: {{count}}",
+    "selectAll": "Seleziona tutto",
+    "selectNone": "Deseleziona tutto",
+    "select": "Seleziona {{name}}",
+    "colName": "Nome",
+    "colOntos": "In Ontos",
+    "colUc": "In Unity Catalog",
+    "changedBadge": "Modificato in Unity Catalog",
+    "ucEmptyRow": "Unity Catalog non ha un commento qui, quindi non c'è nulla da importare.",
+    "truncated": "Vengono elencate solo le prime 1000 colonne.",
+    "replaceNote": "Le descrizioni selezionate in Ontos vengono sostituite; quelle precedenti restano nel registro delle modifiche.",
+    "objectTypes": {
+      "table": "Tabella",
+      "view": "Vista",
+      "column": "Colonna"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} non fa parte di questa tabella.",
+      "asset_not_found": "Questo asset non esiste più.",
+      "uc_reset_failed": "Non è stato possibile reimpostare le descrizioni e nessuna è stata modificata. Riprova."
+    },
+    "resetSelected": "Reimposta selezionate ({{count}})",
+    "toast": {
+      "done": "Descrizioni sostituite: {{count}}",
+      "failed": "Non sostituite: {{count}}. I motivi sono nella finestra."
     }
   },
   "deleteDialog": {

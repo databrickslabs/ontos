@@ -68,6 +68,7 @@
     "ucEmpty": "このオブジェクトには Unity Catalog のコメントがないため、取り込むものはありません。Ontos の説明は保持されます。",
     "replaceNote": "以前の説明は変更履歴に残ります。",
     "confirm": "説明を置き換える",
+    "confirmInSync": "同期済みにする",
     "toast": {
       "done": "説明を置き換えました",
       "unchanged": "説明は変更されていません"
@@ -98,6 +99,7 @@
     "after": "変更後",
     "restoreAfter": "新しいテキストを復元",
     "restoreBefore": "以前のテキストを復元",
+    "restoreBeforeUnavailable": "これは最初の説明のため、復元できる以前のテキストはありません。",
     "restored": "説明を復元しました",
     "restoreFailed": "説明を復元できませんでした",
     "showMore": "さらに {{count}} 件を表示",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "この変更はこのアセットの履歴にありません。"
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "Unity Catalog で変更されました",
+    "columnsChangedInUc": "Unity Catalog で変更された列: {{count}}",
+    "compare": "Unity Catalog と比較",
+    "title": "Unity Catalog と比較",
+    "description": "{{object}} とその列の説明を、あなたの権限で読み取った Unity Catalog のコメントと比較します。",
+    "descriptionLoading": "あなたの権限で Unity Catalog からコメントを読み取ります。",
+    "loading": "Unity Catalog を読み取り中...",
+    "empty": "（空）",
+    "noDifferences": "説明は Unity Catalog のコメントと一致しています。",
+    "differences": "異なる説明: {{count}}",
+    "selectAll": "すべて選択",
+    "selectNone": "選択を解除",
+    "select": "{{name}} を選択",
+    "colName": "名前",
+    "colOntos": "Ontos",
+    "colUc": "Unity Catalog",
+    "changedBadge": "Unity Catalog で変更されました",
+    "ucEmptyRow": "ここには Unity Catalog のコメントがないため、取り込むものはありません。",
+    "truncated": "最初の 1000 列のみ表示されます。",
+    "replaceNote": "選択した Ontos の説明は置き換えられ、以前の説明は変更履歴に残ります。",
+    "objectTypes": {
+      "table": "テーブル",
+      "view": "ビュー",
+      "column": "カラム"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} はこのテーブルに含まれていません。",
+      "asset_not_found": "このアセットは存在しなくなりました。",
+      "uc_reset_failed": "説明をリセットできなかったため、変更はありません。もう一度お試しください。"
+    },
+    "resetSelected": "選択をリセット ({{count}})",
+    "toast": {
+      "done": "置き換えた説明: {{count}}",
+      "failed": "置き換えられなかった説明: {{count}}。理由はダイアログに表示されます。"
     }
   },
   "deleteDialog": {

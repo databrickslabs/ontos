@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { History, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -69,24 +69,32 @@ export function DescriptionHistoryPanel({
   const [error, setError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
 
-  const load = useCallback(async (skip: number) => {
+  // How many entries are shown, so a reload keeps the pages the user opened
+  const shown = useRef({ assetId, count: 0 });
+
+  const load = useCallback(async (skip: number, limit = PAGE_SIZE) => {
     setLoading(true);
     const res = await get<AssetDescriptionHistory>(
-      `/api/assets/${assetId}/description/history?skip=${skip}&limit=${PAGE_SIZE}`
+      `/api/assets/${assetId}/description/history?skip=${skip}&limit=${limit}`
     );
     if (res.error || !res.data) {
       setError(res.error || '');
     } else {
       setError(null);
       setTotal(res.data.total);
-      setItems((previous) => (skip === 0 ? res.data.items : [...previous, ...res.data.items]));
+      setItems((previous) => {
+        const next = skip === 0 ? res.data.items : [...previous, ...res.data.items];
+        shown.current = { assetId, count: next.length };
+        return next;
+      });
     }
     setLoading(false);
   }, [assetId, get]);
 
   useEffect(() => {
-    void load(0);
-  }, [load, refreshKey]);
+    const opened = shown.current.assetId === assetId ? shown.current.count : 0;
+    void load(0, Math.max(PAGE_SIZE, Math.ceil(opened / PAGE_SIZE) * PAGE_SIZE));
+  }, [load, refreshKey, assetId]);
 
   const restore = async (entry: AssetDescriptionHistoryEntry, version: 'after' | 'before') => {
     const key = `${entry.id}:${version}`;
@@ -161,7 +169,9 @@ export function DescriptionHistoryPanel({
                 </Button>
                 <Button
                   size="sm" variant="outline"
-                  disabled={restoring !== null || same(entry.before, currentDescription)}
+                  disabled={
+                    restoring !== null || !entry.before || same(entry.before, currentDescription)
+                  }
                   onClick={() => restore(entry, 'before')}
                 >
                   {restoring === `${entry.id}:before` && (
@@ -169,6 +179,11 @@ export function DescriptionHistoryPanel({
                   )}
                   {t(`${PREFIX}.restoreBefore`)}
                 </Button>
+                {!entry.before && (
+                  <span className="self-center text-xs text-muted-foreground">
+                    {t(`${PREFIX}.restoreBeforeUnavailable`)}
+                  </span>
+                )}
               </div>
             )}
           </div>

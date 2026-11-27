@@ -50,6 +50,15 @@
     "operationLinked": "collegato",
     "operationUnlinked": "scollegato"
   },
+  "descriptionChange": {
+    "title": "Descrizione modificata",
+    "name": "Nome:",
+    "location": "Posizione:",
+    "before": "Prima:",
+    "after": "Dopo:",
+    "source": "Origine:",
+    "empty": "(vuoto)"
+  },
   "validation": {
     "commentRequired": "Il contenuto del commento è obbligatorio"
   },

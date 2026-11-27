@@ -19,10 +19,11 @@ from src.common.errors import NotFoundError
 from src.common.logging import get_logger
 from src.common.uc_comments import (
     CommentWriteError, NOT_FOUND, PERMISSION_DENIED, SINGLE_READ_TIMEOUT_SECONDS,
-    normalize_comment, read_comment,
+    TableComments, normalize_comment, read_comment, read_table_comments,
 )
 from src.controller.asset_description_history import SOURCE_UC_RESET, description_source
 from src.controller.assets_manager import AssetsManager
+from src.controller.uc_description_baseline import set_baseline
 from src.controller.uc_description_sync_manager import (
     METRIC_VIEW_TABLE_TYPE, UcDescriptionSyncManager, uc_comment_target,
 )
@@ -109,8 +110,8 @@ class UcDescriptionResetManager:
         self, db: Session, asset_id: UUID, *, user_client: Callable[[], Any],
     ) -> UcCommentPreview:
         """The Ontos description and the Unity Catalog comment of an asset, for the diff."""
-        asset = self._get(db, asset_id)
-        target = self._target(asset)
+        asset = self.get_asset(db, asset_id)
+        target = self.target_of(asset)
         table_type, uc_comment = self._read(user_client, target)
         return UcCommentPreview(
             asset_id=asset.id, target=_label(target),
@@ -125,19 +126,50 @@ class UcDescriptionResetManager:
     ) -> ResetOutcome:
         """Replace the description of the asset with its Unity Catalog comment.
 
-        Does not commit (``AssetsManager.update_asset`` does, with the history entry); the
-        caller commits what is left. ``expected_uc_comment``: the comment the user saw;
+        Does not commit (``AssetsManager.update_asset`` only flushes, with the history entry);
+        the caller commits. ``expected_uc_comment``: the comment the user saw;
         another one now is ``UcCommentChangedError``.
         """
+        # Read Unity Catalog first (up to 10 s), lock afterwards: the row is not held during
+        # the read, and the asset is read again under the lock
+        target = self.target_of(self.get_asset(db, asset_id))
+        _table_type, uc_comment = self._read(user_client, target)
+        asset = self.lock(db, asset_id)
+        if self.target_of(asset) != target:
+            raise UcCommentChangedError(
+                f"{_label(target)} changed while Unity Catalog was read.", _label(target))
+        return self.apply_comment(
+            db, asset, _label(target), uc_comment, username=username,
+            expected_uc_comment=expected_uc_comment)
+
+    @staticmethod
+    def lock(db: Session, asset_id: UUID) -> AssetDb:
+        """The asset, its row locked until the caller commits."""
         asset = (
             db.query(AssetDb).filter(AssetDb.id == asset_id)
             .with_for_update().populate_existing().one_or_none()
         )
         if asset is None:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
-        target = self._target(asset)
-        label = _label(target)
-        _table_type, uc_comment = self._read(user_client, target)
+        return asset
+
+    def apply_comment(
+        self, db: Session, asset: AssetDb, label: str, uc_comment: Optional[str], *,
+        username: str, expected_uc_comment: Any = NOT_SENT, snapshot: bool = True,
+        reindex: bool = True,
+    ) -> ResetOutcome:
+        """Replace the description of the (locked) asset with ``uc_comment``, read as the user.
+
+        ``snapshot=False``: the caller updates the tables' column snapshots itself, once for
+        all the assets it resets (see ``UcDescriptionDriftManager.reset_many``).
+        ``reindex=False``: likewise the search index, which the caller upserts once after its
+        commit.
+
+        Records the comment as the asset's Unity Catalog baseline (drift). An empty comment
+        changes nothing and warns; a description that already equals it only clears the
+        "not in sync" mark.
+        """
+        asset_id = asset.id
         if expected_uc_comment is not NOT_SENT and (
                 normalize_comment(expected_uc_comment) != normalize_comment(uc_comment)):
             raise UcCommentChangedError(
@@ -157,6 +189,7 @@ class UcDescriptionResetManager:
         if uc_comment is None:
             # Nothing to bring: the Ontos description is kept
             audit['outcome'] = 'uc_empty'
+            set_baseline(db, asset, None)
             if previous is not None:
                 warnings.append(CodedWarning(
                     code=CODE_UC_EMPTY, params={'object': label},
@@ -167,29 +200,33 @@ class UcDescriptionResetManager:
             # Already the same text; an earlier "not in sync" mark is obsolete
             audit['outcome'] = 'unchanged'
             self._sync.clear_state(db, asset)
+            set_baseline(db, asset, uc_comment)
             return ResetOutcome(result(False), audit)
 
-        # The mark goes with the change (one commit, in update_asset)
+        # The mark and the baseline go with the change (one commit, in update_asset)
         self._sync.clear_state(db, asset)
+        set_baseline(db, asset, uc_comment)
         with description_source(SOURCE_UC_RESET):
             self._assets.update_asset(
                 db, asset_id=asset_id, asset_in=AssetUpdate(description=uc_comment),
-                current_user_id=username)
+                current_user_id=username, commit=False,
+                reindex=reindex)
         asset = db.get(AssetDb, asset_id)
-        AssetsManager.update_table_column_snapshot(db, asset)
+        if snapshot:
+            AssetsManager.update_table_column_snapshot(db, asset)
         audit['outcome'] = 'reset'
         logger.info("Reset the description of asset %s to its Unity Catalog comment", asset_id)
         return ResetOutcome(result(True), audit)
 
     @staticmethod
-    def _get(db: Session, asset_id: UUID) -> AssetDb:
+    def get_asset(db: Session, asset_id: UUID) -> AssetDb:
         asset = db.get(AssetDb, asset_id)
         if asset is None:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
         return asset
 
     @staticmethod
-    def _target(asset: AssetDb) -> Tuple[str, Optional[str]]:
+    def target_of(asset: AssetDb) -> Tuple[str, Optional[str]]:
         type_name = getattr(asset.asset_type, 'name', None)
         label = asset.location or str(asset.id)
         if type_name == METRIC_VIEW_ASSET_TYPE:
@@ -200,6 +237,32 @@ class UcDescriptionResetManager:
             raise NotApplicableError(
                 f"{label} is not a Unity Catalog table, view or column.", label)
         return target
+
+    @staticmethod
+    def read_table(user_client: Callable[[], Any], table_fqn: str) -> TableComments:
+        """The comments of a table and all its columns, read as the user in one call."""
+        ws = user_client()  # a CodedValueError (no user token, no client) reaches the caller
+        try:
+            comments = read_table_comments(
+                ws, table_fqn, timeout_seconds=SINGLE_READ_TIMEOUT_SECONDS)
+        except CommentWriteError as e:
+            logger.warning("Reading the Unity Catalog comments of %s failed: %s",
+                           table_fqn, e.reason)
+            if e.reason == PERMISSION_DENIED:
+                raise PermissionDeniedError(
+                    f"You can't read {table_fqn} in Unity Catalog (SELECT permission needed).",
+                    table_fqn) from e
+            if e.reason == NOT_FOUND:
+                raise ObjectNotFoundError(
+                    f"{table_fqn} was not found in Unity Catalog, or you don't have access "
+                    "to it.", table_fqn) from e
+            raise UnavailableError(
+                f"Unity Catalog could not be read for {table_fqn}.", table_fqn) from e
+        if comments.table_type == METRIC_VIEW_TABLE_TYPE:
+            raise MetricViewError(
+                f"{table_fqn} is a metric view: its description comes from its definition.",
+                table_fqn)
+        return comments
 
     @staticmethod
     def _read(user_client: Callable[[], Any], target: Tuple[str, Optional[str]]) -> Tuple[

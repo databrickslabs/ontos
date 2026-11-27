@@ -204,6 +204,42 @@ class TestDescriptionHistory:
 
 
 class TestResetToUc:
+    def test_the_search_index_is_updated_once_for_the_reset_asset(
+            self, client, table, user_ws, monkeypatch):
+        from src.controller.assets_manager import AssetsManager
+
+        upserts = []
+        monkeypatch.setattr(
+            AssetsManager, '_notify_index_upsert', lambda self, item: upserts.append(item))
+        user_ws.tables.get.return_value = _uc_info('Orders placed online')
+
+        assert _reset(client, table).status_code == 200
+
+        assert len(upserts) == 1
+
+    def test_unity_catalog_is_read_before_the_row_is_locked(
+            self, client, table, user_ws, monkeypatch):
+        from sqlalchemy.orm import Query
+
+        events = []
+        lock = Query.with_for_update
+
+        def recording_lock(query, *args, **kwargs):
+            events.append('lock')
+            return lock(query, *args, **kwargs)
+
+        def recording_read(*args, **kwargs):
+            events.append('uc_read')
+            return _uc_info('From UC')
+
+        monkeypatch.setattr(Query, 'with_for_update', recording_lock)
+        user_ws.tables.get.side_effect = recording_read
+
+        assert _reset(client, table).status_code == 200
+
+        # The slow read is done before the lock is taken (and the lock comes once)
+        assert events[:2] == ['uc_read', 'lock'] and events.count('uc_read') == 1
+
     def test_the_uc_comment_replaces_the_description(self, client, db_session, table, user_ws):
         user_ws.tables.get.return_value = _uc_info('Orders placed online')
 

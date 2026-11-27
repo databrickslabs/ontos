@@ -68,6 +68,7 @@
     "ucEmpty": "Unity Catalog hat zu diesem Objekt keinen Kommentar, es gibt also nichts zu übernehmen. Die Ontos-Beschreibung bleibt erhalten.",
     "replaceNote": "Die bisherige Beschreibung bleibt im Änderungsprotokoll erhalten.",
     "confirm": "Beschreibung ersetzen",
+    "confirmInSync": "Als synchron markieren",
     "toast": {
       "done": "Beschreibung ersetzt",
       "unchanged": "Beschreibung unverändert"
@@ -98,6 +99,7 @@
     "after": "Nachher",
     "restoreAfter": "Neuen Text wiederherstellen",
     "restoreBefore": "Vorherigen Text wiederherstellen",
+    "restoreBeforeUnavailable": "Dies war die erste Beschreibung, daher gibt es keinen vorherigen Text zum Wiederherstellen.",
     "restored": "Beschreibung wiederhergestellt",
     "restoreFailed": "Die Beschreibung wurde nicht wiederhergestellt",
     "showMore": "{{count}} weitere anzeigen",
@@ -110,6 +112,43 @@
     },
     "errors": {
       "description_history_entry_not_found": "Diese Änderung ist nicht im Verlauf dieses Assets."
+    }
+  },
+  "descriptionDrift": {
+    "changedInUc": "In Unity Catalog geändert",
+    "columnsChangedInUc": "In Unity Catalog geänderte Spalten: {{count}}",
+    "compare": "Mit Unity Catalog vergleichen",
+    "title": "Mit Unity Catalog vergleichen",
+    "description": "Vergleicht die Beschreibungen von {{object}} und seinen Spalten mit den Unity-Catalog-Kommentaren, gelesen mit Ihren Berechtigungen.",
+    "descriptionLoading": "Liest die Kommentare mit Ihren Berechtigungen aus Unity Catalog.",
+    "loading": "Unity Catalog wird gelesen...",
+    "empty": "(leer)",
+    "noDifferences": "Die Beschreibungen entsprechen den Unity-Catalog-Kommentaren.",
+    "differences": "Abweichende Beschreibungen: {{count}}",
+    "selectAll": "Alle auswählen",
+    "selectNone": "Auswahl aufheben",
+    "select": "{{name}} auswählen",
+    "colName": "Name",
+    "colOntos": "In Ontos",
+    "colUc": "In Unity Catalog",
+    "changedBadge": "In Unity Catalog geändert",
+    "ucEmptyRow": "Unity Catalog hat hier keinen Kommentar, es gibt also nichts zu übernehmen.",
+    "truncated": "Es werden nur die ersten 1000 Spalten aufgelistet.",
+    "replaceNote": "Die ausgewählten Beschreibungen in Ontos werden ersetzt; die bisherigen bleiben im Änderungsprotokoll.",
+    "objectTypes": {
+      "table": "Tabelle",
+      "view": "View",
+      "column": "Spalte"
+    },
+    "errors": {
+      "uc_reset_field_not_in_table": "{{object}} gehört nicht zu dieser Tabelle.",
+      "asset_not_found": "Dieses Asset existiert nicht mehr.",
+      "uc_reset_failed": "Die Beschreibungen konnten nicht zurückgesetzt werden, und keine wurde geändert. Versuchen Sie es erneut."
+    },
+    "resetSelected": "Ausgewählte zurücksetzen ({{count}})",
+    "toast": {
+      "done": "Ersetzte Beschreibungen: {{count}}",
+      "failed": "Nicht ersetzt: {{count}}. Die Gründe stehen im Dialog."
     }
   },
   "deleteDialog": {

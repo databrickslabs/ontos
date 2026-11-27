@@ -75,9 +75,13 @@ export default function Home() {
   // The journey home (#1347) replaces the Full overview for the roles that have it.
   const journeyHome = resolvedSections.includes(HomeSection.JOURNEY);
   // The marketplace home (#1325) replaces it too, for users who can read products. On a
-  // multi-role union the journey wins. Without products access the Full home is shown.
+  // multi-role union the journey wins, and so do the curation and required-actions sections
+  // of another role (a consumer who is also a steward keeps the steward's home). Without
+  // products access the Full home is shown.
   const marketplaceHome = !journeyHome
     && resolvedSections.includes(HomeSection.MARKETPLACE)
+    && !resolvedSections.includes(HomeSection.DATA_CURATION)
+    && !resolvedSections.includes(HomeSection.REQUIRED_ACTIONS)
     && hasPermission('data-products', FeatureAccessLevel.READ_ONLY);
   // The Full home's sections: MARKETPLACE has none of its own.
   const withoutMarketplace = resolvedSections.filter(s => s !== HomeSection.MARKETPLACE);

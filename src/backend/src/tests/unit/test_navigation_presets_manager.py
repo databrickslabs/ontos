@@ -417,3 +417,34 @@ def test_undo_drops_ids_that_no_longer_exist_and_ignores_unreadable_snapshots(
 def test_preset_feature_ids_are_registered_features_or_entries():
     for entry, feature_id in NAV_MENU_ENTRIES.items():
         assert feature_id in APP_FEATURES, entry
+
+
+# --- Ids that aren't menu entries ---------------------------------------------------------
+
+def _set_hidden(settings_manager, role, hidden):
+    row = settings_manager._db.get(AppRoleDb, str(role.id))
+    row.hidden_nav_features = json.dumps(hidden)
+    settings_manager._db.commit()
+
+
+def test_apply_keeps_hidden_ids_that_are_not_menu_entries_and_undo_restores_the_list(
+    manager, settings_manager, roles,
+):
+    assert 'term-mapping' in APP_FEATURES and 'term-mapping' not in NAV_MENU_ENTRIES
+    _set_hidden(settings_manager, roles[CONSUMER], ['term-mapping', 'master-data'])
+    before = _role(settings_manager, roles[CONSUMER]).hidden_nav_features
+
+    manager.apply('essentials')
+
+    hidden = _role(settings_manager, roles[CONSUMER]).hidden_nav_features
+    assert 'term-mapping' in hidden
+    assert hidden.count('term-mapping') == 1
+    # The menu entries are the preset's: Products is now hidden, the old list's own entry
+    # (Master Data, no access for this role) isn't kept.
+    assert 'data-products' in hidden
+    assert 'master-data' not in hidden
+
+    manager.undo()
+
+    assert _role(settings_manager, roles[CONSUMER]).hidden_nav_features == before
+    assert before == ['term-mapping', 'master-data']

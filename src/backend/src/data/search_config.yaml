@@ -2,6 +2,15 @@
 # Defines which fields are indexed per asset type, match strategies, and ranking behavior
 version: "1.0"
 
+# Performance note (Postgres backend): when no field uses match_type "fuzzy", the
+# query first keeps only rows containing a query term as a substring, then scores
+# those rows. With any fuzzy field, every row is scored (no pre-filter), which is
+# much slower on large catalogs. Typo tolerance is the usual reason to use fuzzy.
+# Broad terms are slow as well, even without fuzzy: the pre-filter only helps when
+# few rows contain the term, so a term that matches most rows is scored over most
+# of the table. Order of magnitude on 10k synthetic rows (busy machine): about 1 s
+# for a term in 500 rows, about 17 s for a term in 8.6k rows.
+
 # Global defaults applied to all asset types unless overridden
 defaults:
   fields:

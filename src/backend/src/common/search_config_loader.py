@@ -94,8 +94,19 @@ class SearchConfigLoader:
                 self._config = self._create_default_config()
                 return self._config
             
-            # Parse and validate using Pydantic
-            self._config = self._parse_config(raw_data)
+            # Parse and validate using Pydantic. A malformed structure (e.g. a YAML
+            # list at the root) is rejected loudly, never replaced by defaults.
+            if not isinstance(raw_data, dict):
+                logger.warning(
+                    "Search config %s is not a YAML mapping (got %s); rejecting it",
+                    self.config_path, type(raw_data).__name__,
+                )
+                raise ValueError("Search config must be a YAML mapping")
+            try:
+                self._config = self._parse_config(raw_data)
+            except (AttributeError, TypeError, KeyError) as e:
+                logger.warning("Search config %s has a malformed section: %s", self.config_path, e)
+                raise ValueError("Search config has a malformed section") from e
             self._last_modified = os.path.getmtime(self.config_path)
             
             logger.info(

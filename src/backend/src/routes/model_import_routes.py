@@ -21,6 +21,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from src.common.authorization import enforce_feature_permission, is_user_feature_admin
 from src.common.dependencies import AuditManagerDep, CurrentUserDep, DBSessionDep
@@ -64,11 +65,29 @@ async def _require_write(options: ModelImportOptions, user, request: Request) ->
         await enforce_feature_permission("data-contracts", FeatureAccessLevel.READ_WRITE, user, request)
 
 
+_FEATURES = ("data-contracts", "semantic-models")
+
+
+async def _require_read(user, request: Request) -> None:
+    """Read access to either feature a run can write to."""
+    last = None
+    for feature in _FEATURES:
+        try:
+            await enforce_feature_permission(feature, FeatureAccessLevel.READ_ONLY, user, request)
+            return
+        except HTTPException as exc:
+            last = exc
+    raise last
+
+
 async def _is_admin(user, request: Request) -> bool:
-    try:
-        return await is_user_feature_admin(user.email, user.groups, "data-contracts", request)
-    except Exception:
-        return False
+    for feature in _FEATURES:
+        try:
+            if await is_user_feature_admin(user.email, user.groups, feature, request):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 async def _get_visible_run(db, run_id: str, manager: ModelImportManager, user, request: Request) -> ModelImportRunDb:
@@ -154,9 +173,10 @@ async def create_run(
             raise HTTPException(status_code=422, detail="The file is empty.")
         tmp.seek(0)
         try:
-            run = manager.create_run(
-                db, stream=tmp, filename=filename, size_bytes=size, sha256=sha.hexdigest(),
-                user_id=current_user.email, options=opts,
+            # Parsing a large model is CPU-bound: keep it off the event loop.
+            run = await run_in_threadpool(
+                manager.create_run, db, stream=tmp, filename=filename, size_bytes=size,
+                sha256=sha.hexdigest(), user_id=current_user.email, options=opts,
             )
         except ErwinParseError as exc:
             _audit(background_tasks, audit_manager, request, current_user, "MODEL_IMPORT_STAGE", False,
@@ -177,7 +197,7 @@ async def list_runs(
     limit: int = 50,
     manager: ModelImportManager = Depends(_get_manager),
 ):
-    await enforce_feature_permission("data-contracts", FeatureAccessLevel.READ_ONLY, current_user, request)
+    await _require_read(current_user, request)
     user_id = None if await _is_admin(current_user, request) else current_user.email
     return [_summary(r) for r in manager.list_runs(db, user_id, limit=max(1, min(limit, 200)))]
 
@@ -190,7 +210,7 @@ async def get_run(
     current_user: CurrentUserDep,
     manager: ModelImportManager = Depends(_get_manager),
 ):
-    await enforce_feature_permission("data-contracts", FeatureAccessLevel.READ_ONLY, current_user, request)
+    await _require_read(current_user, request)
     return _detail(await _get_visible_run(db, run_id, manager, current_user, request))
 
 
@@ -209,13 +229,13 @@ async def update_run(
     if run.user_id != current_user.email:
         raise HTTPException(status_code=403, detail="Only the user who uploaded the model can change this run.")
     try:
-        return _detail(manager.update_options(db, run, options))
+        return _detail(await run_in_threadpool(manager.update_options, db, run, options))
     except ModelImportError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/runs/{run_id}/confirm", response_model=ModelImportRunDetail, status_code=status.HTTP_202_ACCEPTED,
-             summary="Apply a previewed run in the background")
+             summary="Apply a previewed run (concepts now, contracts in the background)")
 async def confirm_run(
     run_id: str,
     payload: ConfirmModelImportRequest,
@@ -231,7 +251,8 @@ async def confirm_run(
         raise HTTPException(status_code=403, detail="Only the user who uploaded the model can confirm this run.")
     await _require_write(ModelImportOptions.model_validate(run.options or {}), current_user, request)
     try:
-        run = manager.confirm_run(db, run, payload.confirm_token, current_user.email)
+        # Concepts are written in this request (contracts follow in the background).
+        run = await run_in_threadpool(manager.confirm_run, db, run, payload.confirm_token, current_user.email)
     except ModelImportConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ModelImportError as exc:

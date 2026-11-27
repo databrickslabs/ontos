@@ -7,7 +7,7 @@
 | Relationship                  | owl:ObjectProperty, domain = parent, range = child      |
 | Subtype relationship          | rdfs:subClassOf                                         |
 | Domain (not built-in)         | skos:Concept, linked from its properties (erwin:domain) |
-| Subject area                  | skos:Collection with skos:member classes                |
+| Subject area                  | erwin:subjectArea annotation on its classes             |
 
 Migrated (foreign key) attributes get no property of their own: the
 relationship represents them, and contract columns that implement them link
@@ -74,12 +74,14 @@ def map_concepts(
     collection_iri: str,
     entity_ids: Optional[Iterable[str]] = None,
     existing_iris: Optional[Dict[str, str]] = None,
+    reserved_iris: Optional[Iterable[str]] = None,
 ) -> ConceptMapping:
     """Build the RDF graph for the logical layer of ``model``.
 
     ``entity_ids`` restricts the output to those entities (a subject area
     selection); relationships are kept when both ends are selected.
     ``existing_iris`` maps ``ontos:sourceId`` → IRI from earlier imports.
+    ``reserved_iris`` are taken (e.g. hand-made concepts); new IRIs avoid them.
     """
     existing = existing_iris or {}
     selected = set(entity_ids) if entity_ids is not None else {e.id for e in model.entities}
@@ -88,10 +90,10 @@ def map_concepts(
     g.bind("erwin", ERWIN)
     g.bind("skos", SKOS)
     g.bind("owl", OWL)
-    used: Set[str] = set(existing.values())
+    used: Set[str] = set(existing.values()) | set(reserved_iris or ())
     iri_by_id: Dict[str, str] = {}
     counts = {"classes": 0, "datatype_properties": 0, "object_properties": 0, "domains": 0,
-              "subclass_links": 0, "collections": 0}
+              "subclass_links": 0}
 
     def mint(object_id: str, slug: str) -> URIRef:
         sid = source_id(model, object_id)
@@ -203,16 +205,11 @@ def map_concepts(
         if sg.exclusive is not None:
             g.add((sup, ERWIN.subtypesExclusive, Literal(sg.exclusive, datatype=XSD.boolean)))
 
-    # Subject areas as SKOS collections
+    # Subject areas as annotations on their classes. (A skos:Collection is not
+    # a versioned concept in Ontos, so it would never be stored or updated.)
     for sa in model.subject_areas:
-        members = [iri_by_id[eid] for eid in sa.entity_ids if eid in iri_by_id]
-        if not members:
-            continue
-        c = mint(sa.id, "subject-area-" + slugify(sa.name))
-        g.add((c, RDF.type, SKOS.Collection))
-        describe(c, sa.id, sa.name, sa.definition)
-        for m in members:
-            g.add((c, SKOS.member, URIRef(m)))
-        counts["collections"] += 1
+        for eid in sa.entity_ids:
+            if eid in iri_by_id and model.entity(eid) is not None and not model.entity(eid).is_view:
+                g.add((URIRef(iri_by_id[eid]), ERWIN.subjectArea, Literal(sa.name)))
 
     return ConceptMapping(graph=g, iri_by_id=iri_by_id, counts=counts)

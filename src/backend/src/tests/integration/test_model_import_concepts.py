@@ -219,3 +219,81 @@ class TestReimport:
         assert run.preview["logical"]["summary"]["removed"] == 0
         manager.confirm_run(db_session, run, run.confirm_token, "steward@example.com", run_inline=True)
         assert semantic.get_concept(f"{COLLECTION}/hand-made")["status"] != "deprecated"
+
+
+class TestReviewFixes:
+    def test_modified_concept_snapshot_matches_model(self, manager, semantic, db_session):
+        """A re-import persists every predicate of a modified concept, not only label/definition."""
+        _import(manager, db_session)
+        changed = XML.replace(
+            "<EMX:Logical_Data_Type>VARCHAR(255)</EMX:Logical_Data_Type>",
+            "<EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type>",
+        )
+        run = _stage(manager, db_session, changed)
+        assert run.preview["logical"]["summary"]["modified"] == 1
+        manager.confirm_run(db_session, run, run.confirm_token, "steward@example.com", run_inline=True)
+        from rdflib.namespace import XSD
+        g = semantic._graph.get_context(URIRef(COLLECTION))
+        email = _iri("customer.email-address")
+        assert (email, RDFS.range, XSD.integer) in g
+        assert (email, RDFS.range, XSD.string) not in g
+        assert _stage(manager, db_session, changed).preview["logical"]["summary"]["modified"] == 0
+
+    def test_subject_areas_annotate_classes(self, manager, semantic, db_session):
+        from src.model_import.erwin.map_concepts import ERWIN
+        _import(manager, db_session)
+        g = semantic._graph.get_context(URIRef(COLLECTION))
+        areas = {str(o) for o in g.objects(_iri("customer"), ERWIN.subjectArea)}
+        assert areas == {"Sales", "Party"}
+
+    def test_entity_turned_physical_only_is_deprecated(self, manager, semantic, db_session):
+        _import(manager, db_session)
+        changed = XML.replace(
+            "<EMX:Name>Product</EMX:Name><EMX:Physical_Name>PRODUCT</EMX:Physical_Name>",
+            "<EMX:Name>Product</EMX:Name><EMX:Physical_Name>PRODUCT</EMX:Physical_Name>"
+            "<EMX:Physical_Only>true</EMX:Physical_Only>",
+        )
+        run = _stage(manager, db_session, changed)
+        assert f"{COLLECTION}/product" in {r["iri"] for r in run.preview["logical"]["removed"]}
+
+    def test_hand_made_concept_iri_is_not_taken_over(self, manager, semantic, db_session):
+        semantic.create_collection(label="Sales DW", collection_type="ontology", created_by="x")
+        semantic.create_concept(collection_iri=COLLECTION, label="Customer", definition="Ours.",
+                                concept_type="class", created_by="x")
+        _import(manager, db_session)
+        assert semantic.get_concept(f"{COLLECTION}/customer")["comment"] == "Ours."
+        assert semantic.get_concept(f"{COLLECTION}/customer-2")["comment"] == (
+            "A party that has placed at least one order."
+        )
+
+    def test_custom_collection_iri_is_created_as_given(self, manager, semantic, db_session):
+        run = _import(manager, db_session, collection_iri="urn:ontology:erwin-sales")
+        assert run.result["logical"]["collection_iri"] == "urn:ontology:erwin-sales"
+        assert semantic.get_collection("urn:ontology:erwin-sales") is not None
+
+    def test_patch_keeps_run_options(self, manager, db_session):
+        run = _stage(manager, db_session, collection_iri="urn:ontology:erwin-sales", contract_grouping="table")
+        run = manager.update_options(db_session, run, ModelImportOptions(migration_mode=True))
+        assert run.options["collection_iri"] == "urn:ontology:erwin-sales"
+        assert run.options["contract_grouping"] == "table"
+        assert run.options["import_physical"] is False
+        assert run.options["migration_mode"] is True
+
+    def test_confirm_twice_is_rejected(self, manager, db_session):
+        run = _stage(manager, db_session)
+        token = run.confirm_token
+        manager.confirm_run(db_session, run, token, "steward@example.com", run_inline=True)
+        with pytest.raises(ModelImportError):
+            manager.confirm_run(db_session, run, token, "steward@example.com", run_inline=True)
+
+    def test_orphaned_running_run_does_not_block_the_model(self, manager, db_session):
+        from datetime import datetime, timedelta, timezone
+        stuck = _stage(manager, db_session)
+        stuck.status = "running"
+        stuck.updated_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        db_session.commit()
+        run = _stage(manager, db_session)
+        run = manager.confirm_run(db_session, run, run.confirm_token, "steward@example.com", run_inline=True)
+        assert run.status == "completed"
+        db_session.refresh(stuck)
+        assert stuck.status == "failed"

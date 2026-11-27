@@ -722,7 +722,9 @@ class SemanticModelsManager(SearchableAsset):
                 target_graph.add(t)
             self._strip_subjects_from_graph(target_graph, conflict_iris)
 
-        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        # Current rows only: superseded versions keep frozen copies of their
+        # triples, which would make every versioned concept look modified.
+        current_triples = rdf_triples_repo.list_current_by_context(self._db, context_name)
         diff = compute_concept_diff(target_graph, current_triples)
 
         original_commit = self._db.commit
@@ -860,7 +862,8 @@ class SemanticModelsManager(SearchableAsset):
                 diff_graph.add(t)
             self._strip_subjects_from_graph(diff_graph, conflict_iris)
 
-        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        # Current rows only (see apply_upload_as_versioning_event).
+        current_triples = rdf_triples_repo.list_current_by_context(self._db, context_name)
         diff = compute_concept_diff(diff_graph, current_triples)
 
         # Stamp the origin filename into the incoming graph (per typed subject)
@@ -1039,7 +1042,7 @@ class SemanticModelsManager(SearchableAsset):
 
         # Aggregate diff for the WHOLE upload (never per-concept).
         incoming_graph = self._load_stash_graph(stash)
-        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        current_triples = rdf_triples_repo.list_current_by_context(self._db, context_name)
         diff = compute_concept_diff(incoming_graph, current_triples)
         summary = diff.summary()
 
@@ -3941,11 +3944,14 @@ class SemanticModelsManager(SearchableAsset):
         parent_collection_iri: Optional[str] = None,
         is_editable: bool = True,
         created_by: Optional[str] = None,
+        collection_iri: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new knowledge collection.
         
         Creates triples in the urn:meta:sources context and an empty context
-        for the collection's concepts.
+        for the collection's concepts. ``collection_iri`` sets the IRI instead
+        of deriving it from the label (an importer re-creating the collection
+        it used before).
         """
         from datetime import datetime
         
@@ -3955,7 +3961,7 @@ class SemanticModelsManager(SearchableAsset):
         sanitized = _sanitize_context_name(label.lower().replace(" ", "-"))
         prefix = "urn:glossary:" if collection_type == "glossary" else \
                  "urn:taxonomy:" if collection_type == "taxonomy" else "urn:ontology:"
-        collection_iri = f"{prefix}{sanitized}"
+        collection_iri = collection_iri or f"{prefix}{sanitized}"
         
         # Check if already exists
         existing = self.get_collection(collection_iri)

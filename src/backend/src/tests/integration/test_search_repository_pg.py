@@ -193,3 +193,21 @@ def test_match_ids_uses_the_search_where(seeded):
     assert repo.match_ids(seeded, "churn") == ["product::1"]
     assert repo.match_ids(seeded, "*", allowed_ids_by_type={"data-product": ["product::2"]},
                           filters={"status": "draft"}) == ["product::2"]
+
+
+def test_search_index_items_types_filter_applies_before_limit(pg_session):
+    """250 better-ranked glossary terms must not crowd the product out of the limit."""
+    repo.upsert_documents(pg_session, [
+        _item(f"term::{i}", "glossary-term", "glossary", "customer customer", "customer")
+        for i in range(250)
+    ] + [
+        _item("product::p1", "data-product", "data-products", "Shoppers 360", "about customer"),
+    ])
+    pg_session.flush()
+    plain = repo.search_index_items(pg_session, "customer", limit=200)
+    assert "product::p1" not in [i.id for i in plain]
+    typed = repo.search_index_items(pg_session, "customer", limit=200, types=["data-product"])
+    assert [i.id for i in typed] == ["product::p1"]
+    tagged = repo.search_index_items(pg_session, "tag:x", types=["data-product"])
+    assert tagged == []
+    assert set(repo.indexed_types(pg_session)) == {"glossary-term", "data-product"}

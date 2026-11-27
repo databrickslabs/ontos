@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Database, Search, Bell, X, LayoutList, Network, Package, Grid2X2, ExternalLink } from 'lucide-react';
+import {
+  Loader2, Database, Search, Bell, X, LayoutList, Network, Package, Grid2X2, ExternalLink,
+  ChevronDown, ChevronRight, AlertTriangle,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDomains } from '@/hooks/use-domains';
 import { type DataProduct } from '@/types/data-product';
@@ -21,18 +24,24 @@ import SubscribeDialog from '@/components/data-products/subscribe-dialog';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
-import { RatingBadge } from '@/components/ratings';
-import { QualityBadge } from '@/components/quality/quality-badge';
 import CertificationBadge from '@/components/common/certification-badge';
-import PublicationBadge from '@/components/common/publication-badge';
+import { QualityBadge } from '@/components/quality/quality-badge';
 import { PUBLICATION_SCOPE_LABELS, type CertificationLevel } from '@/types/lifecycle';
+import {
+  graphFocusForSelection,
+  productIdsFromSearch,
+  productOwnerLabel,
+  productTrustSignal,
+} from '@/lib/marketplace-utils';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface MarketplaceViewProps {
   className?: string;
 }
 
 export default function MarketplaceView({ className }: MarketplaceViewProps) {
-  const { t } = useTranslation(['home', 'common']);
+  const { t } = useTranslation(['home', 'common', 'data-products']);
   const navigate = useNavigate();
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
   const { userInfo } = useUserStore();
@@ -51,6 +60,10 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
+  // Server-side search (#1599): product ids in rank order for the debounced query,
+  // null while no query is active (or the first response is pending).
+  const [searchHits, setSearchHits] = useState<string[] | null>(null);
+  const [searchError, setSearchError] = useState(false);
   // Multi-domain filter (#520 story 10): the marketplace filters by one or MORE
   // domains and shows entities matching ANY of them (union). Empty = all domains.
   const [selectedDomainIds, setSelectedDomainIds] = useState<string[]>([]);
@@ -68,6 +81,8 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   
   // Exact match filter (false = include children, true = exact domain only)
   const [exactMatchesOnly, setExactMatchesOnly] = useState(false);
+  // "Exact match only" is a database-style option: tucked behind an Advanced filters disclosure
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [matchSets, setMatchSets] = useState<{ ids: Set<string>; namesLower: Set<string> } | null>(null);
   const [matchesLoading, _setMatchesLoading] = useState(false);
   
@@ -129,6 +144,44 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     loadProducts();
   }, [scopeFilter]);
 
+  // Server-side search (#1599): the shared search index ranks and matches (tokens, tags,
+  // domains, owners, concept labels) and applies the caller's permissions and the product
+  // read rule, so /api/search never returns an unpublished product to this user. The hits are
+  // intersected with the published list below, which supplies the card data and the scope
+  // filter that a search hit does not carry.
+  useEffect(() => {
+    const query = searchQuery.trim();
+    setSearchError(false);
+    if (!query) {
+      setSearchHits(null);
+      return;
+    }
+    // A new query: drop the previous query's hits so the grid shows the loading state until
+    // the server answers (the abort below cancels the previous request).
+    setSearchHits(null);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const resp = await fetch(
+          `/api/search?search_term=${encodeURIComponent(query)}&types=data-product`,
+          { signal: controller.signal },
+        );
+        if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+        const data = await resp.json();
+        setSearchHits(productIdsFromSearch(Array.isArray(data) ? data : []));
+        setSearchError(false);
+      } catch {
+        if (controller.signal.aborted) return;
+        setSearchHits([]);
+        setSearchError(true);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery]);
+
   // Fetch subscribed products
   const loadSubscribedProducts = useCallback(async () => {
     try {
@@ -175,18 +228,24 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     }
   }, []);
 
-  // Load domain details when switching to graph mode or changing the graph focus.
+  // On entering graph mode, centre the graph on the current selection (#1591): the selected
+  // domain, or the nearest common ancestor of several; the first root when nothing is
+  // selected or the selection has no common ancestor. Focus only; it never filters.
+  const selectedDomainIdsRef = useRef(selectedDomainIds);
+  selectedDomainIdsRef.current = selectedDomainIds;
+  useEffect(() => {
+    if (domainBrowserStyle !== 'graph' || domains.length === 0) return;
+    const focus = graphFocusForSelection(selectedDomainIdsRef.current, domains);
+    const rootDomain = domains.find(d => !d.parent_id) || domains[0];
+    setGraphFocusId(focus ?? rootDomain.id);
+  }, [domainBrowserStyle, domains]);
+
+  // Load domain details when in graph mode and the graph focus changes.
   useEffect(() => {
     if (domainBrowserStyle === 'graph' && graphFocusId) {
       loadDomainDetails(graphFocusId);
-    } else if (domainBrowserStyle === 'graph' && !graphFocusId && domains.length > 0) {
-      // Auto-focus first root domain for graph view (focus only; does not filter).
-      const rootDomain = domains.find(d => !d.parent_id) || domains[0];
-      if (rootDomain) {
-        setGraphFocusId(rootDomain.id);
-      }
     }
-  }, [domainBrowserStyle, graphFocusId, domains, loadDomainDetails]);
+  }, [domainBrowserStyle, graphFocusId, loadDomainDetails]);
 
   // Fade-in effect for graph when domain changes
   useEffect(() => {
@@ -228,6 +287,18 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     
     return result;
   }, [domains]);
+
+  const rootDomains = useMemo(() => sortedDomains.filter(d => !d.parent_id), [sortedDomains]);
+  // The top-level domain that contains the focused graph node (for the root switcher)
+  const graphRootId = useMemo(() => {
+    let cur = domains.find(d => d.id === graphFocusId);
+    const seen = new Set<string>();
+    while (cur?.parent_id && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = domains.find(d => d.id === cur!.parent_id);
+    }
+    return cur?.id ?? null;
+  }, [domains, graphFocusId]);
 
   // Build match sets from the selected domains (union / any-of, #520 story 10).
   // Uses the already-loaded domains array to walk the tree client-side (no API calls needed).
@@ -309,18 +380,18 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
       });
     }
     
-    // Filter by search query
+    // Search: the server ranks; the browser only keeps the hits that are also in the
+    // marketplace listing (domain/scope filters above stay post-filters), in rank order.
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.name?.toLowerCase().includes(query) ||
-        p.description?.purpose?.toLowerCase().includes(query) ||
-        p.description?.usage?.toLowerCase().includes(query)
-      );
+      if (searchHits === null) return [];
+      const rank = new Map(searchHits.map((id, i) => [id, i]));
+      filtered = filtered
+        .filter(p => p.id != null && rank.has(String(p.id)))
+        .sort((a, b) => rank.get(String(a.id))! - rank.get(String(b.id))!);
     }
 
     return filtered;
-  }, [allProducts, selectedDomainIds, searchQuery, matchSets]);
+  }, [allProducts, selectedDomainIds, searchQuery, searchHits, matchSets]);
 
   // Toggle a domain in the multi-select filter (add if absent, remove if present).
   const toggleDomain = useCallback((domainId: string) => {
@@ -338,6 +409,47 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     setGraphFocusId(domainId);
     setSelectedDomainIds([domainId]);
   }, []);
+
+  const searchPending = searchQuery.trim() !== '' && searchHits === null;
+  const clearDomainFilter = useCallback(() => setSelectedDomainIds([]), []);
+
+  // Plain status label: translated for the known statuses, else the raw value humanised
+  const statusLabel = (status: string) =>
+    t(`marketplace.details.statusLabels.${status.toLowerCase()}`, {
+      // The app's own status labels, then the raw value humanised
+      defaultValue: t(`data-products:status.${status.toLowerCase()}`, {
+        defaultValue: status.replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()),
+      }),
+    });
+
+  // What the card no longer shows (#1600): status, publication scope and quality
+  const productDetails = (product: DataProduct) => (
+    <>
+      {product.status && (
+        <Badge variant="outline">
+          {t('marketplace.details.status')}: {statusLabel(product.status)}
+        </Badge>
+      )}
+      {product.publication_scope && product.publication_scope !== 'none' && (
+        <Badge variant="outline">
+          {t('marketplace.details.publishedTo')}:{' '}
+          {t(`marketplace.details.scopes.${product.publication_scope}`, {
+            defaultValue: PUBLICATION_SCOPE_LABELS[
+              product.publication_scope as keyof typeof PUBLICATION_SCOPE_LABELS
+            ] ?? product.publication_scope,
+          })}
+        </Badge>
+      )}
+      {product.id && (
+        <QualityBadge
+          entityType="data_product"
+          entityId={product.id}
+          productAggregation
+          size="sm"
+        />
+      )}
+    </>
+  );
 
   // Handle product card click
   const handleProductClick = async (product: DataProduct) => {
@@ -410,7 +522,13 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     const domainStr = domainRaw != null ? String(domainRaw) : '';
     const domainLabel = getDomainName(domainStr) || domainStr || t('marketplace.products.unknown');
     const description = product.description?.purpose || product.description?.usage || '';
-    const owner = product.team?.members?.[0]?.username || product.team?.name || t('marketplace.products.unknown');
+    // A person's name (or the owning team), never an email or an email prefix (#1600)
+    const owner = productOwnerLabel(product) || t('marketplace.products.unknown');
+    const trust = productTrustSignal(product);
+    const replacement =
+      trust?.kind === 'retiring' && trust.replacementId
+        ? allProducts.find(p => p.id === trust.replacementId)
+        : undefined;
 
     return (
       <Card 
@@ -451,43 +569,40 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             <Badge variant="secondary" className="text-xs">
               {domainLabel}
             </Badge>
-            {product.status && (
-              <Badge variant="outline" className="text-xs">
-                {product.status}
+            {/* One trust signal per card (#1600); scope, status and the secondary
+                badges live on the details page. */}
+            {trust?.kind === 'certified' && (
+              <CertificationBadge
+                certificationLevel={product.certification_level}
+                inheritedCertificationLevel={product.inherited_certification_level}
+                certifiedAt={product.certified_at ?? undefined}
+                certifiedBy={product.certified_by ?? undefined}
+                levels={certificationLevels}
+                size="sm"
+              />
+            )}
+            {trust?.kind === 'retiring' && !replacement?.name && (
+              <Badge
+                variant="outline"
+                className="text-xs border-amber-500 text-amber-700 dark:text-amber-300"
+              >
+                {t('marketplace.trust.retiring')}
               </Badge>
             )}
-            <PublicationBadge
-              publicationScope={product.publication_scope}
-              publishedAt={product.published_at ?? undefined}
-              publishedBy={product.published_by ?? undefined}
-            />
-            <CertificationBadge
-              certificationLevel={product.certification_level}
-              inheritedCertificationLevel={product.inherited_certification_level}
-              certifiedAt={product.certified_at ?? undefined}
-              certifiedBy={product.certified_by ?? undefined}
-              levels={certificationLevels}
-              size="sm"
-            />
-            {product.id && (
-              <RatingBadge
-                entityType="data_product"
-                entityId={product.id}
-                size="sm"
-              />
-            )}
-            {product.id && (
-              <QualityBadge
-                entityType="data_product"
-                entityId={product.id}
-                productAggregation
-                size="sm"
-              />
+            {trust?.kind === 'preview' && (
+              <Badge variant="outline" className="text-xs">
+                {t('marketplace.trust.preview')}
+              </Badge>
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-2 truncate">
             {t('marketplace.products.owner')}: {owner}
           </div>
+          {trust?.kind === 'retiring' && replacement?.name && (
+            <div className="text-xs text-amber-700 dark:text-amber-300 mt-1 truncate">
+              {t('marketplace.trust.retiringUseInstead', { name: replacement.name })}
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -534,15 +649,36 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium">{t('marketplace.browseDataDomains')}</div>
           <div className="flex items-center gap-4">
-            {/* Exact match toggle - only show when at least one domain is selected */}
+            {/* Clear the domain filter: both views, whenever something is selected (#1588) */}
             {selectedDomainIds.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{t('marketplace.exactMatchOnly')}</span>
-                <Switch 
-                  checked={exactMatchesOnly} 
-                  onCheckedChange={(v) => setExactMatchesOnly(!!v)} 
-                />
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={clearDomainFilter}
+              >
+                <X className="h-3.5 w-3.5 mr-1" />
+                {t('marketplace.allDomains')}
+              </Button>
+            )}
+            {/* Switch between top-level domains in graph mode (#1588) */}
+            {domainBrowserStyle === 'graph' && rootDomains.length > 1 && (
+              <Select
+                value={graphRootId ?? ''}
+                onValueChange={(v) => focusDomainInGraph(v)}
+              >
+                <SelectTrigger
+                  className="w-[170px] h-7 text-xs"
+                  aria-label={t('marketplace.graph.rootDomain')}
+                >
+                  <SelectValue placeholder={t('marketplace.graph.rootDomain')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {rootDomains.map(d => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             {/* View style toggle */}
             <div className="inline-flex items-center gap-1 p-0.5 bg-muted rounded-md">
@@ -648,6 +784,74 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         )}
       </div>
 
+      {/* Active domain filter, in both views (#1589): removable chips so a replaced or
+          cleared selection is visible */}
+      {selectedDomainIds.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap" data-testid="marketplace-active-domains">
+          <span className="text-xs text-muted-foreground">
+            {t('marketplace.filters.activeDomains')}
+          </span>
+          {selectedDomainIds.map(id => (
+            <Badge key={id} variant="secondary" className="gap-1 pr-1">
+              {getDomainName(id) || id}
+              <button
+                type="button"
+                className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+                aria-label={t('marketplace.filters.removeDomain', {
+                  name: getDomainName(id) || id,
+                })}
+                onClick={() => toggleDomain(id)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          {domainBrowserStyle === 'graph' && graphFocusId
+            && !selectedDomainIds.includes(graphFocusId) && (
+            <span className="text-xs text-muted-foreground">
+              {t('marketplace.filters.focusNotFiltering', {
+                name: getDomainName(graphFocusId) || graphFocusId,
+              })}
+            </span>
+          )}
+        </div>
+      )}
+      {selectedDomainIds.length === 0 && domainBrowserStyle === 'graph' && (
+        <div className="text-xs text-muted-foreground">
+          {t('marketplace.filters.noDomainFilter')}
+        </div>
+      )}
+
+      {/* Advanced filters (#1600): "Exact match only" is hidden until opened; the default
+          stays "include sub-domains". */}
+      {selectedDomainIds.length > 0 && (
+        <div>
+          <button
+            type="button"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen(o => !o)}
+          >
+            {advancedOpen
+              ? <ChevronDown className="h-3.5 w-3.5" />
+              : <ChevronRight className="h-3.5 w-3.5" />}
+            {t('marketplace.filters.advanced')}
+          </button>
+          {advancedOpen && (
+            <div className="flex items-center gap-2 mt-2">
+              <Switch
+                id="marketplace-exact-match"
+                checked={exactMatchesOnly}
+                onCheckedChange={(v) => setExactMatchesOnly(!!v)}
+              />
+              <label htmlFor="marketplace-exact-match" className="text-xs text-muted-foreground">
+                {t('marketplace.exactMatchOnly')}
+              </label>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Scope filter & tiles per row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 flex-wrap">
@@ -687,7 +891,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
 
         {/* Products */}
         <div className="mt-4">
-          {productsLoading || matchesLoading ? (
+          {productsLoading || matchesLoading || searchPending ? (
             <div className="flex items-center justify-center h-48">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
@@ -699,8 +903,27 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             <div className="text-center py-12 text-muted-foreground">
               <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
               <p>{t('marketplace.products.noProducts')}</p>
+              {searchError && (
+                <p className="text-sm mt-1 flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {t('marketplace.search.error')}
+                </p>
+              )}
               {(searchQuery || selectedDomainIds.length > 0 || scopeFilter !== 'all') && (
                 <p className="text-sm mt-1">{t('marketplace.products.adjustFilters')}</p>
+              )}
+              {/* Suggestions instead of a dead end (#1599) */}
+              {searchQuery.trim() !== '' && (
+                <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
+                    {t('marketplace.search.clear')}
+                  </Button>
+                  {selectedDomainIds.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={clearDomainFilter}>
+                      {t('marketplace.search.searchAllDomains')}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           ) : (
@@ -726,6 +949,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             setInfoDialogOpen(open);
             if (!open) setSelectedProduct(null);
           }}
+          headerExtra={productDetails(selectedProduct)}
           onSubscribe={handleSubscribeClick}
           isSubscribed={productIsSubscribed}
           subscriptionLoading={checkingSubscription}

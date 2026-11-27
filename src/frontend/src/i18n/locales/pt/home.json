@@ -306,6 +306,46 @@
       "pills": "Lista",
       "graph": "Grafo"
     },
+    "details": {
+      "status": "Status",
+      "publishedTo": "Publicado para",
+      "statusLabels": {
+        "sandbox": "Sandbox",
+        "draft": "Rascunho",
+        "proposed": "Proposto",
+        "active": "Ativo",
+        "deprecated": "Em desativação",
+        "retired": "Desativado",
+        "under_review": "Em revisão",
+        "approved": "Aprovado"
+      },
+      "scopes": {
+        "domain": "Domínio",
+        "organization": "Organização",
+        "external": "Externo"
+      }
+    },
+    "filters": {
+      "activeDomains": "Filtrado por:",
+      "removeDomain": "Remover {{name}} do filtro",
+      "focusNotFiltering": "{{name}} aparece no grafo, mas não está filtrando. Clique em um nó para filtrar por ele.",
+      "noDomainFilter": "Mostrando produtos de todos os domínios. Clique em um domínio no grafo para filtrar.",
+      "advanced": "Filtros avançados"
+    },
+    "graph": {
+      "rootDomain": "Domínio de nível superior"
+    },
+    "trust": {
+      "retiring": "Em desativação",
+      "preview": "Prévia",
+      "retiringUseInstead": "Em desativação, use {{name}}",
+      "retiringNoReplacement": "Em desativação, sem substituto indicado"
+    },
+    "search": {
+      "error": "A busca está indisponível no momento.",
+      "clear": "Limpar busca",
+      "searchAllDomains": "Buscar em todos os domínios"
+    },
     "exactMatchOnly": "Somente correspondência exata",
     "selectDomainForGraph": "Selecione um domínio para ver sua hierarquia.",
     "domainInfo": {

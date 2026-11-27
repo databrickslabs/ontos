@@ -306,6 +306,46 @@
       "pills": "List",
       "graph": "Graph"
     },
+    "details": {
+      "status": "Status",
+      "publishedTo": "Published to",
+      "statusLabels": {
+        "sandbox": "Sandbox",
+        "draft": "Draft",
+        "proposed": "Proposed",
+        "active": "Active",
+        "deprecated": "Retiring",
+        "retired": "Retired",
+        "under_review": "Under review",
+        "approved": "Approved"
+      },
+      "scopes": {
+        "domain": "Domain",
+        "organization": "Organization",
+        "external": "External"
+      }
+    },
+    "filters": {
+      "activeDomains": "Filtered by:",
+      "removeDomain": "Remove {{name}} from the filter",
+      "focusNotFiltering": "{{name}} is shown in the graph but is not filtering. Click a node to filter by it.",
+      "noDomainFilter": "Showing products from all domains. Click a domain in the graph to filter.",
+      "advanced": "Advanced filters"
+    },
+    "graph": {
+      "rootDomain": "Top-level domain"
+    },
+    "trust": {
+      "retiring": "Retiring",
+      "preview": "Preview",
+      "retiringUseInstead": "Retiring, use {{name}} instead",
+      "retiringNoReplacement": "Retiring, no replacement named"
+    },
+    "search": {
+      "error": "Search is unavailable right now.",
+      "clear": "Clear search",
+      "searchAllDomains": "Search all domains"
+    },
     "exactMatchOnly": "Exact match only",
     "selectDomainForGraph": "Select a domain to view its hierarchy.",
     "domainInfo": {

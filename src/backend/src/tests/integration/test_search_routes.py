@@ -32,3 +32,17 @@ class TestSearchRoutes:
         assert response1.status_code == 200
         assert response2.status_code == 200
         assert response1.json() == response2.json()
+
+    def test_search_unknown_type_is_a_coded_400(self, client: TestClient, db_session: Session):
+        """An unknown ``types`` value is rejected with a code, not exception text."""
+        response = client.get("/api/search?search_term=test&types=not-a-type")
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "search_unknown_type"
+        assert detail["params"] == {"types": ["not-a-type"]}
+
+    def test_search_known_type_filters_results(self, client: TestClient, db_session: Session):
+        """A known ``types`` value returns only items of that type."""
+        response = client.get("/api/search?search_term=test&types=data-product")
+        assert response.status_code == 200
+        assert all(i["type"] == "data-product" for i in response.json())

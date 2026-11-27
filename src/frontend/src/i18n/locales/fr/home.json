@@ -306,6 +306,46 @@
       "pills": "Liste",
       "graph": "Graphe"
     },
+    "details": {
+      "status": "Statut",
+      "publishedTo": "Publié pour",
+      "statusLabels": {
+        "sandbox": "Bac à sable",
+        "draft": "Brouillon",
+        "proposed": "Proposé",
+        "active": "Actif",
+        "deprecated": "En retrait",
+        "retired": "Retiré",
+        "under_review": "En revue",
+        "approved": "Approuvé"
+      },
+      "scopes": {
+        "domain": "Domaine",
+        "organization": "Organisation",
+        "external": "Externe"
+      }
+    },
+    "filters": {
+      "activeDomains": "Filtré par :",
+      "removeDomain": "Retirer {{name}} du filtre",
+      "focusNotFiltering": "{{name}} est affiché dans le graphe mais ne filtre pas. Cliquez sur un nœud pour filtrer par celui-ci.",
+      "noDomainFilter": "Produits de tous les domaines affichés. Cliquez sur un domaine du graphe pour filtrer.",
+      "advanced": "Filtres avancés"
+    },
+    "graph": {
+      "rootDomain": "Domaine de premier niveau"
+    },
+    "trust": {
+      "retiring": "En retrait",
+      "preview": "Aperçu",
+      "retiringUseInstead": "En retrait, utilisez {{name}}",
+      "retiringNoReplacement": "En retrait, aucun remplaçant indiqué"
+    },
+    "search": {
+      "error": "La recherche est indisponible pour le moment.",
+      "clear": "Effacer la recherche",
+      "searchAllDomains": "Rechercher dans tous les domaines"
+    },
     "exactMatchOnly": "Correspondance exacte uniquement",
     "selectDomainForGraph": "Sélectionnez un domaine pour voir sa hiérarchie.",
     "domainInfo": {

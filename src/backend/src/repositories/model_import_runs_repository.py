@@ -47,7 +47,11 @@ class ModelImportRunsRepository:
         ).count()
 
     def claim(self, db: Session, run_id: str, token: str) -> bool:
-        """Flip a previewed run to running if its token still matches (atomic)."""
+        """Flip a previewed run to running if its token still matches (atomic).
+
+        Raises IntegrityError (at flush or commit) if another run of the same
+        model is running: see the partial unique index on the table.
+        """
         updated = db.query(ModelImportRunDb).filter(
             ModelImportRunDb.id == run_id,
             ModelImportRunDb.status == 'previewed',

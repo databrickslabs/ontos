@@ -297,3 +297,34 @@ class TestReviewFixes:
         assert run.status == "completed"
         db_session.refresh(stuck)
         assert stuck.status == "failed"
+
+
+class TestFinalReviewFixes:
+    def test_hand_added_annotations_survive_reimport(self, manager, semantic, db_session):
+        from rdflib import Literal
+        from src.repositories.rdf_triples_repository import rdf_triples_repo
+        _import(manager, db_session)
+        cv = concept_versions_repo.get_current(db_session, f"{COLLECTION}/customer")
+        rdf_triples_repo.add_triple(
+            db_session, subject_uri=f"{COLLECTION}/customer",
+            predicate_uri="http://www.w3.org/2004/02/skos/core#example", object_value="ACME Corp",
+            object_is_uri=False, context_name=COLLECTION, concept_version_id=cv.id,
+        )
+        db_session.commit()
+        semantic.rebuild_graph_from_enabled()
+        changed = XML.replace("A party that has placed at least one order.", "A party that buys from us.")
+        run = _stage(manager, db_session, changed)
+        manager.confirm_run(db_session, run, run.confirm_token, "steward@example.com", run_inline=True)
+        g = semantic._graph.get_context(URIRef(COLLECTION))
+        from rdflib.namespace import SKOS
+        assert (_iri("customer"), SKOS.example, Literal("ACME Corp")) in g
+        assert (_iri("customer"), SKOS.definition, Literal("A party that buys from us.")) in g
+
+    def test_second_running_run_of_a_model_is_rejected(self, manager, db_session):
+        from src.controller.model_import_manager import ModelImportConflict
+        first = _stage(manager, db_session)
+        first.status = "running"
+        db_session.commit()
+        run = _stage(manager, db_session)
+        with pytest.raises(ModelImportConflict):
+            manager.confirm_run(db_session, run, run.confirm_token, "steward@example.com", run_inline=True)

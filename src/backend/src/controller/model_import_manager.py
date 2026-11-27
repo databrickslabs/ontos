@@ -28,14 +28,15 @@ from datetime import datetime, timedelta, timezone
 from typing import IO, TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from rdflib import BNode, Graph, Literal, URIRef
-from rdflib.namespace import OWL, RDF, SKOS
+from rdflib.namespace import OWL, RDF, RDFS, SKOS
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.db_models.model_import_runs import ModelImportRunDb
 from src.model_import.erwin.builder import entities_in
 from src.model_import.erwin.ir import ErwinModel
-from src.model_import.erwin.map_concepts import ONTOS, ConceptMapping, map_concepts, source_id
+from src.model_import.erwin.map_concepts import ERWIN, ONTOS, ConceptMapping, map_concepts, source_id
 from src.model_import.erwin.parse import parse_erwin
 from src.model_import.erwin.types import normalize_dbms
 from src.models.model_import import ModelImportOptions
@@ -52,6 +53,11 @@ MAX_CONCURRENT_RUNS_PER_USER = 2
 # Preview lists are capped so a 2,000-entity model doesn't produce a 10 MB response.
 PREVIEW_LIST_LIMIT = 200
 _ONTOS_NS = str(ONTOS)
+# Predicates map_concepts writes besides erwin:* (skos:altLabel is only ever
+# added, so hand-added synonyms survive re-imports).
+_MANAGED_PREDICATES = tuple(str(p) for p in (
+    RDF.type, SKOS.prefLabel, SKOS.definition, SKOS.note, RDFS.domain, RDFS.range, RDFS.subClassOf,
+))
 
 # Options a PATCH may leave out; they keep the run's value, then the previous
 # import's value, then the default.
@@ -200,20 +206,27 @@ class ModelImportManager:
             raise ModelImportError("Run has expired. Upload the file again.")
         if not token or token != run.confirm_token:
             raise ModelImportError("The preview changed since it was shown. Review the new preview and confirm again.")
-        model_import_runs_repo.expire_stale(db)  # frees models held by orphaned runs
+        if model_import_runs_repo.expire_stale(db):  # frees models held by orphaned runs
+            db.flush()
         if model_import_runs_repo.count_running_for_user(db, run.user_id) >= MAX_CONCURRENT_RUNS_PER_USER:
             raise ModelImportConflict(
                 f"Concurrent import limit reached ({MAX_CONCURRENT_RUNS_PER_USER}). Wait for a running import to finish."
             )
         # Claim atomically: only one confirm of this run can flip it to running,
         # and only one run per model may be running.
-        if not model_import_runs_repo.claim(db, run.id, token):
-            db.rollback()
-            raise ModelImportConflict("This run was confirmed or changed by another request.")
-        if model_import_runs_repo.count_running_for_model(db, run.source_model_id) > 1:
+        from sqlalchemy.exc import IntegrityError
+        try:
+            claimed = model_import_runs_repo.claim(db, run.id, token)
+            if claimed:
+                # A partial unique index allows one running run per model; the
+                # commit fails if another request claimed a run of it first.
+                db.commit()
+        except IntegrityError:
             db.rollback()
             raise ModelImportConflict("Another import of this model is running. Wait for it to finish.")
-        db.commit()
+        if not claimed:
+            db.rollback()
+            raise ModelImportConflict("This run was confirmed or changed by another request.")
         db.refresh(run)
         run.progress_message = "Starting import…"
         run.notification_id = self._create_notification(db, run)
@@ -246,6 +259,10 @@ class ModelImportManager:
             self._finish(db, run, "completed", result, "Import complete.")
             return run
 
+        if not iri_by_id:
+            # Resolved here, in the request: the worker thread must not touch
+            # the semantic models manager (its session is not thread-safe).
+            iri_by_id = self._existing_iris_by_id(db, model, options)
         run.result = result
         db.commit()
         cancel_event = threading.Event()
@@ -499,8 +516,12 @@ class ModelImportManager:
         # concept (label, definition, synonyms, ...). Make the new version's
         # snapshot match the model in full (domain, range, erwin annotations).
         sem_db = self._semantic_session(db)
+        conflicts = {iri for iri, _ in self._semantic._detect_cross_scheme_iri_conflicts(
+            plan.merged_graph, plan.collection_iri)}
         synced = 0
         for iri in plan.modified:
+            if iri in conflicts:
+                continue  # skipped by the versioning event: no new version to fill
             cv = concept_versions_repo.get_current(sem_db, iri)
             if cv is not None:
                 self._replace_version_triples(sem_db, plan, iri, cv.id, actor)
@@ -542,11 +563,14 @@ class ModelImportManager:
         from src.db_models.rdf_triples import RdfTripleDb
         from src.repositories.rdf_triples_repository import rdf_triples_repo
 
+        # Only the predicates the importer writes are replaced; anything a
+        # steward added (extra synonyms, other annotations) stays.
         sem_db.query(RdfTripleDb).filter(
             RdfTripleDb.subject_uri == iri,
             RdfTripleDb.context_name == plan.collection_iri,
             RdfTripleDb.concept_version_id == version_id,
-            ~RdfTripleDb.predicate_uri.startswith(_ONTOS_NS),
+            or_(RdfTripleDb.predicate_uri.in_(_MANAGED_PREDICATES),
+                RdfTripleDb.predicate_uri.startswith(str(ERWIN))),
         ).delete(synchronize_session=False)
         for p, o in plan.mapping.graph.predicate_objects(URIRef(iri)):
             if str(p).startswith(_ONTOS_NS):
@@ -603,8 +627,6 @@ class ModelImportManager:
             options = ModelImportOptions.model_validate(run.options or {})
             result = dict(run.result or {})
             self._progress(db, run, "Importing contracts…")
-            if not iri_by_id:
-                iri_by_id = self._existing_iris_by_id(db, model, options)
             plan = self.plan_contracts(db, model, options, iri_by_id, run_id=run.id)
             result["physical"] = apply_contracts(
                 db, self._contracts, plan, actor, lambda m: self._progress(db, run, m), cancel_event,

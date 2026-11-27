@@ -56,16 +56,16 @@ def upgrade() -> None:
     op.create_index('ix_model_import_runs_source_model_id', _TABLE, ['source_model_id'])
     op.create_index('ix_model_import_runs_user_created', _TABLE, ['user_id', 'created_at'])
     op.create_index('ix_model_import_runs_model_status', _TABLE, ['source_model_id', 'status'])
+    # At most one running import per model.
+    op.create_index(
+        'uq_model_import_runs_running_model', _TABLE, ['source_model_id'], unique=True,
+        postgresql_where=sa.text("status = 'running'"),
+    )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     if _TABLE not in sa.inspect(bind).get_table_names():
         return
-    for ix in (
-        'ix_model_import_runs_model_status', 'ix_model_import_runs_user_created',
-        'ix_model_import_runs_source_model_id', 'ix_model_import_runs_source_sha256',
-        'ix_model_import_runs_user_id',
-    ):
-        op.drop_index(ix, table_name=_TABLE)
+    # Dropping the table drops its indexes too (whichever of them exist).
     op.drop_table(_TABLE)

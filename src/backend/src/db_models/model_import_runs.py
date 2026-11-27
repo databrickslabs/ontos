@@ -11,7 +11,7 @@ thread and record their result here.
 
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Index, Integer, LargeBinary, String, Text, func
+from sqlalchemy import Column, DateTime, Index, Integer, LargeBinary, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSON
 
 from src.common.database import Base
@@ -61,6 +61,9 @@ class ModelImportRunDb(Base):
     __table_args__ = (
         Index('ix_model_import_runs_user_created', 'user_id', 'created_at'),
         Index('ix_model_import_runs_model_status', 'source_model_id', 'status'),
+        # At most one running import per model.
+        Index('uq_model_import_runs_running_model', 'source_model_id', unique=True,
+              postgresql_where=text("status = 'running'"), sqlite_where=text("status = 'running'")),
     )
 
     def __repr__(self):

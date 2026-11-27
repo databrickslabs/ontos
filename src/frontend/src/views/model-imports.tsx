@@ -27,8 +27,12 @@ export default function ModelImportsView() {
   const [runs, setRuns] = useState<ModelImportRunSummary[] | null>(null);
   const [open, setOpen] = useState(false);
 
-  const canImport = hasPermission('data-contracts', FeatureAccessLevel.READ_WRITE)
-    || hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
+  // Preselect only the layers the user may write, so the upload isn't refused.
+  const layers = {
+    logical: hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE),
+    physical: hasPermission('data-contracts', FeatureAccessLevel.READ_WRITE),
+  };
+  const canImport = layers.logical || layers.physical;
 
   useEffect(() => {
     setStaticSegments([]);
@@ -66,7 +70,7 @@ export default function ModelImportsView() {
         searchColumn="source_model_name"
         onRowClick={(row) => navigate(`/model-imports/${row.original.id}`)}
       />
-      <ModelImportDialog open={open} onOpenChange={setOpen} />
+      <ModelImportDialog open={open} onOpenChange={setOpen} layers={layers} />
     </div>
   );
 }

@@ -325,25 +325,22 @@
         "sql": "SQL"
       },
       "code": "Código",
-      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
-      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
-      "timeout": "Tempo limite (segundos)",
-      "timeoutHelp": "A etapa falha quando o script roda por mais tempo que isso.",
-      "variablesTitle": "Variáveis disponíveis",
-      "pythonVariables": {
-        "entity": "Os dados da entidade (um dicionário)",
-        "entity_type": "O tipo da entidade",
-        "entity_id": "O ID da entidade",
-        "entity_name": "O nome da entidade",
-        "user_email": "E-mail do usuário que disparou o workflow",
-        "step_results": "Resultados das etapas que já rodaram, por ID da etapa"
-      },
-      "pythonResultHelp": "Defina result para escolher o ramo: result = {'passed': False, 'message': '...'} segue o ramo Fail; sem result a etapa passa. Só há built-ins básicos: sem imports, arquivos ou rede.",
-      "sqlHelp": "Roda no SQL warehouse definido em Configurações. Os marcadores ${variable} são substituídos antes de a instrução rodar; a etapa passa quando a instrução termina com sucesso. A instrução espera até 50 segundos.",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}",
+      "sqlHelp": "Roda no SQL warehouse definido em Configurações. Cada ${variable} vai para o warehouse como parâmetro, nunca colado no SQL: escreva-o onde vai um valor (owner = ${user_email}) ou depois de FROM ou JOIN para o nome de uma tabela. A etapa passa quando a instrução termina com sucesso. A instrução espera até 50 segundos.",
       "errors": {
         "script_code_required": "Informe o código do script.",
-        "script_timeout_invalid": "Informe um número inteiro de segundos, no mínimo {{minimum}}.",
         "script_language_unsupported": "A linguagem \"{{language}}\" não é suportada. Suportadas: {{supported}}."
+      }
+    },
+    "scriptStepSafety": {
+      "placeholderRules": "Um marcador não pode ficar entre aspas ou crases ('%${entity_name}%'), fazer parte de um nome maior (main.${entity_id}) nem ser a lista inteira de um IN (...). Escreva concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) ou array_contains(from_json(${variable}, 'array<string>'), coluna). Um literal tipado como DATE '${entity_name}' também não aceita: escreva CAST('${entity_name}' AS DATE). Para um nome de tabela em qualquer outra posição, escreva IDENTIFIER(${entity_id}): o valor é vinculado dentro dele.",
+      "errors": {
+        "script_python_disabled": "Etapas de script Python estão desativadas: reescreva a etapa em SQL ou remova-a.",
+        "script_sql_placeholder_in_quotes": "O marcador {{placeholder}} está entre aspas ou crases, onde o valor não pode ir como parâmetro. Escreva-o sozinho: name = {{placeholder}}, concat('%', {{placeholder}}, '%') ou IDENTIFIER({{placeholder}}).",
+        "script_sql_placeholder_in_identifier": "O marcador {{placeholder}} faz parte de um nome maior. Monte o nome com IDENTIFIER(...), por exemplo IDENTIFIER(concat('main.', {{placeholder}})).",
+        "script_sql_placeholder_as_list": "O marcador {{placeholder}} é a lista inteira de um IN (...), mas o valor é um único texto. Use = {{placeholder}} para um valor, ou array_contains(from_json({{placeholder}}, 'array<string>'), coluna) para uma lista JSON.",
+        "script_sql_placeholder_typed_literal": "O marcador {{placeholder}} é o texto de um literal tipado ou com prefixo ({{keyword}} '...'), que não aceita parâmetro. Use CAST('{{placeholder}}' AS DATE) (ou o tipo que precisar).",
+        "script_sql_placeholder_name_position": "O marcador {{placeholder}} está onde vai o nome de um catálogo ou esquema (depois de IN, CATALOG, SCHEMA, DATABASE ou USE), que não aceita parâmetro. Escreva IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

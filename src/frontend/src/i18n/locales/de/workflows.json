@@ -325,25 +325,22 @@
         "sql": "SQL"
       },
       "code": "Code",
-      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
-      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
-      "timeout": "Zeitlimit (Sekunden)",
-      "timeoutHelp": "Der Schritt schlägt fehl, wenn das Skript länger läuft.",
-      "variablesTitle": "Verfügbare Variablen",
-      "pythonVariables": {
-        "entity": "Die Daten der Entität (ein Dictionary)",
-        "entity_type": "Der Typ der Entität",
-        "entity_id": "Die ID der Entität",
-        "entity_name": "Der Name der Entität",
-        "user_email": "E-Mail des Benutzers, der den Workflow ausgelöst hat",
-        "step_results": "Ergebnisse der bereits ausgeführten Schritte, nach Schritt-ID"
-      },
-      "pythonResultHelp": "Setzen Sie result, um den Zweig zu wählen: result = {'passed': False, 'message': '...'} folgt dem Fail-Zweig; ohne result ist der Schritt erfolgreich. Nur grundlegende Built-ins sind verfügbar: keine Imports, Dateien oder Netzwerk.",
-      "sqlHelp": "Läuft auf dem in den Einstellungen festgelegten SQL Warehouse. ${variable}-Platzhalter werden vor der Ausführung ersetzt; der Schritt ist erfolgreich, wenn die Anweisung erfolgreich ist. Die Anweisung wartet bis zu 50 Sekunden.",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}",
+      "sqlHelp": "Läuft auf dem in den Einstellungen festgelegten SQL-Warehouse. Jede ${variable} geht als Parameter an das Warehouse und wird nie in das SQL eingefügt: Schreiben Sie sie dort, wo ein Wert steht (owner = ${user_email}), oder nach FROM oder JOIN für einen Tabellennamen. Der Schritt ist erfolgreich, wenn die Anweisung erfolgreich ausgeführt wird. Die Anweisung wartet bis zu 50 Sekunden.",
       "errors": {
         "script_code_required": "Geben Sie den Code des Skripts ein.",
-        "script_timeout_invalid": "Geben Sie eine ganze Zahl an Sekunden ein, mindestens {{minimum}}.",
         "script_language_unsupported": "Die Sprache \"{{language}}\" wird nicht unterstützt. Unterstützt: {{supported}}."
+      }
+    },
+    "scriptStepSafety": {
+      "placeholderRules": "Ein Platzhalter darf nicht in Anführungszeichen oder Backticks stehen ('%${entity_name}%'), nicht Teil eines längeren Namens sein (main.${entity_id}) und nicht die ganze Liste eines IN (...) bilden. Schreiben Sie stattdessen concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) oder array_contains(from_json(${variable}, 'array<string>'), spalte). Auch ein typisiertes Literal wie DATE '${entity_name}' nimmt keinen an: schreiben Sie CAST('${entity_name}' AS DATE). Für einen Tabellennamen an jeder anderen Stelle schreiben Sie IDENTIFIER(${entity_id}): Der Wert wird darin gebunden.",
+      "errors": {
+        "script_python_disabled": "Python-Skriptschritte sind deaktiviert: Schreiben Sie den Schritt in SQL um oder entfernen Sie ihn.",
+        "script_sql_placeholder_in_quotes": "Der Platzhalter {{placeholder}} steht in Anführungszeichen oder Backticks, wo sein Wert nicht als Parameter übergeben werden kann. Schreiben Sie ihn allein: name = {{placeholder}}, concat('%', {{placeholder}}, '%') oder IDENTIFIER({{placeholder}}).",
+        "script_sql_placeholder_in_identifier": "Der Platzhalter {{placeholder}} ist Teil eines längeren Namens. Bilden Sie den Namen mit IDENTIFIER(...), zum Beispiel IDENTIFIER(concat('main.', {{placeholder}})).",
+        "script_sql_placeholder_as_list": "Der Platzhalter {{placeholder}} ist die ganze Liste eines IN (...), sein Wert ist aber ein einzelner Text. Verwenden Sie = {{placeholder}} für einen Wert oder array_contains(from_json({{placeholder}}, 'array<string>'), spalte) für eine JSON-Liste.",
+        "script_sql_placeholder_typed_literal": "Der Platzhalter {{placeholder}} ist der Text eines typisierten oder mit Präfix versehenen Literals ({{keyword}} '...'), das keinen Parameter annimmt. Verwenden Sie CAST('{{placeholder}}' AS DATE) (oder den benötigten Typ).",
+        "script_sql_placeholder_name_position": "Der Platzhalter {{placeholder}} steht dort, wo der Name eines Katalogs oder Schemas steht (nach IN, CATALOG, SCHEMA, DATABASE oder USE), was keinen Parameter annimmt. Schreiben Sie IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

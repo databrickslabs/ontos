@@ -26,9 +26,8 @@ const STEP_TYPES = [
     config_schema: {
       type: 'object',
       properties: {
-        language: { type: 'string', enum: ['python', 'sql'], default: 'python' },
+        language: { type: 'string', enum: ['sql'], default: 'sql' },
         code: { type: 'string' },
-        timeout_seconds: { type: 'integer', default: 60, minimum: 1 },
       },
       required: ['code'],
     },

@@ -26,9 +26,8 @@ const STEP_TYPES = [
     config_schema: {
       type: 'object',
       properties: {
-        language: { type: 'string', enum: ['python', 'sql'], default: 'python' },
+        language: { type: 'string', enum: ['sql'], default: 'sql' },
         code: { type: 'string' },
-        timeout_seconds: { type: 'integer', default: 60, minimum: 1 },
       },
       required: ['code'],
     },
@@ -85,8 +84,7 @@ describe('WorkflowDesigner Conditional and Script steps', () => {
     fireEvent.click(within(conditional).getByTestId('step-config-done'));
 
     const script = await addStep('Script');
-    fireEvent.change(within(script).getByLabelText('Code'), { target: { value: "result = {'passed': True}" } });
-    fireEvent.change(within(script).getByLabelText('Timeout (seconds)'), { target: { value: '20' } });
+    fireEvent.change(within(script).getByLabelText('Code'), { target: { value: 'SELECT 1' } });
     fireEvent.click(within(script).getByTestId('step-config-done'));
 
     fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
@@ -95,7 +93,8 @@ describe('WorkflowDesigner Conditional and Script steps', () => {
     const steps = savedWorkflow().steps;
     expect(steps.map((s: { step_type: string }) => s.step_type)).toEqual(['conditional', 'script']);
     expect(steps[0].config).toEqual({ condition: "obj.name CONTAINS 'email'" });
-    expect(steps[1].config).toEqual({ code: "result = {'passed': True}", timeout_seconds: 20 });
+    // A new Script step is SQL: without a language it would be a (disabled) Python step
+    expect(steps[1].config).toEqual({ language: 'sql', code: 'SELECT 1' });
     expect(api.post).toHaveBeenCalledWith('/api/workflows/check-condition', {
       condition: "obj.name CONTAINS 'email'",
     });
@@ -141,5 +140,35 @@ describe('WorkflowDesigner Conditional and Script steps', () => {
     await waitFor(() => expect(api.toast).toHaveBeenCalled());
     expect(api.toast.mock.calls[0][0].description).toContain("Enter the script's code.");
     expect(savedWorkflow()).toBeUndefined();
+  });
+
+  it('does not save a stored Python Script step, and says why', async () => {
+    const stored = {
+      id: 'wf-1', name: 'Old script', description: '', workflow_type: 'process',
+      is_active: false, is_default: false, version: 1, scope: { type: 'all', ids: [] },
+      trigger: { type: 'manual', entity_types: ['table'] },
+      steps: [{
+        // Stored by an older version: no language (Python was the default) and a timeout
+        id: 's-1', workflow_id: 'wf-1', step_id: 'script', name: 'Script', step_type: 'script',
+        config: { code: "result = {'passed': True}", timeout_seconds: 30 }, order: 0,
+      }],
+    };
+    api.get.mockImplementation(async (url: string) => ({
+      data: url === '/api/workflows/step-types' ? STEP_TYPES
+        : url === '/api/workflows/wf-1' ? stored : [],
+    }));
+    render(
+      <MemoryRouter initialEntries={['/workflows/wf-1']}>
+        <WorkflowDesigner workflowId="wf-1" />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Save/ }));
+
+    await waitFor(() => expect(api.toast).toHaveBeenCalled());
+    expect(api.toast.mock.calls[0][0].description).toContain(
+      'Python script steps are disabled: rewrite the step in SQL or remove it.',
+    );
+    expect(api.put).not.toHaveBeenCalled();
   });
 });

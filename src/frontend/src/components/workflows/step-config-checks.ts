@@ -21,8 +21,13 @@ export interface ConditionCheckResult extends StepConfigIssue {
   valid: boolean;
 }
 
-const DEFAULT_SCRIPT_LANGUAGES = ['python', 'sql'];
-const DEFAULT_SCRIPT_TIMEOUT = 60;
+const DEFAULT_SCRIPT_LANGUAGES = ['sql'];
+/**
+ * The language of a Script step stored without one. Python was the default
+ * before Python steps were disabled (src/backend/src/common/workflow_step_config.py),
+ * so such a step is shown as Python, not as SQL. New steps get `language: 'sql'`.
+ */
+export const LEGACY_SCRIPT_LANGUAGE = 'python';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type JsonSchema = Record<string, any>;
@@ -33,10 +38,27 @@ export function scriptSchema(schema: JsonSchema | undefined) {
   return {
     languages,
     defaultLanguage: String(properties.language?.default ?? languages[0]),
-    defaultTimeout: Number(properties.timeout_seconds?.default ?? DEFAULT_SCRIPT_TIMEOUT),
-    minimumTimeout: Number(properties.timeout_seconds?.minimum ?? 1),
   };
 }
+
+/** A Script step's language as the backend runs it (`LEGACY_SCRIPT_LANGUAGE` when unset). */
+export function scriptLanguageOf(config: Record<string, unknown>): string {
+  return typeof config.language === 'string' && config.language
+    ? config.language
+    : LEGACY_SCRIPT_LANGUAGE;
+}
+
+// Script issues of the Python and SQL placeholder rules, with their texts in
+// `designer.scriptStepSafety` (the backend codes of workflow_step_config.py and
+// workflow_sql_params.py)
+const SCRIPT_SAFETY_CODES = new Set([
+  'script_python_disabled',
+  'script_sql_placeholder_in_quotes',
+  'script_sql_placeholder_in_identifier',
+  'script_sql_placeholder_as_list',
+  'script_sql_placeholder_typed_literal',
+  'script_sql_placeholder_name_position',
+]);
 
 /** The translated text of a step config issue (English text from the backend as fallback). */
 export function stepConfigIssueText(issue: StepConfigIssue, t: TFunction): string {
@@ -46,7 +68,9 @@ export function stepConfigIssueText(issue: StepConfigIssue, t: TFunction): strin
       defaultValue: issue.message || issue.code,
     });
   }
-  const namespace = issue.code.startsWith('script_') ? 'script' : 'conditional';
+  const namespace = SCRIPT_SAFETY_CODES.has(issue.code)
+    ? 'scriptStepSafety'
+    : issue.code.startsWith('script_') ? 'script' : 'conditional';
   return t(`workflows:designer.${namespace}.errors.${issue.code}`, {
     ...(issue.params || {}),
     defaultValue: issue.message || issue.code,
@@ -149,11 +173,8 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
   }
 }
 
-/** Issues the designer can find without the backend: a missing condition or code, a bad timeout. */
-export function localStepConfigIssue(
-  step: WorkflowStepCreate,
-  schema?: JsonSchema,
-): StepConfigIssue | null {
+/** Issues the designer can find without the backend: a missing condition or code, Python. */
+export function localStepConfigIssue(step: WorkflowStepCreate): StepConfigIssue | null {
   const config = (step.config || {}) as Record<string, unknown>;
   if (step.step_type === 'conditional') {
     const condition = config.condition;
@@ -174,16 +195,8 @@ export function localStepConfigIssue(
     if (typeof code !== 'string' || !code.trim()) {
       return { code: 'script_code_required' };
     }
-    // Only Python scripts use the timeout; the form hides the field for SQL.
-    const timeout = config.timeout_seconds;
-    const { minimumTimeout, defaultLanguage } = scriptSchema(schema);
-    const language = typeof config.language === 'string' ? config.language : defaultLanguage;
-    if (
-      language !== 'sql'
-      && timeout !== undefined
-      && (!Number.isInteger(timeout) || (timeout as number) < minimumTimeout)
-    ) {
-      return { code: 'script_timeout_invalid', params: { minimum: minimumTimeout } };
+    if (scriptLanguageOf(config) === LEGACY_SCRIPT_LANGUAGE) {
+      return { code: 'script_python_disabled' };
     }
   }
   return null;

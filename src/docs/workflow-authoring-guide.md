@@ -145,14 +145,25 @@ In a validation step, only the `ASSERT` part is evaluated. When it fails, the st
 
 ### Scripts
 
-A Python script runs with a small set of safe built-ins (`len`, `str`, `dict`, `sorted`, `min`, `max`, ...) and these variables: `entity` (the trigger payload), `entity_type`, `entity_id`, `entity_name`, `user_email`, `step_results`.
+Script steps run SQL. Python script steps are disabled, because code run in the app's process can't be sandboxed: saving or activating a workflow with one is refused (`script_python_disabled`), and one stored before fails when it runs, with the same code. A step without `language` counts as Python (the former default); the designer sets `sql` on new steps.
 
-- Set a variable named `result`: `True` / `False`, or a dict `{"passed": bool, "message": str, "data": {...}}`. Without `result`, the step passes.
-- Don't use `return`: the code isn't a function body, so `return` fails with `'return' outside function`.
-- `import` is not available (`__import__ not found`).
-- The step fails after `timeout_seconds` (default 60).
+A SQL script runs on the SQL warehouse set in Settings. Each `${...}` / `{{...}}` value is sent as a statement parameter (`:p0`, `:p1`, ...), never pasted into the SQL text, so a value can't change the statement. Where the placeholder is written decides how it is sent:
 
-A SQL script runs on the SQL warehouse set in Settings, with variables substituted into the SQL text as they are: values are not quoted or escaped, so don't build SQL from user-entered fields.
+| Written as | Sent as |
+|------------|---------|
+| `owner = ${user_email}`, `IDENTIFIER(${entity_id})`, `concat('%', ${entity_name}, '%')` | a value: `:p0` |
+| `name = '${entity_name}'` (the whole quoted literal) | the literal's value: `:p0` |
+| `FROM ${entity_id}` (after `FROM`, `JOIN`, `INTO`, `UPDATE`, `TABLE`) | a table name: `IDENTIFIER(:p0)` |
+
+Five places can't hold a parameter. A script that uses one is refused on save and on activation, and a stored one fails when it runs:
+
+- inside a longer quoted text, double quotes or backticks (`'%${entity_name}%'`, `` `${entity_id}` ``): `script_sql_placeholder_in_quotes`. Write `concat('%', ${entity_name}, '%')` or `IDENTIFIER(${entity_id})`.
+- glued to other name text (`main.${entity_id}`, `t_${entity_name}`): `script_sql_placeholder_in_identifier`. Write `IDENTIFIER(concat('main.', ${entity_id}))`.
+- as a typed or prefixed literal (`DATE '${d}'`, `INTERVAL '${n}' DAY`, `X'${h}'`, `r'${s}'`): `script_sql_placeholder_typed_literal`. The parameter would replace only the text. Write `CAST('${d}' AS DATE)` (or the type you need).
+- as a catalog or schema name, right after `IN`, `CATALOG`, `SCHEMA`, `DATABASE` or `USE` (`SHOW TABLES IN ${s}`, `USE CATALOG ${c}`): `script_sql_placeholder_name_position`. Write `IDENTIFIER(${s})`.
+- as the whole list of an `IN (...)` (`IN (${entity.ids})`): `script_sql_placeholder_as_list`. The value is one string, so the list would have one item. Use `= ${...}` for one value, or `array_contains(from_json(${entity.ids}, 'array<string>'), column)` for a list (lists in the entity are JSON).
+
+Placeholders in SQL comments are left as written. A placeholder that doesn't resolve is also left as written (without the quotes of a whole literal), so the warehouse reports it.
 
 ### Asset maturity evaluation
 
@@ -168,7 +179,7 @@ A SQL script runs on the SQL warehouse set in Settings, with variables substitut
 
 ### Where variables are substituted
 
-Variables are substituted in notification messages (`custom_message`), approval messages (`message`), webhook bodies, headers, query parameters and path suffixes, and SQL scripts. They are not substituted in rules or conditions.
+Variables are substituted in notification messages (`custom_message`), approval messages (`message`), webhook bodies, headers, query parameters and path suffixes. SQL scripts send them as statement parameters instead ([Scripts](#scripts)). They are not substituted in rules or conditions.
 
 Both `${name}` and `{{name}}` work. A variable that can't be resolved is left as written (for example `${entity.no_such_field}` stays in the text), which makes typos visible in the notification.
 
@@ -467,29 +478,29 @@ It runs next to the default "Status Change Request" workflow, which still asks f
 
 The steward sees "Please check <product>" in the approval notification. After they approve with "looks fine", `${user_email}` is the steward and `${step_results.ask.reason}` is "looks fine".
 
-### A script that returns data to later steps
+### A SQL step whose result later steps read
 
 ```json
 {
-  "name": "Score the name",
+  "name": "Count the requester's audit rows",
   "trigger": { "type": "manual", "entity_types": ["data_product"] },
   "is_active": true,
   "steps": [
-    { "step_id": "score", "step_type": "script",
-      "config": { "language": "python",
-                  "code": "ok = entity_name.startswith('Trading')\nresult = {'passed': ok, 'message': 'name checked', 'data': {'len': len(entity_name)}}" },
+    { "step_id": "count", "step_type": "script",
+      "config": { "language": "sql",
+                  "code": "SELECT * FROM main.audit.events WHERE actor = ${user_email}" },
       "on_pass": "tell", "on_fail": "bad" },
     { "step_id": "tell", "step_type": "notification",
       "config": { "recipients": "requester", "template": "validation_passed",
-                  "custom_message": "Name length: ${step_results.score.data.len}" },
+                  "custom_message": "Audit rows: ${step_results.count.data.row_count}" },
       "on_pass": "done" },
     { "step_id": "done", "step_type": "pass" },
-    { "step_id": "bad", "step_type": "fail", "config": { "message": "Script said no" } }
+    { "step_id": "bad", "step_type": "fail", "config": { "message": "The query failed" } }
   ]
 }
 ```
 
-Run on "Trading Analytics Dashboard v1" (with `entity_name` in the query), the notification says "Name length: 30". Without `entity_name`, the script fails on `None.startswith` and the execution fails with "Script said no".
+`${user_email}` reaches the warehouse as the parameter `:p0`. The step's result data has `row_count` and `sql` (the statement with its parameter markers, without the values).
 
 ## Known Limitations
 
@@ -503,7 +514,6 @@ As of this version:
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
 - Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by #1456: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
-- The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
 - The bulk asset maturity evaluation allows one run at a time per app instance (`evaluate_asset_maturity`, `maturity_bulk_run_in_progress`). The scheduler's claims run each slot on one instance only, but a run started on another instance (from the Maturity Levels card, or a manual workflow run) can overlap it. The overlapping run skips the assets already evaluated since it started (`maturity_bulk_skipped_evaluated_in_run`), so they are not evaluated twice by it.
 
 See also the [Future Roadmap section of the Process Workflows Guide](/user-docs/process-workflows-guide#future-roadmap-deferred-items) for timeout expiry, escalation and crash recovery.

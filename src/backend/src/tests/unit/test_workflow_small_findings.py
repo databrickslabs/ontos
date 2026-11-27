@@ -5,8 +5,8 @@
 - On resume after an approval, the fields of the requester's last completed
   wizard for the entity replaced the approver's ``reason`` (and ``message``)
   in ``${step_results.<approval>.reason}``.
-- The documented script example used ``return``, which fails: the code is not
-  a function body.
+- The documented script example did not run (it used ``return``, which fails: the
+  code is not a function body); it is now a SQL statement.
 """
 import os
 
@@ -15,6 +15,10 @@ os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import json
 import uuid
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
 
 from src.common.workflow_executor import WorkflowExecutor
 from src.controller.workflows_manager import WorkflowsManager
@@ -113,8 +117,24 @@ def test_a_passed_validation_has_no_error(db_session):
     assert _results(db_session, execution.id)['check-name'].error_message is None
 
 
+@pytest.fixture
+def warehouse(db_session, monkeypatch):
+    """A configured SQL warehouse whose client records the statements it gets."""
+    from src.db_models.app_settings import AppSettingDb
+
+    db_session.add(AppSettingDb(key='sql_warehouse_id', value='wh-1'))
+    db_session.flush()
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = SimpleNamespace(
+        status=SimpleNamespace(state=SimpleNamespace(value='SUCCEEDED'), error=None),
+        manifest=SimpleNamespace(total_row_count=1),
+    )
+    monkeypatch.setattr('src.common.workspace_client.get_workspace_client', lambda: ws)
+    return ws.statement_execution.execute_statement
+
+
 def _approval_then_echo(db):
-    """Approval, then a script that puts the approval's reason in its result data."""
+    """Approval, then a SQL step that sends the approval's reason and workspace as parameters."""
     return _workflow(db, [
         WorkflowStepCreate(
             step_id='approve', step_type=StepType.APPROVAL,
@@ -123,10 +143,9 @@ def _approval_then_echo(db):
         ),
         WorkflowStepCreate(
             step_id='echo', step_type=StepType.SCRIPT,
-            config={'language': 'python', 'code': (
-                "a = step_results['approve']\n"
-                "result = {'passed': True, 'data': {\n"
-                "    'reason': a.get('reason'), 'workspace': a.get('workspaceId')}}"
+            config={'language': 'sql', 'code': (
+                "SELECT ${step_results.approve.reason} AS reason, "
+                "${step_results.approve.workspaceId} AS workspace"
             )},
             on_pass='ok', order=1,
         ),
@@ -146,7 +165,8 @@ def _requester_wizard(db, workflow_id, entity_id):
     db.commit()
 
 
-def _resume_with_reason(db, workflow, entity_id):
+def _resume_with_reason(db, workflow, entity_id, warehouse):
+    """The ``reason`` and ``workspace`` the SQL step bound as parameters after the approval."""
     execution = _run(db, workflow, entity_id=entity_id)
     assert execution.status.value == 'paused'
     resumed = WorkflowExecutor(db).resume_workflow(
@@ -157,28 +177,32 @@ def _resume_with_reason(db, workflow, entity_id):
         user_email='reviewer@example.com',
     )
     assert resumed.status.value == 'succeeded'
-    return json.loads(_results(db, execution.id)['echo'].result_data)
+    assert _results(db, execution.id)['echo'].status == 'succeeded'
+    kwargs = warehouse.call_args.kwargs
+    assert kwargs['statement'] == 'SELECT :p0 AS reason, :p1 AS workspace'
+    values = {p.name: p.value for p in kwargs['parameters']}
+    return {'reason': values['p0'], 'workspace': values['p1']}
 
 
-def test_the_approver_reason_wins_over_the_requester_wizard(db_session):
+def test_the_approver_reason_wins_over_the_requester_wizard(db_session, warehouse):
     workflow = _approval_then_echo(db_session)
     _requester_wizard(db_session, workflow.id, 'p-2')
 
-    echoed = _resume_with_reason(db_session, workflow, 'p-2')
+    echoed = _resume_with_reason(db_session, workflow, 'p-2', warehouse)
 
     assert echoed['reason'] == 'Approver reason'
 
 
-def test_other_wizard_fields_still_reach_later_steps(db_session):
+def test_other_wizard_fields_still_reach_later_steps(db_session, warehouse):
     workflow = _approval_then_echo(db_session)
     _requester_wizard(db_session, workflow.id, 'p-3')
 
-    echoed = _resume_with_reason(db_session, workflow, 'p-3')
+    echoed = _resume_with_reason(db_session, workflow, 'p-3', warehouse)
 
     assert echoed['workspace'] == 'ws-42'
 
 
-def test_the_script_example_runs(db_session):
+def test_the_script_example_runs(db_session, warehouse):
     example = ScriptStepConfig.model_json_schema()['example']
     workflow = _workflow(db_session, [
         WorkflowStepCreate(step_id='run', step_type=StepType.SCRIPT,
@@ -191,3 +215,8 @@ def test_the_script_example_runs(db_session):
 
     run = _results(db_session, execution.id)['run']
     assert run.status == 'succeeded', run.error_message
+    kwargs = warehouse.call_args.kwargs
+    assert kwargs['statement'] == 'SELECT COUNT(*) FROM IDENTIFIER(:p0) WHERE owner = :p1'
+    assert [(p.name, p.value) for p in kwargs['parameters']] == [
+        ('p0', 'p-1'), ('p1', 'pat@example.com'),
+    ]

@@ -325,25 +325,22 @@
         "sql": "SQL"
       },
       "code": "コード",
-      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
-      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
-      "timeout": "タイムアウト（秒）",
-      "timeoutHelp": "スクリプトの実行がこれより長くなるとステップは失敗します。",
-      "variablesTitle": "使用できる変数",
-      "pythonVariables": {
-        "entity": "エンティティのデータ（辞書）",
-        "entity_type": "エンティティの種類",
-        "entity_id": "エンティティの ID",
-        "entity_name": "エンティティの名前",
-        "user_email": "ワークフローを起動したユーザーのメール",
-        "step_results": "実行済みのステップの結果（ステップ ID ごと）"
-      },
-      "pythonResultHelp": "result を設定して分岐を選びます。result = {'passed': False, 'message': '...'} は Fail の分岐に進み、result がなければステップは成功します。使えるのは基本的な組み込み関数だけで、import、ファイル、ネットワークは使えません。",
-      "sqlHelp": "設定で指定した SQL ウェアハウスで実行されます。${variable} のプレースホルダーは実行前に置き換えられ、ステートメントが成功するとステップは成功します。ステートメントの待機は最大 50 秒です。",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}",
+      "sqlHelp": "設定で指定した SQL ウェアハウスで実行されます。各 ${variable} は SQL に貼り付けられず、パラメーターとしてウェアハウスに送られます。値を置く位置 (owner = ${user_email})、またはテーブル名として FROM や JOIN の後に書いてください。ステートメントが成功するとステップは成功します。ステートメントは最大 50 秒待機します。",
       "errors": {
         "script_code_required": "スクリプトのコードを入力してください。",
-        "script_timeout_invalid": "{{minimum}} 以上の整数（秒）を入力してください。",
         "script_language_unsupported": "言語 \"{{language}}\" はサポートされていません。サポート対象: {{supported}}。"
+      }
+    },
+    "scriptStepSafety": {
+      "placeholderRules": "プレースホルダーは引用符やバッククォートの中 ('%${entity_name}%')、長い名前の一部 (main.${entity_id})、IN (...) のリスト全体には使えません。代わりに concat('%', ${entity_name}, '%')、IDENTIFIER(concat('main.', ${entity_id}))、array_contains(from_json(${variable}, 'array<string>'), column) と書いてください。 DATE '${entity_name}' のような型付きリテラルにも使えません。CAST('${entity_name}' AS DATE) と書いてください。 それ以外の位置のテーブル名には IDENTIFIER(${entity_id}) と書いてください。値はその中にバインドされます。",
+      "errors": {
+        "script_python_disabled": "Python スクリプトステップは無効です。ステップを SQL で書き直すか、削除してください。",
+        "script_sql_placeholder_in_quotes": "プレースホルダー {{placeholder}} が引用符またはバッククォートの中にあり、値をパラメーターとして送れません。単独で書いてください: name = {{placeholder}}、concat('%', {{placeholder}}, '%')、または IDENTIFIER({{placeholder}})。",
+        "script_sql_placeholder_in_identifier": "プレースホルダー {{placeholder}} が長い名前の一部になっています。IDENTIFIER(...) で名前を組み立ててください。例: IDENTIFIER(concat('main.', {{placeholder}}))。",
+        "script_sql_placeholder_as_list": "プレースホルダー {{placeholder}} が IN (...) のリスト全体ですが、値は 1 つのテキストです。1 つの値には = {{placeholder}}、JSON リストには array_contains(from_json({{placeholder}}, 'array<string>'), column) を使ってください。",
+        "script_sql_placeholder_typed_literal": "プレースホルダー {{placeholder}} は型付きまたは接頭辞付きリテラル ({{keyword}} '...') のテキストで、パラメーターを受け付けません。CAST('{{placeholder}}' AS DATE) (または必要な型) を使ってください。",
+        "script_sql_placeholder_name_position": "プレースホルダー {{placeholder}} はカタログまたはスキーマ名の位置 (IN、CATALOG、SCHEMA、DATABASE、USE の後) にあり、パラメーターを受け付けません。IDENTIFIER({{placeholder}}) と書いてください。"
       }
     },
     "validationIssues": {

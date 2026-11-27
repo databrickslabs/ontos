@@ -325,25 +325,22 @@
         "sql": "SQL"
       },
       "code": "Code",
-      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
-      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
-      "timeout": "Délai maximal (secondes)",
-      "timeoutHelp": "L'étape échoue quand le script dure plus longtemps.",
-      "variablesTitle": "Variables disponibles",
-      "pythonVariables": {
-        "entity": "Les données de l'entité (un dictionnaire)",
-        "entity_type": "Le type de l'entité",
-        "entity_id": "L'ID de l'entité",
-        "entity_name": "Le nom de l'entité",
-        "user_email": "E-mail de l'utilisateur qui a déclenché le workflow",
-        "step_results": "Résultats des étapes déjà exécutées, par ID d'étape"
-      },
-      "pythonResultHelp": "Définissez result pour choisir la branche : result = {'passed': False, 'message': '...'} suit la branche Fail ; sans result l'étape réussit. Seuls les built-ins de base sont disponibles : pas d'imports, de fichiers ni de réseau.",
-      "sqlHelp": "S'exécute sur le SQL warehouse défini dans les Paramètres. Les marqueurs ${variable} sont remplacés avant l'exécution ; l'étape réussit quand l'instruction réussit. L'instruction attend jusqu'à 50 secondes.",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}",
+      "sqlHelp": "S'exécute sur le SQL warehouse défini dans les Paramètres. Chaque ${variable} est envoyée au warehouse comme paramètre, jamais collée dans le SQL : écrivez-la là où va une valeur (owner = ${user_email}), ou après FROM ou JOIN pour un nom de table. L'étape réussit quand l'instruction s'exécute correctement. L'instruction attend jusqu'à 50 secondes.",
       "errors": {
         "script_code_required": "Saisissez le code du script.",
-        "script_timeout_invalid": "Saisissez un nombre entier de secondes, au moins {{minimum}}.",
         "script_language_unsupported": "Le langage \"{{language}}\" n'est pas pris en charge. Pris en charge : {{supported}}."
+      }
+    },
+    "scriptStepSafety": {
+      "placeholderRules": "Un espace réservé ne peut pas être entre guillemets ou accents graves ('%${entity_name}%'), faire partie d'un nom plus long (main.${entity_id}) ni constituer toute la liste d'un IN (...). Écrivez plutôt concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) ou array_contains(from_json(${variable}, 'array<string>'), colonne). Un littéral typé comme DATE '${entity_name}' n'en accepte pas non plus : écrivez CAST('${entity_name}' AS DATE). Pour un nom de table à toute autre position, écrivez IDENTIFIER(${entity_id}) : la valeur y est liée.",
+      "errors": {
+        "script_python_disabled": "Les étapes de script Python sont désactivées : réécrivez l'étape en SQL ou supprimez-la.",
+        "script_sql_placeholder_in_quotes": "L'espace réservé {{placeholder}} est entre guillemets ou accents graves, où sa valeur ne peut pas être envoyée comme paramètre. Écrivez-le seul : name = {{placeholder}}, concat('%', {{placeholder}}, '%') ou IDENTIFIER({{placeholder}}).",
+        "script_sql_placeholder_in_identifier": "L'espace réservé {{placeholder}} fait partie d'un nom plus long. Construisez le nom avec IDENTIFIER(...), par exemple IDENTIFIER(concat('main.', {{placeholder}})).",
+        "script_sql_placeholder_as_list": "L'espace réservé {{placeholder}} constitue toute la liste d'un IN (...), mais sa valeur est un seul texte. Utilisez = {{placeholder}} pour une valeur, ou array_contains(from_json({{placeholder}}, 'array<string>'), colonne) pour une liste JSON.",
+        "script_sql_placeholder_typed_literal": "L'espace réservé {{placeholder}} est le texte d'un littéral typé ou préfixé ({{keyword}} '...'), qui n'accepte pas de paramètre. Utilisez CAST('{{placeholder}}' AS DATE) (ou le type voulu).",
+        "script_sql_placeholder_name_position": "L'espace réservé {{placeholder}} est à l'endroit d'un nom de catalogue ou de schéma (après IN, CATALOG, SCHEMA, DATABASE ou USE), qui n'accepte pas de paramètre. Écrivez IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

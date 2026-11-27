@@ -325,25 +325,22 @@
         "sql": "SQL"
       },
       "code": "Codice",
-      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
-      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
-      "timeout": "Timeout (secondi)",
-      "timeoutHelp": "Il passaggio fallisce quando lo script dura più a lungo.",
-      "variablesTitle": "Variabili disponibili",
-      "pythonVariables": {
-        "entity": "I dati dell'entità (un dizionario)",
-        "entity_type": "Il tipo dell'entità",
-        "entity_id": "L'ID dell'entità",
-        "entity_name": "Il nome dell'entità",
-        "user_email": "Email dell'utente che ha avviato il workflow",
-        "step_results": "Risultati dei passaggi già eseguiti, per ID del passaggio"
-      },
-      "pythonResultHelp": "Imposta result per scegliere il ramo: result = {'passed': False, 'message': '...'} segue il ramo Fail; senza result il passaggio riesce. Sono disponibili solo i built-in di base: niente import, file o rete.",
-      "sqlHelp": "Viene eseguito sul SQL warehouse impostato nelle Impostazioni. I segnaposto ${variable} vengono sostituiti prima dell'esecuzione; il passaggio riesce quando l'istruzione riesce. L'istruzione attende fino a 50 secondi.",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id} WHERE owner = ${user_email}",
+      "sqlHelp": "Viene eseguito sul SQL warehouse impostato nelle Impostazioni. Ogni ${variable} viene inviata al warehouse come parametro, mai incollata nell'SQL: scrivila dove va un valore (owner = ${user_email}) oppure dopo FROM o JOIN per il nome di una tabella. Il passaggio riesce quando l'istruzione va a buon fine. L'istruzione attende fino a 50 secondi.",
       "errors": {
         "script_code_required": "Inserisci il codice dello script.",
-        "script_timeout_invalid": "Inserisci un numero intero di secondi, almeno {{minimum}}.",
         "script_language_unsupported": "Il linguaggio \"{{language}}\" non è supportato. Supportati: {{supported}}."
+      }
+    },
+    "scriptStepSafety": {
+      "placeholderRules": "Un segnaposto non può stare tra virgolette o apici inversi ('%${entity_name}%'), far parte di un nome più lungo (main.${entity_id}) né essere l'intera lista di un IN (...). Scrivi invece concat('%', ${entity_name}, '%'), IDENTIFIER(concat('main.', ${entity_id})) o array_contains(from_json(${variable}, 'array<string>'), colonna). Nemmeno un letterale tipizzato come DATE '${entity_name}' ne accetta uno: scrivi CAST('${entity_name}' AS DATE). Per un nome di tabella in qualsiasi altra posizione, scrivi IDENTIFIER(${entity_id}): il valore viene associato al suo interno.",
+      "errors": {
+        "script_python_disabled": "I passaggi di script Python sono disattivati: riscrivi il passaggio in SQL o rimuovilo.",
+        "script_sql_placeholder_in_quotes": "Il segnaposto {{placeholder}} è tra virgolette o apici inversi, dove il suo valore non può essere inviato come parametro. Scrivilo da solo: name = {{placeholder}}, concat('%', {{placeholder}}, '%') o IDENTIFIER({{placeholder}}).",
+        "script_sql_placeholder_in_identifier": "Il segnaposto {{placeholder}} fa parte di un nome più lungo. Costruisci il nome con IDENTIFIER(...), per esempio IDENTIFIER(concat('main.', {{placeholder}})).",
+        "script_sql_placeholder_as_list": "Il segnaposto {{placeholder}} è l'intera lista di un IN (...), ma il suo valore è un solo testo. Usa = {{placeholder}} per un valore, o array_contains(from_json({{placeholder}}, 'array<string>'), colonna) per una lista JSON.",
+        "script_sql_placeholder_typed_literal": "Il segnaposto {{placeholder}} è il testo di un letterale tipizzato o con prefisso ({{keyword}} '...'), che non accetta parametri. Usa CAST('{{placeholder}}' AS DATE) (o il tipo che ti serve).",
+        "script_sql_placeholder_name_position": "Il segnaposto {{placeholder}} è dove va il nome di un catalogo o di uno schema (dopo IN, CATALOG, SCHEMA, DATABASE o USE), che non accetta parametri. Scrivi IDENTIFIER({{placeholder}})."
       }
     },
     "validationIssues": {

@@ -10,6 +10,7 @@ os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import asyncio
+import json
 import uuid
 from unittest.mock import MagicMock
 
@@ -108,26 +109,61 @@ def test_an_oversized_condition_is_too_long():
 # --- Script checks ------------------------------------------------------------
 
 def test_a_complete_script_config_has_no_issue():
-    assert check_script_config({'language': 'sql', 'code': 'SELECT 1', 'timeout_seconds': 30}) == []
-    assert check_script_config({'code': "result = {'passed': True}"}) == []
+    assert check_script_config({'language': 'sql', 'code': 'SELECT 1'}) == []
+    assert check_script_config({'language': 'sql', 'code': 'SELECT * FROM ${entity_id}'}) == []
 
 
 @pytest.mark.parametrize('timeout', [0, '60', True])
 def test_a_sql_script_timeout_is_not_checked(timeout):
-    # The SQL handler ignores timeout_seconds and the designer hides the field.
+    # The SQL handler ignores timeout_seconds (an older step may still carry it).
     assert check_script_config({'language': 'sql', 'code': 'SELECT 1', 'timeout_seconds': timeout}) == []
 
 
+@pytest.mark.parametrize('config', [
+    {'language': 'python', 'code': "result = {'passed': True}"},
+    # A step stored without a language was a Python step (the old default)
+    {'code': "result = {'passed': True}"},
+    {'language': '', 'code': 'x = 1'},
+    {'language': None, 'code': 'x = 1', 'timeout_seconds': 30},
+])
+def test_a_python_script_is_disabled(config):
+    [issue] = check_script_config(config)
+
+    assert issue['code'] == 'script_python_disabled'
+    assert issue['params'] == {}
+    assert 'disabled' in issue['message']
+
+
 @pytest.mark.parametrize('config, code', [
-    ({}, 'script_code_required'),
-    ({'code': '  '}, 'script_code_required'),
+    ({'language': 'sql'}, 'script_code_required'),
+    ({'language': 'sql', 'code': '  '}, 'script_code_required'),
+    ({'language': 'sql', 'code': 7}, 'script_code_required'),
     ({'code': 'x = 1', 'language': 'bash'}, 'script_language_unsupported'),
-    ({'code': 'x = 1', 'timeout_seconds': 0}, 'script_timeout_invalid'),
-    ({'code': 'x = 1', 'timeout_seconds': '60'}, 'script_timeout_invalid'),
-    ({'code': 'x = 1', 'timeout_seconds': True}, 'script_timeout_invalid'),
+    ({'language': 'sql', 'code': "SELECT '%${n}%'"}, 'script_sql_placeholder_in_quotes'),
+    ({'language': 'sql', 'code': 'SELECT * FROM main.${n}'},
+     'script_sql_placeholder_in_identifier'),
+    ({'language': 'sql', 'code': 'SELECT 1 WHERE a IN (${n})'}, 'script_sql_placeholder_as_list'),
 ])
 def test_script_config_issues(config, code):
     assert [issue['code'] for issue in check_script_config(config)] == [code]
+
+
+def test_a_python_step_without_code_reports_both_issues():
+    assert [issue['code'] for issue in check_script_config({})] == [
+        'script_code_required', 'script_python_disabled',
+    ]
+
+
+def test_an_unsupported_language_names_what_is_supported():
+    [issue] = check_script_config({'language': 'bash', 'code': 'ls'})
+
+    assert issue['params'] == {'language': 'bash', 'supported': 'sql'}
+
+
+def test_a_placeholder_issue_names_the_placeholder():
+    [issue] = check_script_config({'language': 'sql', 'code': "SELECT '%${n}%'"})
+
+    assert issue['params'] == {'placeholder': '${n}'}
 
 
 # --- check-condition route ----------------------------------------------------
@@ -163,9 +199,8 @@ def test_the_route_answers_a_deeply_nested_condition():
 
 def _workflow(condition, script_config=None):
     script_config = script_config or {
-        'language': 'python',
-        'code': "result = {'passed': True, 'data': {'name': entity_name}}",
-        'timeout_seconds': 15,
+        'language': 'sql',
+        'code': "SELECT * FROM ${entity_id} WHERE name = '${entity_name}'",
     }
     return ProcessWorkflowCreate(
         name=f'wf-{uuid.uuid4().hex[:8]}',
@@ -196,13 +231,41 @@ def test_validation_rejects_a_deeply_nested_condition(db_session):
     assert any("Step 'check'" in e and 'nested too deeply' in e for e in result.errors)
 
 
-def test_validation_rejects_an_invalid_script_timeout(db_session):
-    result = WorkflowsManager(db_session).validate_workflow(
-        _workflow("obj.name = 'x'", {'code': 'x = 1', 'timeout_seconds': 0})
-    )
+@pytest.mark.parametrize('config', [
+    {'language': 'python', 'code': 'x = 1'},
+    {'code': 'x = 1', 'timeout_seconds': 30},
+])
+def test_validation_rejects_a_python_script_step(db_session, config):
+    result = WorkflowsManager(db_session).validate_workflow(_workflow("obj.name = 'x'", config))
 
     assert not result.valid
-    assert any("Step 'script'" in e and 'timeout_seconds' in e for e in result.errors)
+    assert any("Step 'script'" in e and 'Python' in e and 'disabled' in e for e in result.errors)
+    assert [(i.code, i.params) for i in result.issues if i.code == 'script_python_disabled'] == [
+        ('script_python_disabled', {'step': 'script'}),
+    ]
+
+
+def test_validation_rejects_a_sql_placeholder_that_cannot_be_bound(db_session):
+    result = WorkflowsManager(db_session).validate_workflow(_workflow(
+        "obj.name = 'x'", {'language': 'sql', 'code': "SELECT * FROM t WHERE a LIKE '%${n}%'"},
+    ))
+
+    assert not result.valid
+    assert [(i.code, i.params) for i in result.issues] == [
+        ('script_sql_placeholder_in_quotes', {'step': 'script', 'placeholder': '${n}'}),
+    ]
+
+
+def test_the_script_step_type_schema_is_sql_only(db_session):
+    schema = {t.type: t for t in WorkflowsManager(db_session).get_step_type_schemas()}[
+        StepType.SCRIPT
+    ]
+    properties = schema.config_schema['properties']
+
+    assert properties['language']['enum'] == ['sql']
+    assert properties['language']['default'] == 'sql'
+    assert 'timeout_seconds' not in properties
+    assert schema.config_schema['required'] == ['code']
 
 
 def test_conditional_and_script_configs_survive_save_and_reload(db_session):
@@ -214,9 +277,8 @@ def test_conditional_and_script_configs_survive_save_and_reload(db_session):
     assert reloaded['check'].config == {'condition': "obj.name CONTAINS 'email'"}
     assert reloaded['check'].on_pass == 'script' and reloaded['check'].on_fail == 'rejected'
     assert reloaded['script'].config == {
-        'language': 'python',
-        'code': "result = {'passed': True, 'data': {'name': entity_name}}",
-        'timeout_seconds': 15,
+        'language': 'sql',
+        'code': "SELECT * FROM ${entity_id} WHERE name = '${entity_name}'",
     }
 
 
@@ -236,36 +298,9 @@ def _step_id_of(db, workflow):
     return {s.id: s.step_id for s in workflow.steps}
 
 
-def test_a_true_condition_follows_the_pass_branch_and_runs_the_script(db_session):
-    manager = WorkflowsManager(db_session)
-    workflow = manager.get_workflow(manager.create_workflow(_workflow("obj.name CONTAINS 'email'")).id)
-
-    execution = _run(db_session, workflow, 'customer_email')
-
-    names = _step_id_of(db_session, workflow)
-    results = {names.get(s.step_id, s.step_id): s for s in execution.step_executions}
-    assert execution.status.value == 'succeeded'
-    assert set(results) == {'check', 'script', 'done'}
-    assert results['check'].passed is True
-    assert results['script'].result_data == {'name': 'customer_email'}
-
-
-def test_a_false_condition_follows_the_fail_branch(db_session):
-    manager = WorkflowsManager(db_session)
-    workflow = manager.get_workflow(manager.create_workflow(_workflow("obj.name CONTAINS 'email'")).id)
-
-    execution = _run(db_session, workflow, 'orders')
-
-    names = _step_id_of(db_session, workflow)
-    results = {names.get(s.step_id, s.step_id): s for s in execution.step_executions}
-    assert execution.status.value == 'failed'
-    assert set(results) == {'check', 'rejected'}
-    # The condition was evaluated: the step succeeded and took its false branch (#1418)
-    assert results['check'].passed is True
-    assert results['check'].result_data['branch'] == 'false'
-
-
-def test_a_sql_script_saved_from_the_designer_runs_on_the_configured_warehouse(db_session, monkeypatch):
+@pytest.fixture
+def warehouse(db_session, monkeypatch):
+    """A configured SQL warehouse whose client records the statements it gets."""
     from types import SimpleNamespace
 
     from src.db_models.app_settings import AppSettingDb
@@ -278,16 +313,79 @@ def test_a_sql_script_saved_from_the_designer_runs_on_the_configured_warehouse(d
         manifest=SimpleNamespace(total_row_count=1),
     )
     monkeypatch.setattr('src.common.workspace_client.get_workspace_client', lambda: ws)
+    return ws.statement_execution.execute_statement
+
+
+def test_a_true_condition_follows_the_pass_branch_and_runs_the_script(db_session, warehouse):
+    manager = WorkflowsManager(db_session)
+    workflow = manager.get_workflow(manager.create_workflow(_workflow("obj.name CONTAINS 'email'")).id)
+
+    execution = _run(db_session, workflow, 'customer_email')
+
+    names = _step_id_of(db_session, workflow)
+    results = {names.get(s.step_id, s.step_id): s for s in execution.step_executions}
+    assert execution.status.value == 'succeeded'
+    assert set(results) == {'check', 'script', 'done'}
+    assert results['check'].passed is True
+    assert results['script'].passed is True
+    warehouse.assert_called_once()
+
+
+def test_a_false_condition_follows_the_fail_branch(db_session, warehouse):
+    manager = WorkflowsManager(db_session)
+    workflow = manager.get_workflow(manager.create_workflow(_workflow("obj.name CONTAINS 'email'")).id)
+
+    execution = _run(db_session, workflow, 'orders')
+
+    names = _step_id_of(db_session, workflow)
+    results = {names.get(s.step_id, s.step_id): s for s in execution.step_executions}
+    assert execution.status.value == 'failed'
+    assert set(results) == {'check', 'rejected'}
+    # The condition was evaluated: the step succeeded and took its false branch (#1418)
+    assert results['check'].passed is True
+    assert results['check'].result_data['branch'] == 'false'
+    warehouse.assert_not_called()
+
+
+def test_a_sql_script_saved_from_the_designer_runs_on_the_configured_warehouse(
+    db_session, warehouse,
+):
     manager = WorkflowsManager(db_session)
     workflow = manager.get_workflow(manager.create_workflow(_workflow(
         "obj.name CONTAINS 'email'",
-        {'language': 'sql', 'code': "SELECT * FROM ${entity_id} LIMIT 1", 'timeout_seconds': 30},
+        {'language': 'sql', 'code': "SELECT * FROM ${entity_id} LIMIT 1"},
     )).id)
 
     execution = _run(db_session, workflow, 'customer_email')
 
     assert execution.status.value == 'succeeded'
-    ws.statement_execution.execute_statement.assert_called_once()
-    kwargs = ws.statement_execution.execute_statement.call_args.kwargs
-    assert kwargs['statement'] == 'SELECT * FROM main.sales.customer_email LIMIT 1'
+    warehouse.assert_called_once()
+    kwargs = warehouse.call_args.kwargs
+    assert kwargs['statement'] == 'SELECT * FROM IDENTIFIER(:p0) LIMIT 1'
+    assert [(p.name, p.value) for p in kwargs['parameters']] == [
+        ('p0', 'main.sales.customer_email'),
+    ]
     assert kwargs['warehouse_id'] == 'wh-123'
+
+
+def test_a_python_script_stored_without_a_language_fails_without_running(db_session, warehouse):
+    from src.common.workflow_executor import WorkflowExecutor
+    from src.db_models.process_workflows import WorkflowStepDb
+
+    manager = WorkflowsManager(db_session)
+    created = manager.create_workflow(_workflow("obj.name CONTAINS 'email'"))
+    # Stored as an older version saved it: no language, a timeout
+    row = db_session.query(WorkflowStepDb).filter_by(
+        workflow_id=created.id, step_id='script',
+    ).one()
+    row.config = json.dumps({'code': "result = {'passed': True}", 'timeout_seconds': 30})
+    db_session.flush()
+    workflow = manager.get_workflow(created.id)
+
+    execution = _run(db_session, workflow, 'customer_email')
+
+    results = {s.step_key: s for s in execution.step_executions}
+    assert execution.status.value == 'failed'
+    assert results['script'].passed is False
+    assert results['script'].result_data['error_code'] == 'script_python_disabled'
+    warehouse.assert_not_called()

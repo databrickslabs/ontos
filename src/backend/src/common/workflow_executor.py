@@ -2322,22 +2322,50 @@ class ConditionalStepHandler(StepHandler):
             return _rule_step_error(e)
 
 
+def _resolved_variable(name: str, context: StepContext) -> Optional[str]:
+    """The value of one template variable (``substitute_template``), None when unresolved."""
+    # The {{ }} form is substituted last, so a value is not substituted again
+    placeholder = '{{' + name + '}}'
+    resolved = substitute_template(placeholder, context)
+    return None if resolved == placeholder else resolved
+
+
+def _coded_step_failure(code: str, message: str, **params: Any) -> StepResult:
+    """A failed step with ``error_code`` / ``error_params`` in its data (the UI's text)."""
+    return StepResult(
+        passed=False, error=message, data={'error_code': code, 'error_params': params},
+    )
+
+
 class ScriptStepHandler(StepHandler):
-    """Handler for script execution steps."""
+    """Handler for script execution steps: SQL only.
+
+    Python steps are refused (``script_python_disabled``): ``exec()`` in the app's
+    process can't be sandboxed (a restricted ``__builtins__`` is escaped through
+    attribute access), so a stored one fails instead of running. A step without a
+    ``language`` was a Python step (the old default).
+    """
 
     def execute(self, context: StepContext) -> StepResult:
-        language = self._config.get('language', 'python')
+        from src.common.workflow_step_config import (
+            SCRIPT_PYTHON_DISABLED,
+            script_language_of,
+        )
+
+        language = script_language_of(self._config)
         code = self._config.get('code', '')
-        timeout_seconds = self._config.get('timeout_seconds', 60)
-        
+
         if not code:
             return StepResult(passed=False, error="No code configured")
-        
+
         try:
             if language == 'python':
-                result = self._execute_python(code, context, timeout_seconds)
+                return _coded_step_failure(
+                    SCRIPT_PYTHON_DISABLED,
+                    "Python script steps are disabled: rewrite the step in SQL or remove it",
+                )
             elif language == 'sql':
-                result = self._execute_sql(code, context, timeout_seconds)
+                result = self._execute_sql(code, context)
             else:
                 return StepResult(passed=False, error=f"Unsupported language: {language}")
             
@@ -2346,81 +2374,43 @@ class ScriptStepHandler(StepHandler):
             logger.exception(f"Script step failed: {e}")
             return StepResult(passed=False, error=str(e))
 
-    _SAFE_BUILTINS = {
-        'len': len, 'str': str, 'int': int, 'float': float, 'bool': bool,
-        'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
-        'range': range, 'enumerate': enumerate, 'zip': zip,
-        'sorted': sorted, 'reversed': reversed,
-        'min': min, 'max': max, 'sum': sum, 'abs': abs, 'round': round,
-        'any': any, 'all': all,
-        'isinstance': isinstance, 'type': type,
-        'print': print, 'repr': repr, 'hasattr': hasattr, 'getattr': getattr,
-        'ValueError': ValueError, 'TypeError': TypeError, 'KeyError': KeyError,
-        'True': True, 'False': False, 'None': None,
-    }
-
-    def _execute_python(self, code: str, context: StepContext, timeout: int) -> StepResult:
-        """Execute Python code with safe builtins and a thread-based timeout."""
-        import threading
-
-        safe_globals = {
-            '__builtins__': self._SAFE_BUILTINS,
-            'entity': context.entity.copy(),
-            'entity_type': context.entity_type,
-            'entity_id': context.entity_id,
-            'entity_name': context.entity_name,
-            'user_email': context.user_email,
-            'step_results': context.step_results.copy(),
-        }
-
-        local_vars: Dict[str, Any] = {}
-        exec_error: List[Exception] = []
-
-        def _run():
-            try:
-                exec(code, safe_globals, local_vars)
-            except Exception as e:
-                exec_error.append(e)
-
-        thread = threading.Thread(target=_run, daemon=True)
-        thread.start()
-        thread.join(timeout=timeout)
-
-        if thread.is_alive():
-            return StepResult(passed=False, error=f"Script timed out after {timeout}s")
-
-        if exec_error:
-            return StepResult(passed=False, error=str(exec_error[0]))
-
-        result = local_vars.get('result', {'passed': True})
-        if isinstance(result, dict):
-            return StepResult(
-                passed=result.get('passed', True),
-                message=result.get('message'),
-                data=result.get('data'),
-            )
-        return StepResult(passed=bool(result))
-
-    def _execute_sql(self, code: str, context: StepContext, timeout: int) -> StepResult:
+    def _execute_sql(self, code: str, context: StepContext) -> StepResult:
         """Execute SQL via Databricks statement_execution API."""
-        try:
-            from src.common.workspace_client import get_workspace_client
-            ws = get_workspace_client()
+        from src.common.workflow_sql_params import (
+            bind_sql_placeholders,
+            check_sql_placeholders,
+        )
 
-            # Resolve SQL warehouse ID from settings
+        # A step stored before the placeholder rules: refused before it runs
+        issues = check_sql_placeholders(code)
+        if issues:
+            return _coded_step_failure(
+                issues[0]['code'], issues[0]['message'], **issues[0]['params'],
+            )
+        try:
+            # Resolve SQL warehouse ID from settings (before building a workspace client)
             from src.db_models.app_settings import AppSettingDb as SettingDb
-            import json as _json
             wh_row = self._db.query(SettingDb).filter(SettingDb.key == "sql_warehouse_id").first()
             if not wh_row or not wh_row.value:
                 return StepResult(passed=False, error="No SQL warehouse configured in Settings")
             warehouse_id = wh_row.value.strip().strip('"')
 
-            # Substitute variables in SQL
-            resolved_sql = substitute_template(code, context)
+            from src.common.workspace_client import get_workspace_client
+            ws = get_workspace_client()
+
+            # Values are bound as named parameters, never pasted into the SQL text
+            from databricks.sdk.service.sql import StatementParameterListItem
+            resolved_sql, bound = bind_sql_placeholders(
+                code, lambda name: _resolved_variable(name, context),
+            )
+            parameters = [
+                StatementParameterListItem(name=name, value=value) for name, value in bound
+            ]
 
             resp = ws.statement_execution.execute_statement(
                 statement=resolved_sql,
                 warehouse_id=warehouse_id,
+                parameters=parameters or None,
                 wait_timeout="50s",
             )
 

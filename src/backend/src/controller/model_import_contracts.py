@@ -167,7 +167,7 @@ def resolve_tables(db: Session, model: ErwinModel, options: ModelImportOptions) 
             "drift": None,
         }
         if asset is not None:
-            drift = table_drift(e, _uc_columns(db, asset), dbms)
+            drift = table_drift(e, _uc_columns(db, asset), dbms, model=model)
             entry["drift"] = None if drift.is_clean() else drift.as_dict()
         out.append(entry)
     return out

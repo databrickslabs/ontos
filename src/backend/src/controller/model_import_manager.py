@@ -143,12 +143,16 @@ class ModelImportManager:
         sha256: str,
         user_id: str,
         options: Optional[ModelImportOptions] = None,
+        model: Optional[ErwinModel] = None,
     ) -> ModelImportRunDb:
         """Parse an uploaded export and stage a run with its preview.
 
-        Raises ``ErwinParseError`` (a ValueError) for files that are not erwin exports.
+        ``model`` is the already parsed export (the route parses off the event
+        loop); otherwise ``stream`` is parsed here. Raises ``ErwinParseError``
+        (a ValueError) for files that are not erwin exports.
         """
-        model = parse_erwin(stream)
+        if model is None:
+            model = parse_erwin(stream)
         opts = self._resolve_options(db, model, options)
         run = ModelImportRunDb(
             user_id=user_id,
@@ -228,6 +232,13 @@ class ModelImportManager:
                 result["logical"] = logical
             except Exception as exc:
                 logger.exception("Model import run %s failed while importing concepts", run.id)
+                sem_db = self._semantic_session(db)
+                if sem_db is not db:
+                    sem_db.rollback()
+                    try:
+                        self._semantic.rebuild_graph_from_enabled()
+                    except Exception:
+                        logger.error("Graph rebuild after a failed concept import failed", exc_info=True)
                 db.rollback()
                 self._finish(db, run, "failed", result, None, error=f"Concept import failed: {exc}")
                 return run

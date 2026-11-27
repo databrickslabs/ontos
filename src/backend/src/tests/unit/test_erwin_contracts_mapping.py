@@ -253,3 +253,18 @@ class TestUcMatching:
         d = table_drift(prod, [UcColumn("PRODUCT_ID", "bigint", False), UcColumn("PRODUCT_NAME", "string", False)],
                         "oracle")
         assert d.is_clean()
+
+
+def test_drift_uses_domain_type_when_column_has_none():
+    xml = FIXTURE.read_text(encoding="utf-8").replace(
+        "<EMX:Logical_Data_Type>VARCHAR(20)</EMX:Logical_Data_Type><EMX:Physical_Data_Type>VARCHAR2(20)</EMX:Physical_Data_Type>",
+        "",
+    )
+    import io
+    m = parse_erwin(io.BytesIO(xml.encode("utf-8")))
+    orders = m.entity(_id("E-ORD"))
+    assert m.attribute(_id("A-ORD-STATUS")).physical_type is None
+    uc = [UcColumn(c, "bigint", False) for c in ("ORDER_ID", "CUSTOMER_ID", "ORDER_DATE", "TOTAL_AMOUNT")]
+    uc.append(UcColumn("ORDER_STATUS", "int", False))
+    drift = table_drift(orders, uc, "oracle", model=m)
+    assert any(t["column"] == "ORDER_STATUS" and t["modeled"] == "VARCHAR2(20)" for t in drift.type_mismatches)

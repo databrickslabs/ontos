@@ -30,6 +30,7 @@ from src.common.file_security import sanitize_filename
 from src.common.logging import get_logger
 from src.controller.model_import_manager import ModelImportConflict, ModelImportError, ModelImportManager
 from src.db_models.model_import_runs import ModelImportRunDb
+from src.model_import.erwin.parse import parse_erwin
 from src.model_import.erwin.xml_reader import ErwinParseError
 from src.models.model_import import (
     ConfirmModelImportRequest,
@@ -173,10 +174,14 @@ async def create_run(
             raise HTTPException(status_code=422, detail="The file is empty.")
         tmp.seek(0)
         try:
-            # Parsing a large model is CPU-bound: keep it off the event loop.
-            run = await run_in_threadpool(
-                manager.create_run, db, stream=tmp, filename=filename, size_bytes=size,
-                sha256=sha.hexdigest(), user_id=current_user.email, options=opts,
+            # Parsing a large model is CPU-bound and touches no shared state:
+            # keep it off the event loop. The preview reads concepts through the
+            # app-wide semantic models manager, whose session is not thread-safe,
+            # so it runs on the loop like every other concept route.
+            model = await run_in_threadpool(parse_erwin, tmp)
+            run = manager.create_run(
+                db, stream=tmp, filename=filename, size_bytes=size, sha256=sha.hexdigest(),
+                user_id=current_user.email, options=opts, model=model,
             )
         except ErwinParseError as exc:
             _audit(background_tasks, audit_manager, request, current_user, "MODEL_IMPORT_STAGE", False,
@@ -229,7 +234,7 @@ async def update_run(
     if run.user_id != current_user.email:
         raise HTTPException(status_code=403, detail="Only the user who uploaded the model can change this run.")
     try:
-        return _detail(await run_in_threadpool(manager.update_options, db, run, options))
+        return _detail(manager.update_options(db, run, options))
     except ModelImportError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
@@ -251,8 +256,9 @@ async def confirm_run(
         raise HTTPException(status_code=403, detail="Only the user who uploaded the model can confirm this run.")
     await _require_write(ModelImportOptions.model_validate(run.options or {}), current_user, request)
     try:
-        # Concepts are written in this request (contracts follow in the background).
-        run = await run_in_threadpool(manager.confirm_run, db, run, payload.confirm_token, current_user.email)
+        # Concepts are written in this request, on the loop like other concept
+        # writes (shared semantic session); contracts follow in the background.
+        run = manager.confirm_run(db, run, payload.confirm_token, current_user.email)
     except ModelImportConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ModelImportError as exc:

@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from src.model_import.erwin.ir import ErwinEntity
+from src.model_import.erwin.ir import ErwinEntity, ErwinModel
 from src.model_import.erwin.map_contracts import _column_name, table_name
 from src.model_import.erwin.types import databricks_type_for, same_type
 from src.models.model_import import ModelImportOptions
@@ -61,8 +61,12 @@ class TableDrift:
 
 
 def table_drift(entity: ErwinEntity, uc_columns: List[UcColumn], dbms: str,
-                pk_ids: Optional[set] = None) -> TableDrift:
-    """Compare a modeled table with the columns of its UC table."""
+                pk_ids: Optional[set] = None, model: Optional[ErwinModel] = None) -> TableDrift:
+    """Compare a modeled table with the columns of its UC table.
+
+    With ``model``, a column typed only through its erwin domain is compared
+    using the domain's physical type (as the contract does).
+    """
     drift = TableDrift()
     by_name = {c.name.lower(): c for c in uc_columns}
     modeled = [a for a in entity.attributes if not a.logical_only]
@@ -77,11 +81,15 @@ def table_drift(entity: ErwinEntity, uc_columns: List[UcColumn], dbms: str,
         if uc is None:
             drift.missing_in_uc.append(name)
             continue
-        if a.physical_type and uc.data_type and not same_type(a.physical_type, uc.data_type, dbms):
+        modeled_type = a.physical_type
+        if not modeled_type and model is not None and a.domain_id:
+            domain = model.domain(a.domain_id)
+            modeled_type = domain.physical_type if domain else None
+        if modeled_type and uc.data_type and not same_type(modeled_type, uc.data_type, dbms):
             drift.type_mismatches.append({
                 "column": name,
-                "modeled": a.physical_type,
-                "modeled_databricks": databricks_type_for(a.physical_type, dbms) or "",
+                "modeled": modeled_type,
+                "modeled_databricks": databricks_type_for(modeled_type, dbms) or "",
                 "actual": uc.data_type,
             })
         required = a.id in pk_ids or a.nullable is False

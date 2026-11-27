@@ -6,7 +6,6 @@ works, and must re-initialize the managers only once the workspace is back.
 """
 
 import asyncio
-import gc
 import threading
 import time
 from types import SimpleNamespace
@@ -117,37 +116,37 @@ def test_two_retries_leave_one_poller_once_the_workspace_is_back(running_app_wit
 
 @pytest.mark.asyncio
 async def test_health_answers_while_a_retry_runs(running_app_without_workspace):
-    def slow_workspace_client(settings=None):
-        time.sleep(1.0)
+    in_retry = threading.Event()
+    release = threading.Event()
+
+    def blocked_workspace_client(settings=None):
+        # The retry is parked here until the test has seen /health answer.
+        in_retry.set()
+        # Safety net only: a hang fails the test instead of blocking forever.
+        if not release.wait(timeout=30):
+            raise TimeoutError("the test never released the retry")
         raise ValueError("unreachable host")
 
     transport = httpx.ASGITransport(app=app_module.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         with patch.object(
-            app_module, "get_workspace_client", side_effect=slow_workspace_client
+            app_module, "get_workspace_client", side_effect=blocked_workspace_client
         ), patch.object(app_module, "initialize_database"), patch.object(
-            # Before the fix, the retry re-ran the whole startup on the event loop.
-            app_module, "initialize_managers", side_effect=lambda app: time.sleep(1.0)
+            app_module, "initialize_managers"
         ), patch.object(app_module, "_seed_default_workflows"):
-            # A gen2 GC pause (0.2-0.5 s on a large suite) must not land in the timed window.
-            gc_was_enabled = gc.isenabled()
-            gc.collect()
-            gc.disable()
+            retry = asyncio.create_task(client.post("/api/health/retry"))
             try:
-                started = time.monotonic()
-                retry = asyncio.create_task(client.post("/api/health/retry"))
-                await asyncio.sleep(0.1)
-                health = await client.get("/api/health")
-                # Measured from the retry's start: a retry blocking the event loop
-                # would hold this request for the whole second.
-                elapsed = time.monotonic() - started
+                # Before the fix, the retry re-ran the whole startup on the event loop,
+                # so /health below could not be served until the retry finished.
+                assert await asyncio.to_thread(in_retry.wait, 30)
+                health = await asyncio.wait_for(client.get("/api/health"), timeout=30)
+                retry_was_running = not retry.done()
             finally:
-                if gc_was_enabled:
-                    gc.enable()
-            retry_response = await retry
+                release.set()
+            retry_response = await asyncio.wait_for(retry, timeout=30)
 
     assert health.status_code == 200
-    assert elapsed < 0.6
+    assert retry_was_running
     assert retry_response.status_code == 200
 
 

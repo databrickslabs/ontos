@@ -116,3 +116,16 @@ class TestCanonicalRole:
         assert manager.get_canonical_role_for_groups(["z"], BOSS).name == "Steward"
         assert manager.get_canonical_role_for_groups(["z"]).name == "Other"
         assert manager.get_canonical_role_for_groups([]) is None
+
+    def test_no_canonical_role_without_groups_or_an_assignment_by_user(self):
+        """No groups and no role by email: None, not the nearest role by permissions."""
+        none_role = AppRole(
+            id=uuid.uuid4(), name="Nothing", description=None, assigned_groups=["y"],
+            assigned_users=[], feature_permissions={}, home_sections=[], approval_privileges={},
+        )
+        manager = SettingsManager.__new__(SettingsManager)
+        manager.list_app_roles = lambda: [none_role]
+        manager.get_app_role = lambda role_id: none_role
+
+        assert manager.get_canonical_role_for_groups([], "nobody@example.com") is None
+        assert manager.get_canonical_role_for_groups(None, "nobody@example.com") is None

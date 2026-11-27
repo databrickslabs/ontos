@@ -603,6 +603,9 @@ class SettingsManager(ThreadBoundDb):
                 continue
         if best_role:
             return best_role
+        # Without groups there is nothing to compare; an email only counts by direct match
+        if not user_group_set:
+            return None
 
         # 2) Distance-based fallback using effective permissions
         try:

@@ -35,8 +35,6 @@ from src.models.process_workflows import (
 )
 
 UTC = timezone.utc
-_TABLES = ('process_workflows', 'workflow_steps', 'workflow_executions',
-           'workflow_step_executions', 'scheduler_claims')
 _PG_URL = os.environ.get('SCHEDULER_TEST_PG_URL')
 
 
@@ -67,11 +65,13 @@ class _Database:
 
 @pytest.fixture(params=['sqlite', 'postgresql'])
 def database(request, tmp_path):
-    tables = [Base.metadata.tables[name] for name in _TABLES]
+    # The whole schema, not a subset: a run also reads other tables (compliance
+    # templates, notifications). On Postgres a failed statement aborts the
+    # transaction, so a missing table fails the run instead of being skipped.
     if request.param == 'sqlite':
         shared = _Database(f"sqlite:///{tmp_path / 'scheduler.db'}",
                            {'check_same_thread': False, 'timeout': 30})
-        Base.metadata.create_all(shared.engine(), tables=tables)
+        Base.metadata.create_all(shared.engine())
         yield shared
         shared.dispose()
         return
@@ -83,7 +83,7 @@ def database(request, tmp_path):
         conn.execute(text(f'CREATE SCHEMA "{schema}"'))
     shared = _Database(_PG_URL, {'options': f'-csearch_path={schema}'})
     try:
-        Base.metadata.create_all(shared.engine(), tables=tables)
+        Base.metadata.create_all(shared.engine())
         yield shared
     finally:
         shared.dispose()

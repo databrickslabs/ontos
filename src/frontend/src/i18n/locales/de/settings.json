@@ -113,7 +113,8 @@
     "schemaImporter": "Schema-Importer",
     "dataProductTypes": "Datenprodukttypen",
     "certificationLevels": "Zertifizierungsstufen",
-    "maturityLevels": "Reifegradstufen"
+    "maturityLevels": "Reifegradstufen",
+    "complianceTemplates": "Compliance-Vorlagen"
   },
   "accessDenied": {
     "title": "Zugriff verweigert",
@@ -1598,6 +1599,88 @@
       "saveError": "Speichern fehlgeschlagen",
       "clearTitleError": "Titel konnte nicht gelöscht werden",
       "clearError": "Löschen fehlgeschlagen"
+    }
+  },
+  "complianceTemplates": {
+    "title": "Compliance-Vorlagen",
+    "intro": "Definiere typisierte, gruppierte Governance-Felder, die an einen Entitätstyp gebunden sind. Pro Entitätstyp kann genau eine Vorlage aktiv sein.",
+    "addTemplate": "Vorlage hinzufügen",
+    "columns": {
+      "name": "Name",
+      "entityType": "Entitätstyp",
+      "fields": "Felder",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "entityTypes": {
+      "data_product": "Datenprodukte"
+    },
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren"
+    },
+    "emptyState": "Keine Compliance-Vorlagen konfiguriert. Klicke auf „Vorlage hinzufügen“, um eine anzulegen.",
+    "dialog": {
+      "editTitle": "Compliance-Vorlage bearbeiten",
+      "createTitle": "Compliance-Vorlage hinzufügen",
+      "editDescription": "Bearbeite Felder, Standardwerte, Hinweise und Pflichtkennzeichen. Das Ändern des Typs eines Feldes oder das Entfernen eines Felds bzw. Enum-Werts ist blockiert, wenn Produkte bereits gespeicherte Werte haben.",
+      "createDescription": "Lege eine Vorlage an und füge optional Felder hinzu. Aktiviere sie, damit sie für den verknüpften Entitätstyp verfügbar ist.",
+      "name": "Name",
+      "namePlaceholder": "z. B. Nutzungsbedingungen",
+      "description": "Beschreibung",
+      "descriptionPlaceholder": "Was diese Vorlage erfasst …",
+      "entityType": "Entitätstyp",
+      "fields": "Felder",
+      "addField": "Feld hinzufügen",
+      "noFields": "Noch keine Felder. Klicke auf „Feld hinzufügen“, um eines zu definieren.",
+      "fieldLabelPlaceholder": "Feldbezeichnung",
+      "groupPlaceholder": "Gruppe (optional)",
+      "optionsPlaceholder": "Optionen (durch Kommas getrennt)",
+      "hintPlaceholder": "Hinweistext (optional)",
+      "defaultPlaceholder": "Standardwert (optional)",
+      "referencePlaceholder": "Referenz-ID (automatisch)",
+      "mandatory": "Pflichtfeld",
+      "mandatoryWithDefault": "Dieses Feld ist ein Pflichtfeld, hat aber einen Standardwert. Der Standardwert erfüllt die Anforderung, sodass Verantwortliche ohne Änderung veröffentlichen können.",
+      "cancel": "Abbrechen",
+      "saveChanges": "Änderungen speichern",
+      "create": "Erstellen"
+    },
+    "valueTypes": {
+      "string": "Text",
+      "numeric": "Zahl",
+      "boolean": "Ja/Nein",
+      "date": "Datum",
+      "enum": "Einzelauswahl",
+      "multi_enum": "Mehrfachauswahl",
+      "range": "Bereich (untere–obere Grenze)"
+    },
+    "deleteDialog": {
+      "title": "Compliance-Vorlage löschen?",
+      "description": "Möchtest du „{{name}}“ wirklich löschen? Die zugehörigen Felder werden entfernt. Eine Vorlage, deren Produkte bereits gespeicherte Werte haben, kann nicht gelöscht werden. Dies kann nicht rückgängig gemacht werden.",
+      "confirm": "Löschen",
+      "cancel": "Abbrechen"
+    },
+    "toast": {
+      "created": "Erstellt",
+      "createdDescription": "Vorlage „{{name}}“ erstellt.",
+      "saved": "Gespeichert",
+      "savedDescription": "Vorlage „{{name}}“ aktualisiert.",
+      "activated": "Aktiviert",
+      "activatedDescription": "Vorlage „{{name}}“ ist jetzt aktiv.",
+      "deactivated": "Deaktiviert",
+      "deactivatedDescription": "Vorlage „{{name}}“ deaktiviert.",
+      "deleted": "Gelöscht",
+      "deletedDescription": "Vorlage „{{name}}“ gelöscht.",
+      "cannotDelete": "Löschen nicht möglich",
+      "saveFailed": "Speichern fehlgeschlagen",
+      "cannotAdd": "„{{label}}“ kann nicht hinzugefügt werden: {{error}}",
+      "cannotUpdate": "„{{label}}“ kann nicht aktualisiert werden: {{error}}",
+      "cannotRemove": "„{{label}}“ kann nicht entfernt werden: {{error}}"
     }
   }
 }

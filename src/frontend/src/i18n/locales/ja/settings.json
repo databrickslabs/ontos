@@ -113,7 +113,8 @@
     "schemaImporter": "スキーマインポーター",
     "dataProductTypes": "データプロダクトタイプ",
     "certificationLevels": "認定レベル",
-    "maturityLevels": "成熟度レベル"
+    "maturityLevels": "成熟度レベル",
+    "complianceTemplates": "コンプライアンステンプレート"
   },
   "accessDenied": {
     "title": "アクセス拒否",
@@ -1596,6 +1597,88 @@
       "saveError": "保存に失敗しました",
       "clearTitleError": "タイトルのクリアに失敗しました",
       "clearError": "クリアに失敗しました"
+    }
+  },
+  "complianceTemplates": {
+    "title": "コンプライアンステンプレート",
+    "intro": "エンティティタイプに紐づく、型付きでグループ化されたガバナンス項目を定義します。エンティティタイプごとに有効にできるテンプレートは1つだけです。",
+    "addTemplate": "テンプレートを追加",
+    "columns": {
+      "name": "名前",
+      "entityType": "エンティティタイプ",
+      "fields": "項目",
+      "status": "ステータス",
+      "actions": "操作"
+    },
+    "entityTypes": {
+      "data_product": "データプロダクト"
+    },
+    "status": {
+      "active": "有効",
+      "inactive": "無効"
+    },
+    "actions": {
+      "edit": "編集",
+      "activate": "有効にする",
+      "deactivate": "無効にする"
+    },
+    "emptyState": "コンプライアンステンプレートが設定されていません。「テンプレートを追加」をクリックして作成してください。",
+    "dialog": {
+      "editTitle": "コンプライアンステンプレートを編集",
+      "createTitle": "コンプライアンステンプレートを追加",
+      "editDescription": "項目、既定値、ヒント、必須フラグを編集します。製品にすでに保存済みの値がある場合、項目の型の変更や項目・列挙値の削除はブロックされます。",
+      "createDescription": "テンプレートを作成し、必要に応じて項目を追加します。紐づくエンティティタイプで利用するには有効にしてください。",
+      "name": "名前",
+      "namePlaceholder": "例: 利用規約",
+      "description": "説明",
+      "descriptionPlaceholder": "このテンプレートが扱う内容…",
+      "entityType": "エンティティタイプ",
+      "fields": "項目",
+      "addField": "項目を追加",
+      "noFields": "まだ項目がありません。「項目を追加」をクリックして定義してください。",
+      "fieldLabelPlaceholder": "項目名",
+      "groupPlaceholder": "グループ（任意）",
+      "optionsPlaceholder": "オプション（カンマ区切り）",
+      "hintPlaceholder": "ヒント文（任意）",
+      "defaultPlaceholder": "既定値（任意）",
+      "referencePlaceholder": "参照ID（自動）",
+      "mandatory": "必須",
+      "mandatoryWithDefault": "この項目は必須ですが既定値があります。既定値が要件を満たすため、担当者は変更せずに公開できます。",
+      "cancel": "キャンセル",
+      "saveChanges": "変更を保存",
+      "create": "作成"
+    },
+    "valueTypes": {
+      "string": "テキスト",
+      "numeric": "数値",
+      "boolean": "はい/いいえ",
+      "date": "日付",
+      "enum": "単一選択",
+      "multi_enum": "複数選択",
+      "range": "範囲（下限〜上限）"
+    },
+    "deleteDialog": {
+      "title": "コンプライアンステンプレートを削除しますか？",
+      "description": "「{{name}}」を削除してもよろしいですか？ 含まれる項目も削除されます。製品に保存済みの値があるテンプレートは削除できません。この操作は元に戻せません。",
+      "confirm": "削除",
+      "cancel": "キャンセル"
+    },
+    "toast": {
+      "created": "作成しました",
+      "createdDescription": "テンプレート「{{name}}」を作成しました。",
+      "saved": "保存しました",
+      "savedDescription": "テンプレート「{{name}}」を更新しました。",
+      "activated": "有効にしました",
+      "activatedDescription": "テンプレート「{{name}}」が有効になりました。",
+      "deactivated": "無効にしました",
+      "deactivatedDescription": "テンプレート「{{name}}」を無効にしました。",
+      "deleted": "削除しました",
+      "deletedDescription": "テンプレート「{{name}}」を削除しました。",
+      "cannotDelete": "削除できません",
+      "saveFailed": "保存に失敗しました",
+      "cannotAdd": "「{{label}}」を追加できません: {{error}}",
+      "cannotUpdate": "「{{label}}」を更新できません: {{error}}",
+      "cannotRemove": "「{{label}}」を削除できません: {{error}}"
     }
   }
 }

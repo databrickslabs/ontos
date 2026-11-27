@@ -113,7 +113,8 @@
     "schemaImporter": "Schema-importer",
     "dataProductTypes": "Dataproducttypen",
     "certificationLevels": "Certificeringsniveaus",
-    "maturityLevels": "Volwassenheidsniveaus"
+    "maturityLevels": "Volwassenheidsniveaus",
+    "complianceTemplates": "Compliancesjablonen"
   },
   "accessDenied": {
     "title": "Toegang Geweigerd",
@@ -1616,6 +1617,88 @@
       "saveError": "Kon niet opslaan",
       "clearTitleError": "Kon titel niet wissen",
       "clearError": "Kon niet wissen"
+    }
+  },
+  "complianceTemplates": {
+    "title": "Compliancesjablonen",
+    "intro": "Definieer getypeerde, gegroepeerde governancevelden die aan een entiteitstype zijn gekoppeld. Per entiteitstype kan precies één sjabloon actief zijn.",
+    "addTemplate": "Sjabloon toevoegen",
+    "columns": {
+      "name": "Naam",
+      "entityType": "Entiteitstype",
+      "fields": "Velden",
+      "status": "Status",
+      "actions": "Acties"
+    },
+    "entityTypes": {
+      "data_product": "Dataproducten"
+    },
+    "status": {
+      "active": "Actief",
+      "inactive": "Inactief"
+    },
+    "actions": {
+      "edit": "Bewerken",
+      "activate": "Activeren",
+      "deactivate": "Deactiveren"
+    },
+    "emptyState": "Er zijn geen compliancesjablonen ingesteld. Klik op \"Sjabloon toevoegen\" om er een te maken.",
+    "dialog": {
+      "editTitle": "Compliancesjabloon bewerken",
+      "createTitle": "Compliancesjabloon toevoegen",
+      "editDescription": "Bewerk velden, standaardwaarden, hints en verplichte-vlaggen. Het wijzigen van het type van een veld of het verwijderen van een veld of enumwaarde is geblokkeerd wanneer producten al opgeslagen waarden hebben.",
+      "createDescription": "Maak een sjabloon en voeg eventueel velden toe. Activeer het om het beschikbaar te maken voor het gekoppelde entiteitstype.",
+      "name": "Naam",
+      "namePlaceholder": "bijv. Gebruiksvoorwaarden",
+      "description": "Beschrijving",
+      "descriptionPlaceholder": "Wat deze sjabloon vastlegt…",
+      "entityType": "Entiteitstype",
+      "fields": "Velden",
+      "addField": "Veld toevoegen",
+      "noFields": "Nog geen velden. Klik op \"Veld toevoegen\" om er een te definiëren.",
+      "fieldLabelPlaceholder": "Veldlabel",
+      "groupPlaceholder": "Groep (optioneel)",
+      "optionsPlaceholder": "Opties (kommagescheiden)",
+      "hintPlaceholder": "Hinttekst (optioneel)",
+      "defaultPlaceholder": "Standaard (optioneel)",
+      "referencePlaceholder": "Referentie-ID (automatisch)",
+      "mandatory": "Verplicht",
+      "mandatoryWithDefault": "Dit veld is verplicht maar heeft een standaardwaarde. De standaardwaarde voldoet aan de eis, zodat eigenaars kunnen publiceren zonder die te wijzigen.",
+      "cancel": "Annuleren",
+      "saveChanges": "Wijzigingen opslaan",
+      "create": "Maken"
+    },
+    "valueTypes": {
+      "string": "Tekst",
+      "numeric": "Getal",
+      "boolean": "Ja/Nee",
+      "date": "Datum",
+      "enum": "Enkelvoudige keuze",
+      "multi_enum": "Meervoudige keuze",
+      "range": "Bereik (minimum–maximum)"
+    },
+    "deleteDialog": {
+      "title": "Compliancesjabloon verwijderen?",
+      "description": "Weet je zeker dat je \"{{name}}\" wilt verwijderen? De velden worden verwijderd. Een sjabloon waarvan producten al opgeslagen waarden hebben, kan niet worden verwijderd. Dit kan niet ongedaan worden gemaakt.",
+      "confirm": "Verwijderen",
+      "cancel": "Annuleren"
+    },
+    "toast": {
+      "created": "Aangemaakt",
+      "createdDescription": "Sjabloon \"{{name}}\" aangemaakt.",
+      "saved": "Opgeslagen",
+      "savedDescription": "Sjabloon \"{{name}}\" bijgewerkt.",
+      "activated": "Geactiveerd",
+      "activatedDescription": "Sjabloon \"{{name}}\" is nu actief.",
+      "deactivated": "Gedeactiveerd",
+      "deactivatedDescription": "Sjabloon \"{{name}}\" gedeactiveerd.",
+      "deleted": "Verwijderd",
+      "deletedDescription": "Sjabloon \"{{name}}\" verwijderd.",
+      "cannotDelete": "Kan niet verwijderen",
+      "saveFailed": "Opslaan mislukt",
+      "cannotAdd": "Kan \"{{label}}\" niet toevoegen: {{error}}",
+      "cannotUpdate": "Kan \"{{label}}\" niet bijwerken: {{error}}",
+      "cannotRemove": "Kan \"{{label}}\" niet verwijderen: {{error}}"
     }
   }
 }

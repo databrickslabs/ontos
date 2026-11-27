@@ -11,6 +11,7 @@ from . import change_log
 from . import comments
 from . import compliance
 from . import concept_versions
+from . import compliance_templates
 from . import connections
 from . import costs
 from . import data_asset_reviews

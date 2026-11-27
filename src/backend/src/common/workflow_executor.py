@@ -89,6 +89,8 @@ def substitute_template(template: str, context: 'StepContext') -> str:
                                      (e.g. ${context.on_behalf_of.value}).
                                      Top-level scalar attrs like
                                      ${context.entity_type} also work.
+      ${template.<ref>}            - compliance template field value (stored value
+                                     else field default); requires context.template_values
     """
     import re
 
@@ -154,6 +156,12 @@ def substitute_template(template: str, context: 'StepContext') -> str:
                 resolved = _lookup_context(parts)
                 if resolved is not None:
                     return resolved
+            elif head == 'template':
+                # Resolve ${template.<ref>} from context.template_values
+                if context.template_values and parts:
+                    ref = parts[0]  # Just the first part (reference_id)
+                    if ref in context.template_values:
+                        return _render_template_value(context.template_values[ref])
         # leave placeholder intact when unresolved
         return match.group(0)
 
@@ -183,6 +191,69 @@ class StepContext:
     # Id of the step being executed (WorkflowStep.step_id), set by the
     # executor before each step
     step_id: Optional[str] = None
+    # Pre-resolved compliance template values: {reference_id: effective_value}.
+    # Used by substitute_template to resolve ${template.<ref>}.
+    template_values: Optional[Dict[str, Any]] = None
+
+
+def build_template_values(db: Session, entity_type: str, entity_id: str) -> Dict[str, Any]:
+    """Build compliance template values for an entity.
+
+    Returns a dict mapping reference_id -> effective_value (stored value else field default).
+    Returns empty dict on error (non-fatal; workflow continues).
+
+    Args:
+        db: Database session
+        entity_type: Entity type (e.g., 'data_product')
+        entity_id: Entity ID
+
+    Returns:
+        Dict[reference_id, effective_value]. Empty on error.
+    """
+    try:
+        # Import here to avoid circular dependency
+        from src.controller.compliance_templates_manager import compliance_templates_manager
+
+        # read_for_entity returns EntityComplianceRead with .values and .fields
+        compliance_data = compliance_templates_manager.read_for_entity(
+            db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+
+        if not compliance_data:
+            return {}
+
+        result: Dict[str, Any] = {}
+
+        # Build a map of reference_id -> field default
+        field_defaults: Dict[str, Any] = {}
+        if compliance_data.fields:
+            for field in compliance_data.fields:
+                ref_id = getattr(field, 'reference_id', None)
+                default = getattr(field, 'default_value', None)
+                if ref_id:
+                    field_defaults[ref_id] = default
+
+        # Apply stored values (override defaults)
+        if compliance_data.values:
+            for val in compliance_data.values:
+                ref_id = getattr(val, 'reference_id', None)
+                stored_val = getattr(val, 'value', None)
+                if ref_id is not None:
+                    result[ref_id] = stored_val
+
+        # Fill in defaults for fields with no stored value
+        for ref_id, default in field_defaults.items():
+            if ref_id not in result:
+                result[ref_id] = default
+
+        return result
+    except Exception as e:
+        logger.warning(
+            f"Failed to build template values for {entity_type} {entity_id}: {e}"
+        )
+        return {}
 
 
 @dataclass
@@ -3529,6 +3600,19 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        if scope != 'none':
+            # The publish gate of set_publication_scope / publish_product: mandatory
+            # compliance fields must be set (no-op when no template is active)
+            from src.common.api_errors import CodedValueError
+            from src.controller.compliance_templates_manager import (
+                compliance_templates_manager, raise_if_incomplete,
+            )
+            try:
+                raise_if_incomplete(compliance_templates_manager.check_completeness(
+                    self._db, entity_type=resolved_type, entity_id=entity_id,
+                ))
+            except CodedValueError as e:
+                return _rule_step_error(e)
         if scope != 'none' and resolved_type == 'data_product':
             # The same rule as set_publication_scope: every output port needs an
             # approved / active contract (approval can come after the contract changed)
@@ -3952,7 +4036,13 @@ class WorkflowExecutor:
             if isinstance(obo, dict):
                 on_behalf_of = obo
 
-        # Build step context
+        # Build step context with template values
+        template_values = None
+        try:
+            template_values = build_template_values(self._db, entity_type, entity_id)
+        except Exception as e:
+            logger.warning(f"Failed to build template values: {e}")
+
         context = StepContext(
             entity=entity.copy(),
             entity_type=entity_type,
@@ -3965,6 +4055,7 @@ class WorkflowExecutor:
             workflow_name=workflow.name,
             step_results={},
             on_behalf_of=on_behalf_of,
+            template_values=template_values,
         )
         # A before_update gate sees the tag changes of the gates that ran before it
         _start_from_earlier_gates(context)
@@ -4592,6 +4683,18 @@ class WorkflowExecutor:
             if isinstance(obo, dict):
                 on_behalf_of = obo
 
+        # Build template values for resume
+        template_values = None
+        if trigger_context:
+            try:
+                template_values = build_template_values(
+                    self._db,
+                    trigger_context.entity_type,
+                    trigger_context.entity_id,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to build template values on resume: {e}")
+
         context = StepContext(
             entity=entity_data.copy(),
             entity_type=trigger_context.entity_type if trigger_context else 'unknown',
@@ -4616,6 +4719,7 @@ class WorkflowExecutor:
                 },
             },
             on_behalf_of=on_behalf_of,
+            template_values=template_values,
         )
         # The tags the run had when it paused, with those tag steps set or
         # removed only in the context. Runs paused before they were kept: the

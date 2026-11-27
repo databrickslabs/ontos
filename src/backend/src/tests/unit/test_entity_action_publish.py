@@ -232,3 +232,54 @@ def test_unpublish_action_trigger_error_keeps_the_unpublish_and_says_so():
     db.commit.assert_called_once()
     assert result.data['trigger_failed'] == 'on_unpublish'
     assert 'the on_unpublish workflows did not run' in result.message
+
+
+# ----- Compliance publish gate on the workflow publication step (regression) -----
+
+def _incomplete_result():
+    from src.common.compliance_completeness import CompletenessResult
+    return CompletenessResult(
+        passed=False,
+        missing=['Data Owner'],
+        messages=["'Data Owner' is required but has no value."],
+    )
+
+
+def test_publication_step_refuses_product_with_unset_mandatory_compliance_field():
+    """The default 'Apply Publication' step must not publish past the compliance gate."""
+    from src.controller.compliance_templates_manager import compliance_templates_manager
+
+    with patch.object(compliance_templates_manager, 'check_completeness', return_value=_incomplete_result()):
+        result, entity, db = _publish('data_product', 'active')
+
+    assert result.passed is False
+    assert result.data['error_code'] == 'compliance_incomplete'
+    assert result.data['error_params'] == {'missing': 'Data Owner'}
+    assert 'Data Owner' in result.error
+    assert entity.publication_scope == 'none'
+    assert entity.published_at is None
+    db.commit.assert_not_called()
+
+
+def test_publication_step_checks_completeness_for_the_entity():
+    from src.controller.compliance_templates_manager import compliance_templates_manager
+
+    with patch.object(
+        compliance_templates_manager, 'check_completeness', return_value=_incomplete_result(),
+    ) as check:
+        _publish('data_product', 'active')
+
+    check.assert_called_once()
+    assert check.call_args.kwargs == {'entity_type': 'data_product', 'entity_id': 'e-1'}
+
+
+def test_unset_compliance_fields_do_not_block_scope_none():
+    """Unpublishing is never gated by completeness."""
+    from src.controller.compliance_templates_manager import compliance_templates_manager
+
+    config = {'action': 'set_publication_scope', 'scope_source': 'fixed', 'fixed_scope': 'none'}
+    with patch.object(compliance_templates_manager, 'check_completeness', return_value=_incomplete_result()) as check:
+        result, entity, db = _publish('data_product', 'active', config=config)
+
+    assert result.passed is True
+    check.assert_not_called()

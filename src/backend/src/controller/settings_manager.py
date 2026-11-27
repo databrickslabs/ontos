@@ -128,6 +128,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'data-asset-reviews': FeatureAccessLevel.ADMIN,
         'catalog-commander': FeatureAccessLevel.FULL,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
+        'compliance-template-values': FeatureAccessLevel.READ_WRITE,  # Fill product compliance fields
     },
     "Data Steward": {
         'data-domains': FeatureAccessLevel.READ_WRITE,
@@ -148,6 +149,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'data-asset-reviews': FeatureAccessLevel.READ_WRITE,
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
+        'compliance-template-values': FeatureAccessLevel.READ_WRITE,  # Fill product compliance fields
     },
     "Data Consumer": {
         'data-domains': FeatureAccessLevel.READ_ONLY,
@@ -162,6 +164,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
+        'compliance-template-values': FeatureAccessLevel.READ_ONLY,  # View product compliance (read-only)
     },
     "Data Producer": {
         'data-domains': FeatureAccessLevel.READ_ONLY,
@@ -176,6 +179,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
+        'compliance-template-values': FeatureAccessLevel.READ_WRITE,  # Fill product compliance fields
     },
     "Security Officer": {
         'security-features': FeatureAccessLevel.ADMIN,
@@ -185,6 +189,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'data-asset-reviews': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
+        'compliance-template-values': FeatureAccessLevel.READ_ONLY,  # View product compliance (read-only)
     },
 }
 

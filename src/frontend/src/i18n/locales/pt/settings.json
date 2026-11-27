@@ -113,7 +113,8 @@
     "schemaImporter": "Importador de esquemas",
     "dataProductTypes": "Tipos de produto de dados",
     "certificationLevels": "Níveis de certificação",
-    "maturityLevels": "Níveis de maturidade"
+    "maturityLevels": "Níveis de maturidade",
+    "complianceTemplates": "Modelos de conformidade"
   },
   "accessDenied": {
     "title": "Acesso negado",
@@ -1616,6 +1617,88 @@
       "saveError": "Falha ao salvar",
       "clearTitleError": "Falha ao limpar o título",
       "clearError": "Falha ao limpar"
+    }
+  },
+  "complianceTemplates": {
+    "title": "Modelos de conformidade",
+    "intro": "Defina campos de governança tipados e agrupados, vinculados a um tipo de entidade. Apenas um modelo pode estar ativo por tipo de entidade.",
+    "addTemplate": "Adicionar modelo",
+    "columns": {
+      "name": "Nome",
+      "entityType": "Tipo de entidade",
+      "fields": "Campos",
+      "status": "Status",
+      "actions": "Ações"
+    },
+    "entityTypes": {
+      "data_product": "Produtos de dados"
+    },
+    "status": {
+      "active": "Ativo",
+      "inactive": "Inativo"
+    },
+    "actions": {
+      "edit": "Editar",
+      "activate": "Ativar",
+      "deactivate": "Desativar"
+    },
+    "emptyState": "Nenhum modelo de conformidade configurado. Clique em «Adicionar modelo» para criar um.",
+    "dialog": {
+      "editTitle": "Editar modelo de conformidade",
+      "createTitle": "Adicionar modelo de conformidade",
+      "editDescription": "Edite campos, valores padrão, dicas e marcações de obrigatoriedade. Alterar o tipo de um campo ou remover um campo/valor de enumeração é bloqueado quando os produtos já têm valores armazenados.",
+      "createDescription": "Crie um modelo e, opcionalmente, adicione campos. Ative-o para torná-lo disponível no tipo de entidade vinculado.",
+      "name": "Nome",
+      "namePlaceholder": "ex.: Termos de uso",
+      "description": "Descrição",
+      "descriptionPlaceholder": "O que este modelo captura…",
+      "entityType": "Tipo de entidade",
+      "fields": "Campos",
+      "addField": "Adicionar campo",
+      "noFields": "Nenhum campo ainda. Clique em «Adicionar campo» para definir um.",
+      "fieldLabelPlaceholder": "Rótulo do campo",
+      "groupPlaceholder": "Grupo (opcional)",
+      "optionsPlaceholder": "Opções (separadas por vírgulas)",
+      "hintPlaceholder": "Texto de dica (opcional)",
+      "defaultPlaceholder": "Padrão (opcional)",
+      "referencePlaceholder": "ID de referência (automático)",
+      "mandatory": "Obrigatório",
+      "mandatoryWithDefault": "Este campo é obrigatório, mas tem um padrão: o padrão atende ao requisito, então os responsáveis podem publicar sem alterá-lo.",
+      "cancel": "Cancelar",
+      "saveChanges": "Salvar alterações",
+      "create": "Criar"
+    },
+    "valueTypes": {
+      "string": "Texto",
+      "numeric": "Número",
+      "boolean": "Sim/Não",
+      "date": "Data",
+      "enum": "Escolha única",
+      "multi_enum": "Escolha múltipla",
+      "range": "Intervalo (mínimo–máximo)"
+    },
+    "deleteDialog": {
+      "title": "Excluir modelo de conformidade?",
+      "description": "Tem certeza de que deseja excluir \"{{name}}\"? Os campos dele serão removidos. Um modelo cujos produtos já têm valores armazenados não pode ser excluído. Esta ação não pode ser desfeita.",
+      "confirm": "Excluir",
+      "cancel": "Cancelar"
+    },
+    "toast": {
+      "created": "Criado",
+      "createdDescription": "Modelo \"{{name}}\" criado.",
+      "saved": "Salvo",
+      "savedDescription": "Modelo \"{{name}}\" atualizado.",
+      "activated": "Ativado",
+      "activatedDescription": "O modelo \"{{name}}\" agora está ativo.",
+      "deactivated": "Desativado",
+      "deactivatedDescription": "Modelo \"{{name}}\" desativado.",
+      "deleted": "Excluído",
+      "deletedDescription": "Modelo \"{{name}}\" excluído.",
+      "cannotDelete": "Não é possível excluir",
+      "saveFailed": "Falha ao salvar",
+      "cannotAdd": "Não é possível adicionar \"{{label}}\": {{error}}",
+      "cannotUpdate": "Não é possível atualizar \"{{label}}\": {{error}}",
+      "cannotRemove": "Não é possível remover \"{{label}}\": {{error}}"
     }
   }
 }

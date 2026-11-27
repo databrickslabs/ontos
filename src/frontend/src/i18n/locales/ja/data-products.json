@@ -377,7 +377,10 @@
       "unlinkContract": "このデリバラブルから契約のリンクを解除しますか？",
       "createGenieSpace": "\"{{name}}\" の Genie Space を作成しますか？"
     },
-    "contractDangling": "契約はもう存在しません"
+    "contractDangling": "契約はもう存在しません",
+    "errors": {
+      "complianceIncomplete": "公開できません: 必須のコンプライアンス項目が不足しています: {{missing}}。"
+    }
   },
   "form": {
     "createTitle": "データ製品を作成",
@@ -1215,5 +1218,28 @@
     "consumer-aligned": "コンシューマー指向",
     "source": "ソース",
     "sink": "シンク"
+  },
+  "compliance": {
+    "modal": {
+      "defaultTitle": "コンプライアンス",
+      "descriptionWrite": "この項目のコンプライアンス情報を入力してください。",
+      "descriptionReadOnly": "この項目のコンプライアンス情報（読み取り専用）。",
+      "noTemplate": "この項目に有効なコンプライアンステンプレートはありません。",
+      "loadFailed": "コンプライアンスデータの読み込みに失敗しました",
+      "saved": "保存しました",
+      "savedDescription": "コンプライアンス情報を更新しました。",
+      "saveFailed": "保存に失敗しました",
+      "yes": "はい",
+      "no": "いいえ",
+      "selectPlaceholder": "選択…",
+      "noOptions": "オプションが定義されていません。",
+      "low": "下限",
+      "high": "上限",
+      "rangeLowLabel": "{{label}} 下限",
+      "rangeHighLabel": "{{label}} 上限",
+      "cancel": "キャンセル",
+      "close": "閉じる",
+      "save": "保存"
+    }
   }
 }

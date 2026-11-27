@@ -113,7 +113,8 @@
     "schemaImporter": "Importador de esquemas",
     "dataProductTypes": "Tipos de producto de datos",
     "certificationLevels": "Niveles de certificación",
-    "maturityLevels": "Niveles de madurez"
+    "maturityLevels": "Niveles de madurez",
+    "complianceTemplates": "Plantillas de cumplimiento"
   },
   "accessDenied": {
     "title": "Acceso denegado",
@@ -1598,6 +1599,88 @@
       "saveError": "No se pudo guardar",
       "clearTitleError": "No se pudo borrar el título",
       "clearError": "No se pudo borrar"
+    }
+  },
+  "complianceTemplates": {
+    "title": "Plantillas de cumplimiento",
+    "intro": "Define campos de gobernanza tipados y agrupados vinculados a un tipo de entidad. Solo puede haber una plantilla activa por tipo de entidad.",
+    "addTemplate": "Añadir plantilla",
+    "columns": {
+      "name": "Nombre",
+      "entityType": "Tipo de entidad",
+      "fields": "Campos",
+      "status": "Estado",
+      "actions": "Acciones"
+    },
+    "entityTypes": {
+      "data_product": "Productos de datos"
+    },
+    "status": {
+      "active": "Activa",
+      "inactive": "Inactiva"
+    },
+    "actions": {
+      "edit": "Editar",
+      "activate": "Activar",
+      "deactivate": "Desactivar"
+    },
+    "emptyState": "No hay plantillas de cumplimiento configuradas. Haz clic en «Añadir plantilla» para crear una.",
+    "dialog": {
+      "editTitle": "Editar plantilla de cumplimiento",
+      "createTitle": "Añadir plantilla de cumplimiento",
+      "editDescription": "Edita campos, valores predeterminados, sugerencias y marcas de obligatoriedad. Cambiar el tipo de un campo o eliminar un campo o valor de enumeración se bloquea si los productos ya tienen valores guardados.",
+      "createDescription": "Crea una plantilla y, si quieres, añade campos. Actívala para que esté disponible en el tipo de entidad vinculado.",
+      "name": "Nombre",
+      "namePlaceholder": "p. ej., Condiciones de uso",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Qué recoge esta plantilla…",
+      "entityType": "Tipo de entidad",
+      "fields": "Campos",
+      "addField": "Añadir campo",
+      "noFields": "Aún no hay campos. Haz clic en «Añadir campo» para definir uno.",
+      "fieldLabelPlaceholder": "Etiqueta del campo",
+      "groupPlaceholder": "Grupo (opcional)",
+      "optionsPlaceholder": "Opciones (separadas por comas)",
+      "hintPlaceholder": "Texto de ayuda (opcional)",
+      "defaultPlaceholder": "Predeterminado (opcional)",
+      "referencePlaceholder": "ID de referencia (automático)",
+      "mandatory": "Obligatorio",
+      "mandatoryWithDefault": "Este campo es obligatorio, pero tiene un valor predeterminado: el valor predeterminado cumple el requisito, así que los responsables pueden publicar sin cambiarlo.",
+      "cancel": "Cancelar",
+      "saveChanges": "Guardar cambios",
+      "create": "Crear"
+    },
+    "valueTypes": {
+      "string": "Texto",
+      "numeric": "Número",
+      "boolean": "Sí/No",
+      "date": "Fecha",
+      "enum": "Selección única",
+      "multi_enum": "Selección múltiple",
+      "range": "Rango (mínimo–máximo)"
+    },
+    "deleteDialog": {
+      "title": "¿Eliminar plantilla de cumplimiento?",
+      "description": "¿Seguro que quieres eliminar «{{name}}»? Sus campos se eliminarán. No se puede eliminar una plantilla cuyos productos ya tengan valores guardados. Esta acción no se puede deshacer.",
+      "confirm": "Eliminar",
+      "cancel": "Cancelar"
+    },
+    "toast": {
+      "created": "Creada",
+      "createdDescription": "Plantilla «{{name}}» creada.",
+      "saved": "Guardado",
+      "savedDescription": "Plantilla «{{name}}» actualizada.",
+      "activated": "Activada",
+      "activatedDescription": "La plantilla «{{name}}» ya está activa.",
+      "deactivated": "Desactivada",
+      "deactivatedDescription": "Plantilla «{{name}}» desactivada.",
+      "deleted": "Eliminada",
+      "deletedDescription": "Plantilla «{{name}}» eliminada.",
+      "cannotDelete": "No se puede eliminar",
+      "saveFailed": "Error al guardar",
+      "cannotAdd": "No se puede añadir «{{label}}»: {{error}}",
+      "cannotUpdate": "No se puede actualizar «{{label}}»: {{error}}",
+      "cannotRemove": "No se puede quitar «{{label}}»: {{error}}"
     }
   }
 }

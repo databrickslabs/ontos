@@ -113,7 +113,8 @@
     "schemaImporter": "Importatore di schemi",
     "dataProductTypes": "Tipi di prodotto dati",
     "certificationLevels": "Livelli di certificazione",
-    "maturityLevels": "Livelli di maturità"
+    "maturityLevels": "Livelli di maturità",
+    "complianceTemplates": "Modelli di conformità"
   },
   "accessDenied": {
     "title": "Accesso negato",
@@ -1598,6 +1599,88 @@
       "saveError": "Salvataggio non riuscito",
       "clearTitleError": "Impossibile cancellare il titolo",
       "clearError": "Impossibile cancellare"
+    }
+  },
+  "complianceTemplates": {
+    "title": "Modelli di conformità",
+    "intro": "Definisci campi di governance tipizzati e raggruppati, associati a un tipo di entità. Per ogni tipo di entità può essere attivo un solo modello.",
+    "addTemplate": "Aggiungi modello",
+    "columns": {
+      "name": "Nome",
+      "entityType": "Tipo di entità",
+      "fields": "Campi",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "entityTypes": {
+      "data_product": "Data product"
+    },
+    "status": {
+      "active": "Attivo",
+      "inactive": "Inattivo"
+    },
+    "actions": {
+      "edit": "Modifica",
+      "activate": "Attiva",
+      "deactivate": "Disattiva"
+    },
+    "emptyState": "Nessun modello di conformità configurato. Fai clic su «Aggiungi modello» per crearne uno.",
+    "dialog": {
+      "editTitle": "Modifica modello di conformità",
+      "createTitle": "Aggiungi modello di conformità",
+      "editDescription": "Modifica campi, valori predefiniti, suggerimenti e flag obbligatori. Cambiare il tipo di un campo o rimuovere un campo o un valore di enumerazione è bloccato se i prodotti hanno già valori salvati.",
+      "createDescription": "Crea un modello e, se vuoi, aggiungi dei campi. Attivalo per renderlo disponibile sul tipo di entità associato.",
+      "name": "Nome",
+      "namePlaceholder": "es. Termini di utilizzo",
+      "description": "Descrizione",
+      "descriptionPlaceholder": "Cosa raccoglie questo modello…",
+      "entityType": "Tipo di entità",
+      "fields": "Campi",
+      "addField": "Aggiungi campo",
+      "noFields": "Nessun campo ancora. Fai clic su «Aggiungi campo» per definirne uno.",
+      "fieldLabelPlaceholder": "Etichetta campo",
+      "groupPlaceholder": "Gruppo (facoltativo)",
+      "optionsPlaceholder": "Opzioni (separate da virgole)",
+      "hintPlaceholder": "Testo di suggerimento (facoltativo)",
+      "defaultPlaceholder": "Predefinito (facoltativo)",
+      "referencePlaceholder": "ID di riferimento (automatico)",
+      "mandatory": "Obbligatorio",
+      "mandatoryWithDefault": "Questo campo è obbligatorio ma ha un valore predefinito: il valore predefinito soddisfa il requisito, quindi i responsabili possono pubblicare senza modificarlo.",
+      "cancel": "Annulla",
+      "saveChanges": "Salva modifiche",
+      "create": "Crea"
+    },
+    "valueTypes": {
+      "string": "Testo",
+      "numeric": "Numero",
+      "boolean": "Sì/No",
+      "date": "Data",
+      "enum": "Scelta singola",
+      "multi_enum": "Scelta multipla",
+      "range": "Intervallo (minimo–massimo)"
+    },
+    "deleteDialog": {
+      "title": "Eliminare il modello di conformità?",
+      "description": "Sei sicuro di voler eliminare «{{name}}»? I suoi campi verranno rimossi. Un modello i cui prodotti hanno già valori salvati non può essere eliminato. L’operazione non può essere annullata.",
+      "confirm": "Elimina",
+      "cancel": "Annulla"
+    },
+    "toast": {
+      "created": "Creato",
+      "createdDescription": "Modello «{{name}}» creato.",
+      "saved": "Salvato",
+      "savedDescription": "Modello «{{name}}» aggiornato.",
+      "activated": "Attivato",
+      "activatedDescription": "Il modello «{{name}}» è ora attivo.",
+      "deactivated": "Disattivato",
+      "deactivatedDescription": "Modello «{{name}}» disattivato.",
+      "deleted": "Eliminato",
+      "deletedDescription": "Modello «{{name}}» eliminato.",
+      "cannotDelete": "Impossibile eliminare",
+      "saveFailed": "Salvataggio non riuscito",
+      "cannotAdd": "Impossibile aggiungere «{{label}}»: {{error}}",
+      "cannotUpdate": "Impossibile aggiornare «{{label}}»: {{error}}",
+      "cannotRemove": "Impossibile rimuovere «{{label}}»: {{error}}"
     }
   }
 }

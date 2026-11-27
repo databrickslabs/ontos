@@ -377,7 +377,10 @@
       "unlinkContract": "Contract ontkoppelen van deze levering?",
       "createGenieSpace": "Een Genie Space aanmaken voor \"{{name}}\"?"
     },
-    "contractDangling": "Contract bestaat niet meer"
+    "contractDangling": "Contract bestaat niet meer",
+    "errors": {
+      "complianceIncomplete": "Publiceren niet mogelijk: verplichte compliancevelden ontbreken: {{missing}}."
+    }
   },
   "form": {
     "createTitle": "Dataproduct Aanmaken",
@@ -1215,5 +1218,28 @@
     "consumer-aligned": "Consumentgericht",
     "source": "Bron",
     "sink": "Bestemming"
+  },
+  "compliance": {
+    "modal": {
+      "defaultTitle": "Compliance",
+      "descriptionWrite": "Vul de complianceinformatie voor dit item in.",
+      "descriptionReadOnly": "Complianceinformatie voor dit item (alleen-lezen).",
+      "noTemplate": "Er is geen actieve compliancesjabloon voor dit item.",
+      "loadFailed": "Compliancegegevens laden mislukt",
+      "saved": "Opgeslagen",
+      "savedDescription": "Complianceinformatie bijgewerkt.",
+      "saveFailed": "Opslaan mislukt",
+      "yes": "Ja",
+      "no": "Nee",
+      "selectPlaceholder": "Selecteren…",
+      "noOptions": "Geen opties gedefinieerd.",
+      "low": "Laag",
+      "high": "Hoog",
+      "rangeLowLabel": "{{label}} minimum",
+      "rangeHighLabel": "{{label}} maximum",
+      "cancel": "Annuleren",
+      "close": "Sluiten",
+      "save": "Opslaan"
+    }
   }
 }

@@ -377,7 +377,10 @@
       "unlinkContract": "Desvincular o contrato deste entregável?",
       "createGenieSpace": "Criar um Genie Space para \"{{name}}\"?"
     },
-    "contractDangling": "O contrato não existe mais"
+    "contractDangling": "O contrato não existe mais",
+    "errors": {
+      "complianceIncomplete": "Não é possível publicar: faltam campos de conformidade obrigatórios: {{missing}}."
+    }
   },
   "form": {
     "createTitle": "Criar produto de dados",
@@ -1215,5 +1218,28 @@
     "consumer-aligned": "Alinhado ao consumidor",
     "source": "Origem",
     "sink": "Destino"
+  },
+  "compliance": {
+    "modal": {
+      "defaultTitle": "Conformidade",
+      "descriptionWrite": "Preencha as informações de conformidade deste item.",
+      "descriptionReadOnly": "Informações de conformidade deste item (somente leitura).",
+      "noTemplate": "Não há nenhum modelo de conformidade ativo para este item.",
+      "loadFailed": "Falha ao carregar os dados de conformidade",
+      "saved": "Salvo",
+      "savedDescription": "Informações de conformidade atualizadas.",
+      "saveFailed": "Falha ao salvar",
+      "yes": "Sim",
+      "no": "Não",
+      "selectPlaceholder": "Selecionar…",
+      "noOptions": "Nenhuma opção definida.",
+      "low": "Baixo",
+      "high": "Alto",
+      "rangeLowLabel": "{{label}} mínimo",
+      "rangeHighLabel": "{{label}} máximo",
+      "cancel": "Cancelar",
+      "close": "Fechar",
+      "save": "Salvar"
+    }
   }
 }

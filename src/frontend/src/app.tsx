@@ -106,6 +106,7 @@ import SettingsSemanticModelsView from './views/settings-semantic-models';
 import SettingsDataProductTypesView from './views/settings-data-product-types';
 import SettingsCertificationLevelsView from './views/settings-certification-levels';
 import SettingsMaturityLevelsView from './views/settings-maturity-levels';
+import SettingsComplianceTemplatesView from './views/settings-compliance-templates';
 
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
@@ -273,6 +274,7 @@ export default function App() {
                 <Route path="data-product-types" element={<SettingsDataProductTypesView />} />
                 <Route path="certification-levels" element={<SettingsCertificationLevelsView />} />
                 <Route path="maturity-levels" element={<SettingsMaturityLevelsView />} />
+                <Route path="compliance-templates" element={<SettingsComplianceTemplatesView />} />
                 <Route path="workflows" element={<Workflows />} />
                 <Route path="workflows/new" element={<WorkflowDesignerView />} />
                 <Route path="workflows/:workflowId" element={<WorkflowDesignerView />} />

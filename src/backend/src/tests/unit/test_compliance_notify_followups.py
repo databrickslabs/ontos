@@ -6,9 +6,13 @@ os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import uuid
+from unittest.mock import patch
+
+import pytest
 
 from src.common.compliance_actions import ActionContext, NotifyAction
 from src.common.compliance_notifications import ComplianceRunNotifier
+from src.common.notification_audience import NotifyAudience
 from src.db_models.notifications import NotificationDb
 
 RUN_USER = 'steward@example.com'
@@ -16,7 +20,8 @@ RUN_USER = 'steward@example.com'
 
 def _notifier(db, run_user=RUN_USER):
     return ComplianceRunNotifier(
-        db, policy_id='pol-1', policy_name='P', run_id='run-1', run_user=run_user,
+        db, policy_id='pol-1', policy_name='P', run_id='run-1',
+        audience=NotifyAudience(email=None, is_admin=True, role_ids=frozenset()), run_user=run_user,
     )
 
 
@@ -299,6 +304,25 @@ class TestRecipientTokens:
         notifier.flush(failed=1, passed=0)
 
         assert _recipients(db_session) == ['data-engineers']
+
+    @pytest.mark.parametrize('spelling, canonical', [
+        ('Entity Owner', 'entity_owner'), ('ENTITY OWNER', 'entity_owner'), ('Owner', 'owner'),
+    ])
+    def test_owner_spellings_resolve_as_the_canonical_token(self, db_session, spelling, canonical):
+        # The audience check (test_notification_recipients) accepts the same spellings
+        notifier = _notifier(db_session)
+        resolver = 'src.common.workflow_executor._resolve_role_to_users'
+        with patch(resolver, return_value=[('owner@example.com', None)]) as resolve:
+            assert notifier._resolve(spelling, _context(notifier)) == [('owner@example.com', None)]
+        assert resolve.call_args.args[1] == canonical
+
+    def test_self_spellings_resolve_to_the_author(self, db_session):
+        audience = NotifyAudience(email='author@example.com', is_admin=False, role_ids=frozenset())
+        notifier = ComplianceRunNotifier(
+            db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=audience, run_user=RUN_USER,
+        )
+        for spelling in ('self', 'Self', 'SELF', 'S_E_L_F'):
+            assert notifier._resolve(spelling, _context(notifier)) == [('author@example.com', None)], spelling
 
     def test_an_app_role_name_still_resolves(self, db_session):
         from src.db_models.settings import AppRoleDb

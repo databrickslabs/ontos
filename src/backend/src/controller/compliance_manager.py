@@ -28,6 +28,8 @@ from src.common.compliance_actions import (
     APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
 )
 from src.common.compliance_notifications import ComplianceRunNotifier
+from src.common.notification_audience import NotifyAudience, audience_for
+from src.repositories.notification_recipient_repository import json_list
 from src.common.api_errors import CodedValueError, UserTokenRequiredError
 from src.common.run_identity import RunIdentity
 from src.common.compliance_llm_check import (
@@ -88,19 +90,35 @@ def _result_details(action_outcomes, llm_checks) -> Optional[str]:
     return json.dumps(details) if details else None
 
 
-def _rule_actions(rule: Optional[str]) -> List[dict]:
+def _author_columns(author: Optional[Tuple[Optional[str], List[str]]]) -> dict:
+    """The policy columns that record the rule's author (email and groups)."""
+    email, groups = author or (None, [])
+    return {'rule_author_email': email, 'rule_author_groups': json.dumps(list(groups or []))}
+
+
+def _parse_or_none(rule: Optional[str]) -> Optional[dict]:
     if not rule:
-        return []
+        return None
     try:
-        parsed = parse_rule(rule)
+        return parse_rule(rule)
     except Exception:
-        return []
+        return None
+
+
+def _rule_actions(rule: Optional[str]) -> List[dict]:
+    parsed = _parse_or_none(rule) or {}
     return (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
 
 
-def rule_sends_notifications(rule: Optional[str]) -> bool:
-    """Whether a rule has NOTIFY actions (False if it doesn't parse)."""
-    return any(action.get('type') == 'NOTIFY' for action in _rule_actions(rule))
+def notify_targets_of(parsed: Optional[dict]) -> List[str]:
+    """The recipients of each NOTIFY action of an already parsed rule."""
+    actions = ((parsed or {}).get('on_pass_actions') or []) + ((parsed or {}).get('on_fail_actions') or [])
+    return [action.get('recipients') or '' for action in actions if action.get('type') == 'NOTIFY']
+
+
+def rule_notify_targets(rule: Optional[str]) -> List[str]:
+    """The recipients of each NOTIFY action of a rule (empty if it doesn't parse)."""
+    return notify_targets_of(_parse_or_none(rule))
 
 
 def _yaml_rule_refusal(rule: Optional[str]) -> Optional[str]:
@@ -400,6 +418,10 @@ class ComplianceManager:
                 # Upsert by id
                 existing = db.get(CompliancePolicyDb, str(model.id))
                 if existing:
+                    if existing.rule != model.rule:
+                        # The new rule has no recorded author; its NOTIFY targets are refused until one saves it
+                        existing.rule_author_email = None
+                        existing.rule_author_groups = None
                     existing.name = model.name
                     existing.description = model.description
                     existing.rule = model.rule
@@ -534,6 +556,7 @@ class ComplianceManager:
         db: Session,
         policy: CompliancePolicyCreate,
         current_user: Optional[str] = None,
+        author: Optional[Tuple[Optional[str], List[str]]] = None,
     ) -> CompliancePolicyDb:
         db_obj = CompliancePolicyDb(
             id=str(uuid.uuid4()),  # Server-generated UUID
@@ -544,6 +567,7 @@ class ComplianceManager:
             category=policy.category,
             severity=policy.severity,
             is_active=policy.is_active,
+            **_author_columns(author),
         )
         db.add(db_obj)
         
@@ -571,10 +595,15 @@ class ComplianceManager:
         policy_id: str, 
         policy: CompliancePolicy,
         current_user: Optional[str] = None,
+        author: Optional[Tuple[Optional[str], List[str]]] = None,
     ) -> Optional[CompliancePolicyDb]:
         existing = db.get(CompliancePolicyDb, policy_id)
         if not existing:
             return None
+        if author is not None:
+            columns = _author_columns(author)
+            existing.rule_author_email = columns['rule_author_email']
+            existing.rule_author_groups = columns['rule_author_groups']
         existing.name = policy.name
         existing.description = policy.description
         existing.failure_message = policy.failure_message
@@ -1231,8 +1260,12 @@ class ComplianceManager:
         # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
         # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
+        # NOTIFY is checked against the policy's author, not the user who runs it (#1450).
+        # Until the rule is parsed (below) the notifier has no audience, so it refuses every target.
         notifier = ComplianceRunNotifier(
-            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, run_user=current_user,
+            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id,
+            audience=NotifyAudience(email=None, is_admin=False, role_ids=frozenset()),
+            run_user=current_user,
         )
         # LLM_CHECK calls: one budget for this run (or the job run that passes
         # its checker), verdicts cached across runs
@@ -1253,6 +1286,12 @@ class ComplianceManager:
         try:
             # Parse the rule using enhanced DSL
             parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
+            if notify_targets_of(parsed_rule):
+                # getattr: a policy object without the author columns (a run from a bare policy) has no author
+                notifier.set_audience(audience_for(
+                    db, getattr(policy, 'rule_author_email', None),
+                    json_list(getattr(policy, 'rule_author_groups', None)),
+                ))
             refused = llm_check_tag_actions(parsed_rule)
             if refused:
                 # Also refused on save and in the YAML load; a rule stored another way
@@ -1435,7 +1474,11 @@ class ComplianceManager:
                     entity_id=policy.id,
                     action='RUN',
                     username=current_user,
-                    details={"run_id": run.id, "status": run.status, "score": run.score}
+                    details={
+                        "run_id": run.id, "status": run.status, "score": run.score,
+                        # How many recipients were notified (counts only, no names)
+                        "notifications": notifier.sent,
+                    }
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for policy run: {log_err}")

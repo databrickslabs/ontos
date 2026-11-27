@@ -271,6 +271,8 @@ def test_workflow_config_initialization_supports_inline_policy_workspace_client(
         id="policy-1",
         name="Serverless settings policy",
         rule="MATCH (table:Table) ASSERT true",
+        rule_author_email=None,
+        rule_author_groups=None,
     )
     run = compliance_manager_module.ComplianceManager().run_policy_inline(
         FakeSession(),

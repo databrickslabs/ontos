@@ -257,7 +257,9 @@ PID = str(uuid.uuid4())
 
 
 def test_changing_a_rule_to_llm_check_needs_compliance_admin(api, writer):
-    api.manager.get_policy.return_value = SimpleNamespace(id=PID, name='P', rule=PLAIN_RULE)
+    api.manager.get_policy.return_value = SimpleNamespace(id=PID, name='P', rule=PLAIN_RULE, description='d', is_active=True,
+                                                 severity='low', category='Governance',
+                                                 failure_message=None, rule_author_email=None, rule_author_groups=None)
 
     response = api.http.put(
         f'/api/compliance/policies/{PID}', json={**_payload(UC_RULE), 'id': PID},
@@ -268,7 +270,9 @@ def test_changing_a_rule_to_llm_check_needs_compliance_admin(api, writer):
 
 
 def test_other_edits_of_an_llm_check_policy_are_not_gated(api, writer):
-    api.manager.get_policy.return_value = SimpleNamespace(id=PID, name='P', rule=UC_RULE)
+    api.manager.get_policy.return_value = SimpleNamespace(id=PID, name='P', rule=UC_RULE, description='d', is_active=True,
+                                                 severity='low', category='Governance',
+                                                 failure_message=None, rule_author_email=None, rule_author_groups=None)
     api.manager.update_policy.return_value = CompliancePolicyDb(
         id=PID, name='P', description='d2', rule=UC_RULE, category='Governance',
         severity='low', is_active=False, created_at=datetime.now(), updated_at=datetime.now(),

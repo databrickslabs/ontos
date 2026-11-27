@@ -34,6 +34,7 @@ import {
 import { complianceRunScoreText, complianceScoreColor } from '@/lib/compliance-run-warning';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { NotifyRecipientInsert } from '@/components/compliance/notify-recipient-insert';
 import { LlmCheckTester } from '@/components/compliance/llm-check-tester';
 
 interface CompliancePolicy {
@@ -459,6 +460,7 @@ export default function Compliance() {
                     required
                     placeholder={t('compliance:form.rulePlaceholder')}
                   />
+                  <NotifyRecipientInsert textareaId="rule" />
                 </div>
                 <LlmCheckTester getRule={() => ruleRef.current?.value ?? ''} />
                 <div className="space-y-2">

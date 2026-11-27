@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Boxes,
   Activity,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -67,6 +68,7 @@ const settingsNavGroups: SettingsNavGroup[] = [
       { path: '/settings/ui', labelKey: 'settings:tabs.ui', defaultLabel: 'UI', icon: Palette, permissionId: 'settings-ui' },
       { path: '/settings/tags', labelKey: 'settings:tabs.tags', defaultLabel: 'Tags', icon: Tags, permissionId: 'tags' },
       { path: '/settings/connectors', labelKey: 'settings:tabs.connectors', defaultLabel: 'Connectors', icon: Plug2, permissionId: 'settings-connectors' },
+      { path: '/settings/notification-recipients', labelKey: 'settings:tabs.notificationRecipients', defaultLabel: 'Notification Recipients', icon: Bell, permissionId: 'settings-roles' },
     ],
   },
   {

@@ -29,6 +29,7 @@ import {
   complianceRunWarningText,
 } from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { NotifyRecipientInsert } from '@/components/compliance/notify-recipient-insert';
 import { llmCheckErrorText, llmUsageText } from '@/lib/compliance-llm-checks';
 
 type Policy = {
@@ -571,6 +572,7 @@ export default function CompliancePolicyDetails() {
                 required
                 placeholder={t('compliance:form.rulePlaceholder')}
               />
+              <NotifyRecipientInsert textareaId="edit-rule" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-failure-message">{t('compliance:form.failureMessage')}</Label>

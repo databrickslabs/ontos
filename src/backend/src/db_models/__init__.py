@@ -26,6 +26,7 @@ from . import mcp_tokens
 from . import mdm
 from . import metadata as metadata_db
 from . import notifications
+from . import notification_recipients
 from . import process_workflows
 from . import projects
 from . import quality

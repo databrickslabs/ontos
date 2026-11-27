@@ -13,6 +13,7 @@ from . import mdm_routes
 from . import metadata_routes
 from . import metadata_routes as generic_metadata_routes
 from . import notifications_routes
+from . import notification_recipients_routes
 from . import search_routes
 from . import security_features_routes
 from . import settings_routes

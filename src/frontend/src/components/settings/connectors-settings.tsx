@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { useTranslation } from 'react-i18next';
+import { connectorErrorText } from '@/lib/connector-error-text';
 import { PlusCircle, MoreHorizontal, HeartPulse, Loader2, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -70,7 +71,7 @@ export default function ConnectorsSettings() {
       } else {
         toast({
           title: t('settings:connectors.messages.testFailed', 'Connection failed'),
-          description: result.error || t('common:errors.unknownError'),
+          description: connectorErrorText(t, result.error, t('common:errors.unknownError')),
           variant: 'destructive',
         });
       }

@@ -92,3 +92,28 @@ describe('buildConnectionConfig', () => {
     expect(buildConnectionConfig('unknown', { foo: 'bar' })).toEqual({});
   });
 });
+
+describe('Tableau connection config', () => {
+  it('persists Tableau fields, never a secret value', () => {
+    const config = buildConnectionConfig('tableau', {
+      server_url: 'https://10az.online.tableau.com',
+      site_content_url: 'mysite',
+      auth_mode: 'connected_app',
+      client_id: 'cid',
+      secret_id: 'kid',
+      username: 'svc@example.com',
+      secret_name: 'main.ontos.tableau_connected_app',
+      project_id: 'ignored-bigquery-field',
+    });
+    expect(config).toEqual({
+      server_url: 'https://10az.online.tableau.com',
+      site_content_url: 'mysite',
+      auth_mode: 'connected_app',
+      client_id: 'cid',
+      secret_id: 'kid',
+      username: 'svc@example.com',
+      secret_name: 'main.ontos.tableau_connected_app',
+    });
+    expect(CONNECTOR_CONFIG_FIELDS.tableau).not.toContain('secret_value');
+  });
+});

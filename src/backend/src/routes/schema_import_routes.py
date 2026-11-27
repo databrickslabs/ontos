@@ -5,6 +5,7 @@ Provides endpoints to browse a remote system via an existing connection
 and import selected resources as persisted Ontos assets.
 """
 
+from src.connectors.base import client_error_code
 from typing import Optional
 from uuid import UUID
 
@@ -90,7 +91,7 @@ async def browse(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error(f"Browse failed for connection {connection_id}: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=client_error_code(exc, "Operation failed"))
 
 
 # ------------------------------------------------------------------
@@ -137,7 +138,7 @@ async def get_asset_metadata(
         raise
     except Exception as exc:
         logger.error(f"Metadata fetch failed for {connection_id}/{path}: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=client_error_code(exc, "Operation failed"))
 
 
 # ------------------------------------------------------------------
@@ -162,7 +163,7 @@ async def preview_import(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error(f"Preview failed: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=client_error_code(exc, "Operation failed"))
 
 
 # ------------------------------------------------------------------
@@ -210,7 +211,7 @@ async def execute_import(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         logger.error(f"Import failed: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=client_error_code(exc, "Operation failed"))
 
 
 # ------------------------------------------------------------------
@@ -262,7 +263,7 @@ async def start_import_async(
         raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:
         logger.error(f"Failed to start async import: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=client_error_code(exc, "Operation failed"))
 
 
 @router.get(

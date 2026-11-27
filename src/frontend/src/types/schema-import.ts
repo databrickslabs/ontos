@@ -54,6 +54,8 @@ export interface ImportResult {
   skipped: number;
   errors: number;
   error_messages: string[];
+  /** Non-fatal issues, e.g. lineage targets that are not in Ontos. */
+  warnings?: string[];
   items: ImportResultItem[];
   system_asset_id: string | null;
 }

@@ -39,6 +39,8 @@ src/backend/src/data/cache/
 
 .databricks
 .env
+.env.tableau
+.scratch/
 .venv/
 venv/
 ENV/

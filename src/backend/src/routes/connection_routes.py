@@ -17,8 +17,9 @@ from ..common.dependencies import (
 from ..common.config import get_settings
 from ..common.workspace_client import get_workspace_client
 from ..common.logging import get_logger
-from ..common.authorization import PermissionChecker
+from ..common.authorization import PermissionChecker, user_has_feature_level
 from ..common.features import FeatureAccessLevel
+from ..common.manager_dependencies import get_auth_manager
 from ..controller.connections_manager import ConnectionsManager
 from ..models.connections import ConnectionCreate, ConnectionUpdate, ConnectionResponse
 
@@ -27,6 +28,20 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["Connections"])
 
 FEATURE_ID = "settings-connectors"
+TABLEAU_CONNECTOR_TYPE = "tableau"
+
+
+def _require_admin_for_tableau(request: Request, auth_manager, user, connector_type: Optional[str]) -> None:
+    """A Tableau connection names a server and a Unity Catalog secret, and the
+    app sends that secret to the server. Only settings-connectors ADMIN may set one
+    up, change it, or test it (the test runs with the app's own identity)."""
+    if connector_type != TABLEAU_CONNECTOR_TYPE:
+        return
+    if not user_has_feature_level(auth_manager, user, FEATURE_ID, FeatureAccessLevel.ADMIN, request):
+        raise HTTPException(
+            status_code=403,
+            detail="Tableau connections can only be created, changed or tested by an administrator",
+        )
 
 
 def _get_manager(db: Session = Depends(get_db)) -> ConnectionsManager:
@@ -83,9 +98,11 @@ async def create_connection(
     manager: ConnectionsManager = Depends(_get_manager),
     audit_manager: AuditManagerDep = None,
     current_user: AuditCurrentUserDep = None,
+    auth_manager=Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Create a new connection."""
+    _require_admin_for_tableau(request, auth_manager, current_user, payload.connector_type)
     try:
         result = manager.create_connection(
             payload,
@@ -104,7 +121,7 @@ async def create_connection(
         return result
     except Exception as e:
         logger.error(f"Error creating connection: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Could not create the connection")
 
 
 @router.put("/connections/{connection_id}")
@@ -116,9 +133,13 @@ async def update_connection(
     manager: ConnectionsManager = Depends(_get_manager),
     audit_manager: AuditManagerDep = None,
     current_user: AuditCurrentUserDep = None,
+    auth_manager=Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Update an existing connection."""
+    existing = manager.get_connection(connection_id)
+    if existing is not None:
+        _require_admin_for_tableau(request, auth_manager, current_user, existing.connector_type)
     result = manager.update_connection(connection_id, payload)
     if result is None:
         raise HTTPException(status_code=404, detail="Connection not found")
@@ -172,10 +193,16 @@ async def delete_connection(
 @router.post("/connections/{connection_id}/test")
 async def test_connection(
     connection_id: UUID,
+    request: Request,
     manager: ConnectionsManager = Depends(_get_manager),
+    current_user: AuditCurrentUserDep = None,
+    auth_manager=Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Test connectivity for a specific connection."""
+    existing = manager.get_connection(connection_id)
+    if existing is not None:
+        _require_admin_for_tableau(request, auth_manager, current_user, existing.connector_type)
     result = manager.test_connection(connection_id)
     return result
 

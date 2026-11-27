@@ -890,11 +890,55 @@
       "testError": "Error al probar la conexión",
       "deleteSuccess": "Conexión eliminada",
       "testSuccessProject": "Proyecto: {{project}}",
-      "deleteFailed": "No se pudo eliminar"
+      "deleteFailed": "No se pudo eliminar",
+      "testSuccessWithWarnings": "Conectado, con advertencias"
     },
     "badges": {
       "system": "Sistema",
       "default": "Predeterminado"
+    },
+    "tableau": {
+      "configTitle": "Configuración de Tableau",
+      "serverUrl": "URL del servidor",
+      "serverUrlHelp": "URL del pod de Tableau Cloud (como en el navegador) o URL de Tableau Server.",
+      "site": "Sitio",
+      "siteHelp": "URL de contenido del sitio de la barra de direcciones (…/site/<sitio>/…). Vacío para el sitio predeterminado de Tableau Server.",
+      "authSectionTitle": "Autenticación",
+      "authSectionHelp": "Guarde el valor secreto de la Connected App (o el secreto del PAT) como secreto de Unity Catalog e introduzca su nombre abajo. Use una cuenta de administrador del sitio; de lo contrario, Tableau oculta los nombres de tablas y columnas del contenido que no pertenece a la cuenta.",
+      "authMode": "Método de autenticación",
+      "authConnectedApp": "Connected App (recomendado)",
+      "authConnectedAppHelp": "Connected App con confianza directa. Ontos firma un token de corta duración para el usuario indicado abajo; las sesiones pueden ser simultáneas.",
+      "authPat": "Token de acceso personal",
+      "authPatHelp": "Para desarrollo. Iniciar sesión de nuevo con el mismo token cierra su sesión anterior, así que use un token dedicado.",
+      "patName": "Nombre del token",
+      "clientId": "ID de cliente",
+      "secretId": "ID del secreto",
+      "username": "Usuario",
+      "usernameHelp": "Usuario de Tableau con el que inicia sesión la Connected App (correo electrónico en Tableau Cloud).",
+      "secretName": "Secreto de Unity Catalog",
+      "secretNameHelp": "catalog.schema.secret. Quien explore o importe necesita READ_SECRET sobre él, y también la entidad de servicio de la aplicación para las sincronizaciones programadas.",
+      "caBundlePath": "Ruta del paquete CA",
+      "caBundlePathHelp": "Opcional. Paquete PEM para Tableau Server con una autoridad de certificación privada.",
+      "defaultCatalog": "Catálogo predeterminado",
+      "defaultCatalogHelp": "Opcional. Catálogo de Unity Catalog para las tablas de Databricks que Tableau nombra solo como esquema.tabla."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "No se pudo conectar con Tableau. Revise la URL del servidor y la red.",
+      "tableau_auth_failed": "Tableau rechazó el inicio de sesión. Revise la configuración del PAT o de la Connected App y el valor del secreto.",
+      "tableau_forbidden": "Tableau denegó el acceso. La cuenta necesita acceso a este sitio y a su contenido.",
+      "tableau_not_found": "Tableau no encontró el elemento solicitado. Puede que se haya movido o eliminado.",
+      "tableau_server_error": "Tableau devolvió un error. Inténtelo de nuevo más tarde.",
+      "tableau_invalid_server_url": "La URL del servidor de Tableau debe ser una dirección https.",
+      "tableau_blocked_server_address": "La dirección del servidor de Tableau no está permitida porque resuelve a una dirección privada o interna.",
+      "tableau_redirect_refused": "Tableau respondió con una redirección, que no se sigue. Use la URL final del servidor.",
+      "tableau_metadata_unavailable": "La API de metadatos de Tableau no está disponible o devolvió resultados incompletos.",
+      "tableau_render_failed": "Tableau no pudo generar la imagen del panel.",
+      "tableau_secret_unavailable": "No se pudo leer el secreto de Unity Catalog. Compruebe que existe y que tiene READ_SECRET sobre él.",
+      "tableau_not_configured": "A la conexión le faltan ajustes obligatorios.",
+      "tableau_invalid_secret_name": "El secreto debe ser un nombre de Unity Catalog (catalog.schema.secret).",
+      "connection_error": "No se pudo conectar con el sistema de origen.",
+      "import_failed": "No se pudo importar este elemento.",
+      "connection_test_failed": "La prueba de conexión falló. Consulte el registro del servidor para más detalles."
     }
   },
   "schemaImporter": {

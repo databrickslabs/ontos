@@ -908,11 +908,55 @@
       "testError": "Erro no teste de conexão",
       "deleteSuccess": "Conexão excluída",
       "testSuccessProject": "Projeto: {{project}}",
-      "deleteFailed": "Falha ao excluir"
+      "deleteFailed": "Falha ao excluir",
+      "testSuccessWithWarnings": "Conectado, com avisos"
     },
     "badges": {
       "system": "Sistema",
       "default": "Padrão"
+    },
+    "tableau": {
+      "configTitle": "Configuração do Tableau",
+      "serverUrl": "URL do servidor",
+      "serverUrlHelp": "URL do pod do Tableau Cloud (como no navegador) ou URL do Tableau Server.",
+      "site": "Site",
+      "siteHelp": "URL de conteúdo do site na barra de endereços (…/site/<site>/…). Vazio para o site padrão do Tableau Server.",
+      "authSectionTitle": "Autenticação",
+      "authSectionHelp": "Guarde o valor secreto da Connected App (ou o segredo do PAT) como segredo do Unity Catalog e informe o nome abaixo. Use uma conta de administrador do site; caso contrário, o Tableau oculta os nomes de tabelas e colunas de conteúdo que não pertence à conta.",
+      "authMode": "Método de autenticação",
+      "authConnectedApp": "Connected App (recomendado)",
+      "authConnectedAppHelp": "Connected App com confiança direta. O Ontos assina um token de curta duração para o usuário abaixo; as sessões podem ser simultâneas.",
+      "authPat": "Token de acesso pessoal",
+      "authPatHelp": "Para desenvolvimento. Entrar novamente com o mesmo token encerra a sessão anterior, então use um token dedicado.",
+      "patName": "Nome do token",
+      "clientId": "ID do cliente",
+      "secretId": "ID do segredo",
+      "username": "Nome de usuário",
+      "usernameHelp": "Usuário do Tableau com o qual a Connected App entra (e-mail no Tableau Cloud).",
+      "secretName": "Segredo do Unity Catalog",
+      "secretNameHelp": "catalog.schema.secret. Quem navega ou importa precisa de READ_SECRET nele, assim como a entidade de serviço do app para sincronizações agendadas.",
+      "caBundlePath": "Caminho do pacote CA",
+      "caBundlePathHelp": "Opcional. Pacote PEM para Tableau Server com uma autoridade certificadora privada.",
+      "defaultCatalog": "Catálogo padrão",
+      "defaultCatalogHelp": "Opcional. Catálogo do Unity Catalog para tabelas do Databricks que o Tableau nomeia apenas como esquema.tabela."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Não foi possível contactar o Tableau. Verifique o URL do servidor e a rede.",
+      "tableau_auth_failed": "O Tableau recusou o início de sessão. Verifique as definições do PAT ou da Connected App e o valor do segredo.",
+      "tableau_forbidden": "O Tableau negou o acesso. A conta precisa de acesso a este site e ao seu conteúdo.",
+      "tableau_not_found": "O Tableau não encontrou o item pedido. Pode ter sido movido ou eliminado.",
+      "tableau_server_error": "O Tableau devolveu um erro. Tente novamente mais tarde.",
+      "tableau_invalid_server_url": "O URL do servidor Tableau tem de ser um endereço https.",
+      "tableau_blocked_server_address": "O endereço do servidor Tableau não é permitido porque resolve para um endereço privado ou interno.",
+      "tableau_redirect_refused": "O Tableau respondeu com um redirecionamento, que não é seguido. Use o URL final do servidor.",
+      "tableau_metadata_unavailable": "A API de metadados do Tableau não está disponível ou devolveu resultados incompletos.",
+      "tableau_render_failed": "O Tableau não conseguiu gerar a imagem do painel.",
+      "tableau_secret_unavailable": "Não foi possível ler o segredo do Unity Catalog. Verifique se existe e se tem READ_SECRET sobre ele.",
+      "tableau_not_configured": "A ligação não tem as definições obrigatórias.",
+      "tableau_invalid_secret_name": "O segredo tem de ser um nome do Unity Catalog (catalog.schema.secret).",
+      "connection_error": "Não foi possível contactar o sistema de origem.",
+      "import_failed": "Não foi possível importar este item.",
+      "connection_test_failed": "O teste de ligação falhou. Consulte o registo do servidor para mais detalhes."
     }
   },
   "schemaImporter": {

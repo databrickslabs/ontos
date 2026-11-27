@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 import yaml
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends, Request, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 import json
 import uuid
 from sqlalchemy.orm import Session
@@ -1019,6 +1019,7 @@ async def create_product_from_contract(
     version: str = Body(..., embed=True),
     product_type: Optional[str] = Body(None, embed=True),
     output_port_name: Optional[str] = Body(None, embed=True),
+    include_dashboards: bool = Body(False, embed=True),
     request: Request = None,
     db: DBSessionDep = None,
     audit_manager: AuditManagerDep = None,
@@ -1042,6 +1043,7 @@ async def create_product_from_contract(
             version=version,
             output_port_name=output_port_name,
             user_email=current_user.email if current_user else None,
+            include_dashboards=include_dashboards,
         )
 
         # Log audit event
@@ -1075,6 +1077,29 @@ async def create_product_from_contract(
     except Exception:
         logger.exception("Error creating product from contract %s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to create product from contract")
+
+
+class ContractDashboard(BaseModel):
+    id: str
+    name: str
+    location: Optional[str] = None
+    url: Optional[str] = None
+
+
+@router.get('/data-products/from-contract/{contract_id}/dashboards', response_model=List[ContractDashboard])
+async def get_contract_dashboards(
+    contract_id: str,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """Dashboards built on the contract's semantic models, offered as output ports when creating a product."""
+    return [
+        ContractDashboard(
+            id=str(d.id), name=d.name, location=d.location,
+            url=(d.properties or {}).get("dashboardUrl") or (d.properties or {}).get("url"),
+        )
+        for d in manager.contract_dashboards(contract_id)
+    ]
 
 
 @router.get('/data-products/by-contract/{contract_id}', response_model=List[DataProduct])

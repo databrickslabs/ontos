@@ -908,11 +908,55 @@
       "testError": "Fout bij verbindingstest",
       "deleteSuccess": "Verbinding verwijderd",
       "testSuccessProject": "Project: {{project}}",
-      "deleteFailed": "Verwijderen mislukt"
+      "deleteFailed": "Verwijderen mislukt",
+      "testSuccessWithWarnings": "Verbonden, met waarschuwingen"
     },
     "badges": {
       "system": "Systeem",
       "default": "Standaard"
+    },
+    "tableau": {
+      "configTitle": "Tableau-configuratie",
+      "serverUrl": "Server-URL",
+      "serverUrlHelp": "Pod-URL van Tableau Cloud (zoals in je browser) of de URL van Tableau Server.",
+      "site": "Site",
+      "siteHelp": "Content-URL van de site uit de adresbalk (…/site/<site>/…). Leeg voor de standaardsite van Tableau Server.",
+      "authSectionTitle": "Authenticatie",
+      "authSectionHelp": "Sla de geheime waarde van de Connected App (of het PAT-geheim) op als Unity Catalog-secret en vul hieronder de naam in. Gebruik een sitebeheerdersaccount, anders verbergt Tableau tabel- en kolomnamen van inhoud die niet van het account is.",
+      "authMode": "Authenticatiemethode",
+      "authConnectedApp": "Connected App (aanbevolen)",
+      "authConnectedAppHelp": "Connected App met direct trust. Ontos ondertekent een kortlevend token voor de gebruiker hieronder; sessies kunnen tegelijk lopen.",
+      "authPat": "Persoonlijk toegangstoken",
+      "authPatHelp": "Voor ontwikkeling. Opnieuw aanmelden met hetzelfde token beëindigt de vorige sessie, dus gebruik een apart token.",
+      "patName": "Tokennaam",
+      "clientId": "Client-ID",
+      "secretId": "Secret-ID",
+      "username": "Gebruikersnaam",
+      "usernameHelp": "Tableau-gebruiker waarmee de Connected App zich aanmeldt (e-mailadres bij Tableau Cloud).",
+      "secretName": "Unity Catalog-secret",
+      "secretNameHelp": "catalog.schema.secret. Iedereen die bladert of importeert heeft er READ_SECRET op nodig, net als de service principal van de app voor geplande synchronisaties.",
+      "caBundlePath": "Pad naar CA-bundel",
+      "caBundlePathHelp": "Optioneel. PEM-bundel voor Tableau Server met een private certificaatautoriteit.",
+      "defaultCatalog": "Standaardcatalogus",
+      "defaultCatalogHelp": "Optioneel. Unity Catalog-catalogus voor Databricks-tabellen die Tableau alleen als schema.tabel benoemt."
+    },
+    "errorCodes": {
+      "tableau_unreachable": "Tableau is niet bereikbaar. Controleer de server-URL en het netwerk.",
+      "tableau_auth_failed": "Tableau heeft de aanmelding geweigerd. Controleer de PAT- of Connected App-instellingen en de geheime waarde.",
+      "tableau_forbidden": "Tableau heeft de toegang geweigerd. Het account heeft toegang nodig tot deze site en de inhoud.",
+      "tableau_not_found": "Tableau kan het gevraagde item niet vinden. Het is mogelijk verplaatst of verwijderd.",
+      "tableau_server_error": "Tableau gaf een fout terug. Probeer het later opnieuw.",
+      "tableau_invalid_server_url": "De Tableau-server-URL moet een https-adres zijn.",
+      "tableau_blocked_server_address": "Het Tableau-serveradres is niet toegestaan omdat het naar een privé- of intern adres verwijst.",
+      "tableau_redirect_refused": "Tableau antwoordde met een doorverwijzing, die niet wordt gevolgd. Gebruik de uiteindelijke server-URL.",
+      "tableau_metadata_unavailable": "De Tableau Metadata API is niet beschikbaar of gaf onvolledige resultaten.",
+      "tableau_render_failed": "Tableau kon de dashboardafbeelding niet renderen.",
+      "tableau_secret_unavailable": "Het Unity Catalog-geheim kon niet worden gelezen. Controleer of het bestaat en of je READ_SECRET erop hebt.",
+      "tableau_not_configured": "De verbinding mist verplichte instellingen.",
+      "tableau_invalid_secret_name": "Het geheim moet een Unity Catalog-naam zijn (catalog.schema.secret).",
+      "connection_error": "Het bronsysteem is niet bereikbaar.",
+      "import_failed": "Dit item kon niet worden geïmporteerd.",
+      "connection_test_failed": "De verbindingstest is mislukt. Zie het serverlogboek voor details."
     }
   },
   "schemaImporter": {

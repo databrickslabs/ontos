@@ -83,6 +83,8 @@
         "failed": "Falhou",
         "cancelled": "Cancelada"
       }
-    }
+    },
+    "warningsTitle": "Avisos ({{count}})",
+    "moreWarnings": "+{{count}} a mais"
   }
 }

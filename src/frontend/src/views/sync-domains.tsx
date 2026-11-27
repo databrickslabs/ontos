@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type JSX } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {

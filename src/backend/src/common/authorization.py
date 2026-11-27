@@ -4,7 +4,9 @@ from typing import Optional, Dict, List
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
-from src.controller.authorization_manager import AuthorizationManager
+from src.controller.authorization_manager import (
+    AuthorizationManager, normalize_email, role_matches,
+)
 from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
@@ -416,7 +418,10 @@ def is_ontos_admin(request: Request, user: Optional[UserInfo]) -> bool:
         return False
     try:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
-        return bool(auth_manager is not None and auth_manager.is_user_ontos_admin(user.groups))
+        return bool(
+            auth_manager is not None
+            and auth_manager.is_user_ontos_admin(user.groups, user.email)
+        )
     except Exception:
         logger.warning("Could not check whether the caller is an Ontos admin.", exc_info=True)
         return False
@@ -886,16 +891,16 @@ class ApprovalChecker:
                 ap = (role.approval_privileges or {}) if role else {}
                 approval = bool(ap.get(self.entity, False))
             else:
-                # Union across roles assigned to user's groups
+                # Union across roles the user holds (by group or by user)
                 # Normalize to lowercase for case-insensitive matching
                 user_groups = set(g.lower() for g in (user_details.groups or []))
+                user_email_norm = normalize_email(user_details.email)
                 roles = settings_manager.list_app_roles()
                 ap_union: dict[ApprovalEntity, bool] = {}
                 for role in roles:
                     try:
-                        # Normalize role groups to lowercase for case-insensitive matching
-                        role_groups = set(g.lower() for g in (role.assigned_groups or []))
-                        if not role_groups.intersection(user_groups):
+                        # By group or by user assignment (case-insensitive)
+                        if not role_matches(role, user_groups, user_email_norm):
                             continue
                         for k, v in (role.approval_privileges or {}).items():
                             ap_union[ApprovalEntity(k)] = ap_union.get(ApprovalEntity(k), False) or bool(v)

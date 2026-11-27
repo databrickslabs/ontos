@@ -24,7 +24,7 @@ from ..common.dependencies import (
 )
 from ..common.authorization import PermissionChecker, get_user_details_from_sdk
 from ..common.manager_dependencies import get_auth_manager
-from ..controller.authorization_manager import AuthorizationManager, _normalize_email, _role_matches
+from ..controller.authorization_manager import AuthorizationManager, normalize_email, role_matches
 from ..models.users import UserInfo
 from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
@@ -335,11 +335,11 @@ async def list_roles(
             return roles
 
         user_group_set = {(g or '').lower() for g in (user_details.groups or [])}
-        user_email_norm = _normalize_email(user_details.email)
+        user_email_norm = normalize_email(user_details.email)
         if not user_group_set and not user_email_norm:
             return []
         # Roles the user holds by group or by assigned user (#1713)
-        return [r for r in roles if _role_matches(r, user_group_set, user_email_norm)]
+        return [r for r in roles if role_matches(r, user_group_set, user_email_norm)]
     except Exception as e:
         logger.error("Error listing roles", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list roles")

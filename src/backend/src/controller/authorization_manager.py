@@ -11,20 +11,23 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
-def _normalize_email(user_email: Optional[str]) -> Optional[str]:
+def normalize_email(user_email: Optional[str]) -> Optional[str]:
     """Lowercased, stripped email for direct-assignment matching (None when empty)."""
     return (user_email or "").strip().lower() or None
 
 
-def _role_matches(role, user_group_set: Set[str], user_email_norm: Optional[str]) -> bool:
+def role_matches(role, user_group_set: Set[str], user_email_norm: Optional[str]) -> bool:
     """Whether the user holds ``role`` by group OR by direct user assignment (#196/#760).
 
     ``user_group_set`` is the user's groups lowercased and ``user_email_norm`` the email
-    from ``_normalize_email``. Both sides are compared case-insensitively; ``(x or '')``
-    guards against None entries in dirty data (a None element would raise on .lower()).
+    from ``normalize_email``. Both sides are stripped and compared case-insensitively;
+    ``(x or '')`` guards against None entries in dirty data (a None element would raise
+    on .lower()).
     """
     role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
-    role_users = {(u or '').lower() for u in (getattr(role, 'assigned_users', None) or [])}
+    role_users = {
+        (u or '').strip().lower() for u in (getattr(role, 'assigned_users', None) or [])
+    }
     return bool(user_group_set.intersection(role_groups)) or bool(
         user_email_norm and user_email_norm in role_users
     )
@@ -70,7 +73,7 @@ class AuthorizationManager:
         # Normalize user groups to lowercase for case-insensitive matching
         user_group_set = set(g.lower() for g in user_groups)
         # Normalize the email for case-insensitive direct-assignment matching
-        user_email_norm = _normalize_email(user_email)
+        user_email_norm = normalize_email(user_email)
 
         if not user_group_set and not user_email_norm:
             logger.warning("Received empty user_groups and no user_email for permission calculation.")
@@ -94,8 +97,8 @@ class AuthorizationManager:
         matching_roles = []
         logger.debug("Identifying matching roles based on group intersection OR email assignment...")
         for role in all_roles:
-            group_match = _role_matches(role, user_group_set, None)
-            email_match = _role_matches(role, set(), user_email_norm)
+            group_match = role_matches(role, user_group_set, None)
+            email_match = role_matches(role, set(), user_email_norm)
 
             if group_match or email_match:
                 matching_roles.append(role)
@@ -184,7 +187,7 @@ class AuthorizationManager:
             False otherwise (including no groups and no email, and role-load errors).
         """
         user_group_set = {(g or '').lower() for g in (user_groups or [])}
-        user_email_norm = _normalize_email(user_email)
+        user_email_norm = normalize_email(user_email)
         if not user_group_set and not user_email_norm:
             return False
 
@@ -196,7 +199,7 @@ class AuthorizationManager:
 
         return any(
             getattr(role, 'is_admin', False)
-            and _role_matches(role, user_group_set, user_email_norm)
+            and role_matches(role, user_group_set, user_email_norm)
             for role in all_roles
         )
 
@@ -211,7 +214,7 @@ class AuthorizationManager:
         an arbitrary UUID (#853 review).
         """
         user_group_set = {(g or '').lower() for g in (user_groups or [])}
-        user_email_norm = _normalize_email(user_email)
+        user_email_norm = normalize_email(user_email)
         if not user_group_set and not user_email_norm:
             return False
         try:
@@ -221,7 +224,7 @@ class AuthorizationManager:
             return False
         return any(
             getattr(role, 'can_adopt_entity_ids', False)
-            and _role_matches(role, user_group_set, user_email_norm)
+            and role_matches(role, user_group_set, user_email_norm)
             for role in all_roles
         )
 
@@ -276,14 +279,14 @@ class AuthorizationManager:
             return set()
 
         user_group_set = set(g.lower() for g in (user_groups or []))
-        user_email_norm = _normalize_email(user_email)
+        user_email_norm = normalize_email(user_email)
         team_names = {n for n in (team_role_names or []) if n}
         if not user_group_set and not user_email_norm and not team_names:
             return set()
 
         role_ids: Set[str] = {str(r.id) for r in all_roles if r.name in team_names}
         for role in all_roles:
-            if _role_matches(role, user_group_set, user_email_norm):
+            if role_matches(role, user_group_set, user_email_norm):
                 role_ids.add(str(role.id))
         return role_ids
 

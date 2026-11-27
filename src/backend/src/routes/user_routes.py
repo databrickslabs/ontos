@@ -238,13 +238,13 @@ async def set_role_override(
     Body: { "role_id": "<uuid>" } or { "role_id": null } to clear.
 
     Authorization: admins may override to any role (impersonation). Non-admins may only
-    override to a role whose assigned_groups intersect their own groups. Clearing is
+    override to a role they hold, by group or by user assignment. Clearing is
     always allowed.
     """
     role_id = payload.role_id
-    # Determine if caller is an Ontos admin (member of an AppRole flagged is_admin).
-    # Computed from groups so the override cannot bootstrap admin, and intentionally
-    # decoupled from settings:ADMIN (see issue #404).
+    # Determine if caller is an Ontos admin (holder of an AppRole flagged is_admin).
+    # Computed from the roles held (by group or user), so the override cannot bootstrap
+    # admin, and intentionally decoupled from settings:ADMIN (see issue #404).
     caller_is_admin = auth_manager.is_user_ontos_admin(user_details.groups, user_details.email)
 
     try:
@@ -300,7 +300,9 @@ async def get_actual_role(
     settings_manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Return the canonical role determined from the user's groups (ignores override)."""
-    role = settings_manager.get_canonical_role_for_groups(user_details.groups)
+    role = settings_manager.get_canonical_role_for_groups(
+        user_details.groups, user_details.email
+    )
     return {"role": role.dict() if role else None}
 
 

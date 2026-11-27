@@ -584,6 +584,56 @@ class TestAdminOverrideOnTheWorkflowPath:
         assert details['access_grant']['permission_level'] == 'MANAGE'
 
 
+# An Ontos admin holding the role only by user assignment: no group (role approval, #1713)
+BOSS = ('boss@example.com', ['no-admin-group'])
+
+
+@pytest.fixture
+def admin_assigned_by_user(db_session):
+    from src.db_models.settings import AppRoleDb
+
+    db_session.add(AppRoleDb(
+        id=str(uuid.uuid4()), name=f'Assigned Admin {uuid.uuid4().hex[:8]}',
+        description='admin by user', feature_permissions=json.dumps({'access-grants': 'Admin'}),
+        assigned_groups='[]', assigned_users=json.dumps(['Boss@Example.com ']),
+        home_sections='[]', approval_privileges='{}', is_admin=True,
+    ))
+    db_session.flush()
+
+
+class TestAdminAssignedByUser:
+    def test_decides_their_own_request_on_the_access_grants_page(
+        self, client, as_user, db_session, admin_assigned_by_user,
+    ):
+        from src.controller.audit_manager import AuditManager
+
+        request_id = _request_access(client, as_user, identity=BOSS)
+
+        with patch.object(AuditManager, 'log_action_background') as log_action_background:
+            response = _handle(client, as_user, request_id, True, BOSS)
+
+        assert response.status_code == 200, response.text
+        details = _handled_audit(log_action_background)
+        assert (details['override'], details['overridden']) == (True, ['self_approval'])
+
+    def test_approves_their_own_request_through_the_workflow(
+        self, client, as_user, db_session, admin_assigned_by_user,
+    ):
+        from src.controller.audit_manager import AuditManager
+
+        workflow_id = _workflow(client, as_user, f'{BOSS[0]},{ANA[0]}')
+        request_id = _request_access(client, as_user, identity=BOSS)
+        execution_id = _execution_of(db_session, workflow_id, request_id)
+
+        with patch.object(AuditManager, 'log_action') as log_action:
+            response = _decide(client, as_user, execution_id, True, identity=BOSS)
+
+        assert response.status_code == 200, response.text
+        assert len(_grants(db_session, request_id)) == 1
+        details = _approval_audit(log_action)
+        assert (details['override'], details['overridden']) == (True, ['self_approval'])
+
+
 def _failing_record():
     """The decision can't be recorded on the request (after the workflow step committed)."""
     from src.controller.access_grants_manager import AccessGrantsManager

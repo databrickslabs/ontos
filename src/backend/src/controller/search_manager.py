@@ -107,30 +107,41 @@ class SearchManager:
             return False
         return True
 
+    def _is_item_indexable(self, item: SearchIndexItem, uses_postgres: bool) -> bool:
+        """Whether to store the item in the active index.
+
+        The Postgres backend stores items of disabled asset types too and
+        excludes them at query time, so toggling a type in Settings applies on
+        the next query in both directions without a rebuild.
+        """
+        if uses_postgres:
+            return bool(getattr(item, 'feature_id', None))
+        return self._is_item_enabled(item)
+
     def build_index(self):
         """Builds or rebuilds the search index by querying searchable managers."""
         logger.info(f"Building search index from {len(self.searchable_managers)} managers...")
         new_index: List[SearchIndexItem] = []
-        config = self.config
+        uses_postgres = self._uses_postgres()
 
         for manager in self.searchable_managers:
             manager_name = manager.__class__.__name__
             try:
                 items = manager.get_search_index_items()
                 for item in items:
-                    if not self._is_item_enabled(item):
+                    if not self._is_item_indexable(item, uses_postgres):
                         logger.debug(f"Skipping item {item.id} from {manager_name} (disabled or missing feature_id)")
                         continue
                     new_index.append(item)
             except Exception as e:
                 logger.error(f"Failed to get search items from {manager_name}: {e}", exc_info=True)
-        
+
         self.index = new_index
         logger.info(f"Search index build complete. Total items: {len(self.index)}")
 
         # Postgres backend: backfill the search_documents table, then drop the
         # in-memory copy so search RAM is O(1) rather than O(entities).
-        if self._uses_postgres():
+        if uses_postgres:
             try:
                 self._backend.rebuild(self.index)
             except Exception as e:
@@ -139,7 +150,7 @@ class SearchManager:
 
     def upsert_item(self, item: SearchIndexItem) -> None:
         """Insert or update a single item in the active backend's index."""
-        if not self._is_item_enabled(item):
+        if not self._is_item_indexable(item, self._uses_postgres()):
             logger.debug(f"upsert_item: skipping {item.id} (disabled or missing feature_id)")
             # A now-disabled item should also be removed if present.
             self._backend.remove(item.id)
@@ -149,8 +160,9 @@ class SearchManager:
     def upsert_items(self, items: List[SearchIndexItem]) -> None:
         """Insert or update several items in one backend call; disabled items are removed."""
         enabled: List[SearchIndexItem] = []
+        uses_postgres = self._uses_postgres()
         for item in items:
-            if self._is_item_enabled(item):
+            if self._is_item_indexable(item, uses_postgres):
                 enabled.append(item)
             else:
                 self._backend.remove(item.id)

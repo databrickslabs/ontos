@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, Boolean, Text, Enum as SQLAlchemyEnum, func
+from sqlalchemy import Column, String, DateTime, Boolean, Text, Enum as SQLAlchemyEnum, Index, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID # Or keep generic UUID
 
 from src.common.database import Base
@@ -10,6 +10,12 @@ from src.models.notifications import NotificationType # Import the Pydantic enum
 class NotificationDb(Base):
     """In-app notifications: type, title, message, recipient (email or role), read flag; used for job progress, review requests, and alerts (NotificationsManager)."""
     __tablename__ = 'notifications'
+    __table_args__ = (
+        # get_by_action_type: equality on action_type, then read
+        Index('ix_notifications_action_type_read', 'action_type', 'read'),
+        # get_addressed_to / get_by_action_type: ORDER BY created_at, id
+        Index('ix_notifications_created_at_id', 'created_at', 'id'),
+    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     type = Column(String(50), nullable=False, index=True)

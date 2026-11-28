@@ -163,6 +163,9 @@ def run_migrations_online() -> None:
                 if target_schema:
                     logger.info(f"env.py: Setting search_path to {target_schema}")
                     connection.execute(text(f'SET search_path TO "{target_schema}"'))
+                    # SQLAlchemy autobegins on that statement even in AUTOCOMMIT mode; end it
+                    # so Alembic's autocommit_block() does not find a transaction it never began.
+                    connection.commit()
                 
                 logger.info("env.py: Configuring Alembic context")
                 context.configure(

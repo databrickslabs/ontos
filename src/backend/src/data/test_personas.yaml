@@ -20,6 +20,15 @@
 #   groups      - X-Test-User-Groups value (omit/null to let the backend
 #                 fall back to a real SCIM lookup for the email)
 #   description - optional explanation shown alongside the persona
+#
+# Optional presentation, shown in the header chip while the persona is active
+# (all fall back gracefully: name/title are split from `label` on " — ",
+# the colour is derived from `id`, the avatar falls back to initials):
+#   display_name - name in the chip (e.g. "Priya Raman")
+#   title        - line under the name (e.g. "Data Steward, Finance")
+#   color        - accent colour, "#rgb" or "#rrggbb"
+#   avatar       - a data:image/... URI, an https:// URL, or a file name
+#                  (.svg/.png/.jpg/.webp/.gif) under {DATABRICKS_VOLUME}/config/avatars/
 personas:
   - id: admin
     label: "Admin"

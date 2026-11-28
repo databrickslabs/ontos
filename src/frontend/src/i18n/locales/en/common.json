@@ -757,6 +757,11 @@
     "testPersona": "Test persona",
     "noToken": "No token",
     "noneRealIdentity": "None (real identity)",
+    "testBadge": "Test",
+    "nowViewingAs": "Now viewing Ontos as",
+    "stopActing": "Stop acting: back to your own identity",
+    "presenterSize": "Presenter size",
+    "cycleShortcut": "Alt + ] next persona, Alt + [ previous",
     "actual": " (Actual)",
     "unknownRole": "Unknown Role",
     "accessLevel": {

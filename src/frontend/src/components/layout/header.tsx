@@ -9,6 +9,8 @@ import { ProjectChooser } from '@/components/ui/project-chooser';
 import { LanguageSelector } from '@/components/common/language-selector';
 import { useNavigate } from 'react-router-dom';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import useTestPersonaStore from '@/stores/test-persona-store';
+import { personaDisplay } from '@/lib/persona-display';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -18,9 +20,15 @@ interface HeaderProps {
 export function Header({ onToggleSidebar, isSidebarCollapsed }: HeaderProps) {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
-  
+  // Accent stripe in the active test persona's colour, so a role change reads across the room.
+  const activePersona = useTestPersonaStore((s) => s.personas.find((p) => p.id === s.selectedPersonaId) || null);
+  const personaColor = activePersona ? personaDisplay(activePersona).color : null;
+
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-sidebar/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-sidebar/60">
+    <header
+      className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-sidebar/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-sidebar/60"
+      style={personaColor ? { boxShadow: `inset 0 3px 0 ${personaColor}` } : undefined}
+    >
        {/* Sidebar Toggle Button */}
         <Button
             variant="ghost"

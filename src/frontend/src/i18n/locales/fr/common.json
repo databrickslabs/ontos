@@ -757,6 +757,11 @@
     "testPersona": "Persona de test",
     "noToken": "Aucun jeton",
     "noneRealIdentity": "Aucun (identité réelle)",
+    "testBadge": "Test",
+    "nowViewingAs": "Vous voyez Ontos en tant que",
+    "stopActing": "Arrêter : revenir à votre identité",
+    "presenterSize": "Taille présentation",
+    "cycleShortcut": "Alt + ] persona suivante, Alt + [ précédente",
     "actual": " (Réel)",
     "unknownRole": "Rôle inconnu",
     "accessLevel": {

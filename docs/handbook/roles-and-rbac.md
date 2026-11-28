@@ -308,6 +308,27 @@ list; when absent the bundled list is used. Edits are picked up at runtime
 CONTRIBUTING.md for wiring it through a secret resource on a dev/test
 deployment).
 
+**Showing who is acting.** While a persona is active, the header shows a
+persona chip instead of the user avatar: avatar, name, title and a TEST badge,
+plus a stripe in the persona's colour along the top of the header. Switching
+shows a "Now viewing Ontos as …" toast, and **Alt + ]** / **Alt + [** cycle
+through the personas (outside dialogs and code editors; *Stop acting* in the
+menu returns to your own identity). *Presenter size* in the user menu (or `?presenter=1` in
+the URL) enlarges the chip for projectors and recordings. The chip steps down to
+name only, then avatar only, when the header gets narrow (e.g. with the Ask
+Ontos panel open). Each persona may set:
+
+| Field | Purpose | Default |
+|---|---|---|
+| `display_name` | Name in the chip | `label` up to " — " |
+| `title` | Line under the name | `label` after " — " |
+| `color` | Accent colour, `#rgb` or `#rrggbb` | derived from `id` |
+| `avatar` | `data:image/...` URI, `https://` URL, or a `.svg`/`.png`/`.jpg`/`.webp`/`.gif` file name under `{DATABRICKS_VOLUME}/config/avatars/` | initials on the colour |
+
+Avatar files are served by `GET /api/test/personas/{id}/avatar`, which, like the
+persona list, returns 404 unless `TEST_USER_TOKEN` is set. The trigger carries
+`data-persona-id` as a stable hook for Playwright and screenshots.
+
 #### Role override (impersonation) {#role-override}
 
 Independently from the persona-token mechanism, an admin can apply a

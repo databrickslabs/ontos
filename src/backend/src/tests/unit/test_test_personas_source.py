@@ -235,3 +235,129 @@ class TestCaching:
 
         second = tpr._load_personas(settings)
         assert [p.id for p in second] == ["edited"]
+
+
+PRESENTATION_YAML = """
+personas:
+  - id: priya
+    label: "Priya Raman — Data Steward, Finance"
+    email: priya@test.local
+    display_name: "Priya Raman"
+    title: "Data Steward, Finance"
+    color: "#0f7b3f"
+    avatar: priya.svg
+  - id: joost
+    label: "Joost"
+    email: joost@test.local
+    color: "red; background: url(x)"
+    avatar: "../../etc/passwd"
+  - id: inline
+    label: "Inline"
+    email: inline@test.local
+    avatar: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>"
+"""
+
+SVG = b"<svg xmlns='http://www.w3.org/2000/svg'><circle r='4'/></svg>"
+
+
+def _volume_with(tmp_path, yaml_text=PRESENTATION_YAML, avatars=None):
+    cfg = tmp_path / "config"
+    cfg.mkdir(parents=True)
+    (cfg / "test_personas.yaml").write_text(yaml_text)
+    if avatars:
+        (cfg / "avatars").mkdir()
+        for name, data in avatars.items():
+            (cfg / "avatars" / name).write_bytes(data)
+    return _settings(str(tmp_path))
+
+
+class TestPresentationFields:
+    def test_fields_parse_and_avatar_file_maps_to_route(self, tmp_path):
+        personas = {p.id: p for p in tpr._load_personas(_volume_with(tmp_path))}
+        priya = personas["priya"]
+        assert (priya.display_name, priya.title, priya.color) == ("Priya Raman", "Data Steward, Finance", "#0f7b3f")
+        assert priya.avatar_url == "/api/test/personas/priya/avatar"
+        assert priya.model_dump()["avatar_url"] == "/api/test/personas/priya/avatar"
+
+    def test_invalid_color_and_avatar_are_dropped_not_the_persona(self, tmp_path):
+        joost = {p.id: p for p in tpr._load_personas(_volume_with(tmp_path))}["joost"]
+        assert joost.color is None
+        assert joost.avatar is None and joost.avatar_url is None
+
+    def test_inline_and_https_avatars_pass_through(self, tmp_path):
+        inline = {p.id: p for p in tpr._load_personas(_volume_with(tmp_path))}["inline"]
+        assert inline.avatar_url.startswith("data:image/svg+xml")
+        remote = tpr.TestPersona(id="r", label="R", email="r@x", avatar="https://example.com/r.png")
+        assert remote.avatar_url == "https://example.com/r.png"
+
+    @pytest.mark.parametrize("avatar", ["javascript:alert(1)", "data:text/html,<b>", "a/b.svg", "notes.txt", "http://x/a.png"])
+    def test_unsafe_avatar_values_rejected(self, avatar):
+        assert tpr.TestPersona(id="x", label="X", email="x@x", avatar=avatar).avatar is None
+
+    def test_persona_id_is_url_encoded(self):
+        p = tpr.TestPersona(id="a/b c", label="X", email="x@x", avatar="a.png")
+        assert p.avatar_url == "/api/test/personas/a%2Fb%20c/avatar"
+
+
+class TestAvatarRoute:
+    def test_serves_local_file_with_safe_headers(self, tmp_path):
+        settings = _volume_with(tmp_path, avatars={"priya.svg": SVG})
+        resp = tpr.get_test_persona_avatar("priya", settings=settings)
+        assert resp.body == SVG
+        assert resp.media_type == "image/svg+xml"
+        assert "sandbox" in resp.headers["content-security-policy"]
+        assert resp.headers["x-content-type-options"] == "nosniff"
+
+    def test_disabled_without_token(self, tmp_path):
+        settings = _volume_with(tmp_path, avatars={"priya.svg": SVG})
+        settings.TEST_USER_TOKEN = None
+        with pytest.raises(tpr.HTTPException) as exc:
+            tpr.get_test_persona_avatar("priya", settings=settings)
+        assert exc.value.status_code == 404
+
+    @pytest.mark.parametrize("persona_id", ["nobody", "inline", "joost"])
+    def test_404_for_unknown_persona_or_non_file_avatar(self, tmp_path, persona_id):
+        settings = _volume_with(tmp_path, avatars={"priya.svg": SVG})
+        with pytest.raises(tpr.HTTPException) as exc:
+            tpr.get_test_persona_avatar(persona_id, settings=settings)
+        assert exc.value.status_code == 404
+
+    def test_404_when_file_missing(self, tmp_path):
+        with pytest.raises(tpr.HTTPException) as exc:
+            tpr.get_test_persona_avatar("priya", settings=_volume_with(tmp_path))
+        assert exc.value.status_code == 404
+
+    def test_oversized_file_not_served(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tpr, "_AVATAR_MAX_BYTES", 10)
+        settings = _volume_with(tmp_path, avatars={"priya.svg": SVG})
+        with pytest.raises(tpr.HTTPException):
+            tpr.get_test_persona_avatar("priya", settings=settings)
+
+    def test_volume_avatar_read_via_files_api_and_cached(self):
+        mock_ws = MagicMock()
+        mock_ws.files.download.return_value = SimpleNamespace(contents=BytesIO(SVG))
+        with patch("src.common.workspace_client.get_workspace_client", return_value=mock_ws):
+            settings = _settings("/Volumes/cat/sch/vol")
+            assert tpr._read_avatar(settings, "priya.svg") == SVG
+            assert tpr._read_avatar(settings, "priya.svg") == SVG
+        mock_ws.files.download.assert_called_once_with(
+            file_path="/Volumes/cat/sch/vol/config/avatars/priya.svg"
+        )
+
+    def test_volume_avatar_missing_is_none(self):
+        mock_ws = MagicMock()
+        mock_ws.files.download.side_effect = NotFound("missing")
+        with patch("src.common.workspace_client.get_workspace_client", return_value=mock_ws):
+            assert tpr._read_avatar(_settings("/Volumes/cat/sch/vol"), "priya.svg") is None
+
+
+class TestPresentationEdgeCases:
+    def test_empty_color_and_avatar_mean_unset_without_warning(self):
+        with patch.object(tpr, "logger") as mock_logger:
+            p = tpr.TestPersona(id="x", label="X", email="x@x", color="", avatar="  ")
+        assert p.color is None and p.avatar is None
+        mock_logger.warning.assert_not_called()
+
+    def test_gif_files_and_data_uris_are_both_accepted(self):
+        assert tpr.TestPersona(id="x", label="X", email="x@x", avatar="x.gif").avatar_url == "/api/test/personas/x/avatar"
+        assert tpr.TestPersona(id="x", label="X", email="x@x", avatar="data:image/gif;base64,R0lG").avatar

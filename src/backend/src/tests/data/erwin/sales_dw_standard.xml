@@ -1,0 +1,501 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-crafted erwin DM "XML Standard" export used by the erwin import tests.
+  It follows the documented EMX layout (EMX.xsd / EMXProps.xsd / UDP.xsd) and
+  covers: composite + identifying keys, alternate and inversion keys, a
+  non-identifying optional FK, a relationship without a type code (inferred),
+  a complete/exclusive subtype group, domains with valid values, entity and
+  attribute UDPs, a table in two subject areas, a logical-only attribute, a
+  view, and an Oracle target. Fictional data; no customer names.
+-->
+<erwin xmlns="http://www.erwin.com/dm" xmlns:EMX="http://www.erwin.com/dm/data" xmlns:UDP="http://www.erwin.com/dm/metadata/udp" Format="erwin_Repository" FormatVersion="9.0">
+<EMX:Model id="{M-SALES}+00000000" name="Sales DW">
+  <EMX:ModelProps>
+    <EMX:Name>Sales DW</EMX:Name>
+    <EMX:Model_Type>Logical/Physical</EMX:Model_Type>
+    <EMX:Target_Server>Oracle</EMX:Target_Server>
+    <EMX:Target_Server_Version>19</EMX:Target_Server_Version>
+  </EMX:ModelProps>
+
+  <EMX:Validation_Rule_Groups>
+    <EMX:Validation_Rule id="{VR-STATUS}+00000000" name="Order Status Values">
+      <EMX:Validation_RuleProps><EMX:Name>Order Status Values</EMX:Name></EMX:Validation_RuleProps>
+      <EMX:Valid_Value_Groups>
+        <EMX:Valid_Value id="{VV-1}+00000000" name="NEW"><EMX:Valid_ValueProps><EMX:Value>NEW</EMX:Value></EMX:Valid_ValueProps></EMX:Valid_Value>
+        <EMX:Valid_Value id="{VV-2}+00000000" name="SHIPPED"><EMX:Valid_ValueProps><EMX:Value>SHIPPED</EMX:Value></EMX:Valid_ValueProps></EMX:Valid_Value>
+        <EMX:Valid_Value id="{VV-3}+00000000" name="CANCELLED"><EMX:Valid_ValueProps><EMX:Value>CANCELLED</EMX:Value></EMX:Valid_ValueProps></EMX:Valid_Value>
+      </EMX:Valid_Value_Groups>
+    </EMX:Validation_Rule>
+  </EMX:Validation_Rule_Groups>
+
+  <EMX:Domain_Groups>
+    <EMX:Domain id="{D-DEFAULT}+00000000" name="&lt;default&gt;"><EMX:DomainProps><EMX:Name>&lt;default&gt;</EMX:Name></EMX:DomainProps></EMX:Domain>
+    <EMX:Domain id="{D-STRING}+00000000" name="String"><EMX:DomainProps><EMX:Name>String</EMX:Name><EMX:Logical_Data_Type>VARCHAR(20)</EMX:Logical_Data_Type></EMX:DomainProps></EMX:Domain>
+    <EMX:Domain id="{D-STATUS}+00000000" name="Order Status">
+      <EMX:DomainProps>
+        <EMX:Name>Order Status</EMX:Name>
+        <EMX:Logical_Data_Type>VARCHAR(20)</EMX:Logical_Data_Type>
+        <EMX:Physical_Data_Type>VARCHAR2(20)</EMX:Physical_Data_Type>
+        <EMX:Parent_Domain_Ref>{D-STRING}+00000000</EMX:Parent_Domain_Ref>
+        <EMX:Validation_Rule_Ref>{VR-STATUS}+00000000</EMX:Validation_Rule_Ref>
+        <EMX:Definition>Lifecycle state of an order.</EMX:Definition>
+      </EMX:DomainProps>
+    </EMX:Domain>
+    <EMX:Domain id="{D-AMOUNT}+00000000" name="Currency Amount">
+      <EMX:DomainProps>
+        <EMX:Name>Currency Amount</EMX:Name>
+        <EMX:Logical_Data_Type>DECIMAL(12,2)</EMX:Logical_Data_Type>
+        <EMX:Physical_Data_Type>NUMBER(12,2)</EMX:Physical_Data_Type>
+        <EMX:Definition>A monetary amount in the order currency.</EMX:Definition>
+      </EMX:DomainProps>
+    </EMX:Domain>
+  </EMX:Domain_Groups>
+
+  <EMX:Entity_Groups>
+    <EMX:Entity id="{E-CUST}+00000000" name="Customer">
+      <EMX:EntityProps>
+        <EMX:Name>Customer</EMX:Name>
+        <EMX:Physical_Name>CUSTOMER</EMX:Physical_Name>
+        <EMX:Owner>SALES</EMX:Owner>
+        <EMX:Definition>A party that has placed at least one order.</EMX:Definition>
+        <UDP:Entity.Physical.Data_Owner>Sales Operations</UDP:Entity.Physical.Data_Owner>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-CUST-ID}+00000000" name="customer id">
+          <EMX:AttributeProps>
+            <EMX:Name>customer id</EMX:Name>
+            <EMX:Physical_Name>CUSTOMER_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type>
+            <EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Definition>Surrogate key of the customer.</EMX:Definition>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-CUST-NAME}+00000000" name="customer name">
+          <EMX:AttributeProps>
+            <EMX:Name>customer name</EMX:Name>
+            <EMX:Physical_Name>CUSTOMER_NAME</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>VARCHAR(100)</EMX:Logical_Data_Type>
+            <EMX:Physical_Data_Type>VARCHAR2(100)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>Not Null</EMX:Null_Option_Type>
+            <EMX:Definition>Legal or display name of the customer.</EMX:Definition>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-CUST-EMAIL}+00000000" name="email address">
+          <EMX:AttributeProps>
+            <EMX:Name>email address</EMX:Name>
+            <EMX:Physical_Name>EMAIL_ADDRESS</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>VARCHAR(255)</EMX:Logical_Data_Type>
+            <EMX:Physical_Data_Type>VARCHAR2(255)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>0</EMX:Null_Option_Type>
+            <UDP:Attribute.Physical.Classification>PII</UDP:Attribute.Physical.Classification>
+            <UDP:Attribute.Logical.Critical_Data_Element>true</UDP:Attribute.Logical.Critical_Data_Element>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-CUST-SINCE}+00000000" name="customer since">
+          <EMX:AttributeProps>
+            <EMX:Name>customer since</EMX:Name>
+            <EMX:Physical_Name>CUSTOMER_SINCE</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>DATE</EMX:Logical_Data_Type>
+            <EMX:Physical_Data_Type>DATE</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>0</EMX:Null_Option_Type>
+            <EMX:Default_Value>SYSDATE</EMX:Default_Value>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-CUST-PARTY}+00000000" name="party id">
+          <EMX:AttributeProps>
+            <EMX:Name>party id</EMX:Name>
+            <EMX:Physical_Name>PARTY_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type>
+            <EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>0</EMX:Null_Option_Type>
+            <EMX:Parent_Attribute_Ref>{A-PARTY-ID}+00000000</EMX:Parent_Attribute_Ref>
+            <EMX:Parent_Relationship_Ref>{R-PARTY-CUST}+00000000</EMX:Parent_Relationship_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-CUST-PK}+00000000" name="XPKCustomer">
+          <EMX:Key_GroupProps><EMX:Name>XPKCustomer</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-CUST-PK-1}+00000000" name="customer id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-CUST-ID}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+        <EMX:Key_Group id="{K-CUST-AK1}+00000000" name="XAK1Customer">
+          <EMX:Key_GroupProps><EMX:Name>XAK1Customer</EMX:Name><EMX:Key_Group_Type>AK1</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-CUST-AK-1}+00000000" name="email address"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-CUST-EMAIL}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+        <EMX:Key_Group id="{K-CUST-IE1}+00000000" name="XIE1Customer">
+          <EMX:Key_GroupProps><EMX:Name>XIE1Customer</EMX:Name><EMX:Key_Group_Type>IE1</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-CUST-IE-1}+00000000" name="customer name"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-CUST-NAME}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+    </EMX:Entity>
+
+    <EMX:Entity id="{E-ORD}+00000000" name="Order">
+      <EMX:EntityProps>
+        <EMX:Name>Order</EMX:Name>
+        <EMX:Physical_Name>ORDERS</EMX:Physical_Name>
+        <EMX:Owner>SALES</EMX:Owner>
+        <EMX:Definition>A request by a customer to buy products.</EMX:Definition>
+        <EMX:Note>Orders older than 10 years are archived.</EMX:Note>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-ORD-ID}+00000000" name="order id">
+          <EMX:AttributeProps>
+            <EMX:Name>order id</EMX:Name><EMX:Physical_Name>ORDER_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(12)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-ORD-CUST}+00000000" name="customer id">
+          <EMX:AttributeProps>
+            <EMX:Name>customer id</EMX:Name><EMX:Physical_Name>CUSTOMER_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Parent_Attribute_Ref>{A-CUST-ID}+00000000</EMX:Parent_Attribute_Ref>
+            <EMX:Parent_Relationship_Ref>{R-CUST-ORD}+00000000</EMX:Parent_Relationship_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-ORD-DATE}+00000000" name="order date">
+          <EMX:AttributeProps>
+            <EMX:Name>order date</EMX:Name><EMX:Physical_Name>ORDER_DATE</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>DATE</EMX:Logical_Data_Type><EMX:Physical_Data_Type>DATE</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-ORD-STATUS}+00000000" name="order status">
+          <EMX:AttributeProps>
+            <EMX:Name>order status</EMX:Name><EMX:Physical_Name>ORDER_STATUS</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>VARCHAR(20)</EMX:Logical_Data_Type><EMX:Physical_Data_Type>VARCHAR2(20)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Parent_Domain_Ref>{D-STATUS}+00000000</EMX:Parent_Domain_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-ORD-TOTAL}+00000000" name="total amount">
+          <EMX:AttributeProps>
+            <EMX:Name>total amount</EMX:Name><EMX:Physical_Name>TOTAL_AMOUNT</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>DECIMAL(12,2)</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(12,2)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>0</EMX:Null_Option_Type>
+            <EMX:Parent_Domain_Ref>{D-AMOUNT}+00000000</EMX:Parent_Domain_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-ORD-PK}+00000000" name="XPKOrder">
+          <EMX:Key_GroupProps><EMX:Name>XPKOrder</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-ORD-PK-1}+00000000" name="order id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-ORD-ID}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+    </EMX:Entity>
+
+    <EMX:Entity id="{E-PROD}+00000000" name="Product">
+      <EMX:EntityProps>
+        <EMX:Name>Product</EMX:Name><EMX:Physical_Name>PRODUCT</EMX:Physical_Name><EMX:Owner>SALES</EMX:Owner>
+        <EMX:Definition>An item offered for sale.</EMX:Definition>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-PROD-ID}+00000000" name="product id">
+          <EMX:AttributeProps>
+            <EMX:Name>product id</EMX:Name><EMX:Physical_Name>PRODUCT_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-PROD-NAME}+00000000" name="product name">
+          <EMX:AttributeProps>
+            <EMX:Name>product name</EMX:Name><EMX:Physical_Name>PRODUCT_NAME</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>VARCHAR(200)</EMX:Logical_Data_Type><EMX:Physical_Data_Type>VARCHAR2(200)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-PROD-PK}+00000000" name="XPKProduct">
+          <EMX:Key_GroupProps><EMX:Name>XPKProduct</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-PROD-PK-1}+00000000" name="product id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-PROD-ID}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+    </EMX:Entity>
+
+    <EMX:Entity id="{E-LINE}+00000000" name="Order Line">
+      <EMX:EntityProps>
+        <EMX:Name>Order Line</EMX:Name><EMX:Physical_Name>ORDER_LINE</EMX:Physical_Name><EMX:Owner>SALES</EMX:Owner>
+        <EMX:Definition>One product on an order.</EMX:Definition>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-LINE-ORD}+00000000" name="order id">
+          <EMX:AttributeProps>
+            <EMX:Name>order id</EMX:Name><EMX:Physical_Name>ORDER_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(12)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Parent_Attribute_Ref>{A-ORD-ID}+00000000</EMX:Parent_Attribute_Ref>
+            <EMX:Parent_Relationship_Ref>{R-ORD-LINE}+00000000</EMX:Parent_Relationship_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-LINE-NO}+00000000" name="line number">
+          <EMX:AttributeProps>
+            <EMX:Name>line number</EMX:Name><EMX:Physical_Name>LINE_NUMBER</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>SMALLINT</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(5)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-LINE-PROD}+00000000" name="product id">
+          <EMX:AttributeProps>
+            <EMX:Name>product id</EMX:Name><EMX:Physical_Name>PRODUCT_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Parent_Attribute_Ref>{A-PROD-ID}+00000000</EMX:Parent_Attribute_Ref>
+            <EMX:Parent_Relationship_Ref>{R-PROD-LINE}+00000000</EMX:Parent_Relationship_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-LINE-QTY}+00000000" name="quantity">
+          <EMX:AttributeProps>
+            <EMX:Name>quantity</EMX:Name><EMX:Physical_Name>QUANTITY</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(7)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-LINE-NOTE}+00000000" name="pricing rationale">
+          <EMX:AttributeProps>
+            <EMX:Name>pricing rationale</EMX:Name>
+            <EMX:Logical_Data_Type>VARCHAR(500)</EMX:Logical_Data_Type>
+            <EMX:Logical_Only>true</EMX:Logical_Only>
+            <EMX:Definition>Why a line deviates from list price. Captured in the CRM only.</EMX:Definition>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-LINE-PK}+00000000" name="XPKOrder_Line">
+          <EMX:Key_GroupProps><EMX:Name>XPKOrder_Line</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-LINE-PK-1}+00000000" name="order id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-LINE-ORD}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+            <EMX:Key_Group_Member id="{KM-LINE-PK-2}+00000000" name="line number"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-LINE-NO}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+        <EMX:Key_Group id="{K-LINE-IF1}+00000000" name="XIF1Order_Line">
+          <EMX:Key_GroupProps><EMX:Name>XIF1Order_Line</EMX:Name><EMX:Key_Group_Type>IF1</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-LINE-IF-1}+00000000" name="product id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-LINE-PROD}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+    </EMX:Entity>
+
+    <EMX:Entity id="{E-PARTY}+00000000" name="Party">
+      <EMX:EntityProps>
+        <EMX:Name>Party</EMX:Name><EMX:Physical_Name>PARTY</EMX:Physical_Name><EMX:Owner>MDM</EMX:Owner>
+        <EMX:Definition>A person or organization of interest.</EMX:Definition>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-PARTY-ID}+00000000" name="party id">
+          <EMX:AttributeProps>
+            <EMX:Name>party id</EMX:Name><EMX:Physical_Name>PARTY_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-PARTY-TYPE}+00000000" name="party type">
+          <EMX:AttributeProps>
+            <EMX:Name>party type</EMX:Name><EMX:Physical_Name>PARTY_TYPE</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>CHAR(1)</EMX:Logical_Data_Type><EMX:Physical_Data_Type>CHAR(1)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-PARTY-PK}+00000000" name="XPKParty">
+          <EMX:Key_GroupProps><EMX:Name>XPKParty</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-PARTY-PK-1}+00000000" name="party id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-PARTY-ID}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+      <EMX:Subtype_Symbol_Groups>
+        <EMX:Subtype_Symbol id="{S-PARTY}+00000000" name="S/1">
+          <EMX:Subtype_SymbolProps>
+            <EMX:Name>S/1</EMX:Name>
+            <EMX:Type>Complete</EMX:Type>
+            <EMX:Is_Exclusive>true</EMX:Is_Exclusive>
+            <EMX:Subtype_Relationships_Ref index="0">{R-PARTY-PERSON}+00000000</EMX:Subtype_Relationships_Ref>
+            <EMX:Subtype_Relationships_Ref index="1">{R-PARTY-ORG}+00000000</EMX:Subtype_Relationships_Ref>
+          </EMX:Subtype_SymbolProps>
+        </EMX:Subtype_Symbol>
+      </EMX:Subtype_Symbol_Groups>
+    </EMX:Entity>
+
+    <EMX:Entity id="{E-PERSON}+00000000" name="Person">
+      <EMX:EntityProps>
+        <EMX:Name>Person</EMX:Name><EMX:Physical_Name>PERSON</EMX:Physical_Name><EMX:Owner>MDM</EMX:Owner>
+        <EMX:Definition>An individual human party.</EMX:Definition>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-PERSON-ID}+00000000" name="party id">
+          <EMX:AttributeProps>
+            <EMX:Name>party id</EMX:Name><EMX:Physical_Name>PARTY_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Parent_Attribute_Ref>{A-PARTY-ID}+00000000</EMX:Parent_Attribute_Ref>
+            <EMX:Parent_Relationship_Ref>{R-PARTY-PERSON}+00000000</EMX:Parent_Relationship_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-PERSON-BIRTH}+00000000" name="birth date">
+          <EMX:AttributeProps>
+            <EMX:Name>birth date</EMX:Name><EMX:Physical_Name>BIRTH_DATE</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>DATE</EMX:Logical_Data_Type><EMX:Physical_Data_Type>DATE</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>0</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-PERSON-PK}+00000000" name="XPKPerson">
+          <EMX:Key_GroupProps><EMX:Name>XPKPerson</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-PERSON-PK-1}+00000000" name="party id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-PERSON-ID}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+    </EMX:Entity>
+
+    <EMX:Entity id="{E-ORG}+00000000" name="Organization">
+      <EMX:EntityProps>
+        <EMX:Name>Organization</EMX:Name><EMX:Physical_Name>ORGANIZATION</EMX:Physical_Name><EMX:Owner>MDM</EMX:Owner>
+        <EMX:Definition>A company, agency or other legal entity.</EMX:Definition>
+      </EMX:EntityProps>
+      <EMX:Attribute_Groups>
+        <EMX:Attribute id="{A-ORG-ID}+00000000" name="party id">
+          <EMX:AttributeProps>
+            <EMX:Name>party id</EMX:Name><EMX:Physical_Name>PARTY_ID</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>INTEGER</EMX:Logical_Data_Type><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+            <EMX:Parent_Attribute_Ref>{A-PARTY-ID}+00000000</EMX:Parent_Attribute_Ref>
+            <EMX:Parent_Relationship_Ref>{R-PARTY-ORG}+00000000</EMX:Parent_Relationship_Ref>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+        <EMX:Attribute id="{A-ORG-LEGAL}+00000000" name="legal name">
+          <EMX:AttributeProps>
+            <EMX:Name>legal name</EMX:Name><EMX:Physical_Name>LEGAL_NAME</EMX:Physical_Name>
+            <EMX:Logical_Data_Type>VARCHAR(200)</EMX:Logical_Data_Type><EMX:Physical_Data_Type>VARCHAR2(200)</EMX:Physical_Data_Type>
+            <EMX:Null_Option_Type>1</EMX:Null_Option_Type>
+          </EMX:AttributeProps>
+        </EMX:Attribute>
+      </EMX:Attribute_Groups>
+      <EMX:Key_Group_Groups>
+        <EMX:Key_Group id="{K-ORG-PK}+00000000" name="XPKOrganization">
+          <EMX:Key_GroupProps><EMX:Name>XPKOrganization</EMX:Name><EMX:Key_Group_Type>PK</EMX:Key_Group_Type></EMX:Key_GroupProps>
+          <EMX:Key_Group_Member_Groups>
+            <EMX:Key_Group_Member id="{KM-ORG-PK-1}+00000000" name="party id"><EMX:Key_Group_MemberProps><EMX:Attribute_Ref>{A-ORG-ID}+00000000</EMX:Attribute_Ref></EMX:Key_Group_MemberProps></EMX:Key_Group_Member>
+          </EMX:Key_Group_Member_Groups>
+        </EMX:Key_Group>
+      </EMX:Key_Group_Groups>
+    </EMX:Entity>
+  </EMX:Entity_Groups>
+
+  <EMX:View_Groups>
+    <EMX:View id="{V-CUST-ORD}+00000000" name="v_customer_orders">
+      <EMX:ViewProps>
+        <EMX:Name>v_customer_orders</EMX:Name>
+        <EMX:Physical_Name>V_CUSTOMER_ORDERS</EMX:Physical_Name>
+        <EMX:Owner>SALES</EMX:Owner>
+        <EMX:Definition>Order count per customer.</EMX:Definition>
+        <EMX:View_SQL>SELECT c.CUSTOMER_ID, COUNT(o.ORDER_ID) AS ORDER_COUNT FROM SALES.CUSTOMER c LEFT JOIN SALES.ORDERS o ON o.CUSTOMER_ID = c.CUSTOMER_ID GROUP BY c.CUSTOMER_ID</EMX:View_SQL>
+      </EMX:ViewProps>
+      <EMX:View_Column_Groups>
+        <EMX:View_Column id="{VC-1}+00000000" name="CUSTOMER_ID"><EMX:View_ColumnProps><EMX:Name>CUSTOMER_ID</EMX:Name><EMX:Physical_Data_Type>NUMBER(10)</EMX:Physical_Data_Type></EMX:View_ColumnProps></EMX:View_Column>
+        <EMX:View_Column id="{VC-2}+00000000" name="ORDER_COUNT"><EMX:View_ColumnProps><EMX:Name>ORDER_COUNT</EMX:Name><EMX:Physical_Data_Type>NUMBER</EMX:Physical_Data_Type></EMX:View_ColumnProps></EMX:View_Column>
+      </EMX:View_Column_Groups>
+    </EMX:View>
+  </EMX:View_Groups>
+
+  <EMX:Relationship_Groups>
+    <EMX:Relationship id="{R-CUST-ORD}+00000000" name="R/1">
+      <EMX:RelationshipProps>
+        <EMX:Name>R/1</EMX:Name>
+        <EMX:Type>7</EMX:Type>
+        <EMX:Parent_Entity_Ref>{E-CUST}+00000000</EMX:Parent_Entity_Ref>
+        <EMX:Child_Entity_Ref>{E-ORD}+00000000</EMX:Child_Entity_Ref>
+        <EMX:Parent_To_Child_Verb_Phrase>places</EMX:Parent_To_Child_Verb_Phrase>
+        <EMX:Child_To_Parent_Verb_Phrase>is placed by</EMX:Child_To_Parent_Verb_Phrase>
+        <EMX:Cardinality>-1</EMX:Cardinality>
+        <EMX:Relationship_No_Nulls>1</EMX:Relationship_No_Nulls>
+      </EMX:RelationshipProps>
+    </EMX:Relationship>
+    <EMX:Relationship id="{R-ORD-LINE}+00000000" name="R/2">
+      <EMX:RelationshipProps>
+        <EMX:Name>R/2</EMX:Name>
+        <EMX:Type>2</EMX:Type>
+        <EMX:Parent_Entity_Ref>{E-ORD}+00000000</EMX:Parent_Entity_Ref>
+        <EMX:Child_Entity_Ref>{E-LINE}+00000000</EMX:Child_Entity_Ref>
+        <EMX:Parent_To_Child_Verb_Phrase>contains</EMX:Parent_To_Child_Verb_Phrase>
+        <EMX:Child_To_Parent_Verb_Phrase>is part of</EMX:Child_To_Parent_Verb_Phrase>
+        <EMX:Cardinality>-2</EMX:Cardinality>
+      </EMX:RelationshipProps>
+    </EMX:Relationship>
+    <EMX:Relationship id="{R-PROD-LINE}+00000000" name="R/3">
+      <EMX:RelationshipProps>
+        <EMX:Name>R/3</EMX:Name>
+        <EMX:Parent_Entity_Ref>{E-PROD}+00000000</EMX:Parent_Entity_Ref>
+        <EMX:Child_Entity_Ref>{E-LINE}+00000000</EMX:Child_Entity_Ref>
+        <EMX:Parent_To_Child_Verb_Phrase>is ordered on</EMX:Parent_To_Child_Verb_Phrase>
+        <EMX:Cardinality>-1</EMX:Cardinality>
+      </EMX:RelationshipProps>
+    </EMX:Relationship>
+    <EMX:Relationship id="{R-PARTY-CUST}+00000000" name="R/4">
+      <EMX:RelationshipProps>
+        <EMX:Name>R/4</EMX:Name>
+        <EMX:Type>Non-Identifying</EMX:Type>
+        <EMX:Parent_Entity_Ref>{E-PARTY}+00000000</EMX:Parent_Entity_Ref>
+        <EMX:Child_Entity_Ref>{E-CUST}+00000000</EMX:Child_Entity_Ref>
+        <EMX:Parent_To_Child_Verb_Phrase>acts as</EMX:Parent_To_Child_Verb_Phrase>
+        <EMX:Cardinality>-3</EMX:Cardinality>
+        <EMX:Relationship_No_Nulls>0</EMX:Relationship_No_Nulls>
+      </EMX:RelationshipProps>
+    </EMX:Relationship>
+    <EMX:Relationship id="{R-PARTY-PERSON}+00000000" name="R/5">
+      <EMX:RelationshipProps>
+        <EMX:Name>R/5</EMX:Name>
+        <EMX:Parent_Entity_Ref>{E-PARTY}+00000000</EMX:Parent_Entity_Ref>
+        <EMX:Child_Entity_Ref>{E-PERSON}+00000000</EMX:Child_Entity_Ref>
+      </EMX:RelationshipProps>
+    </EMX:Relationship>
+    <EMX:Relationship id="{R-PARTY-ORG}+00000000" name="R/6">
+      <EMX:RelationshipProps>
+        <EMX:Name>R/6</EMX:Name>
+        <EMX:Parent_Entity_Ref>{E-PARTY}+00000000</EMX:Parent_Entity_Ref>
+        <EMX:Child_Entity_Ref>{E-ORG}+00000000</EMX:Child_Entity_Ref>
+      </EMX:RelationshipProps>
+    </EMX:Relationship>
+  </EMX:Relationship_Groups>
+
+  <EMX:Subject_Area_Groups>
+    <EMX:Subject_Area id="{SA-SALES}+00000000" name="Sales">
+      <EMX:Subject_AreaProps>
+        <EMX:Name>Sales</EMX:Name>
+        <EMX:Definition>Orders, order lines, products and the customers who place them.</EMX:Definition>
+        <EMX:Referenced_Entities_Ref index="0">{E-CUST}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="1">{E-ORD}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="2">{E-LINE}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="3">{E-PROD}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="4">{V-CUST-ORD}+00000000</EMX:Referenced_Entities_Ref>
+      </EMX:Subject_AreaProps>
+    </EMX:Subject_Area>
+    <EMX:Subject_Area id="{SA-PARTY}+00000000" name="Party">
+      <EMX:Subject_AreaProps>
+        <EMX:Name>Party</EMX:Name>
+        <EMX:Referenced_Entities_Ref index="0">{E-PARTY}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="1">{E-PERSON}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="2">{E-ORG}+00000000</EMX:Referenced_Entities_Ref>
+        <EMX:Referenced_Entities_Ref index="3">{E-CUST}+00000000</EMX:Referenced_Entities_Ref>
+      </EMX:Subject_AreaProps>
+    </EMX:Subject_Area>
+  </EMX:Subject_Area_Groups>
+</EMX:Model>
+</erwin>

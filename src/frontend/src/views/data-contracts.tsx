@@ -15,6 +15,7 @@ import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import DataContractBasicFormDialog from '@/components/data-contracts/data-contract-basic-form-dialog'
 import ImportEntityDialog from '@/components/common/import-entity-dialog';
+import ModelImportDialog from '@/components/model-import/model-import-dialog';
 import { ColumnDef } from "@tanstack/react-table"
 import { useToast } from "@/hooks/use-toast"
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -46,6 +47,7 @@ export default function DataContracts() {
   const [error, setError] = useState<string | null>(null);
   const [openWizard, setOpenWizard] = useState(false);
   const [openUploadDialog, setOpenUploadDialog] = useState(false);
+  const [openErwinDialog, setOpenErwinDialog] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<{ message: string; detail?: string } | null>(null);
   const [odcsPaste, setOdcsPaste] = useState<string>('')
@@ -697,6 +699,13 @@ export default function DataContracts() {
                   </Tooltip>
                 </TooltipProvider>
               )}
+              {canWrite && (
+                <Button onClick={() => setOpenErwinDialog(true)} variant="outline" className="gap-2 h-9"
+                        title={t('model-import:entry.contractsTooltip', 'Create draft contracts (and concepts) from an erwin data model')}>
+                  <Upload className="h-4 w-4" />
+                  {t('model-import:entry.fromErwinShort', 'erwin model')}
+                </Button>
+              )}
             </>
           }
           bulkActions={(selectedRows) => (
@@ -729,6 +738,12 @@ export default function DataContracts() {
           }}
         />
       )}
+
+      <ModelImportDialog
+        open={openErwinDialog}
+        onOpenChange={setOpenErwinDialog}
+        layers={{ logical: hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE), physical: true }}
+      />
 
       {/* Upload Dialog (shared with Data Products via ImportEntityDialog) */}
       <ImportEntityDialog

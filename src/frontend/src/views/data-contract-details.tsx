@@ -2001,6 +2001,28 @@ export default function DataContractDetails() {
                 <span className="text-xs text-muted-foreground">—</span>
               )}
             </div>
+            {contract.customProperties?.['erwin.modelName'] && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('model-import:provenance.label', 'Source')}:</Label>
+                <Badge
+                  variant="outline"
+                  className={`text-xs whitespace-nowrap ${contract.customProperties?.['erwin.runId'] ? 'cursor-pointer' : ''}`}
+                  title={t('model-import:provenance.title', 'Imported from an erwin data model')}
+                  onClick={() => {
+                    const runId = contract.customProperties?.['erwin.runId'];
+                    if (runId) navigate(`/model-imports/${runId}`);
+                  }}
+                >
+                  {t('model-import:provenance.badge', 'erwin · {{model}}', { model: contract.customProperties['erwin.modelName'] })}
+                  {contract.customProperties?.['erwin.modelVersion'] ? ` v${contract.customProperties['erwin.modelVersion']}` : ''}
+                </Badge>
+                {String(contract.customProperties?.['erwin.removedInSource']) === 'true' && (
+                  <Badge variant="destructive" className="text-xs">
+                    {t('model-import:provenance.removed', 'Removed from the model')}
+                  </Badge>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.created', 'Created')}:</Label>
               {contract.created ? (

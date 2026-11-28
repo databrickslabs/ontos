@@ -72,6 +72,8 @@ import OntologySearchView from './views/ontology-search';
 import CollectionsView from './views/collections';
 import HierarchyBrowserView from './views/hierarchy-browser';
 import SchemaImporterView from './views/schema-importer';
+import ModelImportsView from './views/model-imports';
+import ModelImportRunView from './views/model-import-run';
 import SyncDomainsView from './views/sync-domains';
 import OwnerConsumersView from './views/owner-consumers';
 import OntologyGeneratorView from './views/ontology-generator';
@@ -197,6 +199,8 @@ export default function App() {
               <Route path="/business-roles" element={<Navigate to="/settings/business-roles" replace />} />
               <Route path="/business-owners" element={<BusinessOwnersView />} />
               <Route path="/schema-importer" element={<SchemaImporterView />} />
+              <Route path="/model-imports" element={<ModelImportsView />} />
+              <Route path="/model-imports/:runId" element={<ModelImportRunView />} />
               <Route path="/domain-sync" element={<SyncDomainsView />} />
               <Route path="/ontology-generator" element={<Navigate to="/concepts/generator" replace />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />

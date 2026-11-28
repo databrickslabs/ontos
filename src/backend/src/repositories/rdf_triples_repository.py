@@ -288,6 +288,28 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
             .all()
         )
 
+    def list_current_by_context(self, db: Session, context_name: str) -> List[RdfTripleDb]:
+        """Current-only triples of one context (same rule as ``list_current``).
+
+        ``list_by_context`` also returns the frozen triples of superseded concept
+        versions, so a diff against it sees a versioned concept's old values too.
+        """
+        return (
+            db.query(RdfTripleDb)
+            .outerjoin(
+                ConceptVersionDb,
+                ConceptVersionDb.id == RdfTripleDb.concept_version_id,
+            )
+            .filter(
+                RdfTripleDb.context_name == context_name,
+                or_(
+                    RdfTripleDb.concept_version_id.is_(None),
+                    ConceptVersionDb.is_current.is_(True),
+                ),
+            )
+            .all()
+        )
+
     def list_by_subject(self, db: Session, subject_uri: str) -> List[RdfTripleDb]:
         """Get all triples with a given subject."""
         return db.query(RdfTripleDb).filter(

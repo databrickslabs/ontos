@@ -43,6 +43,12 @@ documents:
     description: "How workflows run: triggers, branching, variables, approvals, failures and debugging executions"
     category: user-guide
 
+  erwin-model-import:
+    file: erwin-model-import-guide.md
+    title: Importing erwin Data Models
+    description: Import erwin Data Modeler models as concepts and draft data contracts bound to Unity Catalog
+    category: user-guide
+
   release-notes:
     file: RELEASE_NOTES.md
     title: Release Notes

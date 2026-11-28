@@ -69,6 +69,7 @@ const isStoredString = (v: unknown): v is string => typeof v === 'string';
 
 export default function AssetExplorerView() {
   const [assetTypes, setAssetTypes] = useState<AssetTypeRead[]>([]);
+  const [assetTypesLoaded, setAssetTypesLoaded] = useState(false);
   const [assets, setAssets] = useState<AssetRead[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -134,6 +135,8 @@ export default function AssetExplorerView() {
     } catch (err: any) {
       setComponentError(err.message || t('assets:explorer.loadTypesError'));
       toast({ variant: 'destructive', title: t('common:states.error'), description: err.message });
+    } finally {
+      setAssetTypesLoaded(true);
     }
   }, [canRead, permissionsLoading, apiGet, toast, searchParams, selectedTypeId]);
 
@@ -144,7 +147,12 @@ export default function AssetExplorerView() {
     limit: number;
   }
 
+  // Only the latest request may set the table: an earlier, slower one (e.g.
+  // all assets, sent before ?type= was resolved) would overwrite it otherwise
+  const latestAssetsRequest = useRef(0);
   const fetchAssets = useCallback(async (typeId: string | null, page: PaginationState, nameSearch?: string) => {
+    const request = ++latestAssetsRequest.current;
+    const isLatest = () => request === latestAssetsRequest.current;
     setAssetsLoading(true);
     try {
       const skip = page.pageIndex * page.pageSize;
@@ -152,16 +160,18 @@ export default function AssetExplorerView() {
       if (typeId) params.set('asset_type_id', typeId);
       if (nameSearch) params.set('name', nameSearch);
       const response = await apiGet<PaginatedResponse>(`/api/assets?${params}`);
+      if (!isLatest()) return;
       if (response.error) throw new Error(response.error);
       const data = response.data;
       setAssets(data?.items ?? []);
       setAssetsTotal(data?.total ?? 0);
     } catch (err: any) {
+      if (!isLatest()) return;
       setAssets([]);
       setAssetsTotal(0);
       toast({ variant: 'destructive', title: t('assets:explorer.errorLoadingAssets'), description: err.message });
     } finally {
-      setAssetsLoading(false);
+      if (isLatest()) setAssetsLoading(false);
     }
   }, [apiGet, toast]);
 
@@ -210,10 +220,14 @@ export default function AssetExplorerView() {
     }
   }, [assetsTotal, pagination, setPagination]);
 
+  // A type in the URL (e.g. after Back from an asset) is resolved once the
+  // types have loaded; don't load all assets before that
+  const typeFromUrlPending = !!searchParams.get('type') && selectedTypeId === null && !assetTypesLoaded;
   useEffect(() => {
+    if (typeFromUrlPending) return;
     fetchAssets(selectedTypeId, pagination, debouncedNameFilter);
     setRowSelection({});
-  }, [selectedTypeId, pagination, debouncedNameFilter, fetchAssets]);
+  }, [selectedTypeId, pagination, debouncedNameFilter, fetchAssets, typeFromUrlPending]);
 
   const handleTypeChange = useCallback((typeId: string | null, typeName?: string) => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));

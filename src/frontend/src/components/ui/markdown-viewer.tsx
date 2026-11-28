@@ -27,7 +27,7 @@ function extractText(children: React.ReactNode): string {
     } else if (typeof child === 'number') {
       parts.push(String(child));
     } else if (React.isValidElement(child)) {
-      parts.push(extractText(child.props.children));
+      parts.push(extractText((child.props as { children?: React.ReactNode }).children));
     }
   });
   return parts.join(' ');

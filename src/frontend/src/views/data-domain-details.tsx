@@ -60,7 +60,10 @@ interface InfoItemProps {
 const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, className }) => (
   <div className={`mb-3 ${className}`}>
     <p className="text-sm font-medium text-muted-foreground flex items-center">
-      {icon && React.cloneElement(icon as React.ReactElement, { className: 'mr-2 h-4 w-4' })}
+      {icon &&
+        React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
+          className: 'mr-2 h-4 w-4',
+        })}
       {label}
     </p>
     {value && <p className="text-md text-foreground mt-0.5">{value}</p>}

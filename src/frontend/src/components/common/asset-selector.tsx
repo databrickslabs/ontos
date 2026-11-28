@@ -180,7 +180,7 @@ export function AssetSelector({
   const [searchResults, setSearchResults] = useState<AssetSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Browse mode state
   const [assetTypes, setAssetTypes] = useState<AssetTypeRead[]>([]);
@@ -191,7 +191,7 @@ export function AssetSelector({
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseFilter, setBrowseFilter] = useState('');
   const browseFilterRef = useRef<HTMLInputElement>(null);
-  const browseDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const browseDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const groupedTypes = useMemo(() => {
     const filtered = targetAssetTypes && targetAssetTypes.length > 0

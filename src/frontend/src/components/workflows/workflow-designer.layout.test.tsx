@@ -86,8 +86,10 @@ describe('WorkflowDesigner layout', () => {
     const { container } = renderDesigner({ notify: { x: 400, y: 40 }, done: { x: -250, y: 520 } });
 
     await waitFor(() => expect(container.querySelector('.react-flow__node[data-id="done"]')).not.toBeNull());
+    // jsdom serializes "translate(400px, 40px)" with a space since v31; ignore whitespace.
     const transformOf = (id: string) =>
-      (container.querySelector(`.react-flow__node[data-id="${id}"]`) as HTMLElement).style.transform;
+      (container.querySelector(`.react-flow__node[data-id="${id}"]`) as HTMLElement).style
+        .transform.replace(/\s+/g, '');
     expect(transformOf('notify')).toBe('translate(400px,40px)');
     expect(transformOf('done')).toBe('translate(-250px,520px)');
     // The trigger sits above the first step.

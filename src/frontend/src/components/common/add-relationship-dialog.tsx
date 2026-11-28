@@ -196,7 +196,7 @@ export function AddRelationshipDialog({
   const [searchResults, setSearchResults] = useState<TargetEntity[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Browse state
   const [assetTypes, setAssetTypes] = useState<AssetTypeRead[]>([]);
@@ -211,7 +211,7 @@ export function AddRelationshipDialog({
   const [browseTotal, setBrowseTotal] = useState(0);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseFilter, setBrowseFilter] = useState('');
-  const browseDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const browseDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Unique key for each relationship definition (property_name alone can repeat across target types)
   const relKey = useCallback((r: RelationshipDefinition) =>

@@ -1,7 +1,7 @@
 """add model_import_runs for staged erwin model imports
 
 Revision ID: ad1_model_import_runs
-Revises: o2_step_execution_message
+Revises: t2_delivery_outbox
 Create Date: 2026-11-27 09:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'ad1_model_import_runs'
-down_revision: Union[str, None] = 'o2_step_execution_message'
+down_revision: Union[str, None] = 't2_delivery_outbox'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

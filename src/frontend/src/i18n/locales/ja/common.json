@@ -757,6 +757,11 @@
     "testPersona": "テストペルソナ",
     "noToken": "トークンなし",
     "noneRealIdentity": "なし（実際の ID）",
+    "testBadge": "テスト",
+    "nowViewingAs": "現在の表示ユーザー",
+    "stopActing": "なりすましを終了（自分の ID に戻る）",
+    "presenterSize": "プレゼンテーション サイズ",
+    "cycleShortcut": "Alt + ] 次のペルソナ、Alt + [ 前のペルソナ",
     "actual": " （実際）",
     "unknownRole": "不明なロール",
     "accessLevel": {

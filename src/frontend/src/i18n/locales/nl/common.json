@@ -757,6 +757,11 @@
     "testPersona": "Testpersona",
     "noToken": "Geen token",
     "noneRealIdentity": "Geen (echte identiteit)",
+    "testBadge": "Test",
+    "nowViewingAs": "Ontos nu bekeken als",
+    "stopActing": "Stoppen met nadoen: terug naar je eigen identiteit",
+    "presenterSize": "Presentatiegrootte",
+    "cycleShortcut": "Alt + ] volgende persona, Alt + [ vorige",
     "actual": " (Werkelijk)",
     "unknownRole": "Onbekende rol",
     "accessLevel": {

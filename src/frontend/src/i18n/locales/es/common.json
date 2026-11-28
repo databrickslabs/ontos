@@ -757,6 +757,11 @@
     "testPersona": "Persona de prueba",
     "noToken": "Sin token",
     "noneRealIdentity": "Ninguna (identidad real)",
+    "testBadge": "Prueba",
+    "nowViewingAs": "Ahora ves Ontos como",
+    "stopActing": "Dejar de suplantar: volver a tu identidad",
+    "presenterSize": "Tamaño de presentación",
+    "cycleShortcut": "Alt + ] siguiente persona, Alt + [ anterior",
     "actual": " (Real)",
     "unknownRole": "Rol desconocido",
     "accessLevel": {

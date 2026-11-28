@@ -16,6 +16,13 @@ The endpoint is enabled only when ``TEST_USER_TOKEN`` is configured server-side
 should not show any persona UI). When disabled, the endpoint returns 404 so
 clients can probe without learning that the feature exists.
 
+Presentation (optional, per persona): ``display_name``, ``title``, ``color``
+(``#rgb``/``#rrggbb``) and ``avatar``. The UI shows them in the header chip
+while a persona is active; without them it derives name/title from ``label``
+and falls back to coloured initials. ``avatar`` is a ``data:image/...`` URI, an
+``https://`` URL, or a file name under ``{DATABRICKS_VOLUME}/config/avatars/``
+that ``GET /api/test/personas/{id}/avatar`` serves (same token gate).
+
 Freshness: the resolved list is cached with a short TTL (see
 ``_CACHE_TTL_SECONDS``) so edits to the volume file surface within seconds and
 without a restart, while bounding how often we hit the Volume/Files API.
@@ -29,14 +36,16 @@ Security:
   token being configured to avoid surfacing the feature in production.
 """
 
+import re
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 import yaml
 from databricks.sdk.errors import NotFound
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from src.common.authorization import (
     TEST_TOKEN_HEADER,
@@ -66,6 +75,29 @@ PERSONAS_VOLUME_SUBPATH = "config/test_personas.yaml"
 # the Files API on every picker load.
 _CACHE_TTL_SECONDS = 30.0
 
+# Avatar files live next to the persona override, under DATABRICKS_VOLUME.
+AVATARS_VOLUME_SUBDIR = "config/avatars"
+_AVATAR_MAX_BYTES = 1024 * 1024
+_AVATAR_MEDIA_TYPES = {
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+# A bare file name only: no directories, no traversal.
+_AVATAR_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_AVATAR_DATA_URI_RE = re.compile(r"^data:image/(png|jpeg|gif|webp|svg\+xml)[;,]", re.IGNORECASE)
+_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _avatar_file_name(avatar: Optional[str]) -> Optional[str]:
+    """Return ``avatar`` when it names a servable file under config/avatars/."""
+    if not avatar or not _AVATAR_FILE_RE.match(avatar):
+        return None
+    return avatar if Path(avatar).suffix.lower() in _AVATAR_MEDIA_TYPES else None
+
 
 class TestPersona(BaseModel):
     id: str
@@ -75,6 +107,49 @@ class TestPersona(BaseModel):
     # lookup so the persona reflects real workspace state.
     groups: Optional[List[str]] = None
     description: Optional[str] = None
+    # Optional presentation for the header chip (see module docstring).
+    display_name: Optional[str] = None
+    title: Optional[str] = None
+    color: Optional[str] = None
+    avatar: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def _valid_color(cls, v: Optional[str]) -> Optional[str]:
+        # The UI puts this into inline styles; anything but a hex colour is dropped.
+        v = (v or "").strip()
+        if not v:
+            return None
+        if _COLOR_RE.match(v):
+            return v
+        logger.warning("Ignoring invalid test-persona color %r (expected #rgb or #rrggbb)", v)
+        return None
+
+    @field_validator("avatar")
+    @classmethod
+    def _valid_avatar(cls, v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip()
+        if not v:
+            return None
+        if _AVATAR_DATA_URI_RE.match(v) or v.startswith("https://") or _avatar_file_name(v):
+            return v
+        logger.warning(
+            "Ignoring invalid test-persona avatar %r (expected data:image/ URI, https:// URL "
+            "or a .svg/.png/.jpg/.webp/.gif file name under %s/)",
+            v[:80],
+            AVATARS_VOLUME_SUBDIR,
+        )
+        return None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def avatar_url(self) -> Optional[str]:
+        """What the UI puts in ``<img src>``: inline/remote as-is, files via the avatar route."""
+        if not self.avatar:
+            return None
+        if _avatar_file_name(self.avatar):
+            return f"{router.prefix}/personas/{quote(self.id, safe='')}/avatar"
+        return self.avatar
 
 
 class TestPersonasResponse(BaseModel):
@@ -95,6 +170,8 @@ class TestPersonasResponse(BaseModel):
 
 _cached_personas: Optional[List[TestPersona]] = None
 _cache_expires_at: float = 0.0
+# (volume base, file name) -> (expires at, bytes or None for a cached miss)
+_avatar_cache: Dict[Tuple[str, str], Tuple[float, Optional[bytes]]] = {}
 
 
 def _invalidate_persona_cache() -> None:
@@ -102,6 +179,7 @@ def _invalidate_persona_cache() -> None:
     global _cached_personas, _cache_expires_at
     _cached_personas = None
     _cache_expires_at = 0.0
+    _avatar_cache.clear()
 
 
 def _resolve_volume_base(settings: Settings) -> Optional[str]:
@@ -204,6 +282,57 @@ def _read_volume_override(settings: Settings) -> Optional[str]:
     return None
 
 
+def _read_avatar(settings: Settings, file_name: str) -> Optional[bytes]:
+    """Return the bytes of ``config/avatars/<file_name>`` on the volume, or None.
+
+    Same source rules as the persona override: ``/Volumes/...`` through the SDK
+    Files API, anything else from the local filesystem. Results (including
+    misses) are cached for ``_CACHE_TTL_SECONDS``.
+    """
+    base = _resolve_volume_base(settings)
+    if not base:
+        return None
+
+    key = (base, file_name)
+    now = time.monotonic()
+    hit = _avatar_cache.get(key)
+    if hit and now < hit[0]:
+        return hit[1]
+
+    data: Optional[bytes] = None
+    if base.startswith("/Volumes/"):
+        volume_path = f"{base}/{AVATARS_VOLUME_SUBDIR}/{file_name}"
+        try:
+            from src.common.workspace_client import get_workspace_client
+
+            resp = get_workspace_client().files.download(file_path=volume_path)
+            contents = getattr(resp, "contents", None)
+            raw = contents.read() if contents is not None else resp.read()  # type: ignore[union-attr]
+            data = bytes(raw)
+        except NotFound:
+            logger.debug("No test-persona avatar on volume at %s", volume_path)
+        except Exception as e:
+            logger.warning("Failed reading test-persona avatar at %s (%s)", volume_path, e)
+    else:
+        local_path = Path(base) / AVATARS_VOLUME_SUBDIR / file_name
+        if local_path.is_file():
+            try:
+                data = local_path.read_bytes()
+            except OSError as e:
+                logger.warning("Failed reading test-persona avatar %s: %s", local_path, e)
+
+    if data is not None and len(data) > _AVATAR_MAX_BYTES:
+        logger.warning(
+            "Test-persona avatar %s is %d bytes (limit %d); not serving it",
+            file_name,
+            len(data),
+            _AVATAR_MAX_BYTES,
+        )
+        data = None
+    _avatar_cache[key] = (now + _CACHE_TTL_SECONDS, data)
+    return data
+
+
 def _read_bundled() -> Optional[str]:
     """Return the raw YAML text of the repo-bundled persona list, or None."""
     if not PERSONAS_YAML_PATH.is_file():
@@ -281,6 +410,35 @@ def list_test_personas(settings: Settings = Depends(get_settings)) -> TestPerson
         raise HTTPException(status_code=404, detail="Test mode not enabled")
 
     return TestPersonasResponse(personas=_load_personas(settings))
+
+
+@router.get("/personas/{persona_id}/avatar")
+def get_test_persona_avatar(persona_id: str, settings: Settings = Depends(get_settings)) -> Response:
+    """Serve a persona's avatar file from ``{DATABRICKS_VOLUME}/config/avatars/``.
+
+    Returns 404 when test mode is off, the persona is unknown, its ``avatar`` is
+    not a file name (inline and https avatars never hit this route), or the file
+    is missing.
+    """
+    if not settings.TEST_USER_TOKEN:
+        raise HTTPException(status_code=404, detail="Test mode not enabled")
+
+    persona = next((p for p in _load_personas(settings) if p.id == persona_id), None)
+    file_name = _avatar_file_name(persona.avatar) if persona else None
+    data = _read_avatar(settings, file_name) if file_name else None
+    if data is None:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    return Response(
+        content=data,
+        media_type=_AVATAR_MEDIA_TYPES[Path(file_name).suffix.lower()],
+        headers={
+            "Cache-Control": "private, max-age=60",
+            "X-Content-Type-Options": "nosniff",
+            # SVGs may carry script; opened directly, they run sandboxed with no network.
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        },
+    )
 
 
 def register_routes(app):

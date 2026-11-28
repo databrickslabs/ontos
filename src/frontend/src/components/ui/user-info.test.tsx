@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/utils';
@@ -52,6 +52,7 @@ vi.mock('@/components/ui/user-profile-dialog', () => ({
 }));
 
 import UserInfo from './user-info';
+import useTestPersonaStore from '@/stores/test-persona-store';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -241,5 +242,80 @@ describe('UserInfo role switcher gating', () => {
     expect(await screen.findByText('userMenu.applyRoleOverride')).toBeInTheDocument();
     expect(screen.getByText('Data Producer')).toBeInTheDocument();
     expect(screen.getByText('Data Steward')).toBeInTheDocument();
+  });
+});
+
+describe('UserInfo test-persona chip', () => {
+  const personas = [
+    { id: 'priya', label: 'Priya Raman — Data Contract Engineer', email: 'priya@test.local', groups: ['data-producers'], color: '#0f7b3f' },
+    { id: 'joost', label: 'Joost de Vries — Data Steward', email: 'joost@test.local', groups: ['data-stewards'] },
+  ];
+  const reloadMock = vi.fn();
+  const originalLocation = window.location;
+
+  beforeEach(() => {
+    reloadMock.mockReset();
+    localStorage.clear();
+    sessionStorage.clear();
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...originalLocation, reload: reloadMock } });
+    permissionsState = {
+      permissions: {},
+      actualPermissions: {},
+      isLoading: false,
+      availableRoles: [producerRole],
+      appliedRoleId: null,
+      setRoleOverride: setRoleOverrideMock,
+      initializeStore: initializeStoreMock,
+      hasPermission: () => true,
+    };
+    mockUserDetailsFetch(['data-producers'], 'priya');
+    useTestPersonaStore.setState({ enabled: true, personas, selectedPersonaId: 'priya', token: 'tok' });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    useTestPersonaStore.setState({ enabled: false, personas: [], selectedPersonaId: null, token: null });
+  });
+
+  it('shows the active persona name, title and TEST badge in the header trigger', async () => {
+    renderWithProviders(<UserInfo />);
+    const chip = await screen.findByRole('button', { name: /Priya Raman/ });
+    expect(chip).toHaveAttribute('data-persona-id', 'priya');
+    expect(chip).toHaveTextContent('Data Contract Engineer');
+    expect(chip).toHaveTextContent('common:userInfo.testBadge');
+  });
+
+  it('keeps the small avatar when no persona is active', async () => {
+    useTestPersonaStore.setState({ selectedPersonaId: null });
+    renderWithProviders(<UserInfo />);
+    const trigger = await screen.findByRole('button');
+    expect(trigger).not.toHaveAttribute('data-persona-id');
+  });
+
+  it('lists personas with name, title and groups, and offers stop acting', async () => {
+    renderWithProviders(<UserInfo />);
+    await openMenu();
+    expect(await screen.findByText('Joost de Vries')).toBeInTheDocument();
+    expect(screen.getByText('data-stewards')).toBeInTheDocument();
+    expect(screen.getByText('common:userInfo.stopActing')).toBeInTheDocument();
+    expect(screen.getByText('common:userInfo.presenterSize')).toBeInTheDocument();
+  });
+
+  it('cycles to the next persona with Alt+] and queues the switch toast', async () => {
+    renderWithProviders(<UserInfo />);
+    await screen.findByRole('button', { name: /Priya Raman/ });
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'BracketRight', altKey: true }));
+    expect(useTestPersonaStore.getState().selectedPersonaId).toBe('joost');
+    expect(sessionStorage.getItem('ucapp.personaSwitched')).toBe('joost');
+    expect(reloadMock).toHaveBeenCalledOnce();
+  });
+
+  it('does not cycle without a token', async () => {
+    useTestPersonaStore.setState({ token: null });
+    renderWithProviders(<UserInfo />);
+    await screen.findByRole('button', { name: /Priya Raman/ });
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'BracketRight', altKey: true }));
+    expect(useTestPersonaStore.getState().selectedPersonaId).toBe('priya');
+    expect(reloadMock).not.toHaveBeenCalled();
   });
 });

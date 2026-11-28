@@ -20,6 +20,12 @@ export interface TestPersona {
   email: string;
   groups: string[] | null;
   description?: string;
+  /** Optional presentation for the header chip; see lib/persona-display.ts for fallbacks. */
+  display_name?: string | null;
+  title?: string | null;
+  color?: string | null;
+  /** Ready-to-use `<img src>` (data URI, https URL or /api/test/personas/{id}/avatar). */
+  avatar_url?: string | null;
 }
 
 export interface TestPersonaHeaders {

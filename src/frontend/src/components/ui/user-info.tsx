@@ -13,7 +13,7 @@ import {
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon, Settings, Info, TestTube2 } from 'lucide-react';
+import { LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon, Settings, Info, TestTube2, ChevronDown, Presentation } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
@@ -25,6 +25,22 @@ import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
 import UserProfileDialog from '@/components/ui/user-profile-dialog';
+import { PersonaAvatar } from '@/components/ui/persona-avatar';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+import {
+  personaDisplay,
+  readPresenterMode,
+  writePresenterMode,
+  markPersonaSwitched,
+  takePersonaSwitched,
+  personaCycleStep,
+  cyclePersonaIndex,
+  chipDensity,
+} from '@/lib/persona-display';
+// Key names stay untranslated (they match the physical keys).
+const PERSONA_CYCLE_KEYS = 'Alt + ]';
+
 interface UserInfoData {
   email: string | null;
   username: string | null;
@@ -95,14 +111,80 @@ export default function UserInfo() {
       [testPersonas, selectedTestPersonaId],
   );
 
+  const activeDisplay = useMemo(
+      () => (activeTestPersona ? personaDisplay(activeTestPersona) : null),
+      [activeTestPersona],
+  );
+  const [presenterMode, setPresenterMode] = useState<boolean>(() => readPresenterMode());
+  const { toast } = useToast();
+
   const handleTestPersonaChange = (value: string) => {
       const next = value === 'none' ? null : value;
       if (next === selectedTestPersonaId) return;
       setTestPersona(next);
+      markPersonaSwitched(next);
       // Hard reload so every store (user, permissions, notifications, etc.) is
       // re-hydrated with the new identity. Cheaper and more correct than
       // teaching every store to handle mid-session identity swaps.
       window.location.reload();
+  };
+
+  // After a persona switch (which reloads the page), say who we are now.
+  useEffect(() => {
+      if (!activeTestPersona) return;
+      if (takePersonaSwitched() !== activeTestPersona.id) return;
+      const d = personaDisplay(activeTestPersona);
+      toast({
+          duration: 2600,
+          className: 'border-l-4',
+          style: { borderLeftColor: d.color },
+          // `description` (not `title`) because ToastProps types `title` as the HTML string attribute.
+          description: (
+              <span className="flex items-center gap-3 text-foreground">
+                  <PersonaAvatar display={d} className="h-9 w-9" />
+                  <span className="flex flex-col">
+                      <span className="text-xs font-normal text-muted-foreground">{t('common:userInfo.nowViewingAs')}</span>
+                      <span className="text-sm font-semibold">{d.title ? `${d.name} · ${d.title}` : d.name}</span>
+                  </span>
+              </span>
+          ),
+      });
+  }, [activeTestPersona, toast, t]);
+
+  // Alt+] / Alt+[ cycles through the personas (same reload as picking one).
+  useEffect(() => {
+      if (!testPersonasEnabled || !testToken || testPersonas.length === 0) return;
+      const onKey = (e: KeyboardEvent) => {
+          const step = personaCycleStep(e);
+          if (!step) return;
+          e.preventDefault();
+          const current = testPersonas.findIndex((p) => p.id === selectedTestPersonaId);
+          const next = cyclePersonaIndex(current, step, testPersonas.length);
+          if (next >= 0) handleTestPersonaChange(testPersonas[next].id);
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testPersonasEnabled, testToken, testPersonas, selectedTestPersonaId]);
+
+  // Track the header width so the chip can step down (see chipDensity).
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const [headerWidth, setHeaderWidth] = useState<number>(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+      const header = chipRef.current?.closest('header');
+      if (!activeTestPersona || !header || typeof ResizeObserver === 'undefined') return;
+      // Border-box width (contentRect leaves out the header's padding).
+      const ro = new ResizeObserver(([entry]) => setHeaderWidth(entry.target.getBoundingClientRect().width));
+      ro.observe(header);
+      return () => ro.disconnect();
+  }, [activeTestPersona]);
+  const density = chipDensity(headerWidth, presenterMode);
+  // Presenter size applies while there is room for the name.
+  const big = presenterMode && density !== 'avatar';
+
+  const togglePresenterMode = (on: boolean) => {
+      writePresenterMode(on);
+      setPresenterMode(on);
   };
 
   // Hide the Settings menu item when the user lacks the layout gate;
@@ -252,22 +334,53 @@ export default function UserInfo() {
     <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-            variant="ghost"
-            className="relative h-8 w-8 rounded-full"
-            // Subtle persistent visual cue so testers don't forget they're
-            // acting as someone else.
-            title={activeTestPersona ? t('common:userInfo.actingAs', { label: activeTestPersona.label }) : undefined}
-        >
-          <Avatar className={`h-8 w-8 ${activeTestPersona ? 'ring-2 ring-yellow-500' : ''}`}>
-            <AvatarFallback>{initials}</AvatarFallback>
-          </Avatar>
-          {activeTestPersona && (
-            <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-yellow-500 border-2 border-background" />
-          )}
-        </Button>
+        {activeTestPersona && activeDisplay ? (
+          // Persona chip: who is acting, readable across a room (demos, screenshots).
+          <Button
+              ref={chipRef}
+              variant="outline"
+              data-persona-id={activeTestPersona.id}
+              data-density={density}
+              className={cn(
+                  'h-11 max-w-[300px] gap-2.5 rounded-full bg-background py-1 pl-1 pr-2.5 hover:bg-background',
+                  big && 'h-14 max-w-[380px] gap-3 pr-3.5',
+                  density === 'name' && (big ? 'max-w-[300px]' : 'max-w-[220px]'),
+                  // Narrow header: just the ringed avatar plus today's amber dot.
+                  density === 'avatar' && 'relative w-11 justify-center border-transparent p-0.5 px-0.5',
+              )}
+              title={t('common:userInfo.actingAs', { label: activeTestPersona.label })}
+          >
+            <PersonaAvatar display={activeDisplay} ring className={big ? 'h-[46px] w-[46px] text-base' : 'h-9 w-9 text-[13px]'} />
+            <span className={cn('flex min-w-0 flex-col text-left', density === 'avatar' && 'sr-only')}>
+              <span className={cn('truncate font-semibold leading-tight', big ? 'text-base' : 'text-[13px]')}>
+                {activeDisplay.name}
+              </span>
+              {activeDisplay.title && density === 'full' && (
+                <span className={cn('truncate font-normal leading-tight text-muted-foreground', big ? 'text-[13px]' : 'text-[11px]')}>
+                  {activeDisplay.title}
+                </span>
+              )}
+            </span>
+            {density === 'avatar' ? (
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-yellow-500" />
+            ) : (
+              <>
+                <span className="shrink-0 rounded-full border border-yellow-500 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-700 dark:text-yellow-400">
+                  {t('common:userInfo.testBadge')}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </>
+            )}
+          </Button>
+        ) : (
+          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+          </Button>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className={testPersonasEnabled ? 'w-[340px]' : 'w-64'}>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{displayName}</p>
@@ -305,11 +418,17 @@ export default function UserInfo() {
         {testPersonasEnabled && (
             <>
             <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 flex items-center justify-between">
+                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 flex items-center justify-between gap-2">
                     <span className="flex items-center">
                         <TestTube2 className="mr-1.5 h-3.5 w-3.5" />
                         {t('common:userInfo.testPersona')}
                     </span>
+                    <span className="flex items-center gap-1.5">
+                    {testToken && testPersonas.length > 0 && (
+                        <kbd className="rounded border px-1 font-mono text-[10px] font-normal" title={t('common:userInfo.cycleShortcut')}>
+                            {PERSONA_CYCLE_KEYS}
+                        </kbd>
+                    )}
                     {activeTestPersona ? (
                         <Badge variant="outline" className="text-[10px] border-yellow-500 text-yellow-700 dark:text-yellow-400">
                             {t('common:status.active')}
@@ -319,33 +438,60 @@ export default function UserInfo() {
                             {t('common:userInfo.noToken')}
                         </Badge>
                     ) : null}
+                    </span>
                 </DropdownMenuLabel>
-                <ScrollArea className="max-h-[180px] overflow-y-auto">
+                <ScrollArea className="max-h-[320px] overflow-y-auto">
                     <DropdownMenuRadioGroup
                         value={selectedTestPersonaId || 'none'}
                         onValueChange={handleTestPersonaChange}
                     >
-                        <DropdownMenuRadioItem value="none" disabled={!testToken}>
-                            <UserIcon className="mr-1.5 h-3.5 w-3.5" />
-                            {t('common:userInfo.noneRealIdentity')}
+                        {testPersonas.map((p) => {
+                            const d = personaDisplay(p);
+                            return (
+                                <DropdownMenuRadioItem
+                                    key={p.id}
+                                    value={p.id}
+                                    disabled={!testToken}
+                                    className="flex items-center gap-2.5 py-2"
+                                    title={p.description ? `${p.email} · ${p.description}` : p.email}
+                                >
+                                    <PersonaAvatar display={d} className="text-xs" />
+                                    <span className="flex min-w-0 flex-col">
+                                        <span className="truncate font-semibold">{d.name}</span>
+                                        {d.title && <span className="truncate text-xs text-muted-foreground">{d.title}</span>}
+                                        {p.groups && p.groups.length > 0 && (
+                                            <span className="mt-0.5 flex flex-wrap gap-0.5">
+                                                {p.groups.map((g) => (
+                                                    <span key={g} className="rounded border px-1 text-[10px] text-muted-foreground">{g}</span>
+                                                ))}
+                                            </span>
+                                        )}
+                                    </span>
+                                </DropdownMenuRadioItem>
+                            );
+                        })}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuRadioItem value="none" disabled={!testToken} className="flex items-center gap-2.5">
+                            <UserIcon className="h-3.5 w-3.5" />
+                            {activeTestPersona ? t('common:userInfo.stopActing') : t('common:userInfo.noneRealIdentity')}
                         </DropdownMenuRadioItem>
-                        {testPersonas.map((p) => (
-                            <DropdownMenuRadioItem
-                                key={p.id}
-                                value={p.id}
-                                disabled={!testToken}
-                                className="flex items-center"
-                                title={p.description}
-                            >
-                                <TestTube2 className="mr-1.5 h-3.5 w-3.5" />
-                                <span className="flex flex-col">
-                                    <span>{p.label}</span>
-                                    <span className="text-[10px] text-muted-foreground">{p.email}</span>
-                                </span>
-                            </DropdownMenuRadioItem>
-                        ))}
                     </DropdownMenuRadioGroup>
                 </ScrollArea>
+                <DropdownMenuItem
+                    className="flex items-center justify-between"
+                    onSelect={(e) => e.preventDefault()}
+                >
+                    <div className="flex items-center">
+                        <Presentation className="mr-2 h-4 w-4" />
+                        <span>{t('common:userInfo.presenterSize')}</span>
+                    </div>
+                    <Switch
+                        checked={presenterMode}
+                        onCheckedChange={togglePresenterMode}
+                        className="scale-75"
+                        aria-label={t('common:userInfo.presenterSize')}
+                    />
+                </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             </>
